@@ -76,6 +76,7 @@ internal static class AtsContextFilter
         var filteredExportedValues = context.ExportedValues
             .Where(value => normalizedAssemblyNames.Contains(value.OwningAssemblyName))
             .ToList();
+        var knownAssemblyNames = GetKnownAssemblyNames(context, normalizedAssemblyNames);
 
         if (includeReferencedTypes)
         {
@@ -119,6 +120,8 @@ internal static class AtsContextFilter
             EnumTypes = context.EnumTypes.Where(type => includedEnumTypeIds.Contains(type.TypeId)).ToList(),
             ExportedValues = filteredExportedValues,
             Diagnostics = context.Diagnostics
+                .Where(diagnostic => IsDiagnosticOwnedBySelectedAssembly(context, diagnostic, normalizedAssemblyNames, knownAssemblyNames))
+                .ToList()
         };
 
         foreach (var capability in filteredCapabilities)
@@ -229,6 +232,146 @@ internal static class AtsContextFilter
     {
         var assemblyName = assembly?.GetName().Name;
         return assemblyName is not null && assemblyNames.Contains(assemblyName);
+    }
+
+    private static HashSet<string> GetKnownAssemblyNames(AtsContext context, HashSet<string> assemblyNames)
+    {
+        var knownAssemblyNames = new HashSet<string>(assemblyNames, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var capability in context.Capabilities)
+        {
+            AddAssemblyNameFromId(knownAssemblyNames, capability.CapabilityId);
+        }
+
+        foreach (var type in context.HandleTypes)
+        {
+            AddAssemblyName(knownAssemblyNames, type.ClrType?.Assembly);
+            AddAssemblyNameFromId(knownAssemblyNames, type.AtsTypeId);
+        }
+
+        foreach (var type in context.DtoTypes)
+        {
+            AddAssemblyName(knownAssemblyNames, type.ClrType?.Assembly);
+            AddAssemblyNameFromId(knownAssemblyNames, type.TypeId);
+        }
+
+        foreach (var type in context.EnumTypes)
+        {
+            AddAssemblyName(knownAssemblyNames, type.ClrType?.Assembly);
+        }
+
+        foreach (var exportedValue in context.ExportedValues)
+        {
+            AddAssemblyName(knownAssemblyNames, exportedValue.OwningAssemblyName);
+        }
+
+        foreach (var method in context.Methods.Values)
+        {
+            AddAssemblyName(knownAssemblyNames, method.DeclaringType?.Assembly);
+        }
+
+        foreach (var property in context.Properties.Values)
+        {
+            AddAssemblyName(knownAssemblyNames, property.DeclaringType?.Assembly);
+        }
+
+        return knownAssemblyNames;
+    }
+
+    private static void AddAssemblyName(HashSet<string> assemblyNames, Assembly? assembly)
+    {
+        AddAssemblyName(assemblyNames, assembly?.GetName().Name);
+    }
+
+    private static void AddAssemblyName(HashSet<string> assemblyNames, string? assemblyName)
+    {
+        if (!string.IsNullOrWhiteSpace(assemblyName))
+        {
+            assemblyNames.Add(assemblyName);
+        }
+    }
+
+    private static void AddAssemblyNameFromId(HashSet<string> assemblyNames, string id)
+    {
+        if (TryGetAssemblyNameFromId(id, out var assemblyName))
+        {
+            assemblyNames.Add(assemblyName);
+        }
+    }
+
+    private static bool IsDiagnosticOwnedBySelectedAssembly(
+        AtsContext context,
+        AtsDiagnostic diagnostic,
+        HashSet<string> assemblyNames,
+        HashSet<string> knownAssemblyNames)
+    {
+        if (string.IsNullOrWhiteSpace(diagnostic.Location))
+        {
+            return true;
+        }
+
+        if (TryGetAssemblyNameFromDiagnosticLocation(context, diagnostic.Location, knownAssemblyNames, out var assemblyName))
+        {
+            return assemblyNames.Contains(assemblyName);
+        }
+
+        return false;
+    }
+
+    private static bool TryGetAssemblyNameFromDiagnosticLocation(
+        AtsContext context,
+        string location,
+        HashSet<string> knownAssemblyNames,
+        out string assemblyName)
+    {
+        if (TryGetAssemblyNameFromId(location, out assemblyName))
+        {
+            return true;
+        }
+
+        foreach (var capability in context.Capabilities)
+        {
+            if (!string.Equals(capability.SourceLocation, location, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (context.Methods.TryGetValue(capability.CapabilityId, out var method))
+            {
+                assemblyName = method.DeclaringType?.Assembly.GetName().Name ?? string.Empty;
+                return assemblyName.Length > 0;
+            }
+
+            if (context.Properties.TryGetValue(capability.CapabilityId, out var property))
+            {
+                assemblyName = property.DeclaringType?.Assembly.GetName().Name ?? string.Empty;
+                return assemblyName.Length > 0;
+            }
+        }
+
+        return TryGetMostSpecificDottedAssemblyName(location, knownAssemblyNames, out assemblyName);
+    }
+
+    private static bool TryGetMostSpecificDottedAssemblyName(string location, HashSet<string> knownAssemblyNames, out string assemblyName)
+    {
+        assemblyName = string.Empty;
+
+        foreach (var knownAssemblyName in knownAssemblyNames)
+        {
+            if (location.Length <= knownAssemblyName.Length ||
+                location[knownAssemblyName.Length] != '.' ||
+                !location.StartsWith(knownAssemblyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (knownAssemblyName.Length > assemblyName.Length)
+            {
+                assemblyName = knownAssemblyName;
+            }
+        }
+
+        return assemblyName.Length > 0;
     }
 
     private static bool TryGetAssemblyNameFromId(string id, out string assemblyName)

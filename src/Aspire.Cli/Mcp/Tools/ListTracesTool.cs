@@ -3,10 +3,11 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -18,7 +19,7 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing distributed traces.
 /// Gets trace data directly from the Dashboard telemetry API.
 /// </summary>
-internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
+internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvider, IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListTracesTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListTraces;
 
@@ -33,6 +34,10 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
                 "resourceName": {
                   "type": "string",
                   "description": "The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter traces. Searches across span names, attribute values, IDs, and other fields."
                 }
               }
             }
@@ -52,12 +57,29 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             resourceName = resourceNameElement.GetString();
         }
 
+        string? search = null;
+        if (arguments?.TryGetValue("search", out var searchElement) == true &&
+            searchElement.ValueKind == JsonValueKind.String)
+        {
+            search = searchElement.GetString();
+        }
+
         try
         {
             using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
 
             // Resolve resource name to specific instances (handles replicas)
             var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
+
+            // If a specific resource was requested, check if it's excluded from MCP.
+            if (!string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(auxiliaryBackchannelMonitor, resourceName, cancellationToken).ConfigureAwait(false);
+                if (excludedResult is not null)
+                {
+                    return excludedResult;
+                }
+            }
 
             // If a resource was specified but not found, return error
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resourceName, resources, out var resolvedResources))
@@ -70,7 +92,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             }
 
             // Fetch all traces from the API. Limiting of returned telemetry to the MCP caller happens later.
-            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
+            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
             logger.LogDebug("Fetching traces from {Url}", url);
 
@@ -79,6 +101,18 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceSpans = apiResponse?.Data?.ResourceSpans;
+
+            // Filter out spans from resources that are excluded from MCP.
+            if (resourceSpans is not null && string.IsNullOrEmpty(resourceName) && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedNames = await McpToolHelpers.GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
+                if (excludedNames.Count > 0)
+                {
+                    resourceSpans = resourceSpans
+                        .Where(rs => rs.Resource?.GetServiceName() is not { } name || !excludedNames.Contains(name))
+                        .ToArray();
+                }
+            }
 
             var (tracesData, limitMessage) = SharedAIHelpers.GetTracesJson(
                 resourceSpans,

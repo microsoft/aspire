@@ -81,7 +81,25 @@ partial class Resource
 
         foreach (var property in snapshot.Properties)
         {
-            resource.Properties.Add(new ResourceProperty { Name = property.Name, Value = property.Value, IsSensitive = property.IsSensitive });
+            var resourceProperty = new ResourceProperty
+            {
+                Name = property.Name,
+                Value = property.Value,
+                IsSensitive = property.IsSensitive,
+                IsHighlighted = property.IsHighlighted
+            };
+
+            if (!string.IsNullOrEmpty(property.DisplayName))
+            {
+                resourceProperty.DisplayName = property.DisplayName;
+            }
+
+            if (property.SortOrder is { } sortOrder)
+            {
+                resourceProperty.SortOrder = sortOrder;
+            }
+
+            resource.Properties.Add(resourceProperty);
         }
 
         foreach (var volume in snapshot.Volumes)
@@ -95,9 +113,16 @@ partial class Resource
             });
         }
 
-        foreach (var command in snapshot.Commands)
+        foreach (var command in snapshot.Commands.Where(command => command.Visibility.HasFlag(Hosting.ApplicationModel.ResourceCommandVisibility.UI)))
         {
-            resource.Commands.Add(new ResourceCommand { Name = command.Name, DisplayName = command.DisplayName, DisplayDescription = command.DisplayDescription ?? string.Empty, Parameter = ResourceSnapshot.ConvertToValue(command.Parameter), ConfirmationMessage = command.ConfirmationMessage ?? string.Empty, IconName = command.IconName ?? string.Empty, IconVariant = MapIconVariant(command.IconVariant), IsHighlighted = command.IsHighlighted, State = MapCommandState(command.State) });
+#pragma warning disable CS0612, CS0618 // Parameter is obsolete but still flowed for compatibility.
+            var resourceCommand = new ResourceCommand { Name = command.Name, DisplayName = command.DisplayName, DisplayDescription = command.DisplayDescription ?? string.Empty, Parameter = ResourceSnapshot.ConvertToValue(command.Parameter), ConfirmationMessage = command.ConfirmationMessage ?? string.Empty, IconName = command.IconName ?? string.Empty, IconVariant = MapIconVariant(command.IconVariant), IsHighlighted = command.IsHighlighted, State = MapCommandState(command.State) };
+#pragma warning restore CS0612, CS0618
+            if (command.Arguments is { Count: > 0 } arguments)
+            {
+                resourceCommand.ArgumentInputs.AddRange(arguments.Select(input => Aspire.Hosting.Dashboard.DashboardService.CreateInteractionInputDto(input)));
+            }
+            resource.Commands.Add(resourceCommand);
         }
 
         foreach (var report in snapshot.HealthReports)

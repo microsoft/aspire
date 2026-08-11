@@ -7,7 +7,6 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Publishing;
@@ -175,7 +174,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     private async Task WriteProjectAsync(ProjectResource project)
     {
-        if (!project.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (!project.TryGetProjectMetadata(out var metadata))
         {
             throw new DistributedApplicationException($"Project metadata was not found for resource '{project.Name}'.");
         }
@@ -372,16 +371,18 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             var dockerfilePath = annotation.DockerfilePath;
 
-            // If there's a factory, generate the Dockerfile content and write it to both the original path and a resource-specific path
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(annotation, container, ExecutionContext.ServiceProvider, CancellationToken).ConfigureAwait(false);
-
             if (annotation.DockerfileFactory is not null)
             {
                 // Copy to a resource-specific path in the manifest output directory for publishing
                 var manifestDirectory = Path.GetDirectoryName(Path.GetFullPath(ManifestPath))!;
                 var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{container.Name}.Dockerfile");
-                Directory.CreateDirectory(manifestDirectory);
-                File.Copy(annotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                var dockerfileContext = new DockerfileFactoryContext
+                {
+                    Services = ExecutionContext.Services,
+                    Resource = container,
+                    CancellationToken = CancellationToken
+                };
+                await annotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
 
                 // Update the dockerfile path to use the generated file for the manifest
                 dockerfilePath = resourceDockerfilePath;

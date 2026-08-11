@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - Java validation AppHosts
 # Iterates all Java validation AppHosts under tests/PolyglotAppHosts/*/Java,
-# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
 # compiles each AppHost plus the generated Java SDK sources to verify there are
 # no regressions in the codegen API surface.
 set -euo pipefail
@@ -80,7 +80,7 @@ for app_dir in "${APP_DIRS[@]}"; do
     rm -rf "$build_dir"
     mkdir -p "$build_dir"
 
-    if [ ! -f ".modules/sources.txt" ]; then
+    if [ ! -f ".aspire/modules/sources.txt" ]; then
         echo "  ❌ No generated Java source list found for $integration_name"
         FAILED+=("$integration_name (generated sources missing)")
         rm -rf "$build_dir"
@@ -88,7 +88,7 @@ for app_dir in "${APP_DIRS[@]}"; do
         continue
     fi
 
-    if ! javac --enable-preview --source 25 -d "$build_dir" @.modules/sources.txt AppHost.java 2>&1; then
+    if ! javac --enable-preview --source 25 -d "$build_dir" @.aspire/modules/sources.txt AppHost.java 2>&1; then
         echo "  ❌ javac compilation failed for $integration_name"
         FAILED+=("$integration_name (javac)")
         rm -rf "$build_dir"

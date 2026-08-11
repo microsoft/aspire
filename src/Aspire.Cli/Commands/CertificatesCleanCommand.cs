@@ -4,11 +4,8 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Certificates;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -19,15 +16,13 @@ internal sealed class CertificatesCleanCommand : BaseCommand
 {
     private readonly ICertificateToolRunner _certificateToolRunner;
 
-    public CertificatesCleanCommand(ICertificateToolRunner certificateToolRunner, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("clean", CertificatesCommandStrings.CleanDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CertificatesCleanCommand(ICertificateToolRunner certificateToolRunner, CommonCommandServices services)
+        : base("clean", CertificatesCommandStrings.CleanDescription, services)
     {
         _certificateToolRunner = certificateToolRunner;
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.CleanProgress);
 
@@ -36,18 +31,18 @@ internal sealed class CertificatesCleanCommand : BaseCommand
         if (result.Success)
         {
             InteractionService.DisplaySuccess(CertificatesCommandStrings.CleanSuccess);
-            return Task.FromResult(ExitCodeConstants.Success);
+            return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.Success));
         }
 
         if (result.WasCancelled)
         {
             InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.CleanCancelled);
-            return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+            return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.FailedToTrustCertificates));
         }
 
         var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.CleanFailureDetailsFormat, result.ErrorMessage);
         InteractionService.DisplayError(details);
         InteractionService.DisplayError(CertificatesCommandStrings.CleanFailure);
-        return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+        return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.FailedToTrustCertificates));
     }
 }

@@ -76,7 +76,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
 
             require apphost/modules/aspire v0.0.0
 
-            replace apphost/modules/aspire => ./.modules
+            replace apphost/modules/aspire => ./.aspire/modules
             """;
 
         // Create apphost.run.json with random ports
@@ -129,7 +129,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
     {
         // Note: InstallDependencies is null because "go run ." handles module
         // resolution automatically, and InstallDependencies runs BEFORE code
-        // generation which means the .modules directory doesn't exist yet.
+        // generation which means the .aspire/modules directory doesn't exist yet.
         return new RuntimeSpec
         {
             Language = LanguageId,

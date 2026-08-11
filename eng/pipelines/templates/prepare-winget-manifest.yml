@@ -10,11 +10,6 @@ parameters:
   - name: archiveRoot
     type: string
     default: ''
-  - name: skipUrlValidation
-    type: boolean
-    default: false
-  # runInstallTest is derived from skipUrlValidation (they are logical inverses).
-  # Callers should only set skipUrlValidation; install tests run when URLs are valid.
 
 steps:
   - pwsh: |
@@ -33,19 +28,18 @@ steps:
         exit 1
       }
 
-      if ($channel -eq 'stable') {
-        $templateDir = 'microsoft.aspire'
-        $artifactName = 'winget-manifests-stable'
-      } elseif ($channel -eq 'prerelease') {
-        $templateDir = 'microsoft.aspire.prerelease'
-        $artifactName = 'winget-manifests-prerelease'
-      } else {
-        Write-Error "Channel must be 'stable' or 'prerelease', got: $channel"
-        exit 1
-      }
+      # Manifests are generated for every channel. The artifact is a CI-only
+      # build output consumed by dogfooders via 'winget install --manifest <path>'.
+      # Public WinGet publishing is gated separately by publish-winget.yml in the
+      # release-publish pipeline, which downloads 'winget-manifests-stable' by
+      # name — so prerelease artifacts can never reach the public catalog.
+      $isPrereleaseInStablePackage = $channel -ne 'stable'
+      $templateDir = 'microsoft.aspire'
+      $artifactName = "winget-manifests-$channel"
 
       Write-Host "Version: $version"
       Write-Host "Channel: $channel"
+      Write-Host "Is prerelease in stable package: $isPrereleaseInStablePackage"
       Write-Host "Artifact version: $(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
       Write-Host "Template dir: $templateDir"
       Write-Host "Artifact name: $artifactName"
@@ -53,183 +47,57 @@ steps:
       Write-Host "##vso[task.setvariable variable=CliArtifactVersion]$(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
       Write-Host "##vso[task.setvariable variable=WinGetTemplateDir]$templateDir"
       Write-Host "##vso[task.setvariable variable=WinGetArtifactName]$artifactName"
+      Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
     displayName: 🟣Set version ${{ parameters.version }}
 
   - pwsh: |
-      $repoName = 'dotnet-public'
-      $repoUri = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json'
-
-      Write-Host "Ensuring PSResource repository '$repoName' is registered..."
-      $existingRepo = Get-PSResourceRepository -Name $repoName -ErrorAction SilentlyContinue
-      if ($null -eq $existingRepo) {
-        Register-PSResourceRepository -Name $repoName -Uri $repoUri -Trusted
+      # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`
+      # pool blocks outbound access to cdn.winget.microsoft.com, so
+      # `Repair-WinGetPackageManager` fails with "An attempt was made to access a socket in a
+      # way forbidden by its access permissions. (cdn.winget.microsoft.com:443)".
+      #
+      # `prepare-manifest-artifact.ps1` only needs winget when ValidationMode is `Full`
+      # (install/uninstall round-trip) or `Offline` (best-effort `winget validate`); in
+      # Offline mode it tolerates winget being missing and still produces the manifest
+      # artifact. This pipeline hardcodes Offline (see the Prepare step below), so
+      # probing for a pre-installed winget on the image is sufficient and avoids the
+      # blocked CDN path entirely.
+      #
+      # Manifest validation is intentionally delegated to upstream microsoft/winget-pkgs
+      # CI; see eng/winget/README.md "Validation model" for what upstream checks.
+      $winget = Get-Command winget -ErrorAction SilentlyContinue
+      if ($winget) {
+        Write-Host "winget already on PATH at $($winget.Source):"
+        winget --version
       } else {
-        Write-Host "PSResource repository '$repoName' is already registered. Skipping registration."
+        Write-Host "##[warning]winget was not found on PATH. Offline validation will skip the winget validate step (see prepare-manifest-artifact.ps1)."
       }
-
-      Write-Host "Installing Microsoft.WinGet.Client from $repoName feed..."
-      Install-PSResource -Name Microsoft.WinGet.Client -Repository $repoName -TrustRepository
-      Write-Host "Microsoft.WinGet.Client installed. Listing installed version:"
-      Get-Module -ListAvailable Microsoft.WinGet.Client | Select-Object Name, Version | Format-Table
-
-      Write-Host "Installing WinGet..."
-      Repair-WinGetPackageManager -Latest -Force -AllUsers
-
-      Write-Host "winget installed:"
-      winget --version
-    displayName: 🟣Install winget CLI
+    displayName: 🟣Probe winget CLI
 
   - pwsh: |
       $ErrorActionPreference = 'Stop'
-      $version = '$(CliVersion)'
-      $artifactVersion = '$(CliArtifactVersion)'
-      $outputPath = '$(Build.StagingDirectory)/winget-manifests'
-      $templateDir = '$(Build.SourcesDirectory)/eng/winget/$(WinGetTemplateDir)'
-
-      Write-Host "Generating WinGet manifests for Aspire.Cli version $version"
-      Write-Host "Using template directory: $templateDir"
 
       $args = @{
-        Version = $version
-        ArtifactVersion = $artifactVersion
-        TemplateDir = $templateDir
-        OutputPath = $outputPath
+        Version = '$(CliVersion)'
+        ArtifactVersion = '$(CliArtifactVersion)'
+        Channel = '${{ parameters.channel }}'
+        TemplateDir = '$(Build.SourcesDirectory)/eng/winget/$(WinGetTemplateDir)'
+        OutputPath = '$(Build.StagingDirectory)/winget-manifests'
+        # Hardcoded Offline: Full mode requires winget.exe on the agent, which
+        # is not present on 1ES `1es-windows-2022` and cannot be installed
+        # (see the Probe step above). prepare-manifest-artifact.ps1 still accepts
+        # ValidationMode for local/dogfood callers running on a machine with
+        # winget installed. Manifest validation is delegated to upstream
+        # microsoft/winget-pkgs CI — see eng/winget/README.md "Validation model".
+        ValidationMode = 'Offline'
       }
 
       if (-not [string]::IsNullOrWhiteSpace('${{ parameters.archiveRoot }}')) {
         $args.ArchiveRoot = '${{ parameters.archiveRoot }}'
       }
 
-      if ('${{ parameters.skipUrlValidation }}' -eq 'true') {
-        $args.SkipUrlValidation = $true
-      }
-
-      & "$(Build.SourcesDirectory)/eng/winget/generate-manifests.ps1" @args
-
-      if ($LASTEXITCODE -ne 0) {
-        Write-Error "generate-manifests.ps1 failed with exit code $LASTEXITCODE"
-        exit $LASTEXITCODE
-      }
-
-      Write-Host "Manifest files generated:"
-      Get-ChildItem -Path $outputPath -Recurse | Format-Table FullName
-
-      # Find the versioned manifest folder and expose as a pipeline variable
-      $versionedManifestPath = Get-ChildItem -Path $outputPath -Directory -Recurse |
-        Where-Object { $_.Name -eq $version } |
-        Select-Object -First 1 -ExpandProperty FullName
-
-      if (-not $versionedManifestPath) {
-        $versionedManifestPath = $outputPath
-      }
-
-      Write-Host "Versioned manifest path: $versionedManifestPath"
-      Write-Host "##vso[task.setvariable variable=VersionedManifestPath]$versionedManifestPath"
-    displayName: 🟣Generate WinGet manifests
-
-  - pwsh: |
-      $ErrorActionPreference = 'Stop'
-      $versionedManifestPath = '$(VersionedManifestPath)'
-
-      Write-Host "Testing WinGet manifests at: $versionedManifestPath"
-      Write-Host ""
-
-      # Enable local manifest files
-      Write-Host "Enabling local manifest files in winget settings..."
-      winget settings --enable LocalManifestFiles
-      if ($LASTEXITCODE -ne 0) {
-        Write-Host "##[warning]Failed to enable local manifests. This may require admin privileges."
-      }
-
-      # Validate manifests using winget validate
-      Write-Host ""
-      Write-Host "Running winget validate..."
-      winget validate --manifest $versionedManifestPath
-      if ($LASTEXITCODE -ne 0) {
-        Write-Error "winget validate failed with exit code $LASTEXITCODE"
-        exit $LASTEXITCODE
-      }
-
-      Write-Host "✅ winget validate passed"
-    displayName: 🟣Validate WinGet manifests
-
-  - pwsh: |
-      $ErrorActionPreference = 'Stop'
-      $versionedManifestPath = '$(VersionedManifestPath)'
-
-      Write-Host "Testing manifest install/uninstall at: $versionedManifestPath"
-      Write-Host ""
-
-      # Verify aspire is NOT available before install
-      Write-Host "Verifying aspire is not already installed..."
-      if (Get-Command aspire -ErrorAction SilentlyContinue) {
-        Write-Error "aspire command is already available before install - test environment is not clean"
-        exit 1
-      }
-      Write-Host "  Confirmed: aspire is not in PATH"
-
-      # Test install
-      Write-Host ""
-      Write-Host "Installing Aspire.Cli from local manifest..."
-      winget install --manifest $versionedManifestPath --accept-package-agreements --accept-source-agreements
-      if ($LASTEXITCODE -ne 0) {
-        Write-Error "winget install failed with exit code $LASTEXITCODE"
-        exit $LASTEXITCODE
-      }
-      Write-Host "✅ Install succeeded"
-
-      # Refresh PATH from registry to pick up changes made by winget
-      Write-Host ""
-      Write-Host "Refreshing PATH environment variable..."
-      $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-
-      # Verify aspire is now available in PATH.
-      # Use a new pwsh process so it inherits the system/user PATH that winget updated
-      # rather than relying on the current process's stale $env:Path.
-      $failed = $false
-      Write-Host "Verifying aspire CLI is in PATH (new process)..."
-      try {
-        $aspireInfo = pwsh -NoProfile -Command '
-          $cmd = Get-Command aspire -ErrorAction SilentlyContinue
-          if (-not $cmd) { Write-Error "aspire not found in PATH"; exit 1 }
-          Write-Host "  Path: $($cmd.Source)"
-          $v = & aspire --version 2>&1
-          if ($LASTEXITCODE -ne 0) { Write-Error "aspire --version failed: $v"; exit $LASTEXITCODE }
-          Write-Host "  Version: $v"
-        '
-        if ($LASTEXITCODE -ne 0) {
-          throw "Child process exited with code $LASTEXITCODE"
-        }
-        Write-Host "✅ aspire CLI verified"
-      } catch {
-        Write-Host "##[error]Failed to verify aspire CLI: $_"
-        $failed = $true
-      }
-
-      # Test uninstall (always attempt cleanup even if verification failed)
-      Write-Host ""
-      Write-Host "Uninstalling Aspire.Cli..."
-      winget uninstall --manifest $versionedManifestPath --accept-source-agreements
-      if ($LASTEXITCODE -ne 0) {
-        if ($failed) {
-          Write-Host "##[warning]winget uninstall also failed with exit code $LASTEXITCODE (ignoring since verification already failed)"
-        } else {
-          Write-Error "winget uninstall failed with exit code $LASTEXITCODE"
-          exit $LASTEXITCODE
-        }
-      } else {
-        Write-Host "✅ Uninstall succeeded"
-      }
-
-      if ($failed) {
-        exit 1
-      }
-    displayName: 🟣Test WinGet manifest install/uninstall
-    condition: and(succeeded(), eq(${{ parameters.skipUrlValidation }}, false))
-
-  - pwsh: |
-      Copy-Item "$(Build.SourcesDirectory)/eng/winget/dogfood.ps1" "$(Build.StagingDirectory)/winget-manifests/dogfood.ps1"
-    displayName: 🟣Include dogfood script in artifact
+      & "$(Build.SourcesDirectory)/eng/winget/prepare-manifest-artifact.ps1" @args
+    displayName: 🟣Prepare WinGet manifests
 
   - task: 1ES.PublishBuildArtifacts@1
     displayName: 🟣Publish WinGet manifests

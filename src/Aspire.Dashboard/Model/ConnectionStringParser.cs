@@ -484,7 +484,7 @@ internal static partial class ConnectionStringParser
 
         // Reject obvious file path indicators
         if (connectionString.StartsWith('/') || connectionString.StartsWith('\\') ||
-            connectionString.StartsWith("./") || connectionString.StartsWith("../") ||
+            connectionString.StartsWith("./", StringComparison.Ordinal) || connectionString.StartsWith("../", StringComparison.Ordinal) ||
             (connectionString.Length > 2 && connectionString[1] == ':' && char.IsLetter(connectionString[0])))
         {
             return false;

@@ -190,6 +190,9 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         try
         {
             var connection = _connection;
+            // The ReferenceEquals check is technically redundant today (connection was just read from _connection
+            // under the lock), but guards against future refactors that may read _connection earlier or release
+            // and re-acquire the lock before reaching this point.
             if (connection is not null && ReferenceEquals(connection, _connection) && _targetId is not null)
             {
                 try
@@ -416,7 +419,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
             try
             {
-                await Task.Delay(s_connectionRecoveryDelay, _stopCts.Token).ConfigureAwait(false);
+                await Task.Delay(s_connectionRecoveryDelay, _timeProvider, _stopCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)
             {

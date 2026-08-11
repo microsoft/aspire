@@ -1,9 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Components.Common.TestUtilities;
+using Azure.Core.Extensions;
+using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
@@ -97,5 +102,43 @@ public class AspireAzureSearchExtensionsTests
         //Assert.Equal(new Uri(SearchEndpoint), client1.Endpoint);
         Assert.Equal(new Uri("https://aspireazuresearchtests2.search.windows.net/"), client2.Endpoint);
         Assert.Equal(new Uri("https://aspireazuresearchtests3.search.windows.net/"), client3.Endpoint);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddAzureSearchClient_HealthCheckReportsConnectionFailureDescription(bool useKeyed)
+    {
+        var endpoint = ComponentTestUrls.CreateUnavailableHttpsUri();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:search", $"Endpoint={endpoint};Key=fake")
+        ]);
+
+        static void ConfigureClientBuilder(IAzureClientBuilder<SearchIndexClient, SearchClientOptions> clientBuilder)
+        {
+            clientBuilder.ConfigureOptions(options => options.Retry.MaxRetries = 0);
+        }
+
+        if (useKeyed)
+        {
+            builder.AddKeyedAzureSearchClient("search", configureClientBuilder: ConfigureClientBuilder);
+        }
+        else
+        {
+            builder.AddAzureSearchClient("search", configureClientBuilder: ConfigureClientBuilder);
+        }
+
+        using var host = builder.Build();
+        var healthCheckService = host.Services.GetRequiredService<HealthCheckService>();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var healthCheckReport = await healthCheckService.CheckHealthAsync(cts.Token);
+        var healthCheckName = useKeyed ? "Azure_SearchIndexClient_search" : "Azure_SearchIndexClient";
+        Assert.True(healthCheckReport.Entries.TryGetValue(healthCheckName, out var entry));
+
+        Assert.Equal(HealthStatus.Unhealthy, entry.Status);
+        Assert.Equal("Failed to connect to Azure AI Search service.", entry.Description);
+        Assert.NotNull(entry.Exception);
     }
 }

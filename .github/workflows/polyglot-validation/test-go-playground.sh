@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - Go validation AppHosts
 # Iterates all Go validation AppHosts under tests/PolyglotAppHosts/*/Go,
-# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
 # compile-checks each AppHost with 'go build ./...' to verify the generated API surface.
 set -euo pipefail
 
@@ -70,9 +70,9 @@ for app_dir in "${APP_DIRS[@]}"; do
         continue
     fi
 
-    if [ ! -f ".modules/aspire.go" ]; then
-        echo "  ❌ generated .modules/aspire.go missing for $integration_name"
-        FAILED+=("$integration_name (missing .modules/aspire.go)")
+    if [ ! -f ".aspire/modules/aspire.go" ]; then
+        echo "  ❌ generated .aspire/modules/aspire.go missing for $integration_name"
+        FAILED+=("$integration_name (missing .aspire/modules/aspire.go)")
         echo ""
         continue
     fi

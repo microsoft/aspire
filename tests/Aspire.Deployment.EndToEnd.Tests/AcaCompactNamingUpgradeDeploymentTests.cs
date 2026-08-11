@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -93,7 +92,7 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             output.WriteLine("Step 2: Backing up dev CLI and installing GA Aspire CLI...");
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null && cp -r ~/.aspire/managed /tmp/aspire-managed-backup 2>/dev/null && cp -r ~/.aspire/dcp /tmp/aspire-dcp-backup 2>/dev/null; echo 'dev CLI backed up'");
+                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null; echo 'dev CLI backed up'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
             }
@@ -227,7 +226,14 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             var replacement = """
 builder.AddAzureContainerAppEnvironment("env");
 
-builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
+// Use the Azure Container Instances "hello world" sample as a generic linux container.
+// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but per
+// https://github.com/dotnet/dotnet-docker/blob/main/README.samples.md#support those images
+// are not stable and can break at any time (see dotnet/dotnet-docker#7191). The Azure
+// container demo image is owned by a different team and has stable multi-arch manifests.
+// Also pin the image digest so the test cannot break if the tag is republished.
+builder.AddContainer("worker", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
@@ -267,8 +273,13 @@ builder.Build().Run();
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 11: Restoring dev CLI from backup...");
-                // Restore the dev CLI and hive that we backed up before GA install
-                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null && cp -rf /tmp/aspire-managed-backup/* ~/.aspire/managed/ 2>/dev/null && cp -rf /tmp/aspire-dcp-backup/* ~/.aspire/dcp/ 2>/dev/null; echo 'dev CLI restored'");
+                // Restore the dev CLI binary and hive that we backed up before GA install, then
+                // re-extract its embedded bundle (managed + dcp). The dev CLI is self-extracting,
+                // so the bundle lives inside the binary — restoring the binary and running
+                // 'aspire setup' rebuilds ~/.aspire/versions/<id>/ for the dev build. The hive copy
+                // is non-fatal (';') so an empty glob can't short-circuit 'aspire setup', and the
+                // success echo is gated ('&&') on setup so the prompt reflects a setup failure.
+                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null; ~/.aspire/bin/aspire setup --force && echo 'dev CLI restored'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
 

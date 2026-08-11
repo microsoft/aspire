@@ -14,6 +14,11 @@ namespace Aspire.Hosting.ApplicationModel;
 /// conflict with others. A <em>.aspire</em> prefix is also used to ensure that the folder can be deleted without impacting
 /// unrelated files.
 /// </remarks>
+/// <ats-remarks>
+/// The store is created under the AppHost obj folder, or under the path specified by the
+/// ASPIRE__STORE__PATH environment variable. Each application gets its own store so files
+/// do not conflict with unrelated applications.
+/// </ats-remarks>
 public interface IAspireStore
 {
     /// <summary>

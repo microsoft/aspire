@@ -5,8 +5,9 @@ using System.Reflection;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -49,7 +50,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         }).Build());
         services.AddSingleton<ICliHostEnvironment>(new TestCliHostEnvironment(supportsAnsi: false, supportsInteractiveOutput: false));
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var writer = new StringWriter(new StringBuilder());
         var buildAnsiConsole = typeof(Program).GetMethod("BuildAnsiConsole", BindingFlags.NonPublic | BindingFlags.Static);
 
@@ -65,9 +66,30 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AcquireBundleLeaseFromEnvironment_HoldsLeaseWhenBundleVersionDirectoryIsSet()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var versionDirectory = workspace.CreateDirectory("version");
+
+        {
+            using var result = RemoteExecutor.Invoke(static versionDirectory =>
+            {
+                Environment.SetEnvironmentVariable(BundleDiscovery.BundleVersionDirectoryEnvVar, versionDirectory);
+
+                using var lease = Program.AcquireBundleLeaseFromEnvironment(["run"]);
+
+                Assert.NotNull(lease);
+                Assert.True(BundleVersionLease.HasActiveLease(versionDirectory));
+            }, versionDirectory.FullName);
+        }
+
+        Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+    }
+
+    [Fact]
     public void WarnIfGlobalSettingsContainAppHostPath_WritesWarning_WhenGlobalConfigHasAppHostPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, """{ "appHost": { "path": "AppHost.csproj" } }""");
         var errorWriter = new TestStartupErrorWriter();
@@ -84,7 +106,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WarnIfGlobalSettingsContainAppHostPath_DoesNotWarn_WhenGlobalConfigHasNoAppHostPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, """{ "channel": "daily" }""");
         var errorWriter = new TestStartupErrorWriter();
@@ -101,7 +123,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [InlineData("""{ "appHost": { "path": "AppHost.csproj" }""")]
     public void WarnIfGlobalSettingsContainAppHostPath_DoesNotWarn_WhenGlobalConfigCannotBeLoaded(string content)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, content);
         var errorWriter = new TestStartupErrorWriter();

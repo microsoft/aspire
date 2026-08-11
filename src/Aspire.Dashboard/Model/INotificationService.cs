@@ -72,7 +72,7 @@ public sealed class NotificationEntry
 public sealed class NotificationAction
 {
     public required string Text { get; init; }
-    public required Func<Task> OnClick { get; init; }
+    public required Func<IServiceProvider, Task> OnClick { get; init; }
 }
 
 /// <summary>

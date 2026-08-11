@@ -12,6 +12,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// </summary>
 /// <param name="name">The name of the node pool resource.</param>
 /// <param name="environment">The parent Kubernetes environment resource.</param>
+/// <ats-summary>Represents a Kubernetes node pool as a child resource of a <ats-see cref="!:type:KubernetesEnvironmentResource" />. Node pools can be referenced by compute resources to schedule workloads on specific node pools using <ats-see cref="!:method:KubernetesEnvironmentExtensions.withNodePool" />.</ats-summary>
 [AspireExport]
 public class KubernetesNodePoolResource(
     string name,

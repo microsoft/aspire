@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { getParserForDocument } from './parsers/AppHostResourceParser';
+import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
-import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
+import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
 import {
     codeLensDebugPipelineStep,
@@ -21,7 +21,9 @@ import {
     codeLensResourceStoppedWithExitCode,
     codeLensResourceStoppedError,
     codeLensResourceStoppedErrorWithExitCode,
-    codeLensResourceError,
+    codeLensResourceFailedToStart,
+    codeLensResourceFailedToStartError,
+    codeLensResourceRuntimeUnhealthy,
     codeLensRestart,
     codeLensStop,
     codeLensStart,
@@ -29,6 +31,7 @@ import {
     codeLensCommand,
     codeLensOpenDashboard,
     codeLensViewAppHostLogs,
+    codeLensResourceValueMissing,
 } from '../loc/strings';
 
 export class AspireCodeLensProvider implements vscode.CodeLensProvider {
@@ -47,30 +50,46 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         );
     }
 
-    provideCodeLenses(document: vscode.TextDocument, _token: vscode.CancellationToken): vscode.CodeLens[] {
+    provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CodeLens[]> {
+        return this._provideCodeLensesAsync(document, token);
+    }
+
+    private async _provideCodeLensesAsync(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[] | undefined> {
         if (!vscode.workspace.getConfiguration('aspire').get<boolean>('enableCodeLens', true)) {
             return [];
         }
 
-        const parser = getParserForDocument(document);
+        const parser = await getParserForDocument(document);
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
         if (!parser) {
             return [];
         }
 
-        const resources = parser.parseResources(document);
+        const resources = await parser.parseResources(document);
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
+        const workspaceAppHost = this._treeProvider.workspaceAppHost;
         const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
-        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0;
-        const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
+        const globalAppHost = this._resolveGlobalAppHostForDocument(document, appHosts);
+        const workspaceAppHostMatchesDocument = workspaceAppHostPath !== '' && this._documentMatchesAppHostPath(document, workspaceAppHostPath);
+        const hasRunningData = globalAppHost !== undefined || (workspaceAppHostMatchesDocument && (workspaceResources.length > 0 || workspaceAppHost !== undefined));
+        const findWorkspace = workspaceAppHostMatchesDocument
+            ? findWorkspaceResourceState(workspaceResources, workspaceAppHostPath)
+            : () => undefined;
 
         const lenses: vscode.CodeLens[] = [];
 
         // Builder-statement lenses (Open Dashboard + View Logs) appear only when this
         // document maps to a concretely-running AppHost — independent of whether any
         // Add* resource calls were found in the file.
-        this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
+        await this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
 
         if (resources.length === 0) {
             return lenses;
@@ -78,14 +97,25 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         for (const resource of resources) {
             // For pipeline steps the whole statement maps to a single Add*(...) call, so
-            // anchoring at the top of the chain reads naturally. For resources, however,
-            // a single fluent chain can declare several (e.g.
-            // `builder.AddPostgres("pg").AddDatabase("db")`) and collapsing them all to
-            // the chain's start line would stack two state/action lenses on the same
-            // line — the user can't tell which "Stopped" / which "Stop" belongs to which
-            // resource. Anchor each resource lens at its own call line instead.
-            const lensLine = resource.kind === 'pipelineStep'
-                ? (resource.statementStartLine ?? resource.range.start.line)
+            // anchoring at the top of the chain reads naturally.
+            //
+            // For resources, a single fluent chain can declare several (e.g.
+            // `builder.AddPostgres("pg").AddDatabase("db")`). If we collapsed all of those
+            // to the chain's start line their state/action lenses would stack on the same
+            // line and the user couldn't tell which "Stopped" / which "Stop" belongs to
+            // which resource. So when more than one resource shares a statement we anchor
+            // each at its own call line; when a chain declares just one resource we use
+            // the statement-start line so the lens sits above the whole declaration
+            // (e.g. above `const nodePlayer = await builder` rather than between that
+            // line and the `.addNodeApp(...)` call).
+            const statementStart = resource.statementStartLine ?? resource.range.start.line;
+            const sharedWithOthers = resource.kind === 'resource'
+                && resources.some(other =>
+                    other !== resource
+                    && other.kind === 'resource'
+                    && (other.statementStartLine ?? other.range.start.line) === statementStart);
+            const lensLine = (resource.kind === 'pipelineStep' || !sharedWithOthers)
+                ? statementStart
                 : resource.range.start.line;
             const lineRange = new vscode.Range(lensLine, 0, lensLine, 0);
 
@@ -97,7 +127,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             } else if (resource.kind === 'resource') {
                 // Resources get state lenses when live data is available
                 if (hasRunningData) {
-                    const match = findResourceState(appHosts, resource.name)
+                    const match = (globalAppHost ? findResourceState([globalAppHost], resource.name) : undefined)
                         ?? findWorkspace(resource.name);
                     if (match) {
                         this._addStateLenses(lenses, lineRange, match.resource, match.appHost);
@@ -118,14 +148,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }));
     }
 
-    private _addBuilderStatementLenses(
+    private async _addBuilderStatementLenses(
         lenses: vscode.CodeLens[],
         document: vscode.TextDocument,
-        parser: { findBuilderStatementLine?(document: vscode.TextDocument): number | undefined },
+        parser: AppHostResourceParser,
         workspaceAppHostPath: string,
         workspaceResources: readonly ResourceJson[],
-    ): void {
-        const builderLine = parser.findBuilderStatementLine?.(document);
+    ): Promise<void> {
+        const builderLine = await parser.findBuilderStatementLine?.(document);
         if (builderLine === undefined) {
             return;
         }
@@ -162,8 +192,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
      * Resolution order:
      *  1. Exact path or same-directory match against {@link AppHostDataRepository.appHosts}
      *     (covers global mode and any workspace AppHosts that surface there).
-     *  2. The repository's `workspaceAppHostPath` when workspace describe data is live
-     *     and the document lives in the same directory as that AppHost.
+     *  2. The repository's `workspaceAppHostPath` when workspace live data identifies
+     *     a running AppHost and the document lives in the same directory as that AppHost.
      *
      * The document path itself is intentionally not used as a fallback — for C#
      * AppHosts the CLI requires a `.csproj`, not a `.cs` file.
@@ -174,23 +204,31 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         workspaceResources: readonly ResourceJson[],
     ): string | undefined {
         const docPath = document.uri.fsPath;
-        const docDir = path.dirname(docPath);
         const match = this._dataRepository.appHosts.find(host => {
             const hostPath = host.appHostPath;
-            if (!hostPath) {
-                return false;
-            }
-            return hostPath === docPath || path.dirname(hostPath) === docDir;
+            return matchesAppHostPathOrDirectory(docPath, hostPath);
         });
         if (match) {
             return match.appHostPath;
         }
-        if (workspaceAppHostPath && workspaceResources.length > 0) {
-            if (workspaceAppHostPath === docPath || path.dirname(workspaceAppHostPath) === docDir) {
+        if (workspaceAppHostPath && (workspaceResources.length > 0 || this._dataRepository.workspaceAppHost !== undefined)) {
+            if (matchesAppHostPathOrDirectory(docPath, workspaceAppHostPath)) {
                 return workspaceAppHostPath;
             }
         }
         return undefined;
+    }
+
+    private _resolveGlobalAppHostForDocument(document: vscode.TextDocument, appHosts: readonly AppHostDisplayInfo[]): AppHostDisplayInfo | undefined {
+        return appHosts.find(host => this._documentMatchesAppHostPath(document, host.appHostPath));
+    }
+
+    private _documentMatchesAppHostPath(document: vscode.TextDocument, appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return matchesAppHostPathOrDirectory(document.uri.fsPath, appHostPath);
     }
 
     private _addStateLenses(
@@ -202,7 +240,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         const state = resource.state ?? '';
         const stateStyle = resource.stateStyle ?? '';
         const healthStatus = resource.healthStatus;
-        const commands = resource.commands ? Object.keys(resource.commands) : [];
+        const commands = resource.commands ?? {};
 
         // State indicator lens (clickable — reveals resource in tree view)
         let stateLabel = getCodeLensStateLabel(state, stateStyle, resource.exitCode);
@@ -217,7 +255,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             }
         }
 
-        let tooltipText = `${resource.displayName ?? resource.name}: ${state}${healthStatus ? ` (${healthStatus})` : ''}`;
+        let tooltipText = `${resource.displayName ?? resource.name}: ${getResourceStateDescription(state)}${healthStatus ? ` (${healthStatus})` : ''}`;
         const reports = resource.healthReports;
         if (reports && healthStatus && healthStatus !== HealthStatus.Healthy) {
             const failing = Object.entries(reports).filter(([, r]) => r.status !== HealthStatus.Healthy);
@@ -230,34 +268,49 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             title: stateLabel,
             command: 'aspire-vscode.codeLensRevealResource',
             tooltip: tooltipText,
-            arguments: [resource.displayName ?? resource.name],
+            arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
         }));
 
+        // Parameter value lens (secrets masked, long values truncated) so the value is
+        // visible inline next to the state, matching the dashboard and tree view.
+        const parameterValue = getParameterValueDescription(resource);
+        if (parameterValue !== undefined) {
+            lenses.push(new vscode.CodeLens(range, {
+                title: parameterValue,
+                command: 'aspire-vscode.codeLensRevealResource',
+                tooltip: parameterValue,
+                arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
+            }));
+        }
+
         // Action lenses based on available commands
-        if (commands.includes('restart') || commands.includes('resource-restart')) {
+        const restartCommand = getEnabledCommand(commands, 'restart', 'resource-restart');
+        if (restartCommand) {
             lenses.push(new vscode.CodeLens(range, {
                 title: codeLensRestart,
                 command: 'aspire-vscode.codeLensResourceAction',
                 tooltip: codeLensRestart,
-                arguments: [resource.name, 'restart', appHost.appHostPath],
+                arguments: [resource.name, 'restart', appHost.appHostPath, restartCommand],
             }));
         }
 
-        if (commands.includes('stop') || commands.includes('resource-stop')) {
+        const stopCommand = getEnabledCommand(commands, 'stop', 'resource-stop');
+        if (stopCommand) {
             lenses.push(new vscode.CodeLens(range, {
                 title: codeLensStop,
                 command: 'aspire-vscode.codeLensResourceAction',
                 tooltip: codeLensStop,
-                arguments: [resource.name, 'stop', appHost.appHostPath],
+                arguments: [resource.name, 'stop', appHost.appHostPath, stopCommand],
             }));
         }
 
-        if (commands.includes('start') || commands.includes('resource-start')) {
+        const startCommand = getEnabledCommand(commands, 'start', 'resource-start');
+        if (startCommand) {
             lenses.push(new vscode.CodeLens(range, {
                 title: codeLensStart,
                 command: 'aspire-vscode.codeLensResourceAction',
                 tooltip: codeLensStart,
-                arguments: [resource.name, 'start', appHost.appHostPath],
+                arguments: [resource.name, 'start', appHost.appHostPath, startCommand],
             }));
         }
 
@@ -273,17 +326,20 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         // Custom commands (non-standard ones like "Reset Database")
         const standardCommands = new Set(['restart', 'resource-restart', 'stop', 'resource-stop', 'start', 'resource-start']);
-        if (resource.commands) {
-            for (const [cmdName, cmd] of Object.entries(resource.commands) as [string, ResourceCommandJson][]) {
-                if (!standardCommands.has(cmdName)) {
-                    const label = codeLensCommand(cmd.description ?? cmdName);
-                    lenses.push(new vscode.CodeLens(range, {
-                        title: label,
-                        command: 'aspire-vscode.codeLensResourceAction',
-                        tooltip: cmd.description ?? cmdName,
-                        arguments: [resource.name, cmdName, appHost.appHostPath],
-                    }));
-                }
+        // Sort by (order, name) so custom command lenses appear in the dashboard registration order.
+        const customCommands = (Object.entries(commands) as [string, ResourceCommandJson][])
+            .sort(compareResourceCommands);
+        for (const [cmdName, cmd] of customCommands) {
+            if (!standardCommands.has(cmdName) && isEnabledCommand(cmd) && isCommandVisibleToUi(cmd)) {
+                const displayName = getNormalizedCommandText(cmd.displayName);
+                const description = getNormalizedCommandText(cmd.description);
+                const label = codeLensCommand(displayName ?? cmdName);
+                lenses.push(new vscode.CodeLens(range, {
+                    title: label,
+                    command: 'aspire-vscode.codeLensResourceAction',
+                    tooltip: description ?? displayName ?? cmdName,
+                    arguments: [resource.name, cmdName, appHost.appHostPath, cmd],
+                }));
             }
         }
     }
@@ -292,6 +348,12 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         this._disposables.forEach(d => d.dispose());
         this._onDidChangeCodeLenses.dispose();
     }
+}
+
+function getEnabledCommand(commands: Record<string, ResourceCommandJson>, ...commandNames: string[]): ResourceCommandJson | undefined {
+    return commandNames
+        .map(commandName => commands[commandName])
+        .find(command => isEnabledCommand(command) && isCommandVisibleToUi(command));
 }
 
 export function getCodeLensStateLabel(state: string, stateStyle: string, exitCode?: number | null): string {
@@ -313,8 +375,9 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
         case ResourceState.NotStarted:
             return codeLensResourceNotStarted;
         case ResourceState.FailedToStart:
+            return exitCode != null && exitCode !== 0 ? codeLensResourceFailedToStartError : codeLensResourceFailedToStart;
         case ResourceState.RuntimeUnhealthy:
-            return codeLensResourceError;
+            return codeLensResourceRuntimeUnhealthy;
         case ResourceState.Stopping:
             return codeLensResourceStopping;
         case ResourceState.Finished:
@@ -324,7 +387,14 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
                 return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedErrorWithExitCode(exitCode) : codeLensResourceStoppedError;
             }
             return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedWithExitCode(exitCode) : codeLensResourceStopped;
+        case ResourceState.ValueMissing:
+            return codeLensResourceValueMissing;
         default:
             return state || codeLensResourceStopped;
     }
+}
+
+function getNormalizedCommandText(value: string | null | undefined): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -40,7 +40,7 @@ func main() {
 	builder.AddMongoDB("mongo-custom-pass", &aspire.AddMongoDBOptions{Password: &customPassword})
 
 	mongoChained := builder.AddMongoDB("mongo-chained")
-	mongoChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	mongoChained.WithPersistentLifetime()
 	mongoChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("mongo-chained-data")})
 
 	mongoChained.AddDatabase("app-db")
@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

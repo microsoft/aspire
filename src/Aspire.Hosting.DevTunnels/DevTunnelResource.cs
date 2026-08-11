@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.DevTunnels;
@@ -27,6 +28,11 @@ public sealed class DevTunnelResource(string name, string tunnelId, string comma
     /// The unique ID for the dev tunnel.
     /// </summary>
     public string TunnelId { get; init; } = tunnelId;
+
+    /// <summary>
+    /// Gets the fully qualified tunnel ID including the region suffix if a region is specified.
+    /// </summary>
+    internal string ResolvedTunnelId => Options.Region is not null ? $"{TunnelId}.{Options.RegionCode}" : TunnelId;
 
     internal List<DevTunnelPortResource> Ports { get; } = [];
 
@@ -85,4 +91,43 @@ public sealed class DevTunnelPortResource : Resource, IResourceWithServiceDiscov
     internal EndpointReference TargetEndpoint { get; init; }
     internal DevTunnelPort? LastKnownStatus { get; set; }
     internal DevTunnelAccessStatus? LastKnownAccessStatus { get; set; }
+
+    internal async ValueTask<int> GetTunnelPortAsync(CancellationToken cancellationToken = default)
+    {
+        if (TargetEndpoint.Resource.IsContainer())
+        {
+            // Dev tunnel hosting runs on the host, so container endpoints must forward the host-reachable
+            // allocated port rather than the container-internal target port.
+            return await GetResolvedEndpointPortAsync(EndpointProperty.Port, cancellationToken).ConfigureAwait(false)
+                ?? TargetEndpoint.Port;
+        }
+
+        if (TargetEndpoint.TargetPort is int targetPort)
+        {
+            return targetPort;
+        }
+
+        return await GetResolvedEndpointPortAsync(EndpointProperty.TargetPort, cancellationToken).ConfigureAwait(false)
+            ?? TargetEndpoint.Port;
+    }
+
+    private async ValueTask<int?> GetResolvedEndpointPortAsync(EndpointProperty property, CancellationToken cancellationToken)
+    {
+        string? resolvedTargetPort = null;
+        try
+        {
+            resolvedTargetPort = await TargetEndpoint.Property(property).GetValueAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException) when (property == EndpointProperty.TargetPort && TargetEndpoint.IsAllocated)
+        {
+            // Endpoint references can only resolve targetPort dynamically when DCP reports a target-port expression.
+        }
+
+        if (int.TryParse(resolvedTargetPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port))
+        {
+            return port;
+        }
+
+        return null;
+    }
 }

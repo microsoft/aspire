@@ -4,10 +4,8 @@
 using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,14 +19,17 @@ internal sealed class DestroyCommand : PipelineCommandBase
 
     private readonly Option<bool> _yesOption;
 
-    public DestroyCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole)
-        : base("destroy", DestroyCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+    public DestroyCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole,
+        CommonCommandServices services)
+        : base("destroy", DestroyCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
     {
         _yesOption = new Option<bool>("--yes", "-y")
         {
             Description = DestroyCommandStrings.YesOptionDescription
         };
         Options.Add(_yesOption);
+
+        AddNonInteractiveRequiresYesValidator(this, _yesOption);
     }
 
     protected override string OperationCompletedPrefix => DestroyCommandStrings.OperationCompletedPrefix;
@@ -50,7 +51,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
             baseArgs.AddRange(["--yes", "true"]);
         }
 
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);

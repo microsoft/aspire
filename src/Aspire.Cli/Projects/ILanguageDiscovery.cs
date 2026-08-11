@@ -35,7 +35,7 @@ internal readonly record struct LanguageId(string Value)
 /// <param name="PackageName">The NuGet package name for language support (e.g., "Aspire.Hosting.CodeGeneration.TypeScript").</param>
 /// <param name="DetectionPatterns">File patterns used to detect this language (e.g., ["apphost.ts"]).</param>
 /// <param name="CodeGenerator">The code generator name to use for this language (e.g., "TypeScript"). Must match ICodeGenerator.Language.</param>
-/// <param name="AppHostFileName">The default filename for the AppHost entry point (e.g., "apphost.ts").</param>
+/// <param name="AppHostFileName">The default filename for the AppHost entry point (e.g., "apphost.mts").</param>
 /// <param name="IsExperimental">Whether this language is experimental and requires an additional per-language feature flag to be enabled.</param>
 internal sealed record LanguageInfo(
     LanguageId LanguageId,
@@ -47,9 +47,16 @@ internal sealed record LanguageInfo(
     bool IsExperimental = false)
 {
     /// <summary>
-    /// The well-known folder name where generated code is placed for all guest languages.
+    /// The default folder path where generated code is placed for guest languages.
     /// </summary>
-    internal const string GeneratedFolderName = ".modules";
+    internal static string GeneratedFolderName { get; } = Path.Combine(".aspire", "modules");
+
+    /// <summary>
+    /// The legacy folder path where generated code was placed prior to consolidating
+    /// generated artifacts under <c>.aspire/</c>. Used by the legacy TypeScript
+    /// <c>apphost.ts</c> compatibility path which still imports from <c>./.modules/</c>.
+    /// </summary>
+    internal const string LegacyGeneratedFolderName = ".modules";
 
     /// <summary>
     /// Maximum directory depth used when scanning the file system for language

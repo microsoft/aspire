@@ -19,30 +19,40 @@
       </trans-unit>
       <trans-unit id="StateColumnResourceContainerRuntimeUnhealthy">
         <source>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/aspire/container-runtime-unhealthy</source>
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</source>
         <target state="needs-review-translation">コンテナー ランタイムが見つかりましたが、異常である可能性があります。実行中であることを確認してください。
 詳細については、https://aka.ms/dotnet/aspire/container-runtime-unhealthy を参照してください。</target>
         <note>Contains a new line</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExited">
-        <source>{0} is no longer running</source>
-        <target state="translated">{0} が実行されなくなりました</target>
+        <source>{0} is no longer running.</source>
+        <target state="needs-review-translation">{0} が実行されなくなりました</target>
         <note>{0} is a resource type</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExitedUnexpectedly">
-        <source>{0} exited unexpectedly with exit code {1}</source>
-        <target state="translated">{0} は終了コード{1} で予期せず終了しました</target>
+        <source>{0} exited unexpectedly with exit code {1}.</source>
+        <target state="needs-review-translation">{0} は終了コード{1} で予期せず終了しました</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start.</source>
+        <target state="new">{0} failed to start.</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
-        <source>Resource has not started because it's configured to not automatically start.</source>
-        <target state="translated">リソースは自動的に開始しないように構成されているため、開始されていません。</target>
+        <source>Resource is not configured to start automatically.</source>
+        <target state="needs-review-translation">リソースは自動的に開始しないように構成されているため、開始されていません。</target>
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
-        <source>Resource is waiting for other resources to be in a running and healthy state.</source>
-        <target state="translated">リソースは、他のリソースが実行中で正常な状態になるのを待機しています。</target>
+        <source>Resource is waiting for dependencies.</source>
+        <target state="needs-review-translation">リソースは、他のリソースが実行中で正常な状態になるのを待機しています。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceWaitingFor">
+        <source>Waiting for dependencies: {0}</source>
+        <target state="new">Waiting for dependencies: {0}</target>
+        <note>{0} is a comma-separated list of dependency resource names.</note>
       </trans-unit>
       <trans-unit id="UnknownStateLabel">
         <source>Unknown</source>

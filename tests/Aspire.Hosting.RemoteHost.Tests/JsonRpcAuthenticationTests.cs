@@ -5,6 +5,7 @@ using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -160,6 +161,7 @@ public sealed class JsonRpcAuthenticationTests
         {
             services.AddHostedService<JsonRpcServer>();
 
+            services.AddSingleton<RemoteHostProfilingTelemetry>();
             services.AddSingleton<AssemblyLoader>();
             services.AddSingleton<Aspire.Hosting.RemoteHost.AtsContextFactory>();
             services.AddSingleton(sp => sp.GetRequiredService<Aspire.Hosting.RemoteHost.AtsContextFactory>().GetContext());

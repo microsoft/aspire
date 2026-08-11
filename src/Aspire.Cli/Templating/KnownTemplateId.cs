@@ -19,6 +19,11 @@ internal static class KnownTemplateId
     public const string TypeScriptEmptyAppHost = "aspire-ts-empty";
 
     /// <summary>
+    /// The template ID for the CLI Python empty AppHost template.
+    /// </summary>
+    public const string PythonEmptyAppHost = "aspire-py-empty";
+
+    /// <summary>
     /// The template ID for the dotnet empty AppHost template.
     /// </summary>
     public const string DotNetEmptyAppHost = "aspire";
@@ -42,6 +47,11 @@ internal static class KnownTemplateId
     /// The template ID for the CLI Go empty AppHost template.
     /// </summary>
     public const string GoEmptyAppHost = "aspire-go-empty";
+
+    /// <summary>
+    /// The template ID for the CLI Rust empty AppHost template.
+    /// </summary>
+    public const string RustEmptyAppHost = "aspire-rust-empty";
 
     /// <summary>
     /// The template ID for the Go starter template (Redis + Go HTTP API).

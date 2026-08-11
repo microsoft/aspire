@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -18,6 +22,11 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
         }
 
+        await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
+    }
+
+    internal static async Task SetConfigurationInFileAsync(string settingsFilePath, string key, string value, CancellationToken cancellationToken = default)
+    {
         JsonObject settings;
 
         // Read existing settings or create new
@@ -352,5 +361,134 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Convert dot notation to colon notation for IConfiguration access
         var configKey = key.Replace('.', ':');
         return Task.FromResult(configuration[configKey]);
+    }
+
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        var configKey = key.Replace('.', ':');
+
+        // 1. Project-relative local settings: walk up from startDirectory to find the nearest
+        //    config file. Most command lookups stop at that file, even when it omits the key,
+        //    so a parent directory's unrelated app config doesn't override global settings.
+        //    Targeted inheritance paths can explicitly continue past a key-missing file.
+        //    Intentionally bypasses the process-wide IConfiguration (which is rooted at the
+        //    CLI's launch cwd via ConfigurationHelper.RegisterSettingsFiles) so that commands
+        //    that operate on a path other than cwd (e.g. `aspire update --apphost <elsewhere>`)
+        //    consult the project's own aspire.config.json instead of the caller's cwd.
+        for (var searchDirectory = startDirectory; searchDirectory is not null; searchDirectory = searchDirectory.Parent)
+        {
+            var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+            if (TryReadConfigurationValue(configFilePath, configKey, out var configFileValue))
+            {
+                return Task.FromResult<string?>(configFileValue);
+            }
+            else if (File.Exists(configFilePath) && !continueSearchWhenKeyMissing)
+            {
+                break;
+            }
+
+            var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
+            if (TryReadConfigurationValue(legacySettingsPath, configKey, out var legacySettingsValue))
+            {
+                return Task.FromResult<string?>(legacySettingsValue);
+            }
+            else if (File.Exists(legacySettingsPath) && !continueSearchWhenKeyMissing)
+            {
+                break;
+            }
+        }
+
+        // 2. Global settings file fallback (lower precedence).
+        //
+        // Transitional path: identity-channel is now baked into the CLI binary (AspireCliChannel
+        // assembly metadata) and the acquisition scripts no longer seed a "channel" field into
+        // global settings. The read here remains so a user who deliberately ran
+        // `aspire config set -g channel <x>` continues to get their preference honored by
+        // `aspire update` until that workflow is removed in a follow-up. New per-project flows
+        // (`aspire add`, `aspire init`) do not consult global config and must not start to.
+        if (File.Exists(globalSettingsFile.FullName))
+        {
+            var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);
+            var globalValue = globalConfig[configKey];
+            if (!string.IsNullOrWhiteSpace(globalValue))
+            {
+                return Task.FromResult<string?>(globalValue);
+            }
+        }
+
+        return Task.FromResult<string?>(null);
+    }
+
+    private static bool TryReadConfigurationValue(string settingsFilePath, string configKey, [NotNullWhen(true)] out string? value)
+    {
+        value = null;
+
+        if (!File.Exists(settingsFilePath))
+        {
+            return false;
+        }
+
+        var config = LoadSettingsFileForReading(settingsFilePath);
+        var candidateValue = config[configKey];
+        if (string.IsNullOrWhiteSpace(candidateValue))
+        {
+            return false;
+        }
+
+        value = candidateValue;
+        return true;
+    }
+
+    /// <summary>
+    /// Loads a single settings file into an isolated <see cref="IConfigurationRoot"/> for
+    /// directory-scoped lookups, mirroring <c>ConfigurationHelper.AddSettingsFile</c>'s
+    /// JSON-with-comments parsing and "throw on invalid JSON" behavior so directory-scoped
+    /// reads fail loudly the same way startup-time loads do.
+    /// </summary>
+    private static IConfigurationRoot LoadSettingsFileForReading(string filePath)
+    {
+        string content;
+        try
+        {
+            content = File.ReadAllText(filePath);
+        }
+        catch (IOException)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(content, documentOptions: ConfigurationHelper.ParseOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, filePath, ex.Message),
+                ex);
+        }
+
+        if (node is not JsonObject)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        var cleanJson = node.ToJsonString();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
+        return new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(bytes))
+            .Build();
     }
 }

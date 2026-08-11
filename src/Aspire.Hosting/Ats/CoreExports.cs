@@ -76,7 +76,7 @@ internal static class CoreExports
     /// <param name="name">The volume name. If null, an anonymous volume is created.</param>
     /// <param name="isReadOnly">Whether the volume is read-only.</param>
     /// <returns>The same resource builder handle for chaining.</returns>
-    [AspireExport(Description = "Adds a volume")]
+    [AspireExport]
     public static IResourceBuilder<ContainerResource> WithVolume(
         this IResourceBuilder<ContainerResource> resource,
         string target,
@@ -100,10 +100,35 @@ internal static class CoreExports
     /// </remarks>
     /// <param name="resource">The resource builder handle.</param>
     /// <returns>The resource name.</returns>
-    [AspireExport(Description = "Gets the resource name")]
+    [AspireExport]
     public static string GetResourceName(this IResourceBuilder<IResource> resource)
     {
         return resource.Resource.Name;
+    }
+
+    #endregion
+
+    #region Project Configuration
+
+    /// <summary>
+    /// Includes only the specified project endpoint names in environment-variable injection.
+    /// </summary>
+    /// <param name="resource">The project resource builder handle.</param>
+    /// <param name="endpointNames">The endpoint names to include in environment variables.</param>
+    /// <returns>The same project resource builder handle for chaining.</returns>
+    [AspireExport]
+    public static IResourceBuilder<ProjectResource> WithEndpointsInEnvironment(
+        this IResourceBuilder<ProjectResource> resource,
+        string[] endpointNames)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(endpointNames);
+
+        var includedEndpointNames = endpointNames.ToHashSet(StringComparers.EndpointAnnotationName);
+
+        return global::Aspire.Hosting.ProjectResourceBuilderExtensions.WithEndpointsInEnvironment(
+            resource,
+            endpoint => includedEndpointNames.Contains(endpoint.Name));
     }
 
     #endregion

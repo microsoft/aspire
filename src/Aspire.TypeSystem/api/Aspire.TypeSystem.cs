@@ -30,8 +30,17 @@ namespace Aspire.TypeSystem
         public required System.Type[] Types { get { throw null; } init { } }
     }
 
+    public sealed partial class AspireValueData
+    {
+        public required string CatalogName { get { throw null; } init { } }
+
+        public string? Name { get { throw null; } init { } }
+    }
+
     public sealed partial class AtsCallbackParameterInfo
     {
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required AtsTypeRef Type { get { throw null; } init { } }
@@ -45,9 +54,15 @@ namespace Aspire.TypeSystem
 
         public string? Description { get { throw null; } init { } }
 
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public System.Collections.Generic.IReadOnlyList<AtsTypeRef> ExpandedTargetTypes { get { throw null; } set { } }
 
+        public bool IsObsolete { get { throw null; } init { } }
+
         public required string MethodName { get { throw null; } set { } }
+
+        public string? ObsoleteMessage { get { throw null; } init { } }
 
         public string? OwningTypeName { get { throw null; } init { } }
 
@@ -141,6 +156,8 @@ namespace Aspire.TypeSystem
 
         public required System.Collections.Generic.IReadOnlyList<AtsEnumTypeInfo> EnumTypes { get { throw null; } init { } }
 
+        public System.Collections.Generic.IReadOnlyList<AtsExportedValueInfo> ExportedValues { get { throw null; } init { } }
+
         public required System.Collections.Generic.IReadOnlyList<AtsTypeInfo> HandleTypes { get { throw null; } init { } }
 
         public System.Collections.Generic.Dictionary<string, System.Reflection.MethodInfo> Methods { get { throw null; } }
@@ -172,9 +189,28 @@ namespace Aspire.TypeSystem
         Error = 2
     }
 
+    public sealed partial class AtsDocumentationInfo
+    {
+        public System.Collections.Generic.IReadOnlyList<AtsParameterDocumentationInfo> Parameters { get { throw null; } init { } }
+
+        public string? Remarks { get { throw null; } init { } }
+
+        public string? Returns { get { throw null; } init { } }
+
+        public string? Summary { get { throw null; } init { } }
+    }
+
     public sealed partial class AtsDtoPropertyInfo
     {
+        public System.Collections.Generic.IReadOnlyList<AtsCallbackParameterInfo>? CallbackParameters { get { throw null; } init { } }
+
+        public AtsTypeRef? CallbackReturnType { get { throw null; } init { } }
+
         public string? Description { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        public bool IsCallback { get { throw null; } init { } }
 
         public bool IsOptional { get { throw null; } init { } }
 
@@ -189,6 +225,8 @@ namespace Aspire.TypeSystem
 
         public string? Description { get { throw null; } init { } }
 
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required System.Collections.Generic.IReadOnlyList<AtsDtoPropertyInfo> Properties { get { throw null; } init { } }
@@ -200,11 +238,44 @@ namespace Aspire.TypeSystem
     {
         public System.Type? ClrType { get { throw null; } init { } }
 
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required string TypeId { get { throw null; } init { } }
 
+        public System.Collections.Generic.IReadOnlyList<AtsEnumValueInfo> ValueInfos { get { throw null; } init { } }
+
         public required System.Collections.Generic.IReadOnlyList<string> Values { get { throw null; } init { } }
+    }
+
+    public sealed partial class AtsEnumValueInfo
+    {
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        public required string Name { get { throw null; } init { } }
+    }
+
+    public sealed partial class AtsExportedValueInfo
+    {
+        public string? Description { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        public required string OwningAssemblyName { get { throw null; } init { } }
+
+        public required System.Collections.Generic.IReadOnlyList<string> PathSegments { get { throw null; } init { } }
+
+        public required AtsTypeRef Type { get { throw null; } init { } }
+
+        public required System.Text.Json.Nodes.JsonNode? Value { get { throw null; } init { } }
+    }
+
+    public sealed partial class AtsParameterDocumentationInfo
+    {
+        public required string Description { get { throw null; } init { } }
+
+        public required string Name { get { throw null; } init { } }
     }
 
     public sealed partial class AtsParameterInfo
@@ -214,6 +285,8 @@ namespace Aspire.TypeSystem
         public AtsTypeRef? CallbackReturnType { get { throw null; } init { } }
 
         public object? DefaultValue { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public bool IsCallback { get { throw null; } init { } }
 
@@ -246,7 +319,10 @@ namespace Aspire.TypeSystem
 
         public System.Collections.Generic.IReadOnlyList<AtsTypeRef> BaseTypeHierarchy { get { throw null; } init { } }
 
+        [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.Interfaces)]
         public System.Type? ClrType { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public bool HasExposeMethods { get { throw null; } init { } }
 
@@ -268,17 +344,25 @@ namespace Aspire.TypeSystem
 
     public sealed partial class AtsTypeRef
     {
+        public AtsTypeRef? BaseType { get { throw null; } init { } }
+
         public AtsTypeCategory Category { get { throw null; } set { } }
 
+        [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.Interfaces)]
         public System.Type? ClrType { get { throw null; } init { } }
 
         public AtsTypeRef? ElementType { get { throw null; } init { } }
+
+        public System.Collections.Generic.IReadOnlyList<AtsTypeRef> ImplementedInterfaces { get { throw null; } init { } }
 
         public bool IsDistributedApplication { get { throw null; } }
 
         public bool IsDistributedApplicationBuilder { get { throw null; } }
 
         public bool IsInterface { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool? IsNullable { get { throw null; } init { } }
 
         public bool IsReadOnly { get { throw null; } init { } }
 
@@ -306,6 +390,16 @@ namespace Aspire.TypeSystem
         public static AspireUnionData? GetAspireUnionData(System.Reflection.ParameterInfo parameter) { throw null; }
 
         public static AspireUnionData? GetAspireUnionData(System.Reflection.PropertyInfo property) { throw null; }
+
+        public static AspireValueData? GetAspireValueData(System.Reflection.FieldInfo field) { throw null; }
+
+        public static AspireValueData? GetAspireValueData(System.Reflection.PropertyInfo property) { throw null; }
+
+        public static ObsoleteData? GetObsoleteData(System.Reflection.MethodInfo method) { throw null; }
+
+        public static ObsoleteData? GetObsoleteData(System.Reflection.PropertyInfo property) { throw null; }
+
+        public static ObsoleteData? GetObsoleteData(System.Type type) { throw null; }
 
         public static bool HasAspireDtoData(System.Type type) { throw null; }
 
@@ -355,6 +449,7 @@ namespace Aspire.TypeSystem
         public const string AspireExportAttribute = "Aspire.Hosting.AspireExportAttribute";
         public const string AspireExportIgnoreAttribute = "Aspire.Hosting.AspireExportIgnoreAttribute";
         public const string AspireUnionAttribute = "Aspire.Hosting.AspireUnionAttribute";
+        public const string AspireValueAttribute = "Aspire.Hosting.AspireValueAttribute";
         public const string DistributedApplication = "Aspire.Hosting.DistributedApplication";
         public const string DistributedApplicationBuilder = "Aspire.Hosting.IDistributedApplicationBuilder";
         public const string ReferenceExpression = "Aspire.Hosting.ApplicationModel.ReferenceExpression";
@@ -380,6 +475,13 @@ namespace Aspire.TypeSystem
         System.Collections.Generic.Dictionary<string, string> Scaffold(ScaffoldRequest request);
     }
 
+    public sealed partial class ObsoleteData
+    {
+        public bool IsError { get { throw null; } init { } }
+
+        public string? Message { get { throw null; } init { } }
+    }
+
     public sealed partial class RuntimeSpec
     {
         public required string CodeGenLanguage { get { throw null; } init { } }
@@ -392,11 +494,15 @@ namespace Aspire.TypeSystem
 
         public string? ExtensionLaunchCapability { get { throw null; } init { } }
 
+        public CommandSpec[]? Initialize { get { throw null; } init { } }
+
         public CommandSpec? InstallDependencies { get { throw null; } init { } }
 
         public required string Language { get { throw null; } init { } }
 
         public System.Collections.Generic.Dictionary<string, string>? MigrationFiles { get { throw null; } init { } }
+
+        public CommandSpec[]? PreExecute { get { throw null; } init { } }
 
         public CommandSpec? PublishExecute { get { throw null; } init { } }
 

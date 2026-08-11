@@ -29,6 +29,7 @@ namespace Aspire.Hosting.Foundry;
 /// </list>
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 [AspireExport]
 public class BingGroundingToolResource : FoundryToolResource
 {

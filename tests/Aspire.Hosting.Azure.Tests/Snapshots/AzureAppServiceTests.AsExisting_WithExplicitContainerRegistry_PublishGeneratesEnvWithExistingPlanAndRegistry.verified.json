@@ -1,0 +1,10 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env.module.bicep",
+  "params": {
+    "registryName": "{registryName.value}",
+    "sharedRg": "{sharedRg.value}",
+    "appServicePlanName": "{appServicePlanName.value}",
+    "userPrincipalId": ""
+  }
+}

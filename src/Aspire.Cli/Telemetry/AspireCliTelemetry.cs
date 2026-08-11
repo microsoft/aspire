@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-using Aspire.Hosting;
 using System.Runtime.InteropServices;
+using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -46,8 +46,12 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ActivitySource _reportedActivitySource;
     private readonly IMachineInformationProvider _machineInformationProvider;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
+    private readonly ICodingAgentDetector _codingAgentDetector;
+    private readonly IInternalMicrosoftDetector _internalMicrosoftDetector;
+    private readonly TelemetryConfiguration _telemetryConfiguration;
     private readonly ILogger<AspireCliTelemetry> _logger;
-    private readonly List<KeyValuePair<string, object?>> _tagsList = [];
+    private readonly CliExecutionContext _executionContext;
+    private readonly TelemetryTagsSource _tagsSource;
 
     private bool _isInitialized;
 
@@ -57,8 +61,17 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
-    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
+    /// <param name="telemetryConfiguration">The telemetry configuration.</param>
+    /// <param name="executionContext">
+    /// The CLI execution context carrying the effective identity. Required: the DI
+    /// container injects the registered singleton, so identity telemetry tags are
+    /// always emitted from it.
+    /// </param>
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedActivitySourceName, DiagnosticsActivitySourceName, executionContext, tagsSource)
     {
     }
 
@@ -69,13 +82,40 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
-    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, string reportedSourceName, string diagnosticsSourceName)
+    /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, new TelemetryConfiguration { ReportedTelemetryEnabled = true }, reportedSourceName, diagnosticsSourceName, executionContext, tagsSource)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AspireCliTelemetry"/> class with custom telemetry enablement.
+    /// </summary>
+    /// <param name="logger">The logger instance for recording errors.</param>
+    /// <param name="machineInformationProvider">The machine information provider.</param>
+    /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
+    /// <param name="telemetryConfiguration">The telemetry configuration.</param>
+    /// <param name="reportedSourceName">The name for the reported activity source.</param>
+    /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
+    /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
         _ciEnvironmentDetector = ciEnvironmentDetector;
+        _codingAgentDetector = codingAgentDetector;
+        _internalMicrosoftDetector = internalMicrosoftDetector;
+        _telemetryConfiguration = telemetryConfiguration;
+        _executionContext = executionContext;
+        _tagsSource = tagsSource;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
@@ -83,10 +123,9 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <summary>
     /// TESTING PURPOSES ONLY: Gets the default tags used for telemetry.
     /// </summary>
-    internal IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags()
+    internal async Task<IReadOnlyList<KeyValuePair<string, object?>>> GetDefaultTagsAsync()
     {
-        CheckInitialization();
-        return [.. _tagsList];
+        return await _tagsSource.TagsTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -101,6 +140,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <summary>
+    /// Starts a new activity for reported telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
+    }
+
+    /// <summary>
     /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
     /// Uses the caller member name if no name is provided.
     /// </summary>
@@ -112,22 +159,27 @@ internal sealed class AspireCliTelemetry : IHostedService
         return StartActivityCore(_diagnosticsActivitySource, name, kind);
     }
 
-    private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
+    /// <summary>
+    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
     {
-        CheckInitialization();
+        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
+    }
 
+    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
+    {
+        return StartActivityCore(source, name, kind, parentContext: null);
+    }
+
+    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
+    {
         // Activities must have a name.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var activity = source.StartActivity(name, kind);
-
-        if (activity is not null)
-        {
-            foreach (var tag in _tagsList)
-            {
-                activity.AddTag(tag.Key, tag.Value);
-            }
-        }
+        var activity = parentContext is { } context
+            ? source.StartActivity(name, kind, context)
+            : source.StartActivity(name, kind);
 
         return activity;
     }
@@ -139,8 +191,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="exception">The exception that occurred.</param>
     public void RecordError(string message, Exception exception)
     {
-        CheckInitialization();
-
         _logger.LogError(exception, message);
 
         var activity = FindReportedActivity(Activity.Current);
@@ -155,7 +205,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                 [TelemetryConstants.Tags.ExceptionStackTrace] = exception.StackTrace
             };
 
-            foreach (var tag in _tagsList)
+            foreach (var tag in _tagsSource.GetResolvedTags())
             {
                 tags[tag.Key] = tag.Value;
             }
@@ -170,62 +220,119 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <inheritdoc />
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        await InitializeAsync().ConfigureAwait(false);
+        Initialize();
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
-    /// Initializes the telemetry service by collecting machine information.
+    /// Starts background tag calculation. Returns immediately; the tags become available
+    /// asynchronously through <see cref="TelemetryTagsSource.TagsTask"/>.
     /// </summary>
-    internal async Task InitializeAsync()
+    internal void Initialize()
     {
         if (_isInitialized)
         {
             return;
         }
 
-        try
+        _isInitialized = true;
+
+        _tagsSource.StartCalculation(async () =>
         {
-            var macAddressHashTask = _machineInformationProvider.GetMacAddressHash();
-            var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
+            try
+            {
+                var tagsList = new List<KeyValuePair<string, object?>>();
 
-            await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
+                var macAddressHashTask = _machineInformationProvider.GetMacAddressHash();
+                var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
 
-            _tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
-            _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
+                Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
+                if (_telemetryConfiguration.ReportedTelemetryEnabled)
+                {
+                    // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
+                    // telemetry is enabled. Use CancellationToken.None because background tag calculation should not be interrupted by app shutdown.
+                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+                }
 
-            // This is consistent with dashboard version data.
-            _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
-            _tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, GetCliBuildId()));
+                await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
 
-            _tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
+                InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
+                if (internalMicrosoftTask is not null)
+                {
+                    try
+                    {
+                        internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_logger.IsEnabled(LogLevel.Debug))
+                        {
+                            _logger.LogDebug(ex, "Internal Microsoft detection failed.");
+                        }
+                    }
+                }
 
-            _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
-            _tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
-            _tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
-        }
-        catch (Exception ex)
-        {
-            // Don't throw an error if there is a telemetry issue.
-            _logger.LogError(ex, "Error occurred initializing telemetry service.");
-        }
-        finally
-        {
-            _isInitialized = true;
-        }
-    }
+                tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
+                tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
+                if (internalMicrosoftResult is { IsInternalMicrosoft: true })
+                {
+                    tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
+                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Source))
+                    {
+                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftResult.Source));
+                    }
 
-    private void CheckInitialization()
-    {
-        if (!_isInitialized)
-        {
-            throw new InvalidOperationException(
-                $"Telemetry service has not been initialized. Use {nameof(InitializeAsync)}() before any other operations.");
-        }
+                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Alias))
+                    {
+                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftResult.Alias));
+                    }
+
+                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Domain))
+                    {
+                        tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftResult.Domain));
+                    }
+                }
+
+                // This is consistent with dashboard version data.
+                tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
+                tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, GetCliBuildId()));
+
+                // Identity tags describe the build the CLI is *behaving* as (env / sidecar overrides),
+                // kept separate from the physical binary's cli.version/cli.build_id above so emulated
+                // runs are distinguishable in telemetry. See docs/specs/cli-identity-sidecar.md.
+                tagsList.Add(new(TelemetryConstants.Tags.IdentityVersion, _executionContext.IdentityVersion));
+                tagsList.Add(new(TelemetryConstants.Tags.IdentityChannel, _executionContext.IdentityChannel));
+                if (!string.IsNullOrEmpty(_executionContext.IdentityCommit))
+                {
+                    tagsList.Add(new(TelemetryConstants.Tags.IdentityCommit, _executionContext.IdentityCommit));
+                }
+
+                var codingAgent = _codingAgentDetector.GetCodingAgent();
+                if (codingAgent is not null)
+                {
+                    tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
+                }
+
+                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
+
+                tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
+                tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
+                tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
+
+                return (IReadOnlyList<KeyValuePair<string, object?>>)tagsList;
+            }
+            catch (Exception ex)
+            {
+                // Don't throw an error if there is a telemetry issue.
+                _logger.LogError(ex, "Error occurred initializing telemetry service.");
+                return Array.Empty<KeyValuePair<string, object?>>();
+            }
+        });
     }
 
     /// <summary>
@@ -296,10 +403,16 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <summary>
     /// Gets the CLI version from the assembly's informational version attribute.
     /// </summary>
+    /// <remarks>
+    /// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md): the
+    /// <c>cli.version</c> telemetry tag identifies the actual running binary, so it reads the
+    /// assembly directly and is NOT replaced by an emulated <c>ASPIRE_CLI_VERSION</c> identity.
+    /// The emulated identity is emitted separately via the <c>identity.*</c> tags.
+    /// </remarks>
     /// <returns>The CLI version string, or an empty string if not available.</returns>
     internal static string GetCliVersion()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty;
+        return AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
     }
 
     /// <summary>
@@ -308,6 +421,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <returns>The CLI build ID string, or an empty string if not available.</returns>
     internal static string GetCliBuildId()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty;
+        return AssemblyVersionHelper.GetFileVersion(typeof(Program).Assembly);
     }
 }

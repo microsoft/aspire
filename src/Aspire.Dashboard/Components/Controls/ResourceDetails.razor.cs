@@ -7,7 +7,6 @@ using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -46,9 +45,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     [Inject]
     public required IJSRuntime JS { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
@@ -117,7 +113,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     internal IQueryable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
         GetResourceProperties(ordered: true)
-            .Where(vm => (_showAll || vm.KnownProperty != null) && vm.MatchesFilter(_filter))
+            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter))
             .AsQueryable();
 
     private bool _isVolumesExpanded;
@@ -131,7 +127,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly List<MenuButtonItem> _resourceActionsMenuItems = [];
     private bool? _isMaskAllChecked;
     private bool _dataChanged;
-    private AIContext? _aiContext;
     private Dictionary<string, ComponentMetadata>? _valueComponents;
 
     private bool IsMaskAllChecked
@@ -152,9 +147,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 _isMaskAllChecked = true;
                 _unmaskedItemNames.Clear();
                 _dataChanged = true;
-
-                // Update AI context with new resource.
-                _aiContext?.ContextHasChanged();
             }
 
             _resource = Resource;
@@ -164,12 +156,20 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 var displayedProperty = property;
 
                 // An unresolved secret parameter has no value to hide, so keep the placeholder visible
-                // in the details grid instead of routing it through masking behavior.
+                // in the details grid instead of routing it through masking behavior. Preserve the
+                // display/highlight metadata so the placeholder keeps the original property behavior.
                 if (_resource.HasMissingParameterValueState() &&
-                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    string.Equals(property.Name, KnownProperties.Parameter.Value, StringComparisons.ResourcePropertyName) &&
                     property.IsValueSensitive)
                 {
-                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                    displayedProperty = new ResourcePropertyViewModel(
+                        name: property.Name,
+                        value: property.Value,
+                        isValueSensitive: false,
+                        knownProperty: property.KnownProperty,
+                        sortOrder: property.SortOrder,
+                        displayName: property.DisplayName,
+                        isHighlighted: property.IsHighlighted);
                 }
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
@@ -212,23 +212,29 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 {
                     Type = typeof(ResourceHealthStateValue),
                     Parameters = { ["Resource"] = _resource }
-                },
+                }
             };
 
             // For parameter resources whose value is unset, render the same "Value not set" affordance
             // as the parameters grid so the details panel stays consistent with the grid.
             if (_resource.HasMissingParameterValueState())
             {
-                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                var metadata = new ComponentMetadata
                 {
                     Type = typeof(ParameterValueDisplayCell),
                     Parameters =
                     {
                         ["Resource"] = _resource,
-                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteParameterCommandAsync,
+                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteResourceCommandAsync,
                         ["IsCommandExecuting"] = IsCommandExecuting,
                     }
                 };
+
+                // Parameter value is producer metadata for new resource servers, but legacy
+                // fallback metadata exposes the same property as an unknown property key.
+                // Register both keys so the unset-value renderer works in both cases.
+                _valueComponents[KnownProperties.Parameter.Value] = metadata;
+                _valueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
             }
 
             UpdateResourceActionsMenu();
@@ -254,7 +260,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
         (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlStringsLoc);
-        _aiContext = CreateAIContext();
     }
 
     private void UpdateResourceActionsMenu()
@@ -310,7 +315,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             showUrls: true);
     }
 
-    private async Task ExecuteParameterCommandAsync(ResourceViewModel resource, CommandViewModel command)
+    private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         await CommandSelected.InvokeAsync(command);
     }
@@ -375,7 +380,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private void AddStateDescriptionProperty(ResourceViewModel resource)
     {
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
-        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc);
+        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourceByName.Values);
 
         if (string.IsNullOrWhiteSpace(stateDescription) || string.Equals(stateDescription, stateViewModel.Text, StringComparison.Ordinal))
         {
@@ -388,7 +393,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 value: Value.ForString(stateDescription),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
-                priority: 1),
+                // The description explains the current state, so keep it in the same generic
+                // sort group as State rather than treating it as producer-defined metadata.
+                sortOrder: KnownResourcePropertySortOrder.State,
+                displayName: null,
+                isHighlighted: false),
             Loc,
             TimeProvider));
     }
@@ -396,10 +405,13 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private IEnumerable<DisplayedResourcePropertyViewModel> GetResourceProperties(bool ordered)
     {
         var vms = _displayedResourcePropertyViewModels
-            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 });
+            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 }
+                // State has a custom component (ResourceStateValue) that renders "Unknown" when the value is null,
+                // so always include it in the property list.
+                || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
-            ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)
+            ? vms.OrderBy(vm => vm.SortOrder).ThenBy(vm => vm.DisplayName)
             : vms;
     }
 
@@ -498,17 +510,8 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         return null;
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(ResourceDetails), c =>
-        {
-            c.BuildIceBreakers = (builder, context) => builder.ResourceDetails(context, Resource);
-        });
-    }
-
     public void Dispose()
     {
-        _aiContext?.Dispose();
         TelemetryContext.Dispose();
     }
 }

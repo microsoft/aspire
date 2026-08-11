@@ -1,0 +1,10 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- Benchmarks are local-only profiling harnesses; they never ship as packages. -->
+    <IsPackable>false</IsPackable>
+    <IsShippingPackage>false</IsShippingPackage>
+  </PropertyGroup>
+
+</Project>

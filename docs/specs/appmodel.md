@@ -631,7 +631,7 @@ private static ReferenceExpression BuildConnectionString(
 
 ## Endpoint Primitives
 
-The [EndpointReference](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.applicationmodel.endpointreference?view=dotnet-aspire-8.0) is the fundamental type used to interact with another resource's endpoint. It provides properties such as:
+The [EndpointReference](https://aspire.dev/reference/api/csharp/aspire.hosting/endpointreference/) is the fundamental type used to interact with another resource's endpoint. It provides properties such as:
 
 - Url
 - Host
@@ -685,7 +685,9 @@ Use the `IsAllocated` property on an `EndpointReference` to check if an endpoint
 
 Endpoint resolution happens during the startup sequence of the DistributedApplication. To safely access endpoint values (e.g., Url, Host, Port), you must wait until endpoints are allocated.
 
-Aspire provides eventing APIs, such as `AfterEndpointsAllocatedEvent`, to access endpoints after allocation. These APIs ensure code executes only when endpoints are ready. 
+Aspire provides eventing APIs, such as `ResourceEndpointsAllocatedEvent`, to access endpoints after allocation for a specific resource. These APIs ensure code executes only when endpoints are ready.
+
+> **Note:** The older application-level `AfterEndpointsAllocatedEvent` is **deprecated** and will be removed in a future version. Prefer the resource-specific `ResourceEndpointsAllocatedEvent` (to react when a particular resource's endpoints are allocated) or `BeforeResourceStartedEvent` (for last-chance setup just before a resource starts) depending on your needs.
 
 #### Example: Checking Allocation and Using Eventing
 
@@ -711,8 +713,8 @@ catch (Exception ex)
     Console.WriteLine($"Error accessing Url: {ex.Message}");
 }
 
-// Subscribe to AfterEndpointsAllocatedEvent for resolved properties
-builder.Eventing.Subscribe<AfterEndpointsAllocatedEvent>(
+// Subscribe to ResourceEndpointsAllocatedEvent for the specific resource
+builder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>(redis.Resource,
     (@event, cancellationToken) =>
     {
         Console.WriteLine($"Endpoint allocated: {endpoint.IsAllocated}");
@@ -737,7 +739,7 @@ builder.Build().Run();
   Error accessing Url: Endpoint has not been allocated.
   ```
 
-**NOTE: The overloads of [WithEnvironment](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.resourcebuilderextensions.withenvironment) that take a callback run after endpoints have been allocated.** 
+**NOTE: The overloads of [WithEnvironment](https://aspire.dev/reference/api/csharp/aspire.hosting/resourcebuilderextensions/methods/#withenvironment-iresourcebuilder-t-action-environmentcallbackcontext) that take a callback run after endpoints have been allocated.** 
 
 ---
 

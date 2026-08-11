@@ -7,11 +7,13 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECOMPUTE001
 #pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIRECONTAINERRUNTIME001 // IContainerRuntimeResolver is experimental
 #pragma warning disable IDE0005
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,10 +29,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithNoSteps_CompletesSuccessfully()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
         var context = CreateDeployingContext(builder.Build());
 
@@ -40,10 +39,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithSingleStep_ExecutesStep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var stepExecuted = false;
@@ -62,10 +58,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMultipleIndependentSteps_ExecutesAllSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -99,10 +92,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithDependsOn_ExecutesInOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -133,10 +123,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithRequiredBy_ExecutesInCorrectOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -167,10 +154,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMixedDependsOnAndRequiredBy_ExecutesInCorrectOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -207,10 +191,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMultipleLevels_ExecutesLevelsInOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executionOrder = new List<(string step, DateTime time)>();
@@ -267,10 +248,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithPipelineStepFactoryAnnotation_ExecutesAnnotatedSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -302,10 +280,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMultiplePipelineStepAnnotations_ExecutesAllAnnotatedSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -343,10 +318,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public void AddStep_WithDuplicateStepNames_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("step1", async (context) => await Task.CompletedTask);
@@ -359,10 +331,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithUnknownDependency_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("step1", async (context) => await Task.CompletedTask, dependsOn: "unknown-step");
@@ -377,10 +346,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithUnknownRequiredBy_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("step1", async (context) => await Task.CompletedTask, requiredBy: "unknown-step");
@@ -395,10 +361,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithCircularDependency_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var step1 = new PipelineStep
@@ -429,10 +392,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WhenStepThrows_WrapsExceptionWithStepName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "failing-step");
         var pipeline = new DistributedApplicationPipeline();
 
         var exceptionMessage = "Test exception";
@@ -454,10 +414,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithComplexDependencyGraph_ExecutesInCorrectOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -513,10 +470,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMultipleDependencies_ExecutesInCorrectOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -552,10 +506,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithMultipleRequiredBy_ExecutesInCorrectOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executedSteps = new List<string>();
@@ -591,10 +542,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithUnknownRequiredByStep_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("step1", async (context) =>
@@ -610,10 +558,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithUnknownRequiredByStepInList_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("step1", async (context) =>
@@ -669,10 +614,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithDuplicateAnnotationStepNames_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var resource1 = builder.AddResource(new CustomResource("resource1"))
             .WithPipelineStepFactory((factoryContext) => new PipelineStep
@@ -702,10 +644,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithFailingStep_PreservesOriginalStackTrace()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "failing-step");
         var pipeline = new DistributedApplicationPipeline();
 
         pipeline.AddStep("failing-step", async (context) =>
@@ -730,10 +669,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithDependencyFailure_ReportsFailedDependency()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "deploy");
         var pipeline = new DistributedApplicationPipeline();
 
         var dependentStepExecuted = false;
@@ -767,10 +703,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithCircularDependencyInComplex_ThrowsInvalidOperationException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         // Create a more complex circular dependency: A -> B -> C -> A
@@ -812,10 +745,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WithFailure_PreventsOtherStepsFromStarting()
     {
         // Test that when one step fails, other steps that haven't started yet don't start
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "deploy");
         var pipeline = new DistributedApplicationPipeline();
 
         var step2Started = false;
@@ -845,10 +775,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_IndependentStepContinuesWhenSiblingFails()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "deploy");
         var pipeline = new DistributedApplicationPipeline();
 
         var independentStepExecuted = false;
@@ -879,10 +806,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_IndependentStepIsNotCancelledWhenSiblingFails()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "deploy");
         var pipeline = new DistributedApplicationPipeline();
 
         var wasCancelled = false;
@@ -913,10 +837,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_DependentStepSkippedButIndependentContinues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "deploy");
         var pipeline = new DistributedApplicationPipeline();
 
         var dependentExecuted = false;
@@ -956,10 +877,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WhenStepThrows_ReportsFailureToActivityReporter()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "failing-step");
 
         var pipeline = new DistributedApplicationPipeline();
         var exceptionMessage = "Test exception for reporting";
@@ -988,10 +906,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WhenStepThrowsProcessFailedException_RethrowsWithoutWrapping()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "failing-step");
 
         var pipeline = new DistributedApplicationPipeline();
         var expected = new ProcessFailedException("Docker build failed with exit code 1.", 1, ["output-001"]);
@@ -1012,10 +927,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         // Diamond pattern: A -> B, A -> C, B -> D, C -> D
         // D should only start after both B and C complete
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executionOrder = new List<string>();
@@ -1079,10 +991,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithPipelineStepFactoryAnnotation_FactoryReceivesPipelineContextAndResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         IResource? capturedResource = null;
         PipelineContext? capturedPipelineContext = null;
@@ -1119,10 +1028,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineStepFactory_SyncOverload_ExecutesStep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -1146,10 +1052,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineStepFactory_AsyncOverload_ExecutesStep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -1177,10 +1080,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineStepFactory_MultipleStepsSyncOverload_ExecutesAllSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -1217,10 +1117,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var resource = builder.AddResource(new CustomResource("test-resource"))
@@ -1262,10 +1159,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WithPipelineLoggerProvider_LogsToStepLogger()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         var loggedMessages = new List<string>();
@@ -1296,10 +1190,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_PipelineLoggerProvider_IsolatesLoggingBetweenSteps()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         var step1Logger = (ILogger?)null;
@@ -1356,10 +1247,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WhenStepFails_PipelineLoggerIsCleanedUp()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "failing-step");
 
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1395,10 +1283,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_PipelineLoggerProvider_PreservesLoggerAfterStepCompletion()
     {
         // This test verifies that each step gets a clean logger context
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         var capturedSteps = new List<IReportingStep?>();
@@ -1465,10 +1350,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         string[] expectedFilteredLevels)
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, logLevel: configuredLogLevel, step: "logging-step").WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "logging-step", logLevel: configuredLogLevel);
 
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1535,10 +1417,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithConfigurationCallback_ExecutesCallback()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var callbackExecuted = false;
@@ -1581,10 +1460,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_ConfigurationCallback_CanModifyDependencies()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executionOrder = new List<string>();
@@ -1618,10 +1494,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task PipelineConfigurationContext_GetStepsByTag_ReturnsCorrectSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var foundSteps = new List<PipelineStep>();
@@ -1665,10 +1538,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task PipelineConfigurationContext_GetStepsByResource_ReturnsCorrectSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var foundSteps = new List<PipelineStep>();
         IResource? targetResource = null;
@@ -1718,10 +1588,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task PipelineConfigurationContext_GetStepsByResourceAndTag_ReturnsCorrectSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var foundSteps = new List<PipelineStep>();
 
@@ -1761,10 +1628,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineConfiguration_AsyncOverload_ExecutesCallback()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var callbackExecuted = false;
 
@@ -1785,10 +1649,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task WithPipelineConfiguration_SyncOverload_ExecutesCallback()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var callbackExecuted = false;
 
@@ -1808,10 +1669,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ConfigurationCallback_CanAccessModel()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         IResource? capturedResource = null;
 
@@ -1832,10 +1690,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ConfigurationCallback_ExecutesAfterStepCollection()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var allStepsAvailable = false;
 
@@ -1872,10 +1727,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ConfigurationCallback_CanCreateComplexDependencyRelationships()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
 
         var executionOrder = new List<string>();
@@ -1965,10 +1817,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithNonExistentStepFilter_ThrowsInvalidOperationExceptionWithAvailableSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "non-existent-step").WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "non-existent-step");
 
         var pipeline = new DistributedApplicationPipeline();
 
@@ -1989,10 +1838,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithStepFilterAndComplexDependencies_ExecutesTransitiveClosure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "step5").WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "step5");
 
         var pipeline = new DistributedApplicationPipeline();
 
@@ -2060,10 +1906,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithStepFilterForIndependentStep_ExecutesOnlyThatStep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "independent-step").WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: "independent-step");
 
         var pipeline = new DistributedApplicationPipeline();
 
@@ -2100,10 +1943,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task FilterStepsForExecution_WithRequiredBy_IncludesTransitiveDependencies()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var executedSteps = new List<string>();
         var lockObject = new object();
@@ -2168,11 +2008,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ProcessParametersStep_ValidatesBehavior()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+        using var builder = CreatePipelineTestBuilder(activityReporter: activityReporter);
         
         // Add a parameter with a default value to trigger parameter processing
         builder.AddParameter("test-param", () => "default-value");
@@ -2240,11 +2077,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_PassesStepHierarchyMetadataToActivityReporter()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+        using var builder = CreatePipelineTestBuilder(activityReporter: activityReporter);
 
         var pipeline = new DistributedApplicationPipeline();
         pipeline.AddStep("root", _ => Task.CompletedTask);
@@ -2264,9 +2098,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task PushPrereq_SkipsRegistryCheckForNonDockerImageFormat()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
 
         // Add a project that requires build and push
         var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
@@ -2291,9 +2123,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task PushPrereq_ThrowsForDockerImageFormatWithoutRegistry()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
 
         // Add a project that requires build and push
         var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
@@ -2320,9 +2150,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task PushPrereq_ThrowsForDefaultImageFormatWithoutRegistry()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
 
         // Add a project that requires build and push without specifying Destination
         var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
@@ -2343,9 +2171,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task PushPrereq_ThrowsForArchiveDestinationWithoutOutputPath()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
 
         // Add a project that requires build and push
         var project = builder.AddProject<DummyProject>("test-project", launchProfileName: null);
@@ -2373,9 +2199,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task PushPrereq_SkipsExcludedFromManifestResources()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PushPrereq).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder(step: WellKnownPipelineSteps.PushPrereq);
 
         // Add a container registry so non-excluded projects can push
         var registry = builder.AddContainerRegistry("test-registry", "registry.example.com");
@@ -2409,9 +2233,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ResolveStepsAsync_ReturnsAllSteps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         pipeline.AddStep("custom-step", _ => Task.CompletedTask);
@@ -2428,9 +2250,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ResolveStepsAsync_NormalizesRequiredByToDependsOn()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         var step = new PipelineStep
@@ -2452,9 +2272,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ResolveStepsAsync_PreservesTags()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var pipeline = new DistributedApplicationPipeline();
         pipeline.AddStep(new PipelineStep
@@ -2475,9 +2293,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ResolveStepsAsync_DoesNotExecuteStepActions()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         var stepExecuted = false;
         var pipeline = new DistributedApplicationPipeline();
@@ -2564,9 +2380,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // would mutate built-in steps' DependsOnSteps via NormalizeRequiredByToDependsOn,
         // and a later resource removal (e.g. an unused default container registry) would
         // then cause the next ResolveStepsAsync to fail with "depends on unknown step".
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        using var builder = CreatePipelineTestBuilder();
 
         // A resource that emits a step required by the built-in 'deploy' aggregation step.
         builder.AddResource(new CustomResource("transient-resource"))
@@ -2605,5 +2419,33 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
         Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
+    }
+
+    // Creates a test builder with the service registrations every pipeline test needs:
+    // the test output helper, a FakeContainerRuntime so the container-runtime preflight does
+    // not depend on a real Docker daemon, and an IPipelineActivityReporter (the default
+    // TestPipelineActivityReporter, or a caller-supplied instance for tests that inspect it).
+    private IDistributedApplicationTestingBuilder CreatePipelineTestBuilder(
+        string? step = null,
+        string? logLevel = "information",
+        IPipelineActivityReporter? activityReporter = null)
+    {
+        var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, logLevel: logLevel, step: step)
+            .WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
+
+        if (activityReporter is not null)
+        {
+            builder.Services.AddSingleton(activityReporter);
+        }
+        else
+        {
+            builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        }
+
+        return builder;
     }
 }

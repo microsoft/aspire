@@ -1,20 +1,22 @@
-# Aspire.Hosting.JavaScript library
+# JavaScript app hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure JavaScript projects.
+Use this integration to model, configure, and orchestrate JavaScript projects in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire JavaScript library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.JavaScript` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.JavaScript
+```bash
+aspire add Aspire.Hosting.JavaScript
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Or resource and consume the connection using the following methods:
+In the AppHost, add a JavaScript app resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -24,7 +26,22 @@ builder.AddJavaScriptApp("frontend", "../frontend", "app.js");
 builder.Build().Run();
 ```
 
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+await builder.addJavaScriptApp("frontend", "../frontend", "app.js");
+
+await builder.build().run();
+```
+
 ## Additional documentation
+
+https://aspire.dev/integrations/gallery/
+https://aspire.dev/integrations/frameworks/javascript/
 https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-javascript
 https://github.com/microsoft/aspire-samples/tree/main/samples/aspire-with-node
 

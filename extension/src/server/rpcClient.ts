@@ -1,7 +1,7 @@
 import { MessageConnection } from 'vscode-jsonrpc';
+import * as vscode from 'vscode';
 import { extensionLogOutputChannel, logAsyncOperation } from '../utils/logging';
 import { IInteractionService, InteractionService } from './interactionService';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 
 export interface ICliRpcClient {
@@ -21,20 +21,19 @@ export type ValidationResult = {
 export class RpcClient implements ICliRpcClient {
     private _messageConnection: MessageConnection;
     private _connectionClosed: boolean;
-    private _terminalProvider: AspireTerminalProvider;
 
     public debugSessionId: string | null;
     public interactionService: IInteractionService;
 
-    constructor(terminalProvider: AspireTerminalProvider, messageConnection: MessageConnection, debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null) {
-        this._terminalProvider = terminalProvider;
+    constructor(messageConnection: MessageConnection, debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
         this._messageConnection = messageConnection;
         this._connectionClosed = false;
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this, () => terminalProvider.getAspireTerminal());
+        this.interactionService = new InteractionService(getAspireDebugSession, this, globalState);
 
         this._messageConnection.onClose(() => {
             this._connectionClosed = true;
+            this.interactionService.clearProgressNotification();
             extensionLogOutputChannel.info('JSON-RPC connection closed');
         });
     }

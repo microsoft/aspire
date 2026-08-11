@@ -3,12 +3,12 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -26,7 +26,8 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    IEnvironment environment)
     : ITemplateFactory
 {
     // Template-specific options
@@ -104,8 +105,8 @@ internal class DotNetTemplateFactory(
         }
 
         // Fall back to checking for dotnet on the system PATH.
-        var dotnetFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var dotnetFileName = environment.IsWindows() ? "dotnet.exe" : "dotnet";
+        var pathVariable = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
         foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -130,7 +131,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-starter",
             TemplatingStrings.AspireStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -139,7 +140,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-ts-cs-starter",
             TemplatingStrings.AspireJsFrontendStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireJsFrontendStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -150,7 +151,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 KnownTemplateId.DotNetEmptyAppHost,
                 TemplatingStrings.AspireEmptyDotNetTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp,
@@ -160,7 +161,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-apphost",
                 TemplatingStrings.AspireAppHost_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -169,7 +170,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-servicedefaults",
                 TemplatingStrings.AspireServiceDefaults_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -180,7 +181,7 @@ internal class DotNetTemplateFactory(
         var msTestTemplate = new CallbackTemplate(
             "aspire-mstest",
             TemplatingStrings.AspireMSTest_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -190,7 +191,7 @@ internal class DotNetTemplateFactory(
         var nunitTemplate = new CallbackTemplate(
             "aspire-nunit",
             TemplatingStrings.AspireNUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -200,7 +201,7 @@ internal class DotNetTemplateFactory(
         var xunitTemplate = new CallbackTemplate(
             "aspire-xunit",
             TemplatingStrings.AspireXUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireXUnitOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -213,7 +214,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-test",
                 TemplatingStrings.IntegrationTestsTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 async (template, inputs, parseResult, ct) =>
                 {
@@ -234,7 +235,7 @@ internal class DotNetTemplateFactory(
         return new CallbackTemplate(
             "aspire-apphost-singlefile",
             TemplatingStrings.AspireAppHostSingleFile_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyDevLocalhostTldOption,
             (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspireSingleFileOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp,
@@ -435,13 +436,18 @@ internal class DotNetTemplateFactory(
 
     private async Task<TemplateResult> ApplyTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback, CancellationToken cancellationToken)
     {
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
-            return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
         }
 
-        var name = await GetProjectNameAsync(inputs, parseResult, cancellationToken);
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
         var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
     }
@@ -454,7 +460,7 @@ internal class DotNetTemplateFactory(
             // release/13.3. Surfacing channel/version errors before prompting for extra args
             // avoids discarding answers the user just gave.
             var query = new TemplatePackageQuery(
-                ChannelOverride: inputs.Channel,
+                RequestedChannel: inputs.Channel,
                 VersionOverride: inputs.Version,
                 SourceOverride: inputs.Source,
                 IncludePrHives: true);
@@ -475,8 +481,8 @@ internal class DotNetTemplateFactory(
             if (installOutcome.ExitCode != 0)
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, executionContext.LogFilePath));
-                return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+                return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
             interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
@@ -510,87 +516,109 @@ internal class DotNetTemplateFactory(
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
-                    return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode, executionContext.LogFilePath));
-                return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-            // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
-            // working directory, create one in the newly created project's output directory.
-            await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            // Persist the resolved channel into the scaffolded project's aspire.config.json
+            // for channels whose name should be pinned (pr-<N>, daily, staging, local).
+            // Without this pin, `aspire update` on the new project skips the local-config
+            // step in its channel-resolution precedence and falls through to either an
+            // interactive prompt (when hives exist) or the Implicit/nuget.org channel —
+            // silently moving a project scaffolded by a PR or daily CLI onto stable/nuget.org.
+            // The `stable` channel is intentionally NOT persisted (ShouldPersistChannelName
+            // excludes it): its packages live on nuget.org, so `aspire add`/`aspire restore`
+            // continue to use the ambient NuGet config without a per-project pin. Mirrors the
+            // TypeScript starter behavior in CliTemplateFactory.TypeScriptStarterTemplate.
+            if (selectedTemplateDetails.Channel.ShouldPersistChannelName())
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.Save(outputPath);
+            }
+
+            // For channels that route Aspire packages to a custom feed, optionally create or update
+            // a NuGet.config. If none exists in the current working directory, create one in the
+            // newly created project's output directory. The `stable` channel is skipped inside
+            // PromptToCreateOrUpdateNuGetConfigAsync (ShouldCreateNuGetConfig) because its packages
+            // are on nuget.org and a <clear/>-based config would clobber the user's ambient sources.
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(ExitCodeConstants.Success, outputPath);
+            return new TemplateResult(CliExitCodes.Success, outputPath);
         }
         catch (OperationCanceledException)
         {
-            interactionService.DisplayCancellationMessage();
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.Cancelled);
         }
         catch (CertificateServiceException ex)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(ExitCodeConstants.FailedToTrustCertificates);
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
         }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (EmptyChoicesException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 
-    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, string templateName, ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (inputs.Name is not { } name || !ProjectNameValidator.IsProjectNameValid(name))
         {
-            var defaultName = executionContext.WorkingDirectory.Name;
+            var defaultName = templateName;
             name = await prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         return name;
     }
 
-    private async Task<string> GetOutputPathAsync(TemplateInputs inputs, Func<string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        if (inputs.Output is not { } outputPath)
-        {
-            var defaultPath = pathDeriver(projectName);
-            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
-        }
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
 
-        outputPath = Path.GetFullPath(outputPath);
-
-        // When running in extension mode (VS Code), the folder picker returns the parent
-        // directory the user selected. Append the project name as a subdirectory so the
-        // project gets its own clean folder, matching the git-clone convention.
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
-            && !projectName.Equals(".", StringComparison.Ordinal)
-            && !projectName.Equals("..", StringComparison.Ordinal))
-        {
-            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
-
-            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
+        return await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            executionContext.WorkingDirectory.FullName,
+            async () =>
             {
-                outputPath = Path.Combine(normalizedOutputPath, projectName);
-            }
-            else
-            {
-                outputPath = normalizedOutputPath;
-            }
-        }
-
-        return outputPath;
+                var defaultPath = pathDeriver(executionContext, projectName);
+                var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, outputPathResolver, cancellationToken);
+            },
+            interactionService);
     }
 }

@@ -1,5 +1,5 @@
 node_modules/
-.modules/
 dist/
 .venv/
 .aspire/
+.modules/

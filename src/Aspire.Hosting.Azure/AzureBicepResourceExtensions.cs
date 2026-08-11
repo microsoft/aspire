@@ -20,7 +20,8 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepFile">The path to the bicep file on disk. This path is relative to the apphost's project directory.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from a file")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplate(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepFile)
     {
         builder.AddAzureProvisioning();
@@ -37,7 +38,8 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepContent">A string that represents a snippet of bicep.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from inline Bicep content")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplateString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepContent)
     {
         builder.AddAzureProvisioning();
@@ -52,7 +54,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">Name of the output.</param>
     /// <returns>A <see cref="BicepOutputReference"/> that represents the output.</returns>
-    [AspireExport(Description = "Gets an output reference from an Azure Bicep template resource")]
+    [AspireExport]
     public static BicepOutputReference GetOutput(this IResourceBuilder<AzureBicepResource> builder, string name)
     {
         return new BicepOutputReference(name, builder.Resource);
@@ -78,7 +80,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="bicepOutputReference">The reference to the bicep output.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference bicepOutputReference)
         where T : IResourceWithEnvironment
     {
@@ -111,7 +113,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="secretReference">The reference to the key vault secret.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IAzureKeyVaultSecretReference secretReference)
         where T : IResourceWithEnvironment
     {
@@ -125,7 +127,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the input.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name)
         where T : AzureBicepResource
     {
@@ -134,7 +136,10 @@ public static class AzureBicepResourceExtensions
         return builder;
     }
 
-    [AspireExport("withParameter", Description = "Adds a Bicep parameter")]
+    /// <summary>
+    /// Adds a Bicep parameter
+    /// </summary>
+    [AspireExport("withParameter")]
     internal static IResourceBuilder<T> WithParameterForPolyglot<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -173,7 +178,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, string value)
         where T : AzureBicepResource
     {
@@ -190,7 +195,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, IEnumerable<string> value)
         where T : AzureBicepResource
     {
@@ -243,7 +248,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value)
         where T : AzureBicepResource
     {
@@ -279,7 +284,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<IResourceWithConnectionString> value)
         where T : AzureBicepResource
     {
@@ -299,7 +304,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, BicepOutputReference value)
         where T : AzureBicepResource
     {
@@ -319,7 +324,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value)
         where T : AzureBicepResource
     {
@@ -339,7 +344,7 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the input.</param>
     /// <param name="value">The value of the parameter.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
     public static IResourceBuilder<T> WithParameter<T>(this IResourceBuilder<T> builder, string name, EndpointReference value)
         where T : AzureBicepResource
     {

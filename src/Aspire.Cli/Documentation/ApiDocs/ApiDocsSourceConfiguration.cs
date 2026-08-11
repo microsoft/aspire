@@ -13,7 +13,7 @@ internal static partial class ApiDocsSourceConfiguration
 {
     private const string IndexCacheKeyPrefix = "index:";
     private const string MemberIndexCacheKeyPrefix = "member-index:";
-    
+
     /// <summary>
     /// Configuration path for overriding the API sitemap URL.
     /// </summary>

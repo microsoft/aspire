@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -290,6 +289,10 @@ var k8s = builder.AddKubernetesEnvironment("k8s")
         helm.WithNamespace(builder.AddParameter("namespace"));
         helm.WithChartVersion(builder.AddParameter("chartversion"));
     });
+
+// The Gateway route validation requires the routed endpoint to be marked
+// external. The starter template's `webfrontend` does not opt in by default.
+webfrontend.WithExternalHttpEndpoints();
 
 var gateway = k8s.AddGateway("ingress")
     .WithGatewayClass("azure-alb-external")

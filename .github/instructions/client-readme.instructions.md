@@ -447,7 +447,7 @@ Update client integration README.md files when:
 - Adding new extension methods
 - Updating configuration key paths
 - New features are added (health checks, metrics, etc.)
-- New Microsoft Learn or technology documentation becomes available
+- New aspire.dev or technology documentation becomes available
 
 ## Review Checklist
 

@@ -24,6 +24,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string BunLockFileName = "bun.lock";
     private const string BunBinaryLockFileName = "bun.lockb";
     private const string YarnLockFileName = "yarn.lock";
+    private const string YarnClassicLockFileVersionLine = "# yarn lockfile v1";
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
@@ -35,9 +36,9 @@ internal static class TypeScriptAppHostToolchainResolver
              language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, ILogger? logger)
+    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, IEnvironment environment, ILogger? logger)
     {
-        var resolution = ResolveWithReason(appHostDirectory);
+        var resolution = ResolveWithReason(appHostDirectory, environment);
         logger?.LogDebug(
             "Selected TypeScript AppHost package manager '{PackageManager}' because {Reason}.",
             GetCommandName(resolution.Toolchain),
@@ -46,9 +47,9 @@ internal static class TypeScriptAppHostToolchainResolver
         return resolution.Toolchain;
     }
 
-    internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory)
+    internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
-        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory))
+        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory, environment))
         {
             if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain, out var reason))
             {
@@ -70,8 +71,14 @@ internal static class TypeScriptAppHostToolchainResolver
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Pnpm, PnpmLockFileName, candidateDirectory);
             }
 
-            if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnLockFileName)))
+            var yarnLockFilePath = Path.Combine(candidateDirectory.FullName, YarnLockFileName);
+            if (File.Exists(yarnLockFilePath))
             {
+                if (IsYarnClassicLockFile(yarnLockFilePath))
+                {
+                    throw CreateYarnClassicNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                }
+
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnLockFileName, candidateDirectory);
             }
 
@@ -144,6 +151,7 @@ internal static class TypeScriptAppHostToolchainResolver
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
             InstallDependencies = CreateInstallCommand(toolchain),
+            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
             Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
             WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
             PublishExecute = baseRuntimeSpec.PublishExecute,
@@ -154,11 +162,45 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
     {
+        // pnpm resolves a parent pnpm-workspace.yaml when install runs in a nested package.
+        // The generated brownfield AppHost intentionally lives outside the user's workspace
+        // package graph, so install only that package instead of requiring edits to the
+        // user's workspace file. See https://pnpm.io/workspaces.
+        string[] args = toolchain == TypeScriptAppHostToolchain.Pnpm
+            ? ["install", "--ignore-workspace"]
+            : ["install"];
+
         return new CommandSpec
         {
             Command = GetCommandName(toolchain),
-            Args = ["install"]
+            Args = args
         };
+    }
+
+    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    {
+        return
+        [
+            toolchain switch
+            {
+                TypeScriptAppHostToolchain.Bun => new CommandSpec
+                {
+                    Command = "bun",
+                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                TypeScriptAppHostToolchain.Yarn => new CommandSpec
+                {
+                    Command = "yarn",
+                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                TypeScriptAppHostToolchain.Pnpm => new CommandSpec
+                {
+                    Command = "pnpm",
+                    Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+            }
+        ];
     }
 
     private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
@@ -173,7 +215,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
             {
                 Command = "yarn",
-                Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
+                Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
             },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
             {
@@ -191,7 +233,17 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => new CommandSpec
             {
                 Command = "bun",
-                Args = ["--watch", "run", "{appHostFile}"]
+                Args =
+                [
+                    "run",
+                    "nodemon",
+                    "--signal", "SIGTERM",
+                    "--watch", ".",
+                    "--ext", "ts,mts",
+                    "--ignore", "node_modules/",
+                    "--ignore", ".aspire/modules/",
+                    "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
+                ]
             },
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
             {
@@ -202,10 +254,10 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
-                    "--exec", $"yarn exec tsx --tsconfig {tsConfigFileName} {{appHostFile}}"
+                    "--ignore", ".aspire/modules/",
+                    "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
@@ -217,10 +269,10 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
-                    "--exec", $"pnpm exec tsx --tsconfig {tsConfigFileName} {{appHostFile}}"
+                    "--ignore", ".aspire/modules/",
+                    "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
@@ -265,6 +317,11 @@ internal static class TypeScriptAppHostToolchainResolver
             var packageManagerName = packageManager.Split('@', 2)[0];
             if (TryParseToolchain(packageManagerName, out toolchain))
             {
+                if (toolchain == TypeScriptAppHostToolchain.Yarn && IsYarnClassicPackageManager(packageManager))
+                {
+                    throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
+                }
+
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
                 return true;
             }
@@ -294,22 +351,73 @@ internal static class TypeScriptAppHostToolchainResolver
         return result.HasValue;
     }
 
-    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory)
+    private static bool IsYarnClassicPackageManager(string packageManager)
+    {
+        const string yarnPackageManagerPrefix = "yarn@";
+
+        if (!packageManager.StartsWith(yarnPackageManagerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var version = packageManager[yarnPackageManagerPrefix.Length..];
+        return version.Length > 0 &&
+            version[0] == '1' &&
+            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+    }
+
+    private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    {
+        return new YarnClassicNotSupportedException(
+            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+    }
+
+    private static bool IsYarnClassicLockFile(string yarnLockFilePath)
+    {
+        try
+        {
+            var linesRead = 0;
+            foreach (var line in File.ReadLines(yarnLockFilePath))
+            {
+                if (line.Trim().Equals(YarnClassicLockFileVersionLine, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                linesRead++;
+                if (linesRead >= 5)
+                {
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or SecurityException or NotSupportedException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
         yield return appHostDirectory;
 
         // Only use the immediate parent as a fallback so a project folder can provide
         // workspace-level hints without inheriting unrelated markers from higher directories.
         var parentDirectory = appHostDirectory.Parent;
-        if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory))
+        if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory, environment))
         {
             yield return parentDirectory;
         }
     }
 
-    internal static bool ShouldSearchParentDirectory(DirectoryInfo parentDirectory, string? homeDirectory = null)
+    internal static bool ShouldSearchParentDirectory(DirectoryInfo parentDirectory, IEnvironment environment, string? homeDirectory = null)
     {
-        var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var isWindows = environment.IsWindows();
+        var isMacOS = environment.IsMacOS();
+        var pathComparison = isWindows || isMacOS
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 

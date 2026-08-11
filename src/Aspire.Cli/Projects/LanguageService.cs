@@ -85,14 +85,13 @@ internal sealed class LanguageService : ILanguageService
             return (_projectFactory.GetProject(lang), lang);
         }
 
-        _interactionService.DisplayEmptyLine();
-        _interactionService.DisplayMarkdown("""
+        _interactionService.DisplayMarkdown(
+            """
             # Select AppHost Language
 
             Choose the programming language for your Aspire AppHost.
             This selection will be saved for future use.
             """);
-        _interactionService.DisplayEmptyLine();
 
         var selected = await _interactionService.PromptForSelectionAsync(
             "Which language would you like to use?",

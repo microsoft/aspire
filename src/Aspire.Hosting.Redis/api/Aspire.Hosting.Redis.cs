@@ -10,43 +10,43 @@ namespace Aspire.Hosting
 {
     public static partial class RedisBuilderExtensions
     {
-        [AspireExport("addRedis", Description = "Adds a Redis container resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
-        [AspireExport("addRedisWithPort", Description = "Adds a Redis container resource with specific port")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount with persistence")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withRedisInsightDataBindMount", MethodName = "withDataBindMount", Description = "Adds a data bind mount for Redis Insight")]
+        [AspireExport("withRedisInsightDataBindMount", MethodName = "withDataBindMount")]
         public static ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> builder, string source) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume with persistence")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withRedisInsightDataVolume", Description = "Adds a data volume for Redis Insight", MethodName = "withDataVolume")]
+        [AspireExport("withRedisInsightDataVolume", MethodName = "withDataVolume")]
         public static ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> builder, string? name = null) { throw null; }
 
-        [AspireExport("withHostPort", Description = "Sets the host port for Redis")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithHostPort(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, int? port) { throw null; }
 
-        [AspireExport("withRedisCommanderHostPort", MethodName = "withHostPort", Description = "Sets the host port for Redis Commander")]
+        [AspireExport("withRedisCommanderHostPort", MethodName = "withHostPort")]
         public static ApplicationModel.IResourceBuilder<Redis.RedisCommanderResource> WithHostPort(this ApplicationModel.IResourceBuilder<Redis.RedisCommanderResource> builder, int? port) { throw null; }
 
-        [AspireExport("withRedisInsightHostPort", MethodName = "withHostPort", Description = "Sets the host port for Redis Insight")]
+        [AspireExport("withRedisInsightHostPort", MethodName = "withHostPort")]
         public static ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> WithHostPort(this ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> builder, int? port) { throw null; }
 
-        [AspireExport("withPassword", Description = "Configures the password for Redis")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password) { throw null; }
 
-        [AspireExport("withPersistence", Description = "Configures Redis persistence")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, System.TimeSpan? interval = null, long keysChangedThreshold = 1) { throw null; }
 
-        [AspireExport("withRedisCommander", Description = "Adds Redis Commander management UI", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithRedisCommander(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<Redis.RedisCommanderResource>>? configureContainer = null, string? containerName = null) { throw null; }
 
-        [AspireExport("withRedisInsight", Description = "Adds Redis Insight management UI", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithRedisInsight(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<Redis.RedisInsightResource>>? configureContainer = null, string? containerName = null) { throw null; }
     }
 }
@@ -54,7 +54,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.ApplicationModel
 {
     [AspireExport(ExposeProperties = true)]
-    public partial class RedisResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class RedisResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public RedisResource(string name, ParameterResource password) : base(default!, default) { }
 

@@ -3,11 +3,13 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is evaluation-only
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -76,7 +78,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         Assert.True(aks.Resource.OidcIssuerEnabled);
         Assert.True(aks.Resource.WorkloadIdentityEnabled);
-        Assert.Equal(AksSkuTier.Free, aks.Resource.SkuTier);
         Assert.Null(aks.Resource.KubernetesVersion);
         Assert.False(aks.Resource.IsPrivateCluster);
         Assert.False(aks.Resource.ContainerInsightsEnabled);
@@ -437,4 +438,172 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var aksSubnet = vnet.AddSubnet("aksnodes", "10.0.0.0/22");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+        aks.AddLoadBalancer("lb", albSubnet);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public void AddLoadBalancer_AppliesSubnetDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddLoadBalancer("lb", albSubnet);
+
+        Assert.True(aks.Resource.GatewayApiEnabled);
+        Assert.True(aks.Resource.ApplicationLoadBalancerEnabled);
+        Assert.True(aks.Resource.RequiresPreviewIngressApi);
+
+        // AGC requires the subnet be delegated to Microsoft.ServiceNetworking/trafficControllers.
+        Assert.True(albSubnet.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var delegation));
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation!.ServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_RegistersPerLBPipelineStep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        Assert.Same(aks.Resource, lb.Resource.Parent);
+        Assert.Equal("alb-lb", lb.Resource.AlbName);
+        Assert.True(lb.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var stepAnnotations));
+        Assert.Single(stepAnnotations);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_MultipleLBs_AllStepsRegistered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var alb1 = vnet.AddSubnet("alb1", "10.0.4.0/24");
+        var alb2 = vnet.AddSubnet("alb2", "10.0.5.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb1 = aks.AddLoadBalancer("lb1", alb1);
+        var lb2 = aks.AddLoadBalancer("lb2", alb2);
+
+        Assert.NotSame(lb1.Resource, lb2.Resource);
+        Assert.Equal("alb-lb1", lb1.Resource.AlbName);
+        Assert.Equal("alb-lb2", lb2.Resource.AlbName);
+
+        // Each LB owns its own pipeline step annotation.
+        Assert.True(lb1.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var lb1Steps));
+        Assert.True(lb2.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var lb2Steps));
+        Assert.Single(lb1Steps);
+        Assert.Single(lb2Steps);
+
+        // Both LBs share the subnet/delegation requirements but the annotation
+        // is applied idempotently per subnet (one delegation per subnet).
+        Assert.True(alb1.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out _));
+        Assert.True(alb2.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out _));
+    }
+
+    [Fact]
+    public void AddLoadBalancer_OnUserDelegatedSubnet_ReplacesDelegationAndRecordsDisplaced()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+
+        // The user delegates their ALB subnet to a different service before handing it to AGC.
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithServiceDelegation("Microsoft.Netapp/volumes");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        // AGC requires trafficControllers, so the user's delegation is replaced rather than appended
+        // and the subnet retains exactly one effective delegation.
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // The displaced delegation is surfaced so the LB pipeline step can warn the user at deploy time.
+        Assert.Equal("Microsoft.Netapp/volumes", lb.Resource.DisplacedDelegationServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_SharedSubnet_KeepsSingleDelegationWithNoDisplacement()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb1 = aks.AddLoadBalancer("lb1", albSubnet);
+        var lb2 = aks.AddLoadBalancer("lb2", albSubnet);
+
+        // Sharing a subnet across load balancers is idempotent: exactly one delegation remains.
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // Neither LB displaced a user delegation; the only prior delegation was AGC's own.
+        Assert.Null(lb1.Resource.DisplacedDelegationServiceName);
+        Assert.Null(lb2.Resource.DisplacedDelegationServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_EquivalentDelegationWithDifferentCasing_DoesNotRecordDisplacement()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithServiceDelegation("microsoft.servicenetworking/trafficcontrollers");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+        Assert.Null(lb.Resource.DisplacedDelegationServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_OnSubnetWithMultipleDirectDelegations_CollapsesToSingle()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+
+        // AzureSubnetServiceDelegationAnnotation is public, so a subnet can carry several directly-appended
+        // delegations. AddLoadBalancer must read the last one (last-write-wins) without throwing on the
+        // duplicates and then collapse them to AGC's single required delegation.
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("First", "Microsoft.Netapp/volumes"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("Second", "Microsoft.Sql/managedInstances"));
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // The last of the user's delegations is surfaced as displaced so the LB pipeline step can warn.
+        Assert.Equal("Microsoft.Sql/managedInstances", lb.Resource.DisplacedDelegationServiceName);
+    }
+
 }

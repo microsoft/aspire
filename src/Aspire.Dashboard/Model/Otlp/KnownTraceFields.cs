@@ -10,6 +10,8 @@ public static class KnownTraceFields
     public const string StatusField = "trace.status";
     public const string TraceIdField = "trace.traceid";
     public const string SpanIdField = "trace.spanid";
+    public const string DurationField = "trace.duration";
+    public const string TimestampField = "trace.timestamp";
 
     // Not used in search.
     public const string StatusMessageField = "trace.statusmessage";
@@ -23,6 +25,8 @@ public static class KnownTraceFields
         KnownResourceFields.ServiceNameField,
         TraceIdField,
         SpanIdField,
-        KnownSourceFields.NameField
+        KnownSourceFields.NameField,
+        DurationField,
+        TimestampField
     ];
 }

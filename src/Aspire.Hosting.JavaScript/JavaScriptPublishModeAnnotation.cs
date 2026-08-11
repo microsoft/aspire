@@ -9,7 +9,7 @@ internal enum JavaScriptPublishMode
 {
     StaticWebsite,
     NodeServer,
-    NpmScript,
+    PackageScript,
     NextStandalone
 }
 
@@ -22,7 +22,7 @@ internal sealed class JavaScriptPublishModeAnnotation(JavaScriptPublishMode mode
     // NodeServer properties
     public string? EntryPoint { get; init; }
 
-    // NpmScript properties
-    public string? StartScriptName { get; init; }
+    // PackageScript properties
+    public string? ScriptName { get; init; }
     public string? RunScriptArguments { get; init; }
 }

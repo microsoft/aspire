@@ -30,14 +30,6 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     }
 
     /// <summary>
-    /// JSON serializer options used for writing deployment state files.
-    /// </summary>
-    protected static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
-    {
-        WriteIndented = true
-    };
-
-    /// <summary>
     /// Logger instance for the derived class.
     /// </summary>
     protected readonly ILogger<T> logger = logger;

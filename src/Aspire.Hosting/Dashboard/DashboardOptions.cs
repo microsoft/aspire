@@ -25,38 +25,24 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
     public void Configure(DashboardOptions options)
     {
         options.DashboardPath = dcpOptions.Value.DashboardPath;
-        options.DashboardUrl = configuration[KnownConfigNames.AspNetCoreUrls];
+        options.DashboardUrl = configuration[KnownAspNetCoreConfigNames.Urls];
         options.DashboardToken = configuration["AppHost:BrowserToken"];
 
-        options.OtlpGrpcEndpointUrl = configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
-        options.OtlpHttpEndpointUrl = configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+        options.OtlpGrpcEndpointUrl = NormalizeUrl(configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl));
+        options.OtlpHttpEndpointUrl = NormalizeUrl(configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl));
+
         options.OtlpApiKey = configuration["AppHost:OtlpApiKey"];
         options.ApiKey = configuration["AppHost:DashboardApiKey"];
 
-        options.AspNetCoreEnvironment = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
+        options.AspNetCoreEnvironment = configuration[KnownAspNetCoreConfigNames.Environment] ?? "Production";
 
         options.TelemetryOptOut = bool.TryParse(configuration["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"], out var telemetryOptOut)
             ? telemetryOptOut
             : null;
     }
-}
 
-internal class ValidateDashboardOptions : IValidateOptions<DashboardOptions>
-{
-    public ValidateOptionsResult Validate(string? name, DashboardOptions options)
+    private static string? NormalizeUrl(string? value)
     {
-        var builder = new ValidateOptionsResultBuilder();
-
-        if (string.IsNullOrEmpty(options.DashboardUrl))
-        {
-            builder.AddError($"Failed to configure dashboard resource because {KnownConfigNames.AspNetCoreUrls} environment variable was not set.");
-        }
-
-        if (string.IsNullOrEmpty(options.OtlpGrpcEndpointUrl) && string.IsNullOrEmpty(options.OtlpHttpEndpointUrl))
-        {
-            builder.AddError($"Failed to configure dashboard resource because {KnownConfigNames.DashboardOtlpGrpcEndpointUrl} and {KnownConfigNames.DashboardOtlpHttpEndpointUrl} environment variables are not set. At least one OTLP endpoint must be provided.");
-        }
-
-        return builder.Build();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

@@ -9,14 +9,12 @@
 namespace Aspire.Hosting
 {
     [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREATS001")]
     public sealed partial class AspireDtoAttribute : System.Attribute
     {
         public string? DtoTypeId { get { throw null; } set { } }
     }
 
     [System.AttributeUsage(System.AttributeTargets.Assembly | System.AttributeTargets.Class | System.AttributeTargets.Method | System.AttributeTargets.Property | System.AttributeTargets.Interface, Inherited = false, AllowMultiple = true)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREATS001")]
     public sealed partial class AspireExportAttribute : System.Attribute
     {
         public AspireExportAttribute() { }
@@ -41,19 +39,27 @@ namespace Aspire.Hosting
     }
 
     [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Method | System.AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREATS001")]
     public sealed partial class AspireExportIgnoreAttribute : System.Attribute
     {
         public string? Reason { get { throw null; } set { } }
     }
 
     [System.AttributeUsage(System.AttributeTargets.Property | System.AttributeTargets.Parameter, AllowMultiple = false)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREATS001")]
     public sealed partial class AspireUnionAttribute : System.Attribute
     {
         public AspireUnionAttribute(params System.Type[] types) { }
 
         public System.Type[] Types { get { throw null; } }
+    }
+
+    [System.AttributeUsage(System.AttributeTargets.Property | System.AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
+    public sealed partial class AspireValueAttribute : System.Attribute
+    {
+        public AspireValueAttribute(string catalogName) { }
+
+        public string CatalogName { get { throw null; } }
+
+        public string? Name { get { throw null; } set { } }
     }
 
     public static partial class ConnectionPropertiesExtensions
@@ -64,14 +70,14 @@ namespace Aspire.Hosting
 
     public static partial class ConnectionStringBuilderExtensions
     {
-        [AspireExport("addConnectionStringExpression", Description = "Adds a connection string with a reference expression")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, string name, ApplicationModel.ReferenceExpression connectionStringExpression) { throw null; }
 
-        [AspireExport("addConnectionStringBuilder", Description = "Adds a connection string with a builder callback", RunSyncOnBackgroundThread = true)]
+        [AspireExportIgnore(Reason = "Polyglot app hosts should build a ReferenceExpression explicitly and use the canonical addConnectionString export.")]
         public static ApplicationModel.IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, string name, System.Action<ApplicationModel.ReferenceExpressionBuilder> connectionStringBuilder) { throw null; }
     }
 
-    public sealed partial class ConnectionStringResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithWaitSupport
+    public sealed partial class ConnectionStringResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithWaitSupport
     {
         public ConnectionStringResource(string name, ApplicationModel.ReferenceExpression connectionStringExpression) : base(default!) { }
 
@@ -81,15 +87,15 @@ namespace Aspire.Hosting
     public static partial class ContainerRegistryResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("addContainerRegistry", Description = "Adds a container registry resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerRegistryResource> AddContainerRegistry(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> endpoint, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? repository = null) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("addContainerRegistryFromString", Description = "Adds a container registry with string endpoint")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerRegistryResource> AddContainerRegistry(this IDistributedApplicationBuilder builder, string name, string endpoint, string? repository = null) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withContainerRegistry", Description = "Configures a resource to use a container registry")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TDestination> WithContainerRegistry<TDestination, TContainerRegistry>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<TContainerRegistry> registry)
             where TDestination : ApplicationModel.IResource where TContainerRegistry : ApplicationModel.IResource, ApplicationModel.IContainerRegistry { throw null; }
     }
@@ -102,28 +108,28 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Use the polyglot addContainer overload that accepts a string or AddContainerOptions value.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, string name, string image) { throw null; }
 
-        [AspireExport("addDockerfile", Description = "Adds a container resource built from a Dockerfile")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfile(this IDistributedApplicationBuilder builder, string name, string contextPath, string? dockerfilePath = null, string? stage = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+        [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Action<ApplicationModel.DockerfileBuilderCallbackContext> callback, string? stage = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, System.Threading.Tasks.Task<string>> dockerfileFactory, string? stage = null) { throw null; }
 
-        [AspireExport("publishAsContainer", Description = "Configures the resource to be published as a container")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsContainer<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withBindMount", Description = "Adds a bind mount")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithBindMount<T>(this ApplicationModel.IResourceBuilder<T> builder, string source, string target, bool isReadOnly = false)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -135,7 +141,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithBuildArg<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, object? value)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withParameterBuildSecret", MethodName = "withBuildSecret", Description = "Adds a build secret from a parameter resource")]
+        [AspireExport("withParameterBuildSecret", MethodName = "withBuildSecret")]
         public static ApplicationModel.IResourceBuilder<T> WithBuildSecret<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -155,11 +161,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithContainerFiles<T>(this ApplicationModel.IResourceBuilder<T> builder, string destinationPath, string sourcePath, int? defaultOwner = null, int? defaultGroup = null, System.IO.UnixFileMode? umask = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withContainerName", Description = "Sets the container name")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerName<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withContainerNetworkAlias", Description = "Adds a network alias for the container")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerNetworkAlias<T>(this ApplicationModel.IResourceBuilder<T> builder, string alias)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -171,66 +177,66 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithContainerRuntimeArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.ContainerRuntimeArgsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withContainerRuntimeArgs", Description = "Adds runtime arguments for the container")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerRuntimeArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, params string[] args)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withDockerfile", Description = "Configures the resource to use a Dockerfile")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfile<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, string? dockerfilePath = null, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withDockerfileBaseImage", Description = "Sets the base image for a Dockerfile build")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBaseImage<T>(this ApplicationModel.IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+        [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBuilder<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Action<ApplicationModel.DockerfileBuilderCallbackContext> callback, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBuilder<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileFactory<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileFactory<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileFactoryContext, System.Threading.Tasks.Task<string>> dockerfileFactory, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withEndpointProxySupport", Description = "Configures endpoint proxy support")]
+        [AspireExportIgnore(Reason = "Binary compatibility shim for the resource-level WithEndpointProxySupport overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithEndpointProxySupport<T>(this ApplicationModel.IResourceBuilder<T> builder, bool proxyEnabled)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withEntrypoint", Description = "Sets the container entrypoint")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithEntrypoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string entrypoint)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withImage", Description = "Sets the container image")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImage<T>(this ApplicationModel.IResourceBuilder<T> builder, string image, string? tag = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withImagePullPolicy", Description = "Sets the container image pull policy")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImagePullPolicy<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ImagePullPolicy pullPolicy)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withImageRegistry", Description = "Sets the container image registry")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImageRegistry<T>(this ApplicationModel.IResourceBuilder<T> builder, string? registry)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withImageSHA256", Description = "Sets the image SHA256 digest")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImageSHA256<T>(this ApplicationModel.IResourceBuilder<T> builder, string sha256)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withImageTag", Description = "Sets the container image tag")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImageTag<T>(this ApplicationModel.IResourceBuilder<T> builder, string tag)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExport("withLifetime", Description = "Sets the lifetime behavior of the container resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ContainerLifetime lifetime)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -275,7 +281,7 @@ namespace Aspire.Hosting
 
         public static IDistributedApplicationBuilder CreateBuilder(DistributedApplicationOptions options) { throw null; }
 
-        [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
         public static IDistributedApplicationBuilder CreateBuilder(string[] args) { throw null; }
 
         public virtual void Dispose() { }
@@ -288,7 +294,7 @@ namespace Aspire.Hosting
 
         public void Run() { }
 
-        [AspireExport("run", Description = "Runs the distributed application")]
+        [AspireExport("run", RunSyncOnBackgroundThread = true)]
         public virtual System.Threading.Tasks.Task RunAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public virtual System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
@@ -349,8 +355,20 @@ namespace Aspire.Hosting
     public static partial class DistributedApplicationEventingExtensions
     {
         [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
+        public static T OnAfterPublish<T>(this T builder, System.Func<Publishing.AfterPublishEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
+            where T : IDistributedApplicationBuilder { throw null; }
+
+        [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
+        public static T OnBeforePublish<T>(this T builder, System.Func<Publishing.BeforePublishEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
+            where T : IDistributedApplicationBuilder { throw null; }
+
+        [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> OnBeforeResourceStarted<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<T, ApplicationModel.BeforeResourceStartedEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
+        public static T OnBeforeStart<T>(this T builder, System.Func<ApplicationModel.BeforeStartEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
+            where T : IDistributedApplicationBuilder { throw null; }
 
         [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> OnConnectionStringAvailable<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<T, ApplicationModel.ConnectionStringAvailableEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
@@ -448,34 +466,34 @@ namespace Aspire.Hosting
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class DotnetToolResourceExtensions
     {
-        [AspireExport("addDotnetTool", Description = "Adds a .NET tool resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.DotnetToolResource> AddDotnetTool(this IDistributedApplicationBuilder builder, string name, string packageId) { throw null; }
 
         [AspireExportIgnore(Reason = "Open generic IResource constraint — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolIgnoreExistingFeeds", Description = "Ignores existing NuGet feeds")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolIgnoreFailedSources", Description = "Ignores failed NuGet sources")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolPackage", Description = "Sets the tool package ID")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolPackage<T>(this ApplicationModel.IResourceBuilder<T> builder, string packageId)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolPrerelease", Description = "Allows prerelease tool versions")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolPrerelease<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolSource", Description = "Adds a NuGet source for the tool")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolSource<T>(this ApplicationModel.IResourceBuilder<T> builder, string source)
             where T : ApplicationModel.DotnetToolResource { throw null; }
 
-        [AspireExport("withToolVersion", Description = "Sets the tool version")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithToolVersion<T>(this ApplicationModel.IResourceBuilder<T> builder, string version)
             where T : ApplicationModel.DotnetToolResource { throw null; }
     }
@@ -491,10 +509,10 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Uses object[] parameter which is not ATS-compatible. String[] overload is exported.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ExecutableResource> AddExecutable(this IDistributedApplicationBuilder builder, string name, string command, string workingDirectory, params object[]? args) { throw null; }
 
-        [AspireExport("addExecutable", Description = "Adds an executable resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ExecutableResource> AddExecutable(this IDistributedApplicationBuilder builder, string name, string command, string workingDirectory, params string[]? args) { throw null; }
 
-        [AspireExport("publishAsDockerFileWithConfigure", Description = "Publishes an executable as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource>>? configure)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
@@ -502,15 +520,15 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Collections.Generic.IEnumerable<ApplicationModel.DockerBuildArg>? buildArgs)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
-        [AspireExport("publishAsDockerFile", Description = "Publishes the executable as a Docker container")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the overload with the optional configure callback.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
-        [AspireExport("withExecutableCommand", Description = "Sets the executable command")]
+        [AspireExport("withExecutableCommand")]
         public static ApplicationModel.IResourceBuilder<T> WithCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string command)
             where T : ApplicationModel.ExecutableResource { throw null; }
 
-        [AspireExport("withWorkingDirectory", Description = "Sets the executable working directory")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithWorkingDirectory<T>(this ApplicationModel.IResourceBuilder<T> builder, string workingDirectory)
             where T : ApplicationModel.ExecutableResource { throw null; }
     }
@@ -523,16 +541,16 @@ namespace Aspire.Hosting
 
     public static partial class ExternalServiceBuilderExtensions
     {
-        [AspireExport("addExternalServiceParameter", Description = "Adds an external service with a parameter URL")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> urlParameter) { throw null; }
 
-        [AspireExport("addExternalService", Description = "Adds an external service resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, string url) { throw null; }
 
-        [AspireExport("addExternalServiceUri", Description = "Adds an external service with a URI")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, string name, System.Uri uri) { throw null; }
 
-        [AspireExport("withExternalServiceHttpHealthCheck", Description = "Adds an HTTP health check to an external service")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withHttpHealthCheck export wrapper.")]
         public static ApplicationModel.IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this ApplicationModel.IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null) { throw null; }
     }
 
@@ -584,6 +602,7 @@ namespace Aspire.Hosting
 
         ApplicationModel.IResourceCollection Resources { get; }
 
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS. Use IDistributedApplicationBuilder.addEventingSubscriber or tryAddEventingSubscriber for ATS event subscriber registration.")]
         Microsoft.Extensions.DependencyInjection.IServiceCollection Services { get; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -591,7 +610,7 @@ namespace Aspire.Hosting
 
         ApplicationModel.IResourceBuilder<T> AddResource<T>(T resource)
             where T : ApplicationModel.IResource;
-        [AspireExport("build", Description = "Builds the distributed application")]
+        [AspireExport]
         DistributedApplication Build();
         ApplicationModel.IResourceBuilder<T> CreateResourceBuilder<T>(T resource)
             where T : ApplicationModel.IResource;
@@ -633,15 +652,20 @@ namespace Aspire.Hosting
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class InputsDialogValidationContext
     {
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
         public required InteractionInputCollection Inputs { get { throw null; } init { } }
 
+        [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
         public required System.IServiceProvider Services { get { throw null; } init { } }
 
         public void AddValidationError(InteractionInput input, string errorMessage) { }
+
+        [AspireExport("InputsDialogValidationContext.addValidationError", MethodName = "addValidationError")]
+        public void AddValidationError(string inputName, string errorMessage) { }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -655,6 +679,7 @@ namespace Aspire.Hosting
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireDto]
     [System.Diagnostics.DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
     public sealed partial class InteractionInput
     {
@@ -686,6 +711,7 @@ namespace Aspire.Hosting
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     [System.Diagnostics.DebuggerDisplay("Count = {Count}")]
     public sealed partial class InteractionInputCollection : System.Collections.Generic.IReadOnlyList<InteractionInput>, System.Collections.Generic.IEnumerable<InteractionInput>, System.Collections.IEnumerable, System.Collections.Generic.IReadOnlyCollection<InteractionInput>
     {
@@ -701,9 +727,20 @@ namespace Aspire.Hosting
 
         public bool ContainsName(string name) { throw null; }
 
+        public bool GetBoolean(string name) { throw null; }
+
+        public double GetDouble(string name) { throw null; }
+
         public System.Collections.Generic.IEnumerator<InteractionInput> GetEnumerator() { throw null; }
 
+        public int GetInt32(string name) { throw null; }
+
+        public string? GetString(string name) { throw null; }
+
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { throw null; }
+
+        [AspireExport("InteractionInputCollection.toArray", MethodName = "toArray")]
+        public InteractionInput[] ToArray() { throw null; }
 
         public bool TryGetByName(string name, out InteractionInput? input) { throw null; }
     }
@@ -778,7 +815,9 @@ namespace Aspire.Hosting
         void GetOrSetSecret(Microsoft.Extensions.Configuration.IConfigurationManager configuration, string name, System.Func<string> valueGenerator);
         [AspireExportIgnore(Reason = "JsonObject is not ATS-compatible. Use the ATS helper overload that accepts a JSON string.")]
         System.Threading.Tasks.Task SaveStateAsync(System.Text.Json.Nodes.JsonObject state, System.Threading.CancellationToken cancellationToken = default);
-        [AspireExport(Description = "Attempts to set a user secret value")]
+        [AspireExport]
+        bool TryDeleteSecret(string name);
+        [AspireExport]
         bool TrySetSecret(string name, string value);
     }
 
@@ -830,7 +869,7 @@ namespace Aspire.Hosting
     public static partial class McpServerResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withMcpServer", Description = "Configures an MCP server endpoint on the resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithMcpServer<T>(this ApplicationModel.IResourceBuilder<T> builder, string? path = "/mcp", string? endpointName = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
     }
@@ -875,11 +914,11 @@ namespace Aspire.Hosting
 
         public static void AddOtlpEnvironment(ApplicationModel.IResource resource, Microsoft.Extensions.Configuration.IConfiguration configuration, Microsoft.Extensions.Hosting.IHostEnvironment environment) { }
 
-        [AspireExport("withOtlpExporterProtocol", Description = "Configures OTLP telemetry export with specific protocol")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithOtlpExporter<T>(this ApplicationModel.IResourceBuilder<T> builder, OtlpProtocol protocol)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withOtlpExporter", Description = "Configures OTLP telemetry export")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithOtlpExporter<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
     }
@@ -907,22 +946,22 @@ namespace Aspire.Hosting
 
     public static partial class ParameterResourceBuilderExtensions
     {
-        [AspireExport("addConnectionString", Description = "Adds a connection string resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> AddConnectionString(this IDistributedApplicationBuilder builder, string name, string? environmentVariableName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "ParameterDefault is not an ATS-exported type.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, ApplicationModel.ParameterDefault value, bool secret = false, bool persist = false) { throw null; }
 
-        [AspireExport("addParameter", Description = "Adds a parameter resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, bool secret = false) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw Func<string> delegate — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, System.Func<string> valueGetter, bool publishValueAsDefault = false, bool secret = false) { throw null; }
 
-        [AspireExport("addParameterWithValue", Description = "Adds a parameter with a default value")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, string name, string value, bool publishValueAsDefault = false, bool secret = false) { throw null; }
 
-        [AspireExport("addParameterFromConfiguration", Description = "Adds a parameter sourced from configuration")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> AddParameterFromConfiguration(this IDistributedApplicationBuilder builder, string name, string configurationKey, bool secret = false) { throw null; }
 
         public static void ConfigureConnectionStringManifestPublisher(ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> builder) { }
@@ -933,7 +972,7 @@ namespace Aspire.Hosting
 
         public static ApplicationModel.ParameterResource CreateParameter(IDistributedApplicationBuilder builder, string name, bool secret) { throw null; }
 
-        [AspireExport("publishAsConnectionString", Description = "Publishes the resource as a connection string")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsConnectionString<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString { throw null; }
 
@@ -941,27 +980,27 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Complex Func delegate with InteractionInput — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithCustomInput(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, System.Func<ApplicationModel.ParameterResource, InteractionInput> createInput) { throw null; }
 
-        [AspireExport("withDescription", Description = "Sets a parameter description")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithDescription(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, string description, bool enableMarkdown = false) { throw null; }
     }
 
     public static partial class ProjectResourceBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("addCSharpAppWithOptions", Description = "Adds a C# application resource with configuration options", RunSyncOnBackgroundThread = true)]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path, System.Action<ProjectResourceOptions> configure) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("addCSharpApp", Description = "Adds a C# application resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path) { throw null; }
 
-        [AspireExport("addProjectWithOptions", Description = "Adds a project resource with configuration options", RunSyncOnBackgroundThread = true)]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, System.Action<ProjectResourceOptions> configure) { throw null; }
 
-        [AspireExport("addProject", Description = "Adds a .NET project resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, string? launchProfileName) { throw null; }
 
-        [AspireExport("addProjectWithoutLaunchProfile", Description = "Adds a .NET project resource without a launch profile")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
@@ -976,17 +1015,17 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
-        [AspireExport("disableForwardedHeaders", Description = "Disables forwarded headers for the project")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> DisableForwardedHeaders(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder) { throw null; }
 
-        [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", Description = "Publishes a project as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+        [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource>>? configure = null)
             where T : ApplicationModel.ProjectResource { throw null; }
 
         [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool> which is not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithEndpointsInEnvironment(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, System.Func<ApplicationModel.EndpointAnnotation, bool> filter) { throw null; }
 
-        [AspireExport("withReplicas", Description = "Sets the number of replicas")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithReplicas(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, int replicas) { throw null; }
     }
 
@@ -1007,41 +1046,41 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithRequiredCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string command, System.Func<ApplicationModel.RequiredCommandValidationContext, System.Threading.Tasks.Task<ApplicationModel.RequiredCommandValidationResult>> validationCallback, string? helpLink = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withRequiredCommand", Description = "Adds a required command dependency")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithRequiredCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string command, string? helpLink = null)
             where T : ApplicationModel.IResource { throw null; }
     }
 
     public static partial class ResourceBuilderExtensions
     {
-        [AspireExport("asHttp2Service", Description = "Configures resource for HTTP/2")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> AsHttp2Service<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("clearContainerFilesSources", Description = "Clears all container file sources")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> ClearContainerFilesSources<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : IResourceWithContainerFiles { throw null; }
 
-        [AspireExport("excludeFromManifest", Description = "Excludes the resource from the deployment manifest")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> ExcludeFromManifest<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("excludeFromMcp", Description = "Excludes the resource from MCP server exposure")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> ExcludeFromMcp<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("getConnectionProperty", Description = "Gets a connection property by key")]
+        [AspireExport]
         public static ApplicationModel.ReferenceExpression GetConnectionProperty(this ApplicationModel.IResourceWithConnectionString resource, string key) { throw null; }
 
         [AspireExportIgnore(Reason = "NetworkIdentifier is not ATS-compatible.")]
-        public static ApplicationModel.EndpointReference GetEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.NetworkIdentifier contextNetworkID)
+        public static ApplicationModel.EndpointReference GetEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.NetworkIdentifier contextNetworkId)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("getEndpoint", Description = "Gets an endpoint reference")]
+        [AspireExport]
         public static ApplicationModel.EndpointReference GetEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("publishWithContainerFilesFromResource", MethodName = "publishWithContainerFiles", Description = "Configures the resource to copy container files from the specified source during publishing")]
+        [AspireExport("publishWithContainerFilesFromResource", MethodName = "publishWithContainerFiles")]
         public static ApplicationModel.IResourceBuilder<T> PublishWithContainerFiles<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<IResourceWithContainerFiles> source, string destinationPath)
             where T : ApplicationModel.IContainerFilesDestinationResource { throw null; }
 
@@ -1050,31 +1089,31 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, System.Action<ApplicationModel.HttpsEndpointUpdateCallbackContext> callback)
             where TResource : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("waitForWithBehavior", Description = "Waits for another resource with specific behavior")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitFor<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, ApplicationModel.WaitBehavior waitBehavior)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExport("waitForResource", MethodName = "waitFor", Description = "Waits for another resource to be ready")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitFor<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExport("waitForResourceCompletion", MethodName = "waitForCompletion", Description = "Waits for resource completion")]
+        [AspireExport("waitForResourceCompletion", MethodName = "waitForCompletion")]
         public static ApplicationModel.IResourceBuilder<T> WaitForCompletion<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, int exitCode = 0)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExport("waitForStartWithBehavior", Description = "Waits for another resource to start with specific behavior")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitForStart<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency, ApplicationModel.WaitBehavior waitBehavior)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExport("waitForResourceStart", MethodName = "waitForStart", Description = "Waits for another resource to start")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WaitForStart<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> dependency)
             where T : ApplicationModel.IResourceWithWaitSupport { throw null; }
 
-        [AspireExport("withArgsCallback", Description = "Sets command-line arguments via callback")]
+        [AspireExport("withArgsCallback")]
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.CommandLineArgsCallbackContext> callback)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
-        [AspireExport("withArgsCallbackAsync", Description = "Sets command-line arguments via async callback")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withArgsCallback.")]
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.CommandLineArgsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1082,7 +1121,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, params object[] args)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
-        [AspireExport("withArgs", Description = "Adds arguments")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, params string[] args)
             where T : ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1094,7 +1133,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TResource> WithCertificateTrustConfiguration<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, System.Func<ApplicationModel.CertificateTrustConfigurationCallbackAnnotationContext, System.Threading.Tasks.Task> callback)
             where TResource : ApplicationModel.IResourceWithArgs, ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withCertificateTrustScope", Description = "Sets the certificate trust scope")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithCertificateTrustScope<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, ApplicationModel.CertificateTrustScope scope)
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1102,11 +1141,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithChildRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResource child)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withBuilderChildRelationship", MethodName = "withChildRelationship", Description = "Sets a child relationship")]
+        [AspireExport("withBuilderChildRelationship", MethodName = "withChildRelationship")]
         public static ApplicationModel.IResourceBuilder<T> WithChildRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> child)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withCommand", Description = "Adds a resource command")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, System.Threading.Tasks.Task<ApplicationModel.ExecuteCommandResult>> executeCommand, ApplicationModel.CommandOptions? commandOptions = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1114,7 +1153,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, System.Threading.Tasks.Task<ApplicationModel.ExecuteCommandResult>> executeCommand, System.Func<ApplicationModel.UpdateCommandStateContext, ApplicationModel.ResourceCommandState>? updateState = null, string? displayDescription = null, object? parameter = null, string? confirmationMessage = null, string? iconName = null, ApplicationModel.IconVariant? iconVariant = null, bool isHighlighted = false)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "IComputeEnvironmentResource is a specialized interface — not ATS-compatible.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IComputeEnvironmentResource> computeEnvironmentResource)
             where T : ApplicationModel.IComputeResource { throw null; }
 
@@ -1130,7 +1169,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithConnectionStringRedirection<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceWithConnectionString resource)
             where T : ApplicationModel.IResourceWithConnectionString { throw null; }
 
-        [AspireExport("withContainerFilesSource", Description = "Sets the source directory for container files")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithContainerFilesSource<T>(this ApplicationModel.IResourceBuilder<T> builder, string sourcePath)
             where T : IResourceWithContainerFiles { throw null; }
 
@@ -1139,43 +1178,58 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, System.Action<ApplicationModel.CommandLineArgsCallbackContext>? argsCallback = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withDeveloperCertificateTrust", Description = "Configures developer certificate trust")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithDeveloperCertificateTrust<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, bool trust)
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
-        [AspireExport("withEndpoint", Description = "Adds a network endpoint")]
-        public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? scheme = null, string? name = null, string? env = null, bool isProxied = true, bool? isExternal = null, System.Net.Sockets.ProtocolType? protocol = null)
+        [AspireExportIgnore(Reason = "Binary compatibility shim for the nullable isProxied overload.")]
+        public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? scheme, string? name, string? env, bool isProxied, bool? isExternal, System.Net.Sockets.ProtocolType? protocol)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExportIgnore(Reason = "Subset of the full WithEndpoint overload which is already exported.")]
+        [AspireExportIgnore(Reason = "Binary compatibility shim for the nullable isProxied overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? scheme, string? name, string? env, bool isProxied, bool? isExternal)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExportIgnore(Reason = "EndpointAnnotation has read-only properties AllocatedEndpointSnapshot and AllAllocatedEndpoints that are not ATS-compatible. Callback-free variant is exported.")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? scheme = null, string? name = null, string? env = null, bool? isProxied = null, bool? isExternal = null, System.Net.Sockets.ProtocolType? protocol = null)
+            where T : ApplicationModel.IResourceWithEndpoints { throw null; }
+
+        [AspireExportIgnore(Reason = "Subset of the full WithEndpoint overload which is already exported.")]
+        public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? scheme, string? name, string? env, bool? isProxied, bool? isExternal)
+            where T : ApplicationModel.IResourceWithEndpoints { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
         public static ApplicationModel.IResourceBuilder<T> WithEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Action<ApplicationModel.EndpointAnnotation> callback, bool createIfNotExists = true)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithEndpoints> WithEndpointProxySupport(this ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithEndpoints> builder, bool proxyEnabled) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.EnvironmentCallbackContext> callback)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withEnvironmentCallback", Description = "Sets environment variables via callback")]
+        [AspireExport("withEnvironmentCallback")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.EnvironmentCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withEnvironmentEndpoint", Description = "Sets an environment variable from an endpoint reference")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.EndpointReference endpointReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withEnvironmentConnectionString", Description = "Sets an environment variable from a connection string resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IExpressionValue value)
+            where T : ApplicationModel.IResourceWithEnvironment { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string envVarName, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> resource)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withEnvironmentParameter", Description = "Sets an environment variable from a parameter resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameter)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Specialized overload — withReference covers this use case.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1199,35 +1253,51 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T, TValue>(this ApplicationModel.IResourceBuilder<T> builder, string name, TValue value)
             where T : ApplicationModel.IResourceWithEnvironment where TValue : ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider { throw null; }
 
-        [AspireExport("withExplicitStart", Description = "Prevents resource from starting automatically")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithExplicitStart<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withExternalHttpEndpoints", Description = "Makes HTTP endpoints externally accessible")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithExternalHttpEndpoints<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withHealthCheck", Description = "Adds a health check by key")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithHealthCheck<T>(this ApplicationModel.IResourceBuilder<T> builder, string key)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithHidden<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use ATS-friendly overload that supports a single exit code or multiple exit codes.")]
+        public static ApplicationModel.IResourceBuilder<T> WithHiddenOnCompletion<T>(this ApplicationModel.IResourceBuilder<T> builder, int exitCode)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Uses params array overload; use ATS-friendly overload for polyglot SDKs.")]
+        public static ApplicationModel.IResourceBuilder<T> WithHiddenOnCompletion<T>(this ApplicationModel.IResourceBuilder<T> builder, params int[] exitCodes)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Use the ATS-specific withHttpCommand export.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithHttpCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string path, string displayName, System.Func<ApplicationModel.EndpointReference>? endpointSelector, string? commandName = null, ApplicationModel.HttpCommandOptions? commandOptions = null)
             where TResource : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExportIgnore(Reason = "Func<HttpRequestMessage> is not ATS-compatible.")]
+        [AspireExportIgnore(Reason = "Use the ATS-specific withHttpCommand export.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithHttpCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string path, string displayName, string? endpointName = null, string? commandName = null, ApplicationModel.HttpCommandOptions? commandOptions = null)
             where TResource : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withHttpEndpoint", Description = "Adds an HTTP endpoint")]
-        public static ApplicationModel.IResourceBuilder<T> WithHttpEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? name = null, string? env = null, bool isProxied = true)
+        [AspireExportIgnore(Reason = "Binary compatibility shim for the nullable isProxied overload.")]
+        public static ApplicationModel.IResourceBuilder<T> WithHttpEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? name, string? env, bool isProxied)
+            where T : ApplicationModel.IResourceWithEndpoints { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithHttpEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? name = null, string? env = null, bool? isProxied = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
         [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithHttpHealthCheck<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.EndpointReference>? endpointSelector, string? path = null, int? statusCode = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withHttpHealthCheck", Description = "Adds an HTTP health check")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithHttpHealthCheck<T>(this ApplicationModel.IResourceBuilder<T> builder, string? path = null, int? statusCode = null, string? endpointName = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
@@ -1252,31 +1322,40 @@ namespace Aspire.Hosting
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withParameterHttpsDeveloperCertificate", MethodName = "withHttpsDeveloperCertificate", Description = "Configures HTTPS with a developer certificate")]
+        [AspireExport("withParameterHttpsDeveloperCertificate", MethodName = "withHttpsDeveloperCertificate")]
         public static ApplicationModel.IResourceBuilder<TResource> WithHttpsDeveloperCertificate<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null)
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
-        [AspireExport("withHttpsEndpoint", Description = "Adds an HTTPS endpoint")]
-        public static ApplicationModel.IResourceBuilder<T> WithHttpsEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? name = null, string? env = null, bool isProxied = true)
+        [AspireExportIgnore(Reason = "Binary compatibility shim for the nullable isProxied overload.")]
+        public static ApplicationModel.IResourceBuilder<T> WithHttpsEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port, int? targetPort, string? name, string? env, bool isProxied)
+            where T : ApplicationModel.IResourceWithEndpoints { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithHttpsEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? name = null, string? env = null, bool? isProxied = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the WithHttpHealthCheck method instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithHttpsHealthCheck<T>(this ApplicationModel.IResourceBuilder<T> builder, string? path = null, int? statusCode = null, string? endpointName = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withIconName", Description = "Sets the icon for the resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithIconName<T>(this ApplicationModel.IResourceBuilder<T> builder, string iconName, ApplicationModel.IconVariant iconVariant = ApplicationModel.IconVariant.Filled)
             where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-        [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
         public static ApplicationModel.IResourceBuilder<T> WithImagePushOptions<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.ContainerImagePushOptionsCallbackContext> callback)
             where T : ApplicationModel.IComputeResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-        [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithImagePushOptions<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.ContainerImagePushOptionsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IComputeResource { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithLifetimeOf<T, TSource>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<TSource> sourceBuilder)
+            where T : ApplicationModel.IResource where TSource : ApplicationModel.IResource { throw null; }
 
         [AspireExportIgnore(Reason = "ManifestPublishingContext exposes Utf8JsonWriter and DistributedApplicationExecutionContext — .NET runtime types not usable from polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<T> WithManifestPublishingCallback<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Publishing.ManifestPublishingContext> callback)
@@ -1287,19 +1366,44 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withoutHttpsCertificate", Description = "Removes HTTPS certificate configuration")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithoutHttpsCertificate<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder)
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithParentProcessLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder, int parentProcessId)
+            where T : ApplicationModel.IResource { throw null; }
 
         [AspireExportIgnore(Reason = "Raw IResource interface — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithParentRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResource parent)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withBuilderParentRelationship", MethodName = "withParentRelationship", Description = "Sets the parent relationship")]
+        [AspireExport("withBuilderParentRelationship", MethodName = "withParentRelationship")]
         public static ApplicationModel.IResourceBuilder<T> WithParentRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> parent)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withReferenceEndpoint", Description = "Adds a reference to an endpoint")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+        public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, ApplicationModel.ProcessCommandSpec> processSpecFactory, ApplicationModel.ProcessCommandOptions? commandOptions = null)
+            where TResource : ApplicationModel.IResource { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+        public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, System.Threading.Tasks.ValueTask<ApplicationModel.ProcessCommandSpec>> processSpecFactory, ApplicationModel.ProcessCommandOptions? commandOptions = null)
+            where TResource : ApplicationModel.IResource { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot app hosts.")]
+        public static ApplicationModel.IResourceBuilder<TResource> WithProcessCommand<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string commandName, string displayName, string executablePath, System.Collections.Generic.IReadOnlyList<string>? arguments = null, ApplicationModel.ProcessCommandOptions? commandOptions = null)
+            where TResource : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.EndpointReference endpointReference)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1307,7 +1411,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withReferenceExternalService", Description = "Adds a reference to an external service")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1319,7 +1423,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> source)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExport("withReferenceUri", Description = "Adds a reference to a URI")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, string name, System.Uri uri)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -1343,21 +1447,26 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResource resource, string type)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withBuilderRelationship", MethodName = "withRelationship", Description = "Adds a relationship to another resource")]
+        [AspireExport("withBuilderRelationship", MethodName = "withRelationship")]
         public static ApplicationModel.IResourceBuilder<T> WithRelationship<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> resourceBuilder, string type)
             where T : ApplicationModel.IResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-        [AspireExport("withRemoteImageName", Description = "Sets the remote image name for publishing")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithRemoteImageName<T>(this ApplicationModel.IResourceBuilder<T> builder, string remoteImageName)
             where T : ApplicationModel.IComputeResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-        [AspireExport("withRemoteImageTag", Description = "Sets the remote image tag for publishing")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithRemoteImageTag<T>(this ApplicationModel.IResourceBuilder<T> builder, string remoteImageTag)
             where T : ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExport("withUrlExpression", Description = "Adds a URL using a reference expression")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithSessionLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ReferenceExpression url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1365,23 +1474,23 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, in ApplicationModel.ReferenceExpression.ExpressionInterpolatedStringHandler url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withUrl", Description = "Adds or modifies displayed URLs")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, string url, string? displayText = null)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withUrlForEndpoint", Description = "Customizes the URL for a specific endpoint via callback")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithUrlForEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Action<ApplicationModel.ResourceUrlAnnotation> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withUrlForEndpointFactory", Description = "Adds a URL for a specific endpoint via factory callback")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrlForEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, string endpointName, System.Func<ApplicationModel.EndpointReference, ApplicationModel.ResourceUrlAnnotation> callback)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withUrlsCallback", Description = "Customizes displayed URLs via callback")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithUrls<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.ResourceUrlsCallbackContext> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withUrlsCallbackAsync", Description = "Customizes displayed URLs via async callback")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withUrlsCallback.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrls<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.ResourceUrlsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -1434,7 +1543,7 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Endpoint.Name}, UriString = {UriString}")]
     public partial class AllocatedEndpoint
     {
-        public AllocatedEndpoint(EndpointAnnotation endpoint, string address, int port, EndpointBindingMode bindingMode, string? targetPortExpression = null, NetworkIdentifier? networkID = null) { }
+        public AllocatedEndpoint(EndpointAnnotation endpoint, string address, int port, EndpointBindingMode bindingMode, string? targetPortExpression = null, NetworkIdentifier? networkId = null) { }
 
         public AllocatedEndpoint(EndpointAnnotation endpoint, string address, int port, EndpointBindingMode bindingMode, string? targetPortExpression = null) { }
 
@@ -1463,6 +1572,7 @@ namespace Aspire.Hosting.ApplicationModel
 
     public static partial class AspireStoreExtensions
     {
+        [AspireExport]
         public static string GetFileNameWithContent(this IAspireStore aspireStore, string filenameTemplate, string sourceFilename) { throw null; }
     }
 
@@ -1553,6 +1663,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireDto]
     public partial class CertificateTrustExecutionConfigurationContext
     {
         public required ReferenceExpression CertificateBundlePath { get { throw null; } init { } }
@@ -1591,7 +1702,7 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Func<CommandLineArgsCallbackContext, System.Threading.Tasks.Task> Callback { get { throw null; } }
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport]
     public sealed partial class CommandLineArgsCallbackContext
     {
         public CommandLineArgsCallbackContext(System.Collections.Generic.IList<object> args, IResource resource, System.Threading.CancellationToken cancellationToken = default) { }
@@ -1606,12 +1717,16 @@ namespace Aspire.Hosting.ApplicationModel
 
         public Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } init { } }
 
+        [AspireExport]
         public IResource Resource { get { throw null; } }
     }
 
     [AspireDto]
     public partial class CommandOptions
     {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public System.Collections.Generic.IReadOnlyList<InteractionInput> Arguments { get { throw null; } set { } }
+
         public string? ConfirmationMessage { get { throw null; } set { } }
 
         public string? Description { get { throw null; } set { } }
@@ -1622,9 +1737,32 @@ namespace Aspire.Hosting.ApplicationModel
 
         public bool IsHighlighted { get { throw null; } set { } }
 
+        [System.Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
         public object? Parameter { get { throw null; } set { } }
 
         public System.Func<UpdateCommandStateContext, ResourceCommandState>? UpdateState { get { throw null; } set { } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? ValidateArguments { get { throw null; } set { } }
+
+        public ResourceCommandVisibility Visibility { get { throw null; } set { } }
+    }
+
+    [AspireDto]
+    public sealed partial class CommandResultData
+    {
+        public bool DisplayImmediately { get { throw null; } init { } }
+
+        public CommandResultFormat Format { get { throw null; } init { } }
+
+        public required string Value { get { throw null; } init { } }
+    }
+
+    public enum CommandResultFormat
+    {
+        Text = 0,
+        Json = 1,
+        Markdown = 2
     }
 
     public static partial class CommandResults
@@ -1633,9 +1771,21 @@ namespace Aspire.Hosting.ApplicationModel
 
         public static ExecuteCommandResult Failure(System.Exception exception) { throw null; }
 
+        public static ExecuteCommandResult Failure(string errorMessage, CommandResultData value) { throw null; }
+
+        public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) { throw null; }
+
         public static ExecuteCommandResult Failure(string? errorMessage = null) { throw null; }
 
         public static ExecuteCommandResult Success() { throw null; }
+
+        public static ExecuteCommandResult Success(string message, CommandResultData value) { throw null; }
+
+        public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat, bool displayImmediately) { throw null; }
+
+        public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) { throw null; }
+
+        public static ExecuteCommandResult Success(string message) { throw null; }
     }
 
     public sealed partial class ConnectionPropertyAnnotation : IResourceAnnotation
@@ -1664,7 +1814,7 @@ namespace Aspire.Hosting.ApplicationModel
         public IResourceWithConnectionString Resource { get { throw null; } }
     }
 
-    public partial class ConnectionStringReference : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class ConnectionStringReference : IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public ConnectionStringReference(IResourceWithConnectionString resource, bool optional) { }
 
@@ -1694,13 +1844,13 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class ContainerBuildOptionsCallbackContext
     {
-        public ContainerBuildOptionsCallbackContext(IResource resource, System.IServiceProvider services, Microsoft.Extensions.Logging.ILogger logger, System.Threading.CancellationToken cancellationToken, DistributedApplicationExecutionContext? executionContext = null) { }
+        public ContainerBuildOptionsCallbackContext(IResource resource, System.IServiceProvider services, Microsoft.Extensions.Logging.ILogger logger, System.Threading.CancellationToken cancellationToken, DistributedApplicationExecutionContext executionContext) { }
 
         public System.Threading.CancellationToken CancellationToken { get { throw null; } }
 
         public Publishing.ContainerImageDestination? Destination { get { throw null; } set { } }
 
-        public DistributedApplicationExecutionContext? ExecutionContext { get { throw null; } }
+        public DistributedApplicationExecutionContext ExecutionContext { get { throw null; } }
 
         public Publishing.ContainerImageFormat? ImageFormat { get { throw null; } set { } }
 
@@ -1826,6 +1976,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class ContainerImagePushOptions
     {
         public string? RemoteImageName { get { throw null; } set { } }
@@ -1846,6 +1997,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class ContainerImagePushOptionsCallbackContext
     {
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
@@ -1860,6 +2012,7 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public ContainerImageReference(IResource resource) { }
 
+        [AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container image provenance.")]
         public System.Collections.Generic.IEnumerable<object> References { get { throw null; } }
 
         public IResource Resource { get { throw null; } }
@@ -1928,6 +2081,7 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public ContainerPortReference(IResource resource) { }
 
+        [AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container port provenance.")]
         public System.Collections.Generic.IEnumerable<object> References { get { throw null; } }
 
         public IResource Resource { get { throw null; } }
@@ -2036,6 +2190,11 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Collections.Immutable.ImmutableArray<VolumeSnapshot> Volumes { get { throw null; } init { } }
     }
 
+    public static partial class CustomResourceSnapshotExtensions
+    {
+        public static CustomResourceSnapshot WithHealthReports(this CustomResourceSnapshot snapshot, System.Collections.Immutable.ImmutableArray<HealthReportSnapshot> healthReports) { throw null; }
+    }
+
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, LaunchProfileName = {LaunchProfileName}")]
     public sealed partial class DefaultLaunchProfileAnnotation : IResourceAnnotation
     {
@@ -2108,6 +2267,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.Dictionary<string, object?> BuildArguments { get { throw null; } }
 
+        public string? BuildContextIgnoreContent { get { throw null; } set { } }
+
         public System.Collections.Generic.Dictionary<string, object> BuildSecrets { get { throw null; } }
 
         public string ContextPath { get { throw null; } }
@@ -2123,6 +2284,8 @@ namespace Aspire.Hosting.ApplicationModel
         public string? ImageTag { get { throw null; } set { } }
 
         public string? Stage { get { throw null; } }
+
+        public System.Threading.Tasks.Task EmitDockerfileArtifactsAsync(DockerfileFactoryContext context, string? dockerfilePath = null) { throw null; }
 
         public System.Threading.Tasks.Task MaterializeDockerfileAsync(DockerfileFactoryContext context, System.Threading.CancellationToken cancellationToken) { throw null; }
     }
@@ -2140,6 +2303,7 @@ namespace Aspire.Hosting.ApplicationModel
         public void AddCallback(System.Func<DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback) { }
     }
 
+    [AspireExport(ExposeProperties = true)]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBuilderCallbackContext
     {
@@ -2154,10 +2318,12 @@ namespace Aspire.Hosting.ApplicationModel
         public System.IServiceProvider Services { get { throw null; } }
     }
 
+    [AspireExport]
     public sealed partial class DockerfileFactoryContext
     {
         public System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
+        [AspireExport]
         public required IResource Resource { get { throw null; } init { } }
 
         public required System.IServiceProvider Services { get { throw null; } init { } }
@@ -2193,9 +2359,13 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}")]
     public sealed partial class EndpointAnnotation : IResourceAnnotation
     {
-        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, NetworkIdentifier? networkID, string? uriScheme = null, string? transport = null, string? name = null, int? port = null, int? targetPort = null, bool? isExternal = null, bool isProxied = true) { }
+        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, NetworkIdentifier? networkId, string? uriScheme, string? transport, string? name, int? port, int? targetPort, bool? isExternal, bool isProxied) { }
 
-        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, string? uriScheme = null, string? transport = null, string? name = null, int? port = null, int? targetPort = null, bool? isExternal = null, bool isProxied = true) { }
+        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, NetworkIdentifier? networkId, string? uriScheme = null, string? transport = null, string? name = null, int? port = null, int? targetPort = null, bool? isExternal = null, bool? isProxied = null) { }
+
+        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, string? uriScheme, string? transport, string? name, int? port, int? targetPort, bool? isExternal, bool isProxied) { }
+
+        public EndpointAnnotation(System.Net.Sockets.ProtocolType protocol, string? uriScheme = null, string? transport = null, string? name = null, int? port = null, int? targetPort = null, bool? isExternal = null, bool? isProxied = null) { }
 
         public NetworkEndpointSnapshotList AllAllocatedEndpoints { get { throw null; } }
 
@@ -2207,6 +2377,8 @@ namespace Aspire.Hosting.ApplicationModel
         public NetworkIdentifier DefaultNetworkID { get { throw null; } }
 
         public bool ExcludeReferenceEndpoint { get { throw null; } set { } }
+
+        public bool? IsExplicitlyProxied { get { throw null; } set { } }
 
         public bool IsExternal { get { throw null; } set { } }
 
@@ -2281,15 +2453,15 @@ namespace Aspire.Hosting.ApplicationModel
         TlsEnabled = 7
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport(ExposeProperties = true, ExposeMethods = true)]
     [System.Diagnostics.DebuggerDisplay("Resource = {Resource.Name}, EndpointName = {EndpointName}, IsAllocated = {IsAllocated}")]
-    public sealed partial class EndpointReference : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public sealed partial class EndpointReference : IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
-        public EndpointReference(IResourceWithEndpoints owner, EndpointAnnotation endpoint, NetworkIdentifier? contextNetworkID) { }
+        public EndpointReference(IResourceWithEndpoints owner, EndpointAnnotation endpoint, NetworkIdentifier? contextNetworkId) { }
 
         public EndpointReference(IResourceWithEndpoints owner, EndpointAnnotation endpoint) { }
 
-        public EndpointReference(IResourceWithEndpoints owner, string endpointName, NetworkIdentifier? contextNetworkID = null) { }
+        public EndpointReference(IResourceWithEndpoints owner, string endpointName, NetworkIdentifier? contextNetworkId = null) { }
 
         public EndpointReference(IResourceWithEndpoints owner, string endpointName) { }
 
@@ -2317,6 +2489,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public bool IsHttps { get { throw null; } }
 
+        public bool IsHttpSchemeNamedEndpoint { get { throw null; } }
+
         public int Port { get { throw null; } }
 
         public IResourceWithEndpoints Resource { get { throw null; } }
@@ -2329,20 +2503,36 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string Url { get { throw null; } }
 
-        [AspireExport(Description = "Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.")]
+        [AspireExport]
         public ReferenceExpression GetTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue) { throw null; }
 
+        [AspireExportIgnore]
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(ValueProviderContext context, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
-        [AspireExport("getValueAsync", Description = "Gets the URL of the endpoint asynchronously")]
+        [AspireExport]
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
+        [AspireExport]
         public EndpointReferenceExpression Property(EndpointProperty property) { throw null; }
+    }
+
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Resource = {Resource.Name}, EndpointNames = {UseAllEndpoints ? \"(All)\" : string.Join(\", \", EndpointNames)}")]
+    public sealed partial class EndpointReferenceAnnotation : IResourceAnnotation
+    {
+        public EndpointReferenceAnnotation(IResourceWithEndpoints resource) { }
+
+        public NetworkIdentifier ContextNetworkId { get { throw null; } set { } }
+
+        public System.Collections.Generic.ISet<string> EndpointNames { get { throw null; } }
+
+        public IResourceWithEndpoints Resource { get { throw null; } }
+
+        public bool UseAllEndpoints { get { throw null; } set { } }
     }
 
     [AspireExport(ExposeProperties = true)]
     [System.Diagnostics.DebuggerDisplay("EndpointExpression = {ValueExpression}, Property = {Property}, Endpoint = {Endpoint.EndpointName}")]
-    public partial class EndpointReferenceExpression : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class EndpointReferenceExpression : IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public EndpointReferenceExpression(EndpointReference endpointReference, EndpointProperty property) { }
 
@@ -2373,7 +2563,7 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Func<EnvironmentCallbackContext, System.Threading.Tasks.Task> Callback { get { throw null; } }
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport]
     public partial class EnvironmentCallbackContext
     {
         public EnvironmentCallbackContext(DistributedApplicationExecutionContext executionContext, IResource resource, System.Collections.Generic.Dictionary<string, object>? environmentVariables = null, System.Threading.CancellationToken cancellationToken = default) { }
@@ -2385,10 +2575,12 @@ namespace Aspire.Hosting.ApplicationModel
         [AspireUnion(new[] { typeof(string), typeof(ReferenceExpression) })]
         public System.Collections.Generic.Dictionary<string, object> EnvironmentVariables { get { throw null; } }
 
+        [AspireExport]
         public DistributedApplicationExecutionContext ExecutionContext { get { throw null; } }
 
         public Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } set { } }
 
+        [AspireExport]
         public IResource Resource { get { throw null; } }
     }
 
@@ -2423,10 +2615,15 @@ namespace Aspire.Hosting.ApplicationModel
     [AspireExport(ExposeProperties = true)]
     public sealed partial class ExecuteCommandContext
     {
+        public required InteractionInputCollection Arguments { get { throw null; } init { } }
+
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
+
+        public required Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } init { } }
 
         public required string ResourceName { get { throw null; } init { } }
 
+        [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
         public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
@@ -2435,7 +2632,12 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public bool Canceled { get { throw null; } init { } }
 
+        public CommandResultData? Data { get { throw null; } init { } }
+
+        [System.Obsolete("Use Message instead.")]
         public string? ErrorMessage { get { throw null; } init { } }
+
+        public string? Message { get { throw null; } init { } }
 
         public required bool Success { get { throw null; } init { } }
     }
@@ -2453,19 +2655,24 @@ namespace Aspire.Hosting.ApplicationModel
 
     public static partial class ExecutionConfigurationBuilderExtensions
     {
+        [AspireExport]
         public static IExecutionConfigurationBuilder WithArgumentsConfig(this IExecutionConfigurationBuilder builder) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
         public static IExecutionConfigurationBuilder WithCertificateTrustConfig(this IExecutionConfigurationBuilder builder, System.Func<CertificateTrustScope, CertificateTrustExecutionConfigurationContext> configContextFactory) { throw null; }
 
+        [AspireExport]
         public static IExecutionConfigurationBuilder WithEnvironmentVariablesConfig(this IExecutionConfigurationBuilder builder) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "X509Certificate2 callback input is not ATS-compatible. Use the ATS-specific withHttpsCertificateConfig export instead.")]
         public static IExecutionConfigurationBuilder WithHttpsCertificateConfig(this IExecutionConfigurationBuilder builder, System.Func<System.Security.Cryptography.X509Certificates.X509Certificate2, HttpsCertificateExecutionConfigurationContext> configContextFactory) { throw null; }
     }
 
     public static partial class ExecutionConfigurationResultExtensions
     {
+        [AspireExportIgnore(Reason = "Generic out-parameter helper — use getCertificateTrustData or getHttpsCertificateData instead.")]
         public static bool TryGetAdditionalData<T>(this IExecutionConfigurationResult configuration, out T? additionalData)
             where T : IExecutionConfigurationData { throw null; }
     }
@@ -2515,7 +2722,7 @@ namespace Aspire.Hosting.ApplicationModel
         public System.DateTime? LastRunAt { get { throw null; } init { } }
     }
 
-    public partial record HostUrl(string Url) : IValueProvider, IManifestExpressionProvider
+    public partial record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression { get { throw null; } }
 
@@ -2535,6 +2742,8 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Net.Http.HttpMethod? Method { get { throw null; } set { } }
 
         public System.Func<HttpCommandRequestContext, System.Threading.Tasks.Task>? PrepareRequest { get { throw null; } set { } }
+
+        public HttpCommandResultMode ResultMode { get { throw null; } set { } }
     }
 
     public sealed partial class HttpCommandRequestContext
@@ -2565,6 +2774,14 @@ namespace Aspire.Hosting.ApplicationModel
         public required System.Net.Http.HttpResponseMessage Response { get { throw null; } init { } }
 
         public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
+    }
+
+    public enum HttpCommandResultMode
+    {
+        None = 0,
+        Auto = 1,
+        Json = 2,
+        Text = 3
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -2608,6 +2825,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireDto]
     public partial class HttpsCertificateExecutionConfigurationContext
     {
         public required ReferenceExpression CertificatePath { get { throw null; } init { } }
@@ -2654,6 +2872,8 @@ namespace Aspire.Hosting.ApplicationModel
 
     public partial interface IComputeEnvironmentResource : IResource
     {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression);
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference);
     }
@@ -2720,6 +2940,11 @@ namespace Aspire.Hosting.ApplicationModel
         System.Exception? Exception { get; }
 
         System.Collections.Generic.IEnumerable<object> References { get; }
+    }
+
+    [AspireExport]
+    public partial interface IExpressionValue : IValueProvider, IManifestExpressionProvider
+    {
     }
 
     public enum ImagePullPolicy
@@ -2801,13 +3026,14 @@ namespace Aspire.Hosting.ApplicationModel
 
     public partial interface IResourceCollection : System.Collections.Generic.IList<IResource>, System.Collections.Generic.ICollection<IResource>, System.Collections.Generic.IEnumerable<IResource>, System.Collections.IEnumerable
     {
+        bool TryGetByName(string name, out IResource? resource);
     }
 
     public partial interface IResourceWithArgs : IResource
     {
     }
 
-    public partial interface IResourceWithConnectionString : IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial interface IResourceWithConnectionString : IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         string IManifestExpressionProvider.ValueExpression { get; }
 
@@ -2823,7 +3049,6 @@ namespace Aspire.Hosting.ApplicationModel
         System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(System.Threading.CancellationToken cancellationToken = default);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREATS001")]
     public partial interface IResourceWithCustomWithReference<TSelf> : IResource where TSelf : IResource, IResourceWithCustomWithReference<TSelf>
     {
         IResourceBuilder<TDestination>? TryWithReference<TDestination>(IResourceBuilder<TDestination> builder, IResourceBuilder<IResource> source, string? connectionName = null, bool optional = false, string? name = null)
@@ -2919,6 +3144,7 @@ namespace Aspire.Hosting.ApplicationModel
         public static readonly string Starting;
         public static readonly string Stopping;
         public static readonly System.Collections.Generic.IReadOnlyList<string> TerminalStates;
+        public static readonly string ValueMissing;
         public static readonly string Waiting;
     }
 
@@ -2936,6 +3162,12 @@ namespace Aspire.Hosting.ApplicationModel
         public LaunchProfileAnnotation(string launchProfileName) { }
 
         public string LaunchProfileName { get { throw null; } }
+    }
+
+    public enum Lifetime
+    {
+        Session = 0,
+        Persistent = 1
     }
 
     public readonly partial struct LogLine : System.IEquatable<LogLine>
@@ -3024,6 +3256,22 @@ namespace Aspire.Hosting.ApplicationModel
         public static McpServerEndpointAnnotation FromEndpoint(string endpointName, string? path = "/mcp") { throw null; }
     }
 
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}")]
+    public sealed partial class NameValidationPolicyAnnotation : IResourceAnnotation
+    {
+        public static readonly NameValidationPolicyAnnotation Default;
+        public static readonly NameValidationPolicyAnnotation None;
+        public int? MaxLength { get { throw null; } init { } }
+
+        public bool ValidateAllowedCharacters { get { throw null; } init { } }
+
+        public bool ValidateNoConsecutiveHyphens { get { throw null; } init { } }
+
+        public bool ValidateNoTrailingHyphen { get { throw null; } init { } }
+
+        public bool ValidateStartsWithLetter { get { throw null; } init { } }
+    }
+
     [System.Diagnostics.DebuggerDisplay("NetworkID = {NetworkID}, Endpoint = {Snapshot}")]
     public partial record NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Snapshot, NetworkIdentifier NetworkID)
     {
@@ -3031,16 +3279,16 @@ namespace Aspire.Hosting.ApplicationModel
 
     public partial class NetworkEndpointSnapshotList : System.Collections.Generic.IEnumerable<NetworkEndpointSnapshot>, System.Collections.IEnumerable
     {
-        public void AddOrUpdateAllocatedEndpoint(NetworkIdentifier networkID, AllocatedEndpoint endpoint) { }
+        public void AddOrUpdateAllocatedEndpoint(NetworkIdentifier networkId, AllocatedEndpoint endpoint) { }
 
-        public System.Threading.Tasks.Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkID, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+        public System.Threading.Tasks.Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public System.Collections.Generic.IEnumerator<NetworkEndpointSnapshot> GetEnumerator() { throw null; }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { throw null; }
 
         [System.Obsolete("This method is for internal use only and will be marked internal in a future Aspire release. Use AddOrUpdateAllocatedEndpoint instead.")]
-        public bool TryAdd(NetworkIdentifier networkID, ValueSnapshot<AllocatedEndpoint> snapshot) { throw null; }
+        public bool TryAdd(NetworkIdentifier networkId, ValueSnapshot<AllocatedEndpoint> snapshot) { throw null; }
     }
 
     public partial record NetworkIdentifier(string Value)
@@ -3059,7 +3307,7 @@ namespace Aspire.Hosting.ApplicationModel
         public abstract void WriteToManifest(Publishing.ManifestPublishingContext context);
     }
 
-    public partial class ParameterResource : Resource, IManifestExpressionProvider, IValueProvider
+    public partial class ParameterResource : Resource, IExpressionValue, IValueProvider, IManifestExpressionProvider
     {
         public ParameterResource(string name, System.Func<ParameterDefault?, string> callback, bool secret = false) : base(default!) { }
 
@@ -3081,6 +3329,28 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(ValueProviderContext _, System.Threading.CancellationToken cancellationToken) { throw null; }
 
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(System.Threading.CancellationToken cancellationToken) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Mode = {Mode}")]
+    public sealed partial class PersistenceAnnotation : IResourceAnnotation
+    {
+        public required PersistenceMode Mode { get { throw null; } set { } }
+
+        public int? ParentProcessId { get { throw null; } set { } }
+
+        public System.DateTime? ParentProcessTimestamp { get { throw null; } set { } }
+
+        public IResource? SourceResource { get { throw null; } set { } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum PersistenceMode
+    {
+        Session = 0,
+        Persistent = 1,
+        Resource = 2,
+        ParentProcess = 3
     }
 
     public sealed partial class PortAllocator : IPortAllocator
@@ -3114,6 +3384,60 @@ namespace Aspire.Hosting.ApplicationModel
         Startup = 0,
         Readiness = 1,
         Liveness = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial class ProcessCommandOptions : CommandOptions
+    {
+        public bool DisplayImmediately { get { throw null; } set { } }
+
+        public System.Func<ProcessCommandResultContext, System.Threading.Tasks.Task<ExecuteCommandResult>>? GetCommandResult { get { throw null; } set { } }
+
+        public int MaxOutputLineCount { get { throw null; } set { } }
+
+        public System.Collections.Generic.IReadOnlyList<int> SuccessExitCodes { get { throw null; } set { } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ProcessCommandResultContext
+    {
+        public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
+
+        public required int ExitCode { get { throw null; } init { } }
+
+        public required Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } init { } }
+
+        public required System.Collections.Generic.IReadOnlyList<string> Output { get { throw null; } init { } }
+
+        public required ProcessCommandSpec ProcessCommandSpec { get { throw null; } init { } }
+
+        public required string ResourceName { get { throw null; } init { } }
+
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
+
+        public required int TotalOutputLineCount { get { throw null; } init { } }
+
+        public string GetFormattedOutput(int maxLines = 50, string outputDescription = "Command output") { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ProcessCommandSpec
+    {
+        public ProcessCommandSpec(string executablePath) { }
+
+        public System.Collections.Generic.IReadOnlyList<string> Arguments { get { throw null; } init { } }
+
+        public System.Collections.Generic.IDictionary<string, string> EnvironmentVariables { get { throw null; } init { } }
+
+        public string ExecutablePath { get { throw null; } }
+
+        public bool InheritEnvironmentVariables { get { throw null; } init { } }
+
+        public bool KillEntireProcessTree { get { throw null; } init { } }
+
+        public string? StandardInputContent { get { throw null; } init { } }
+
+        public string? WorkingDirectory { get { throw null; } init { } }
     }
 
     [System.Diagnostics.DebuggerDisplay("{DebuggerToString(),nq}")]
@@ -3157,7 +3481,7 @@ namespace Aspire.Hosting.ApplicationModel
 
     [AspireExport]
     [System.Diagnostics.DebuggerDisplay("ReferenceExpression = {ValueExpression}, Providers = {ValueProviders.Count}")]
-    public partial class ReferenceExpression : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class ReferenceExpression : IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         internal ReferenceExpression() { }
 
@@ -3190,7 +3514,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(ValueProviderContext context, System.Threading.CancellationToken cancellationToken) { throw null; }
 
-        [AspireExport("getValue", Description = "Gets the resolved string value of the reference expression asynchronously")]
+        [AspireExport]
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(System.Threading.CancellationToken cancellationToken) { throw null; }
 
         [System.Runtime.CompilerServices.InterpolatedStringHandler]
@@ -3233,7 +3557,7 @@ namespace Aspire.Hosting.ApplicationModel
         [System.Obsolete("ReferenceExpression instances can't be used in interpolated string with a custom format. Duplicate the inner expression in-place.", true)]
         public void AppendFormatted(ReferenceExpression valueProvider, string format) { }
 
-        [AspireExport("appendFormatted", Description = "Appends a formatted string value to the reference expression")]
+        [AspireExport]
         public void AppendFormatted(string? value, string? format = null) { }
 
         public void AppendFormatted(string? value) { }
@@ -3244,13 +3568,13 @@ namespace Aspire.Hosting.ApplicationModel
         public void AppendFormatted<T>(T valueProvider)
             where T : IValueProvider, IManifestExpressionProvider { }
 
-        [AspireExport("appendLiteral", Description = "Appends a literal string to the reference expression")]
+        [AspireExport]
         public void AppendLiteral(string value) { }
 
-        [AspireExport("appendValueProvider", Description = "Appends a value provider to the reference expression")]
+        [AspireExport]
         public void AppendValueProvider(object valueProvider, string? format = null) { }
 
-        [AspireExport("build", Description = "Builds the reference expression")]
+        [AspireExport]
         public ReferenceExpression Build() { throw null; }
 
         [System.Runtime.CompilerServices.InterpolatedStringHandler]
@@ -3395,7 +3719,12 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}")]
     public sealed partial class ResourceCommandAnnotation : IResourceAnnotation
     {
+        public ResourceCommandAnnotation(string name, string displayName, System.Func<UpdateCommandStateContext, ResourceCommandState> updateState, System.Func<ExecuteCommandContext, System.Threading.Tasks.Task<ExecuteCommandResult>> executeCommand, string? displayDescription, System.Collections.Generic.IReadOnlyList<InteractionInput>? arguments, string? confirmationMessage, string? iconName, IconVariant? iconVariant, bool isHighlighted, ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api, System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? validateArguments = null) { }
+
         public ResourceCommandAnnotation(string name, string displayName, System.Func<UpdateCommandStateContext, ResourceCommandState> updateState, System.Func<ExecuteCommandContext, System.Threading.Tasks.Task<ExecuteCommandResult>> executeCommand, string? displayDescription, object? parameter, string? confirmationMessage, string? iconName, IconVariant? iconVariant, bool isHighlighted) { }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public System.Collections.Generic.IReadOnlyList<InteractionInput> Arguments { get { throw null; } }
 
         public string? ConfirmationMessage { get { throw null; } }
 
@@ -3413,16 +3742,26 @@ namespace Aspire.Hosting.ApplicationModel
 
         public string Name { get { throw null; } }
 
+        [System.Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
         public object? Parameter { get { throw null; } }
 
         public System.Func<UpdateCommandStateContext, ResourceCommandState> UpdateState { get { throw null; } }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? ValidateArguments { get { throw null; } }
+
+        public ResourceCommandVisibility Visibility { get { throw null; } }
     }
 
     public partial class ResourceCommandService
     {
         internal ResourceCommandService() { }
 
+        public System.Threading.Tasks.Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, InteractionInputCollection arguments, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
         public System.Threading.Tasks.Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        public System.Threading.Tasks.Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, InteractionInputCollection arguments, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public System.Threading.Tasks.Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
@@ -3430,6 +3769,9 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.DebuggerDisplay(null, Name = "{Name}")]
     public sealed partial record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
     {
+        public System.Collections.Generic.IReadOnlyList<InteractionInput> Arguments { get { throw null; } init { } }
+
+        public ResourceCommandVisibility Visibility { get { throw null; } init { } }
     }
 
     public enum ResourceCommandState
@@ -3439,10 +3781,25 @@ namespace Aspire.Hosting.ApplicationModel
         Hidden = 2
     }
 
+    [System.Flags]
+    public enum ResourceCommandVisibility
+    {
+        None = 0,
+        UI = 1,
+        Api = 2
+    }
+
     public enum ResourceDependencyDiscoveryMode
     {
         Recursive = 0,
         DirectOnly = 1
+    }
+
+    public sealed partial class ResourceDependencyDiscoveryOptions
+    {
+        public bool CacheAnnotationCallbackResults { get { throw null; } init { } }
+
+        public ResourceDependencyDiscoveryMode DiscoveryMode { get { throw null; } init { } }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -3478,13 +3835,13 @@ namespace Aspire.Hosting.ApplicationModel
         public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
-        public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkID) { throw null; }
+        public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkId) { throw null; }
 
         [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
         public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName) { throw null; }
 
         [AspireExportIgnore(Reason = "Network-specific endpoint enumeration is not part of the ATS surface.")]
-        public static System.Collections.Generic.IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkID) { throw null; }
+        public static System.Collections.Generic.IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkId) { throw null; }
 
         [AspireExportIgnore(Reason = "Resource handle endpoint enumeration is not part of the ATS surface; use builder-based endpoint exports instead.")]
         public static System.Collections.Generic.IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource) { throw null; }
@@ -3497,6 +3854,9 @@ namespace Aspire.Hosting.ApplicationModel
 
         [AspireExportIgnore(Reason = "Dependency discovery helper depends on execution context and is not part of the ATS surface.")]
         public static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlySet<IResource>> GetResourceDependenciesAsync(this IResource resource, DistributedApplicationExecutionContext executionContext, ResourceDependencyDiscoveryMode mode = ResourceDependencyDiscoveryMode.Recursive, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        [AspireExportIgnore(Reason = "Parameters and return type are not ATS-compatible — internal dependency discovery helper.")]
+        public static System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlySet<IResource>> GetResourceDependenciesAsync(this IResource resource, DistributedApplicationExecutionContext executionContext, ResourceDependencyDiscoveryOptions options, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
         public static bool HasAnnotationIncludingAncestorsOfType<T>(this IResource resource)
@@ -3609,7 +3969,7 @@ namespace Aspire.Hosting.ApplicationModel
     {
         public ResourceNotificationService(Microsoft.Extensions.Logging.ILogger<ResourceNotificationService> logger, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime, System.IServiceProvider serviceProvider, ResourceLoggerService resourceLoggerService) { }
 
-        [System.Obsolete("ResourceNotificationService now requires an IServiceProvider and ResourceLoggerService.\r\nUse the constructor that accepts an ILogger<ResourceNotificationService>, IHostApplicationLifetime, IServiceProvider and ResourceLoggerService.\r\nThis constructor will be removed in the next major version of Aspire.")]
+        [System.Obsolete("ResourceNotificationService now requires an IServiceProvider and ResourceLoggerService.\nUse the constructor that accepts an ILogger<ResourceNotificationService>, IHostApplicationLifetime, IServiceProvider and ResourceLoggerService.\nThis constructor will be removed in the next major version of Aspire.")]
         public ResourceNotificationService(Microsoft.Extensions.Logging.ILogger<ResourceNotificationService> logger, Microsoft.Extensions.Hosting.IHostApplicationLifetime hostApplicationLifetime) { }
 
         public void Dispose() { }
@@ -3714,31 +4074,36 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Func<ResourceUrlsCallbackContext, System.Threading.Tasks.Task> Callback { get { throw null; } }
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport]
     public partial class ResourceUrlsCallbackContext
     {
         public ResourceUrlsCallbackContext(DistributedApplicationExecutionContext executionContext, IResource resource, System.Collections.Generic.List<ResourceUrlAnnotation>? urls = null, System.Threading.CancellationToken cancellationToken = default) { }
 
         public System.Threading.CancellationToken CancellationToken { get { throw null; } }
 
+        [AspireExport]
         public DistributedApplicationExecutionContext ExecutionContext { get { throw null; } }
 
         public Microsoft.Extensions.Logging.ILogger Logger { get { throw null; } set { } }
 
+        [AspireExport]
         public IResource Resource { get { throw null; } }
 
         public System.Collections.Generic.List<ResourceUrlAnnotation> Urls { get { throw null; } }
 
-        public EndpointReference? GetEndpoint(string name, NetworkIdentifier contextNetworkID) { throw null; }
+        public EndpointReference? GetEndpoint(string name, NetworkIdentifier contextNetworkId) { throw null; }
 
+        [AspireExport]
         public EndpointReference? GetEndpoint(string name) { throw null; }
     }
 
     [AspireExport(ExposeProperties = true)]
     public sealed partial class UpdateCommandStateContext
     {
+        [AspireExportIgnore(Reason = "CustomResourceSnapshot contains object-valued properties that are not statically representable in polyglot SDKs. Use ResourceSnapshotData for the curated ATS projection.")]
         public required CustomResourceSnapshot ResourceSnapshot { get { throw null; } init { } }
 
+        [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
         public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
@@ -3818,13 +4183,16 @@ namespace Aspire.Hosting.ApplicationModel.Docker
 {
     public static partial class ContainerFilesExtensions
     {
+        [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath, Microsoft.Extensions.Logging.ILogger? logger) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static DockerfileBuilder AddContainerFilesStages(this DockerfileBuilder builder, IResource resource, Microsoft.Extensions.Logging.ILogger? logger) { throw null; }
     }
 
+    [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBuilder
     {
@@ -3845,6 +4213,7 @@ namespace Aspire.Hosting.ApplicationModel.Docker
         public System.Threading.Tasks.Task WriteAsync(System.IO.StreamWriter writer, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
+    [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileStage : DockerfileStatement
     {
@@ -3989,9 +4358,11 @@ namespace Aspire.Hosting.Lifecycle
 {
     public static partial class EventingSubscriberServiceCollectionExtensions
     {
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic service registration is not ATS-compatible. Use IDistributedApplicationBuilder.addEventingSubscriber instead.")]
         public static void AddEventingSubscriber<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services)
             where T : class, IDistributedApplicationEventingSubscriber { }
 
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic service registration is not ATS-compatible. Use IDistributedApplicationBuilder.tryAddEventingSubscriber instead.")]
         public static void TryAddEventingSubscriber<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services)
             where T : class, IDistributedApplicationEventingSubscriber { }
     }
@@ -4012,18 +4383,22 @@ namespace Aspire.Hosting.Lifecycle
     public static partial class LifecycleHookServiceCollectionExtensions
     {
         [System.Obsolete("Use EventingSubscriberServiceCollectionExtensions.AddEventingSubscriber instead.")]
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and IServiceProvider factory registration is not ATS-compatible. Use IDistributedApplicationBuilder.addEventingSubscriber instead.")]
         public static void AddLifecycleHook<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func<System.IServiceProvider, T> implementationFactory)
             where T : class, IDistributedApplicationLifecycleHook { }
 
         [System.Obsolete("Use EventingSubscriberServiceCollectionExtensions.AddEventingSubscriber instead.")]
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic lifecycle hook registration is not ATS-compatible. Use IDistributedApplicationBuilder.addEventingSubscriber instead.")]
         public static void AddLifecycleHook<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services)
             where T : class, IDistributedApplicationLifecycleHook { }
 
         [System.Obsolete("Use EventingSubscriberServiceCollectionExtensions.TryAddEventingSubscriber instead.")]
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and IServiceProvider factory registration is not ATS-compatible. Use IDistributedApplicationBuilder.tryAddEventingSubscriber instead.")]
         public static void TryAddLifecycleHook<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Func<System.IServiceProvider, T> implementationFactory)
             where T : class, IDistributedApplicationLifecycleHook { }
 
         [System.Obsolete("Use EventingSubscriberServiceCollectionExtensions.TryAddEventingSubscriber instead.")]
+        [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic lifecycle hook registration is not ATS-compatible. Use IDistributedApplicationBuilder.tryAddEventingSubscriber instead.")]
         public static void TryAddLifecycleHook<T>(this Microsoft.Extensions.DependencyInjection.IServiceCollection services)
             where T : class, IDistributedApplicationLifecycleHook { }
     }
@@ -4054,12 +4429,20 @@ namespace Aspire.Hosting.Pipelines
         public void SetValue(string value) { }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class DistributedApplicationPipelineExtensions
+    {
+        [AspireExport]
+        public static IDistributedApplicationPipeline DisableBuildOnlyContainerValidation(this IDistributedApplicationPipeline pipeline) { throw null; }
+    }
+
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IDeploymentStateManager
     {
         string? StateFilePath { get; }
 
         System.Threading.Tasks.Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task ClearAllStateAsync(System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task DeleteSectionAsync(DeploymentStateSection section, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task SaveSectionAsync(DeploymentStateSection section, System.Threading.CancellationToken cancellationToken = default);
     }
@@ -4079,6 +4462,7 @@ namespace Aspire.Hosting.Pipelines
         System.Threading.Tasks.Task CompletePublishAsync(PublishCompletionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
         [System.Obsolete("Use CompletePublishAsync(PublishCompletionOptions?, CancellationToken) instead.")]
         System.Threading.Tasks.Task CompletePublishAsync(string? completionMessage = null, CompletionState? completionState = null, System.Threading.CancellationToken cancellationToken = default);
+        System.Threading.Tasks.Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task<IReportingStep> CreateStepAsync(string title, System.Threading.CancellationToken cancellationToken = default);
     }
 
@@ -4145,7 +4529,7 @@ namespace Aspire.Hosting.Pipelines
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport]
     public partial class PipelineConfigurationContext
     {
         public required ApplicationModel.DistributedApplicationModel Model { get { throw null; } init { } }
@@ -4154,13 +4538,13 @@ namespace Aspire.Hosting.Pipelines
 
         public required System.Collections.Generic.IReadOnlyList<PipelineStep> Steps { get { throw null; } init { } }
 
-        [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use Steps or the tag-based overload instead.")]
+        [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use pipeline helpers instead.")]
         public System.Collections.Generic.IEnumerable<PipelineStep> GetSteps(ApplicationModel.IResource resource, string tag) { throw null; }
 
-        [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use Steps or the tag-based overload instead.")]
+        [AspireExportIgnore(Reason = "IResource parameters on callback context methods are not ATS-compatible. Use pipeline helpers instead.")]
         public System.Collections.Generic.IEnumerable<PipelineStep> GetSteps(ApplicationModel.IResource resource) { throw null; }
 
-        [AspireExport("getStepsByTag", Description = "Gets pipeline steps with the specified tag")]
+        [AspireExport]
         public System.Collections.Generic.IEnumerable<PipelineStep> GetSteps(string tag) { throw null; }
     }
 
@@ -4192,6 +4576,8 @@ namespace Aspire.Hosting.Pipelines
 
         public string? OutputPath { get { throw null; } set { } }
 
+        public bool SkipConfirmation { get { throw null; } set { } }
+
         public string? Step { get { throw null; } set { } }
     }
 
@@ -4210,18 +4596,19 @@ namespace Aspire.Hosting.Pipelines
 
         public System.Collections.Generic.List<string> RequiredBySteps { get { throw null; } init { } }
 
+        [AspireExportIgnore(Reason = "The associated resource is an internal runtime link and may be null for steps that are not tied to a resource.")]
         public ApplicationModel.IResource? Resource { get { throw null; } set { } }
 
         public System.Collections.Generic.List<string> Tags { get { throw null; } init { } }
 
         public void DependsOn(PipelineStep step) { }
 
-        [AspireExport("dependsOn", Description = "Adds a dependency on another step by name")]
+        [AspireExport]
         public void DependsOn(string stepName) { }
 
         public void RequiredBy(PipelineStep step) { }
 
-        [AspireExport("requiredBy", Description = "Specifies that another step requires this step by name")]
+        [AspireExport]
         public void RequiredBy(string stepName) { }
     }
 
@@ -4263,16 +4650,22 @@ namespace Aspire.Hosting.Pipelines
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class PipelineStepExtensions
     {
+        [AspireExportIgnore(Reason = "Use PipelineStep.dependsOn on each step in the collection, or mutate PipelineStep.dependsOnSteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> DependsOn(this System.Collections.Generic.IEnumerable<PipelineStep> steps, PipelineStep? step) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use PipelineStep.dependsOn on each step in the collection, or mutate PipelineStep.dependsOnSteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> DependsOn(this System.Collections.Generic.IEnumerable<PipelineStep> steps, System.Collections.Generic.IEnumerable<PipelineStep> targetSteps) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use PipelineStep.dependsOn on each step in the collection, or mutate PipelineStep.dependsOnSteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> DependsOn(this System.Collections.Generic.IEnumerable<PipelineStep> steps, string stepName) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use PipelineStep.requiredBy on each step in the collection, or mutate PipelineStep.requiredBySteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> RequiredBy(this System.Collections.Generic.IEnumerable<PipelineStep> steps, PipelineStep? step) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use PipelineStep.requiredBy on each step in the collection, or mutate PipelineStep.requiredBySteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> RequiredBy(this System.Collections.Generic.IEnumerable<PipelineStep> steps, System.Collections.Generic.IEnumerable<PipelineStep> targetSteps) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use PipelineStep.requiredBy on each step in the collection, or mutate PipelineStep.requiredBySteps directly.")]
         public static System.Collections.Generic.IEnumerable<PipelineStep> RequiredBy(this System.Collections.Generic.IEnumerable<PipelineStep> steps, string stepName) { throw null; }
     }
 
@@ -4288,11 +4681,11 @@ namespace Aspire.Hosting.Pipelines
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class PipelineStepFactoryExtensions
     {
-        [AspireExport("withPipelineConfiguration", Description = "Configures pipeline step dependencies via a callback")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithPipelineConfiguration<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<PipelineConfigurationContext> callback)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withPipelineConfigurationAsync", Description = "Configures pipeline step dependencies via an async callback")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withPipelineConfiguration.")]
         public static ApplicationModel.IResourceBuilder<T> WithPipelineConfiguration<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<PipelineConfigurationContext, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -4312,7 +4705,7 @@ namespace Aspire.Hosting.Pipelines
         public static ApplicationModel.IResourceBuilder<T> WithPipelineStepFactory<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<PipelineStepFactoryContext, System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<PipelineStep>>> factory)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withPipelineStepFactory", Description = "Adds a pipeline step to the resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithPipelineStepFactory<T>(this ApplicationModel.IResourceBuilder<T> builder, string stepName, System.Func<PipelineStepContext, System.Threading.Tasks.Task> callback, string[]? dependsOn = null, string[]? requiredBy = null, string[]? tags = null, string? description = null)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -4387,30 +4780,55 @@ namespace Aspire.Hosting.Pipelines
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class WellKnownPipelineSteps
     {
+        [AspireValue("WellKnownPipelineSteps")]
+        public const string BeforeStart = "before-start";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string Build = "build";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string BuildPrereq = "build-prereq";
+        [AspireValue("WellKnownPipelineSteps")]
+        public const string CheckContainerRuntime = "check-container-runtime";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string Deploy = "deploy";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string DeployPrereq = "deploy-prereq";
+        [AspireValue("WellKnownPipelineSteps")]
+        public const string Destroy = "destroy";
+        [AspireValue("WellKnownPipelineSteps")]
+        public const string DestroyPrereq = "destroy-prereq";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string Diagnostics = "diagnostics";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string ProcessParameters = "process-parameters";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string Publish = "publish";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string PublishPrereq = "publish-prereq";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string Push = "push";
+        [AspireValue("WellKnownPipelineSteps")]
         public const string PushPrereq = "push-prereq";
+        [AspireValue("WellKnownPipelineSteps")]
+        public const string ValidateComputeEnvironments = "validate-compute-environments";
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class WellKnownPipelineTags
     {
+        [AspireValue("WellKnownPipelineTags")]
         public const string BuildCompute = "build-compute";
+        [AspireValue("WellKnownPipelineTags")]
         public const string DeployCompute = "deploy-compute";
+        [AspireValue("WellKnownPipelineTags")]
         public const string ProvisionInfrastructure = "provision-infra";
+        [AspireValue("WellKnownPipelineTags")]
         public const string PushContainerImage = "push-container-image";
     }
 }
 
 namespace Aspire.Hosting.Publishing
 {
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class AfterPublishEvent : Eventing.IDistributedApplicationEvent
     {
         public AfterPublishEvent(System.IServiceProvider services, ApplicationModel.DistributedApplicationModel model) { }
@@ -4420,6 +4838,7 @@ namespace Aspire.Hosting.Publishing
         public System.IServiceProvider Services { get { throw null; } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class BeforePublishEvent : Eventing.IDistributedApplicationEvent
     {
         public BeforePublishEvent(System.IServiceProvider services, ApplicationModel.DistributedApplicationModel model) { }
@@ -4439,6 +4858,34 @@ namespace Aspire.Hosting.Publishing
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial record BuildImageSecretValue(string? Value, BuildImageSecretType Type)
     {
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ComposeOperationContext
+    {
+        public string? ComposeFilePath { get { throw null; } init { } }
+
+        public string? EnvFilePath { get { throw null; } init { } }
+
+        public required string ProjectName { get { throw null; } init { } }
+
+        public required string WorkingDirectory { get { throw null; } init { } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ComposeServiceInfo
+    {
+        public System.Collections.Generic.IReadOnlyList<ComposeServicePort>? Publishers { get { throw null; } init { } }
+
+        public string? Service { get { throw null; } init { } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ComposeServicePort
+    {
+        public int? PublishedPort { get { throw null; } init { } }
+
+        public int? TargetPort { get { throw null; } init { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -4491,10 +4938,19 @@ namespace Aspire.Hosting.Publishing
 
         System.Threading.Tasks.Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, System.Collections.Generic.Dictionary<string, string?> buildArguments, System.Collections.Generic.Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task<bool> CheckIfRunningAsync(System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task ComposeDownAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task ComposeUpAsync(ComposeOperationContext context, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task LoginToRegistryAsync(string registryServer, string username, string password, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task PushImageAsync(ApplicationModel.IResource resource, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task RemoveImageAsync(string imageName, System.Threading.CancellationToken cancellationToken);
         System.Threading.Tasks.Task TagImageAsync(string localImageName, string targetImageName, System.Threading.CancellationToken cancellationToken);
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial interface IContainerRuntimeResolver
+    {
+        System.Threading.Tasks.Task<IContainerRuntime> ResolveAsync(System.Threading.CancellationToken cancellationToken = default);
     }
 
     [System.Obsolete("IDistributedApplicationPublisher is obsolete. Use PipelineStep where applicable.")]

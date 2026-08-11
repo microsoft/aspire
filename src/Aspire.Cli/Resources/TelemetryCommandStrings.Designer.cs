@@ -169,6 +169,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs.
+        /// </summary>
+        internal static string SearchOptionDescription {
+            get {
+                return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The --limit value must be a positive number..
         /// </summary>
         internal static string LimitMustBePositive {

@@ -14,7 +14,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -46,13 +46,13 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("run");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
     public async Task AddCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
@@ -71,13 +71,13 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("add");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
     public async Task NewCommand_WhenSdkNotInstalled_OnlyShowsCliTemplates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
@@ -95,13 +95,13 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         // aspire-starter is not registered when SDK is unavailable, so it's an invalid command
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
     public async Task PublishCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -133,13 +133,13 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("publish");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
     public async Task DeployCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -171,36 +171,13 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("deploy");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
-    }
-
-    [Fact]
-    public async Task ExecCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
-            {
-                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
-            };
-
-            options.InteractionServiceFactory = _ => new TestInteractionService();
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("exec");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
     public async Task RunCommand_WhenSdkInstalled_ContinuesNormalExecution()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
@@ -217,6 +194,6 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         // Should fail at project location, not SDK check
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 }

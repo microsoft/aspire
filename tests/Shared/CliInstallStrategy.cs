@@ -161,6 +161,20 @@ internal static class AspireCliShellCommandHelpers
         return $"dotnet tool install {GetDotnetToolInstallArgs(strategy, nupkgSourcePath, nuGetConfigPath)}";
     }
 
+    internal static string GetDotnetAddPackageCommand(string projectPath, string packageId)
+    {
+        return
+            $"PKG={QuoteBashArg(packageId)}; " +
+            $"TARGET={QuoteBashArg(projectPath)}; " +
+            "PKG_PATH=$(find \"$HOME/.aspire/hives\" -path \"*/packages/$PKG.[0-9]*.nupkg\" -type f 2>/dev/null | sort -V | tail -n 1); " +
+            "if [ -n \"$PKG_PATH\" ]; then " +
+            "PKG_FILE=$(basename \"$PKG_PATH\"); " +
+            "PKG_VERSION=${PKG_FILE#\"$PKG.\"}; " +
+            "PKG_VERSION=${PKG_VERSION%.nupkg}; " +
+            "dotnet add \"$TARGET\" package \"$PKG\" --version \"$PKG_VERSION\"; " +
+            "else dotnet add \"$TARGET\" package \"$PKG\" --prerelease; fi";
+    }
+
     private static string GetDotnetToolInstallArgs(CliInstallStrategy strategy, string? nupkgSourcePath, string? nuGetConfigPath = null)
     {
         var args = "--global Aspire.Cli";
@@ -209,6 +223,8 @@ internal enum CliInstallQuality
 internal sealed class CliInstallStrategy
 {
     internal const string CliArchiveDirEnvironmentVariableName = "ASPIRE_E2E_CLI_ARCHIVE_DIR";
+    internal const string UbuntuAptMirrorBuildArgName = "UBUNTU_APT_MIRROR";
+    internal const string UbuntuAptMirrorEnvironmentVariableName = "ASPIRE_E2E_UBUNTU_APT_MIRROR";
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
     /// <summary>
@@ -513,6 +529,7 @@ internal sealed class CliInstallStrategy
     public void ConfigureContainer(DockerContainerOptions config)
     {
         config.BuildArgs["SKIP_SOURCE_BUILD"] = "true";
+        ConfigureUbuntuAptMirrorBuildArg(config.BuildArgs);
 
         switch (Mode)
         {
@@ -556,6 +573,15 @@ internal sealed class CliInstallStrategy
 
             default:
                 throw new InvalidOperationException($"Unknown install mode: {Mode}");
+        }
+    }
+
+    internal static void ConfigureUbuntuAptMirrorBuildArg(IDictionary<string, string> buildArgs)
+    {
+        var ubuntuAptMirror = Environment.GetEnvironmentVariable(UbuntuAptMirrorEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(ubuntuAptMirror))
+        {
+            buildArgs[UbuntuAptMirrorBuildArgName] = ubuntuAptMirror;
         }
     }
 

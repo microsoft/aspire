@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 
@@ -44,20 +42,12 @@ internal sealed class ApiSearchCommand : BaseCommand
     /// <summary>
     /// Initializes a new instance of the <see cref="ApiSearchCommand"/> class.
     /// </summary>
-    /// <param name="interactionService">The interaction service.</param>
     /// <param name="apiDocsIndexService">The API docs index service.</param>
-    /// <param name="features">The feature flag service.</param>
-    /// <param name="updateNotifier">The update notifier.</param>
-    /// <param name="executionContext">The CLI execution context.</param>
-    /// <param name="telemetry">The telemetry service.</param>
+    /// <param name="services">Common command services.</param>
     public ApiSearchCommand(
-        IInteractionService interactionService,
         IApiDocsIndexService apiDocsIndexService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("search", ApiCommandStrings.SearchDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("search", ApiCommandStrings.SearchDescription, services)
     {
         _apiDocsIndexService = apiDocsIndexService;
 
@@ -67,9 +57,7 @@ internal sealed class ApiSearchCommand : BaseCommand
         Options.Add(s_limitOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -85,14 +73,14 @@ internal sealed class ApiSearchCommand : BaseCommand
         if (items.Count is 0)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.NoResultsFound, query));
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize([.. items], JsonSourceGenerationContext.RelaxedEscaping.ApiSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.FoundSearchResults, items.Count, query));
@@ -115,6 +103,6 @@ internal sealed class ApiSearchCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

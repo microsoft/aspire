@@ -16,6 +16,12 @@ public partial class NotificationEntryComponent : ComponentBase
     [Parameter]
     public EventCallback OnDismiss { get; set; }
 
+    [CascadingParameter]
+    public FluentDialog Dialog { get; set; } = default!;
+
+    [Inject]
+    public required IServiceProvider Services { get; init; }
+
     private string IntentClass => Entry.Intent switch
     {
         MessageIntent.Success => "intent-success",
@@ -49,7 +55,15 @@ public partial class NotificationEntryComponent : ComponentBase
     {
         if (Entry.PrimaryAction is { } primaryAction)
         {
-            await primaryAction.OnClick();
+            try
+            {
+                Dialog.Hide();
+                await primaryAction.OnClick(Services);
+            }
+            finally
+            {
+                Dialog.Show();
+            }
         }
     }
 }

@@ -23,11 +23,11 @@ internal sealed class QdrantHealthCheck : IHealthCheck
 
             return response?.Title is not null
                 ? HealthCheckResult.Healthy()
-                : new HealthCheckResult(HealthStatus.Unhealthy);
+                : new HealthCheckResult(HealthStatus.Unhealthy, "Qdrant server returned an invalid health response.");
         }
         catch (Exception ex)
         {
-            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
+            return new HealthCheckResult(context.Registration.FailureStatus, "Failed to connect to Qdrant server.", ex);
         }
     }
 }

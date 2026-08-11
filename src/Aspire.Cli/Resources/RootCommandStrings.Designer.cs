@@ -79,6 +79,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI is emulating identity &apos;{0}&apos; version &apos;{1}&apos;. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar..
+        /// </summary>
+        public static string IdentityOverrideNotice {
+            get {
+                return ResourceManager.GetString("IdentityOverrideNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Welcome to the.
         /// </summary>
         public static string BannerWelcomeText {

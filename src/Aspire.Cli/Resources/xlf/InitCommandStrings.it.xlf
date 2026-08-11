@@ -17,9 +17,29 @@
         <target state="translated">Aggiunta del progetto ServiceDefaults alla soluzione in corso...</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostCreatedRunOne">
+        <source>Aspire AppHost created! To complete setup, run:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostCreatedRunOneOf">
+        <source>Aspire AppHost created! To complete setup, run one of:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run one of:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireInitializationComplete">
         <source>Aspire initialization complete!</source>
         <target state="translated">Inizializzazione di Aspire completata.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreatedFile">
+        <source>Created {0}</source>
+        <target state="new">Created {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreatingAppHostFromTemplate">
+        <source>Creating AppHost from template...</source>
+        <target state="new">Creating AppHost from template...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostProject">
@@ -32,9 +52,39 @@
         <target state="translated">Creazione del progetto ServiceDefaults in corso...</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeprecatedOptionWarning">
+        <source>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</source>
+        <target state="new">`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Initialize Aspire in an existing codebase</source>
         <target state="needs-review-translation">Inizializzare il supporto Aspire in una soluzione esistente o creare un AppHost a file singolo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToCreateAppHostFromTemplate">
+        <source>Failed to create AppHost from template (exit code {0}).</source>
+        <target state="new">Failed to create AppHost from template (exit code {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToParseExistingConfig">
+        <source>Failed to parse existing {0} at '{1}': {2}</source>
+        <target state="new">Failed to parse existing {0} at '{1}': {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FileAlreadyExistsSkipping">
+        <source>{0} already exists — skipping.</source>
+        <target state="new">{0} already exists — skipping.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FixOrRemoveConfigAndRerun">
+        <source>Fix or remove {0} and re-run `aspire init`.</source>
+        <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallingAspireProjectTemplates">
+        <source>Installing Aspire project templates...</source>
+        <target state="new">Installing Aspire project templates...</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">

@@ -19,7 +19,6 @@ public sealed class DashboardOptions
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
-    public AIOptions AI { get; set; } = new();
 }
 
 // Don't set values after validating/parsing options.
@@ -303,12 +302,14 @@ public sealed class TelemetryLimitOptions
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
     public int MaxSpanEventCount { get; set; } = int.MaxValue;
+    public int MaxResourceCount { get; set; } = 10_000;
 }
 
 public sealed class UIOptions
 {
     public bool? DisableResourceGraph { get; set; }
     public bool? DisableImport { get; set; }
+    public bool? DisableAgentHelp { get; set; }
 }
 
 // Don't set values after validating/parsing options.
@@ -390,17 +391,13 @@ public sealed class ClaimAction
     public string? ValueType { get; set; }
 }
 
-public sealed class AIOptions
-{
-    public bool? Disabled { get; set; }
-}
-
 public sealed class DebugSessionOptions
 {
     private X509Certificate2? _serverCertificate;
 
     public int? Port { get; set; }
     public string? Token { get; set; }
+    public string? DcpInstanceId { get; set; }
     public string? ServerCertificate { get; set; }
     public bool? TelemetryOptOut { get; set; }
 

@@ -13,7 +13,13 @@ internal interface ICertificateToolRunner
     /// <summary>
     /// Checks certificate trust status, returning structured certificate information.
     /// </summary>
-    CertificateTrustResult CheckHttpCertificate();
+    CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ensures an HTTPS development certificate exists in the personal certificate store,
+    /// creating one if necessary, without trusting it.
+    /// </summary>
+    EnsureCertificateResult EnsureHttpCertificateExists();
 
     /// <summary>
     /// Trusts the HTTPS development certificate, creating one if necessary.

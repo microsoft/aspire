@@ -18,8 +18,8 @@ void main() throws Exception {
             .withGrainDirectory("grain-directory", provider);
         var orleansClient = orleans.asClient();
         var silo = builder.addContainer("silo", "redis");
-        silo.withReference(orleansClient);
+        silo.withOrleansReference(orleans);
         var client = builder.addContainer("client", "redis");
-        client.withReference(orleansClient);
+        client.withOrleansClientReference(orleansClient);
         builder.build().run();
     }

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -36,6 +36,13 @@ func main() {
 
 	cache2.WithDataBindMount("/tmp/redis-data")
 	if err = cache2.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// withModule on RedisResource - well-known and custom module paths
+	cache.WithModule(aspire.RedisModules.Json)
+	cache.WithModule("/opt/redis/custom-module.so")
+	if err = cache.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
@@ -82,7 +89,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

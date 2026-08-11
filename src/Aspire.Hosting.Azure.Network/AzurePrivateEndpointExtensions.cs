@@ -20,6 +20,7 @@ public static class AzurePrivateEndpointExtensions
     /// <param name="subnet">The subnet to add the private endpoint to.</param>
     /// <param name="target">The target Azure resource to connect via private link.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzurePrivateEndpointResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method automatically creates the Private DNS Zone, VNet Link, and DNS Zone Group
@@ -45,7 +46,7 @@ public static class AzurePrivateEndpointExtensions
     /// peSubnet.AddPrivateEndpoint(blobs);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Private Endpoint resource to an Azure subnet resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzurePrivateEndpointResource> AddPrivateEndpoint(
         this IResourceBuilder<AzureSubnetResource> subnet,
         IResourceBuilder<IAzurePrivateEndpointTarget> target)

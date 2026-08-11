@@ -1,0 +1,104 @@
+<Project>
+
+  <!--
+    Inline MSBuild task that replaces ${PropertyName} tokens in a template file with
+    MSBuild property values supplied via a semicolon-delimited key=value string.
+    This mirrors the GenerateFileFromTemplate task used by dotnet/aspnetcore templates.
+  -->
+  <UsingTask
+    TaskName="GenerateFileFromTemplate"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <TemplateFile ParameterType="System.String" Required="true" />
+      <OutputPath ParameterType="System.String" Required="true" />
+      <Properties ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+var replacements = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+foreach (var pair in Properties.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+{
+    var eqIndex = pair.IndexOf('=');
+    if (eqIndex > 0)
+    {
+        var key = pair.Substring(0, eqIndex).Trim();
+        var value = pair.Substring(eqIndex + 1).Trim();
+        replacements[key] = value;
+    }
+}
+
+var content = File.ReadAllText(TemplateFile);
+content = Regex.Replace(content, @"\$\{(\w+)\}", match =>
+{
+    var key = match.Groups[1].Value;
+    if (replacements.TryGetValue(key, out var value))
+    {
+        return value;
+    }
+    Log.LogWarning("Template variable '{0}' in '{1}' has no matching property.", key, TemplateFile);
+    return match.Value;
+});
+
+var dir = Path.GetDirectoryName(OutputPath);
+if (!string.IsNullOrEmpty(dir))
+{
+    Directory.CreateDirectory(dir);
+}
+
+// Only write if content has changed to support incremental builds.
+if (!File.Exists(OutputPath) || File.ReadAllText(OutputPath) != content)
+{
+    File.WriteAllText(OutputPath, content);
+}
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <!--
+    Generate Gateway.cs from Gateway.cs.in by stamping package versions from
+    eng/Versions.props and Directory.Packages.props. This keeps the file-based
+    C# app (which runs outside the Aspire build system) in sync with central
+    package management.
+  -->
+  <PropertyGroup>
+    <YarpReverseProxyVersion>2.3.0</YarpReverseProxyVersion>
+    <_ScriptsTemplateDir>$(MSBuildThisFileDirectory)..\Scripts\</_ScriptsTemplateDir>
+    <_ScriptsOutputDir>$(IntermediateOutputPath)Scripts\</_ScriptsOutputDir>
+    <_GenerateScriptProperties>
+      MicrosoftExtensionsHttpResilienceVersion=$(MicrosoftExtensionsHttpResilienceVersion);
+      MicrosoftExtensionsServiceDiscoveryVersion=$(MicrosoftExtensionsServiceDiscoveryVersion);
+      MicrosoftExtensionsServiceDiscoveryYarpVersion=$(MicrosoftExtensionsServiceDiscoveryYarpVersion);
+      OpenTelemetryExporterOpenTelemetryProtocolVersion=$(OpenTelemetryExporterOpenTelemetryProtocolVersion);
+      OpenTelemetryExtensionsHostingVersion=$(OpenTelemetryInstrumentationExtensionsHostingVersion);
+      OpenTelemetryInstrumentationAspNetCoreVersion=$(OpenTelemetryInstrumentationAspNetCoreVersion);
+      OpenTelemetryInstrumentationHttpVersion=$(OpenTelemetryInstrumentationHttpVersion);
+      OpenTelemetryInstrumentationRuntimeVersion=$(OpenTelemetryInstrumentationRuntimeVersion);
+      YarpReverseProxyVersion=$(YarpReverseProxyVersion);
+    </_GenerateScriptProperties>
+  </PropertyGroup>
+
+  <Target Name="_GenerateScriptsFromTemplates"
+          BeforeTargets="CoreCompile;GetCopyToOutputDirectoryItems"
+          Inputs="$(_ScriptsTemplateDir)Gateway.cs.in"
+          Outputs="$(_ScriptsOutputDir)Gateway.cs">
+    <GenerateFileFromTemplate
+      TemplateFile="$(_ScriptsTemplateDir)Gateway.cs.in"
+      OutputPath="$(_ScriptsOutputDir)Gateway.cs"
+      Properties="$(_GenerateScriptProperties)" />
+  </Target>
+
+  <ItemGroup>
+    <Content Include="$(_ScriptsOutputDir)Gateway.cs"
+             CopyToOutputDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="buildTransitive\$(DefaultTargetFramework)\Scripts"
+             Link="Scripts\Gateway.cs" />
+  </ItemGroup>
+
+</Project>

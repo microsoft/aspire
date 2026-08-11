@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Hex1b.Input;
+using Xunit;
 
 namespace Aspire.Tests.Shared;
 
@@ -14,29 +15,6 @@ namespace Aspire.Tests.Shared;
 /// </summary>
 internal static class Hex1bAutomatorTestHelpers
 {
-    /// <summary>
-    /// Waits for a shell success prompt matching the current sequence counter value,
-    /// then increments the counter. Looks for the pattern: [N OK] $
-    /// </summary>
-    internal static async Task WaitForSuccessPromptAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
-
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            var successPromptSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-
-            return successPromptSearcher.Search(snapshot).Count > 0;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $");
-
-        counter.Increment();
-    }
-
     /// <summary>
     /// Waits for any prompt (success or error) matching the current sequence counter.
     /// </summary>
@@ -241,7 +219,7 @@ internal static class Hex1bAutomatorTestHelpers
     /// <summary>
     /// Waits for a successful command prompt, but fails fast if an error prompt is detected.
     /// </summary>
-    internal static async Task WaitForSuccessPromptFailFastAsync(
+    internal static async Task WaitForSuccessPromptAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TimeSpan? timeout = null)
@@ -294,20 +272,6 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.TypeAsync(command);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout);
-    }
-
-    /// <summary>
-    /// Types a shell command, waits for it to complete successfully, and fails immediately on a shell error prompt.
-    /// </summary>
-    internal static async Task RunCommandFailFastAsync(
-        this Hex1bTerminalAutomator auto,
-        string command,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        await auto.TypeAsync(command);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout);
     }
 
     /// <summary>
@@ -413,10 +377,11 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("What version would you like to install?");
         var waitingForLegacyVersionSelection = new CellPatternSearcher()
             .Find("based on NuGet.config");
-        var addCompleted = new CellPatternSearcher()
-            .Find("added to your AppHost project");
-        var addFailed = new CellPatternSearcher()
-            .Find("already exists in the project");
+
+        // We intentionally do NOT check for completion text like "was added successfully"
+        // because it persists on the terminal from prior aspire-add runs and would match
+        // stale output when multiple aspire-add commands run in sequence. Instead we rely
+        // on the shell success/error prompt which uses a unique counter value.
 
         await auto.WaitUntilAsync(s =>
             {
@@ -426,9 +391,7 @@ internal static class Hex1bAutomatorTestHelpers
                     return true;
                 }
 
-                return addCompleted.Search(s).Count > 0
-                    || addFailed.Search(s).Count > 0
-                    || successPrompt.Search(s).Count > 0
+                return successPrompt.Search(s).Count > 0
                     || errorPrompt.Search(s).Count > 0;
             },
             timeout: effectiveTimeout,
@@ -436,12 +399,12 @@ internal static class Hex1bAutomatorTestHelpers
 
         if (!sawVersionPrompt)
         {
-            await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
             return;
         }
 
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
     }
 
     /// <summary>
@@ -459,7 +422,6 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("configure AI agent environments");
 
         var agentInitFound = false;
-        var agentInitPromptRequiresEnter = false;
         var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
@@ -468,10 +430,6 @@ internal static class Hex1bAutomatorTestHelpers
             if (agentInitPrompt.Search(s).Count > 0)
             {
                 agentInitFound = true;
-                agentInitPromptRequiresEnter = new CellPatternSearcher()
-                    .Find("[Y/n]")
-                    .RightText(": ")
-                    .Search(s).Count > 0;
                 return true;
             }
             var successSearcher = new CellPatternSearcher()
@@ -502,12 +460,14 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        if (agentInitPromptRequiresEnter)
-        {
-            await auto.EnterAsync();
-        }
 
-        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+        // Do not send Enter after typing "n" — the Spectre Console [Y/n] confirmation
+        // prompt accepts a single character. Sending Enter risks a race: if aspire init
+        // exits after reading "n" but before the Enter is delivered, bash receives the
+        // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
+        // the test counter from the shell counter.
+
+        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
     }
 
     /// <summary>
@@ -518,7 +478,8 @@ internal static class Hex1bAutomatorTestHelpers
         string projectName,
         SequenceCounter counter,
         AspireTemplate template = AspireTemplate.Starter,
-        bool useRedisCache = true)
+        bool useRedisCache = true,
+        bool useDevLocalhost = false)
     {
         var templateTimeout = TimeSpan.FromSeconds(60);
 
@@ -584,29 +545,39 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.TypeAsync("Empty (TypeScript");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("TypeScript");
                 await auto.EnterAsync();
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                await auto.TypeAsync("Empty (Java AppHost)");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Java Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Java");
                 await auto.EnterAsync();
                 break;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
+        // Step 3: Enter the project name. The CLI resolves the selected template's version against
+        // the active channel's feed somewhere in this window, and slow feeds (staging/daily darc
+        // feeds) can take well over 10s — far longer than nuget.org. Use templateTimeout here (and
+        // for the output-path prompt below) so emulated staging/daily runs don't time out waiting
+        // for the prompt; otherwise the wait throws while `aspire new` is still open and the
+        // teardown `exit` gets consumed by the live prompt, hanging the whole run.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "project name prompt");
         await auto.TypeAsync(projectName);
         await auto.EnterAsync();
@@ -614,16 +585,25 @@ internal static class Hex1bAutomatorTestHelpers
         // Step 4: Accept default output path
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "output path prompt");
         await auto.EnterAsync();
 
-        // Step 5: URLs prompt (all templates have this)
+        // Step 5: URLs prompt (all templates have this). The CLI may spend time
+        // resolving template versions after the output path is entered, so reuse
+        // the template-selection timeout for this first post-resolution prompt.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "URLs prompt");
-        await auto.EnterAsync(); // Accept default "No"
+        if (useDevLocalhost)
+        {
+            await auto.TypeAsync("y");
+        }
+        else
+        {
+            await auto.EnterAsync(); // Accept default "No"
+        }
 
         // Step 6: Redis prompt (only Starter, JsReact, PythonReact)
         if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact)
@@ -664,8 +644,13 @@ internal static class Hex1bAutomatorTestHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
+        // Match the actual prompt text shape — the trailing '?' avoids false-matching
+        // informational confirmation messages like "Created NuGet.config..." which contain
+        // the same substring but are not Y/n prompts. The two real prompts are
+        // "Create NuGet.config for selected channels?" and "Update NuGet.config to add
+        // missing package sources for the selected channel?" — both end in '?'.
         var waitingForNuGetConfigPrompt = new CellPatternSearcher()
-            .Find("NuGet.config");
+            .Find("NuGet.config?");
 
         var waitingForUrlsPrompt = new CellPatternSearcher()
             .Find("Use *.dev.localhost URLs");
@@ -765,7 +750,49 @@ internal static class Hex1bAutomatorTestHelpers
 
         if (!pipelineSucceeded)
         {
+            // Azure sometimes reports that a region's shared compute capacity is temporarily
+            // exhausted while provisioning, e.g.:
+            //   ManagedEnvironmentCapacityHeavyUsageError / "code": "AKSCapacityHeavyUsage"
+            //   "AKS is experiencing heavy usage in region westus3. We are working on adding
+            //    new capacity. In the meantime, please consider creating new AKS clusters in a
+            //    different region."
+            // That is an Azure-side infrastructure condition, not a product or deployment defect:
+            // it is the quota-bearing region being oversubscribed, and it does not clear on a short
+            // retry (and cannot be moved to another region because quota is allocated per-region).
+            // Treat it as an environmental skip — consistent with how these deployment tests already
+            // Assert.Skip when an Azure subscription or login is unavailable — so transient regional
+            // capacity weather does not turn the nightly red.
+            if (terminalOutput is not null && ContainsTransientAzureCapacityError(terminalOutput))
+            {
+                Assert.Skip(
+                    "Skipped: Azure reported transient regional capacity exhaustion during provisioning " +
+                    $"(not a product failure). Terminal output:{Environment.NewLine}{terminalOutput}");
+            }
+
             throw new InvalidOperationException($"Pipeline failed unexpectedly. Terminal output:{Environment.NewLine}{terminalOutput}");
         }
+    }
+
+    // Azure error codes that indicate a region's shared capacity is temporarily exhausted. These
+    // are infrastructure-side conditions (not product defects) that do not clear on a same-region
+    // retry, so the deployment tests treat them as skips rather than failures. Matched
+    // case-insensitively against the deploy pipeline's terminal output.
+    private static readonly string[] s_transientAzureCapacityErrorMarkers =
+    [
+        "AKSCapacityHeavyUsage",
+        "ManagedEnvironmentCapacityHeavyUsageError",
+    ];
+
+    private static bool ContainsTransientAzureCapacityError(string terminalOutput)
+    {
+        foreach (var marker in s_transientAzureCapacityErrorMarkers)
+        {
+            if (terminalOutput.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

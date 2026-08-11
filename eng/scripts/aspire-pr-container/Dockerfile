@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM mcr.microsoft.com/mirror/docker/library/ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 

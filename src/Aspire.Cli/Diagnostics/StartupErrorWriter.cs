@@ -64,6 +64,11 @@ internal sealed class StartupErrorWriter : IStartupErrorWriter
         }
 
         var prefix = ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.PageFacingUp, _errorConsole);
-        _errorConsole.MarkupLine(prefix + string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, _logFilePath.EscapeMarkup()));
+        var supportsLinks = _errorConsole.Profile.Capabilities.Links;
+        var message = string.Format(
+            CultureInfo.CurrentCulture,
+            InteractionServiceStrings.SeeLogsAt,
+            MarkupHelpers.SafeFileLink(supportsLinks, _logFilePath));
+        _errorConsole.MarkupLine(prefix + message);
     }
 }

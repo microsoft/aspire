@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -25,10 +24,9 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -75,14 +73,8 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -95,14 +87,13 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         // Pattern for describe output showing a specific replica
         var waitForApiserviceReplicaName = new CellPatternSearcher()
             .FindPattern("apiservice-[a-z0-9]+");
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -200,13 +191,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

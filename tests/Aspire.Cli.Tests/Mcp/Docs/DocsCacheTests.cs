@@ -13,12 +13,12 @@ namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsCacheTests(ITestOutputHelper outputHelper)
 {
-    private const string DefaultLlmsTxtUrl = "https://aspire.dev/llms-small.txt";
+    private const string DefaultLlmsTxtUrl = DocsSourceConfiguration.DefaultLlmsTxtUrl;
 
     [Fact]
     public async Task FetchDocsAsync_PersistsFriendlyLlmsCacheFileName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
         var cache = CreateCache(workspace, memoryCache);
@@ -38,14 +38,15 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
             .Select(Path.GetFileName)
             .ToArray();
 
-        Assert.Contains("llms-small.txt", cacheFiles);
-        Assert.DoesNotContain("https___aspire.dev_llms-small.txt.txt", cacheFiles);
+        var expectedStem = DocsSourceConfiguration.GetContentCacheKey(DocsSourceConfiguration.DefaultLlmsTxtUrl);
+        Assert.Contains($"{expectedStem}.txt", cacheFiles);
+        Assert.DoesNotContain($"https___aspire.dev_{expectedStem}.txt.txt", cacheFiles);
     }
 
     [Fact]
     public async Task GetIndexAsync_ClearsLegacyUrlBackedDocsFiles_WhenModernIndexExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var cache = CreateCache(workspace, memoryCache);
         var contentCache = CreateContentCache(workspace, memoryCache);
@@ -87,12 +88,26 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
             .Select(Path.GetFileName)
             .ToArray();
 
-        Assert.DoesNotContain("https___aspire.dev_llms-small.txt.txt", cacheFiles);
-        Assert.DoesNotContain("https___aspire.dev_llms-small.txt.etag.txt", cacheFiles);
-        Assert.DoesNotContain("index_https___aspire.dev_llms-small.txt.json", cacheFiles);
-        Assert.DoesNotContain("index_https___aspire.dev_llms-small.txt_fingerprint.txt", cacheFiles);
-        Assert.Contains("index_llms-small.json", cacheFiles);
-        Assert.Contains("index_llms-small_fingerprint.txt", cacheFiles);
+        var legacyStem = SanitizeForFileName(DefaultLlmsTxtUrl);
+        var friendlyStem = DocsSourceConfiguration.GetContentCacheKey(DefaultLlmsTxtUrl);
+        Assert.DoesNotContain($"{legacyStem}.txt", cacheFiles);
+        Assert.DoesNotContain($"{legacyStem}.etag.txt", cacheFiles);
+        Assert.DoesNotContain($"index_{legacyStem}.json", cacheFiles);
+        Assert.DoesNotContain($"index_{legacyStem}_fingerprint.txt", cacheFiles);
+        Assert.Contains($"index_{friendlyStem}.json", cacheFiles);
+        Assert.Contains($"index_{friendlyStem}_fingerprint.txt", cacheFiles);
+    }
+
+    private static string SanitizeForFileName(string value)
+    {
+        var result = new char[value.Length];
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            result[i] = char.IsLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_';
+        }
+
+        return new string(result);
     }
 
     private static DocsCache CreateCache(TemporaryWorkspace workspace, IMemoryCache memoryCache)
@@ -111,5 +126,6 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+            "test.log",
+            identityChannel: "local");
 }

@@ -18,6 +18,7 @@ void main() throws Exception {
         proxy.withImageSHA256("abc123def456");
         proxy.withContainerNetworkAlias("myalias");
         proxy.publishAsContainer();
+        proxy.withStaticFiles(".");
         proxy.publishWithStaticFiles(staticFilesSource);
         proxy.withVolume("/data", new WithVolumeOptions().name("proxy-data"));
         proxy.withBuildArg("BUILD_VERSION", buildVersion);
@@ -48,7 +49,7 @@ void main() throws Exception {
             var httpClientConfig = new YarpHttpClientConfig();
             httpClientConfig.setDangerousAcceptAnyServerCertificate(true);
             httpClientConfig.setEnableMultipleHttp2Connections(true);
-            httpClientConfig.setMaxConnectionsPerServer(10);
+            httpClientConfig.setMaxConnectionsPerServer(10.0);
             httpClientConfig.setRequestHeaderEncoding("utf-8");
             httpClientConfig.setResponseHeaderEncoding("utf-8");
             endpointCluster.withHttpClientConfig(httpClientConfig);

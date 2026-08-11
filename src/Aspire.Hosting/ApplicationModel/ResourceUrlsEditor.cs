@@ -18,7 +18,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// </summary>
     /// <param name="url">The URL to add, specified as a string or reference expression.</param>
     /// <param name="displayText">The optional display text to show for the URL.</param>
-    [AspireExport("ResourceUrlsEditor.add", MethodName = "add", Description = "Adds a displayed URL")]
+    [AspireExport("ResourceUrlsEditor.add", MethodName = "add")]
     public async Task Add([AspireUnion(typeof(string), typeof(ReferenceExpression))] object url, string? displayText = null)
     {
         ArgumentNullException.ThrowIfNull(url);
@@ -49,7 +49,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// <param name="endpoint">The endpoint the URL is associated with.</param>
     /// <param name="url">The URL to add, specified as a string or reference expression.</param>
     /// <param name="displayText">The optional display text to show for the URL.</param>
-    [AspireExport("ResourceUrlsEditor.addForEndpoint", MethodName = "addForEndpoint", Description = "Adds a displayed URL for a specific endpoint")]
+    [AspireExport("ResourceUrlsEditor.addForEndpoint", MethodName = "addForEndpoint")]
     public async Task AddForEndpoint(EndpointReference endpoint, [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url, string? displayText = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -77,7 +77,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the execution context associated with this editor.
     /// </summary>
-    [AspireExport(Description = "Gets the execution context for this URL editor")]
+    [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext => _executionContext;
 
     private void AddUrlAnnotation(string url, string? displayText, EndpointReference? endpoint = null)

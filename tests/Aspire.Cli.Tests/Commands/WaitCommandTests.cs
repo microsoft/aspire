@@ -15,7 +15,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -24,13 +24,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_RequiresResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -39,13 +39,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         // Missing required argument should fail
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_AcceptsResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -53,13 +53,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_AcceptsProjectOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -67,13 +67,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --apphost /path/to/project.csproj --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_AcceptsStatusOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -81,13 +81,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --status up --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_AcceptsTimeoutOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -95,7 +95,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --timeout 60 --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -104,7 +104,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("down")]
     public async Task WaitCommand_AcceptsAllStatusValues(string status)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -112,7 +112,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"wait myresource --status {status} --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -121,7 +121,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("Down")]
     public async Task WaitCommand_StatusIsCaseInsensitive(string status)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -129,13 +129,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"wait myresource --status {status} --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_ResourceNotFound_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -159,13 +159,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait nonexistent --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_ResourceRunning_WaitForUp_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -184,13 +184,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myapp --status up --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_ResourceHealthy_WaitForHealthy_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -209,13 +209,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait mydb --status healthy --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_Timeout_ReturnsTimeoutExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -239,13 +239,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait mydb --status healthy --timeout 2");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitTimeout, exitCode);
+        Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_ResourceExited_WaitForDown_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -264,13 +264,13 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait worker --status down --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
     public async Task WaitCommand_ResourceFailedToStart_WaitForUp_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -294,6 +294,6 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myapp --status up --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
     }
 }

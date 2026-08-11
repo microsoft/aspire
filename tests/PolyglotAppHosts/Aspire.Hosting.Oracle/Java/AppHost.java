@@ -33,7 +33,7 @@ void main() throws Exception {
         oracle.withReference(otherOracle, new WithReferenceOptions());
         // ---- Fluent chaining: multiple methods chained ----
         var oracle3 = builder.addOracle("oracledb3");
-        oracle3.withLifetime(ContainerLifetime.PERSISTENT);
+        oracle3.withPersistentLifetime();
         oracle3.withDataVolume("oracle3-data");
         oracle3.addDatabase("chaineddb");
         // ---- Property access on OracleDatabaseServerResource ----

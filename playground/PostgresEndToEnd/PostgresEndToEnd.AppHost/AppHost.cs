@@ -28,7 +28,7 @@ builder.AddNodeApp("nodeservice", "../PostgresEndToEnd.NodeService", "app.ts")
        .WaitFor(db1)
        .WithExternalHttpEndpoints();
 
-// Java (Spark Framework)
+// Java (Javalin)
 var mvn = builder.AddExecutable("mvn-clean", OperatingSystem.IsWindows() ? "mvn.cmd" : "mvn", "../PostgresEndToEnd.JavaService", ["clean", "package", "-DskipTests"]);
 
 var java = builder.AddExecutable("javaservice", "java", "../PostgresEndToEnd.JavaService", ["-jar", "target/javaservice-1.0.0.jar"])
