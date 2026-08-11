@@ -1,0 +1,29 @@
+{
+  "run_id": 31537292983,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31537292983",
+  "analyzed_at": "2026-08-11T21:51:55Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19247,
+    "title": "Use official Aspire branding in dashboard",
+    "author": "maddymontaquila",
+    "state": "closed",
+    "head_branch": "maddymontaquila-dashboard-brand-purple",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19247"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (macos-latest)",
+      "id": 93933608355,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31537292983/job/93933608355",
+      "classification": "transient-infra",
+      "reason": "All 5 tests in Aspire.Templates.Tests passed successfully. The job only failed during the 'Upload logs, and test results' step with 'Failed to CreateArtifact: Unable to make request: ENOTFOUND', a DNS resolution failure when contacting GitHub's artifact storage endpoint. This is unrelated to the PR's dashboard branding changes and is a known transient artifact-upload network issue.",
+      "failed_steps": ["Upload logs, and test results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["artifact-upload-enotfound"]
+}

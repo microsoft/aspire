@@ -1,0 +1,16 @@
+{
+  "id": "artifact-upload-enotfound",
+  "type": "infra-failure",
+  "title": "GitHub artifact upload fails with ENOTFOUND DNS resolution error",
+  "error_pattern": "Failed to CreateArtifact: Unable to make request: ENOTFOUND\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints",
+  "occurrences": [
+    {
+      "run_id": 31537292983,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31537292983",
+      "job": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (macos-latest)",
+      "pr_number": 19247,
+      "observed_at": "2026-08-11T21:51:55Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19252"
+}
