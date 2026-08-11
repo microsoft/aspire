@@ -25,6 +25,7 @@ VALIDATOR_PATH = Path(__file__).with_name("validate_outcome.py")
 def payload(
     result: object = "skipped",
     source_pr_number: object = EXPECTED_SOURCE_PR_NUMBER,
+    target_branch: object = "",
 ) -> dict:
     return {
         "items": [
@@ -32,31 +33,69 @@ def payload(
                 "type": "notify_source_pr",
                 "source_pr_number": source_pr_number,
                 "result": result,
+                "target_branch": target_branch,
             }
         ]
     }
 
 
-def create_pull_request_item() -> dict:
+def create_pull_request_item(base_branch: object = "release/13.5") -> dict:
     return {
         "type": "create_pull_request",
         "title": "Draft docs",
         "body": "Docs",
+        "base_branch": base_branch,
     }
 
 
 class ValidateOutcomeTests(unittest.TestCase):
-    def test_drafted_with_created_pr_passes(self) -> None:
+    def test_drafted_with_correct_actual_base_passes(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
         message = validate_outcome(
-            payload("drafted"),
+            drafted_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertEqual(
             "Confirmed drafted documentation PR: https://github.com/microsoft/aspire.dev/pull/1447",
             message,
         )
+
+    def test_drafted_with_actual_base_mismatch_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Drafted PR base branch main does not match canonical "
+            "create_pull_request base_branch release/13.5",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "main",
+            )
+
+    def test_drafted_with_notification_target_mismatch_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="main")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Canonical create_pull_request base_branch release/13.5 does not match "
+            "notify_source_pr target_branch main",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "release/13.5",
+            )
 
     def test_skipped_without_created_pr_passes(self) -> None:
         message = validate_outcome(
@@ -262,8 +301,11 @@ class ValidateOutcomeTests(unittest.TestCase):
 
 class SideEffectOutcomeTests(unittest.TestCase):
     def test_valid_draft_allows_comment_and_sme_review(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
         outcome = build_side_effect_outcome(
-            payload("drafted"),
+            drafted_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
         )
