@@ -60,7 +60,7 @@ const darknessLuminanceTarget = (-0.1 + Math.sqrt(0.21)) / 2;
 const brandPurple = createSwatch(0x51, 0x2B, 0xD4);
 const brandPrimary = createSwatch(0x74, 0x55, 0xDD);
 const brandSecondary = createSwatch(0xB9, 0xAA, 0xEE);
-const brandLogoLight = createSwatch(0xC2, 0xB4, 0xEF);
+const brandLight = createSwatch(0xDC, 0xD5, 0xF6);
 
 function createSwatch(r, g, b) {
     return SwatchRGB.create(r / 255.0, g / 255.0, b / 255.0);
@@ -203,7 +203,7 @@ function setAccentColor(theme) {
     // used by Fluent controls so the rendered colors remain in the approved palette while retaining
     // distinct interaction states and WCAG contrast in each theme.
     const rest = theme === themeSettingDark ? brandSecondary : brandPurple;
-    const hover = theme === themeSettingDark ? brandLogoLight : brandPrimary;
+    const hover = theme === themeSettingDark ? brandLight : brandPrimary;
     const active = rest;
     const focus = rest;
     // Fluent design tokens are scoped to an element subtree. The body already receives generated

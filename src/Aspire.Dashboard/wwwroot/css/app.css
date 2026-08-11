@@ -238,9 +238,8 @@ fluent-combobox {
     --focus-stroke-width: var(--aspire-focus-stroke-width);
     --focus-stroke-outer: var(--dash-focus-ring-color);
     --focus-stroke-inner: var(--dash-focus-ring-color);
-    /* Defaults to the accent fill (a dark violet on light theme, which reads fine on white); dark theme
-       overrides it to a tamed violet because the dark accent fill (--accent-fill-rest #e5bfff) is a
-       near-white lavender that paints a loud halo on violet panels. */
+    /* This default supports content outside the application token scope. The application scope below
+       redeclares the focus properties so they resolve against its explicit Fluent accent tokens. */
     --dash-focus-ring-color: var(--accent-fill-rest);
     /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css)
        so each intent hue is defined once and every theme mixes its own surface from it.
@@ -342,6 +341,14 @@ fluent-combobox {
     --accent-olive-text: #fff;
 }
 
+#aspire-design-system {
+    /* Fluent emits the approved semantic accent values on this scope. Resolve the focus-ring variables
+       here as well so they do not capture the generated accent value from the document ancestor. */
+    --dash-focus-ring-color: var(--accent-fill-rest);
+    --focus-stroke-outer: var(--dash-focus-ring-color);
+    --focus-stroke-inner: var(--dash-focus-ring-color);
+}
+
 [data-theme="dark"] {
     --scrollbar-color: #9F9F9F;
     /* Quiet, tint-free neutral thumb on dark: a semi-transparent white so the scrollbar reads as a
@@ -365,9 +372,6 @@ fluent-combobox {
     /* A 10% black mix subtly darkens dialogs while preserving the ramp's blue-violet undertone. */
     --dialog-background-color: color-mix(in srgb, var(--neutral-layer-2) 90%, #000000);
     --dialog-border-color: var(--neutral-stroke-rest);
-    /* The secondary brand purple emitted by Fluent's accent token keeps the focus ring above the
-       WCAG 1.4.11 3:1 non-text contrast minimum without introducing a custom blend. */
-    --dash-focus-ring-color: var(--accent-fill-rest);
     /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css).
        Dark theme: a restrained tint of the seed over the neutral layer replaces the old
        near-black / over-saturated floods (#3F1011, #411200, #052505), while the border stays
