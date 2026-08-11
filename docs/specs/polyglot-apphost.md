@@ -1280,7 +1280,15 @@ The CLI is **not** responsible for language-specific logic. A single `GuestAppHo
 
 A guest (non-C#) AppHost can only consume integrations that expose their API surface through `[AspireExport]` (ATS) coverage. Integrations are polyglot-compatible by default: any project that runs the export analyzer automatically gets the `polyglot` NuGet tag appended at pack time. A project acknowledges that it is not a polyglot integration by setting `<IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>` in its project file, which omits the tag. The `ASPIREEXPORT017` analyzer rule fails the build if a project has no `[AspireExport]` coverage and has not opted out, keeping the tag and the export surface in sync.
 
-When the active AppHost is not C#, `aspire add`, `aspire integration list`, and `aspire integration search` filter discovery down to integrations carrying the `polyglot` tag (resolved via a `tags:polyglot` search on remote feeds or by reading the nuspec `<tags>` for local package sources). Pass `--all` to bypass the filter — useful when an integration has not yet been marked. Naming an integration that exists but lacks the tag yields a clear "not available for this language" error.
+CLI-side filtering on this tag is gated behind the `features.polyglotIntegrationFilterEnabled` feature flag and is **disabled by default**. When enabled and the active AppHost is not C#, `aspire add`, `aspire integration list`, and `aspire integration search` filter discovery down to integrations carrying the `polyglot` tag (resolved via a `tags:polyglot` search on remote feeds or by reading the nuspec `<tags>` for local package sources). Pass `--all` to bypass the filter — useful when an integration has not yet been marked. Naming an integration that exists but lacks the tag yields a clear "not available for this language" error.
+
+The flag defaults to off because tag resolution is not reliable across package sources. Azure DevOps Artifacts feeds — which back the daily, staging, and PR channels — silently ignore `tags:` query scoping and return zero results even for packages whose search payload contains the tag. The filter fails closed, so an unanswerable query is indistinguishable from "nothing is compatible" and every integration disappears (see [#19161](https://github.com/microsoft/aspire/issues/19161)). Enable the flag only when every configured package source honours tag search, such as a pinned local package source:
+
+```console
+aspire config set features.polyglotIntegrationFilterEnabled true
+```
+
+The `polyglot` tag itself is still emitted at pack time and `ASPIREEXPORT017` still enforces export coverage, so the metadata remains available regardless of the flag.
 
 ```mermaid
 classDiagram

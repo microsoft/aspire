@@ -37,9 +37,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     // coverage, so `aspire add` can hide integrations that a polyglot AppHost cannot consume.
     private const string PolyglotTag = "polyglot";
 
-    // NuGet search query scoping that restricts results to packages carrying the polyglot tag.
-    // Verified to work against nuget.org and Azure DevOps feeds, but NOT against local folder feeds,
-    // which is why the local-source path reads the nuspec <tags> directly instead.
+    // NuGet search query scoping that restricts results to packages carrying the polyglot tag, e.g.
+    //   dotnet package search "tags:polyglot" --source https://api.nuget.org/v3/index.json
+    //
+    // Support for this scoping is inconsistent across feed implementations, which is why the polyglot
+    // filter is gated behind the off-by-default KnownFeatures.PolyglotIntegrationFilterEnabled flag:
+    //  - nuget.org honours it.
+    //  - Azure DevOps Artifacts feeds (the daily, staging, and PR channels) silently ignore it and return
+    //    zero results, even for packages whose search payload contains the tag. There is no error to
+    //    detect, so the caller cannot distinguish "no compatible packages" from "this feed cannot answer
+    //    the question". See https://github.com/microsoft/aspire/issues/19161.
+    //  - Local folder feeds do not support tag search at all, which is why the local-source path reads
+    //    the nuspec <tags> directly instead.
     private const string PolyglotTagSearchTerm = "tags:polyglot";
 
     public string Name { get; } = name;
