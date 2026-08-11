@@ -1516,7 +1516,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     /// <summary>
     /// Polls for the Gateway's assigned hostname address using a Polly retry pipeline.
-    /// Retries up to 60 times with 5-second delays (5 minutes total).
+    /// Retries up to 180 times with 5-second delays (~15 minutes total); see the comment on the
+    /// retry budget below. Only call this for a Gateway that is actually materialized: kubectl
+    /// failures are indistinguishable from "no address yet" here, so a Gateway that is never
+    /// created consumes the entire budget before failing.
     /// </summary>
     private static async Task<string?> DiscoverGatewayFqdnAsync(
         string gatewayName,
