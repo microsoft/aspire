@@ -326,4 +326,99 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             "az aks get-credentials failed (exit code 1): subscription not found",
             exception.Message);
     }
+
+    [Fact]
+    public async Task GetCredentialsStepScopesEveryAzureCliCallToDeploymentSubscription()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+        const string clusterName = "provisioned-aks";
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["SubscriptionId"] = subscriptionId
+        });
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // The provisioned cluster name comes from a Bicep output, and no resource group is
+        // saved in deployment state, so the step must fall back to the az resource list query.
+        aks.Resource.Outputs["name"] = clusterName;
+
+        var invocations = new List<string>();
+        aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
+        aks.Resource.AzCommandRunnerForTesting = (path, arguments, logger) =>
+        {
+            invocations.Add(arguments);
+
+            // The resource-group query runs first and returns the group the cluster lives in;
+            // the get-credentials call that follows returns kubeconfig content.
+            return Task.FromResult(arguments.StartsWith("resource list", StringComparison.Ordinal)
+                ? new AzureKubernetesEnvironmentResource.AzCommandResult(0, "queried-rg\n", "")
+                : new AzureKubernetesEnvironmentResource.AzCommandResult(0, "kubeconfig-content", ""));
+        };
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        // The resource carries several PipelineStepAnnotations (the base provisioning resource
+        // contributes its own), so collect every step and select the one under test by name.
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in aks.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = aks.Resource
+            }));
+        }
+
+        var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
+
+        // BicepOutputReference.GetValueAsync awaits this source before reading Outputs, so the
+        // step would block forever without it. Provisioning normally completes it, and nothing
+        // provisions here. It must be signalled after step creation because the base resource's
+        // PipelineStepAnnotation assigns a fresh, incomplete source each time steps are built.
+        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        await getCredentialsStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        // Assert on the exact command lines the step issued. This is what makes the test
+        // guard the call site: reverting either call to an unscoped invocation fails here.
+        Assert.Equal(
+            [
+                $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\"",
+                $"aks get-credentials --resource-group \"queried-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""
+            ],
+            invocations);
+
+        // The copy-paste hint shown to users must carry the subscription too, otherwise it
+        // reproduces the original bug by hand on whatever subscription az defaults to.
+        var connectHint = Assert.Single(
+            pipelineContext.Summary.Items,
+            item => item.Key == "🔑 Connect to cluster");
+        Assert.Equal(
+            $"`az aks get-credentials --resource-group queried-rg --name {clusterName} --subscription {subscriptionId}`",
+            connectHint.Value);
+
+        Assert.Equal(
+            "kubeconfig-content",
+            await File.ReadAllTextAsync(aks.Resource.KubernetesEnvironment.KubeConfigPath!, TestContext.Current.CancellationToken));
+    }
 }

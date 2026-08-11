@@ -23,6 +23,14 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 /// </summary>
 public partial class AzureKubernetesEnvironmentResource
 {
+    // Test seams. These let tests execute the registered aks-get-credentials-{name} pipeline
+    // step end-to-end without the Azure CLI on PATH and without spawning a process, so the
+    // assertions cover the call site rather than only the helpers it delegates to. Asserting
+    // on the helpers alone would let the original wrong-subscription bug be reintroduced here
+    // undetected, which is precisely how #19216 shipped.
+    internal Func<string>? AzCliPathResolverForTesting { get; set; }
+    internal Func<string, string, ILogger, Task<AzCommandResult>>? AzCommandRunnerForTesting { get; set; }
+
     /// <summary>
     /// Per-environment AKS preparation work invoked by the <c>prepare-aks-{name}</c> pipeline
     /// step. Ensures a default user node pool exists and applies node-pool affinity and
@@ -215,7 +223,7 @@ public partial class AzureKubernetesEnvironmentResource
                 var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
                     ?? Name;
 
-                var azPath = FindAzCli();
+                var azPath = (AzCliPathResolverForTesting ?? FindAzCli)();
 
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
@@ -228,7 +236,7 @@ public partial class AzureKubernetesEnvironmentResource
                 ValidateAzureResourceName(subscriptionId, "subscription ID");
 
                 Task<AzCommandResult> RunAzAsync(string path, string arguments)
-                    => RunAzCommandAsync(path, arguments, context.Logger);
+                    => (AzCommandRunnerForTesting ?? RunAzCommandAsync)(path, arguments, context.Logger);
 
                 var resourceGroup = await GetResourceGroupAsync(
                     azPath,
