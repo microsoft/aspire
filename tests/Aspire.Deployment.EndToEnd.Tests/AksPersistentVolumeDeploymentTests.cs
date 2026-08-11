@@ -231,6 +231,17 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")
                 .WithPersistentVolume(data, "/srv/data")
                 .WithEnvironment("DEPLOYMENT_REVISION", "first")
+                .PublishAsKubernetesService(resource =>
+                {
+                    // .NET containers run as the non-root app user. Apply its group to the
+                    // managed disk so the API can write to the filesystem mounted by kubelet.
+                    var workload = resource.Workload
+                        ?? throw new InvalidOperationException("The API Kubernetes workload was not generated.");
+                    workload.PodTemplate.Spec.SecurityContext = new()
+                    {
+                        FsGroup = 1654
+                    };
+                })
             """,
             appHostPath);
 
@@ -375,7 +386,11 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             $"verified=0; for i in $(seq 1 60); do " +
             $"response=$(curl --silent --fail 'http://localhost:{port}/{query}' 2>/dev/null || true); " +
             $"if printf '%s' \"$response\" | grep --fixed-strings --quiet '{expectedResponse}'; then " +
-            "echo \"API response: $response\"; verified=1; break; fi; sleep 2; done; test \"$verified\" = \"1\"",
+            "echo \"API response: $response\"; verified=1; break; fi; sleep 2; done; " +
+            "if [ \"$verified\" != \"1\" ]; then " +
+            "echo 'Port-forward log:'; cat /tmp/aks-pv-port-forward.log 2>/dev/null || true; " +
+            "echo 'API pod log:'; kubectl logs pod/apiservice-statefulset-0 --namespace \"$NS\" --tail=100 || true; " +
+            "fi; test \"$verified\" = \"1\"",
             counter,
             TimeSpan.FromMinutes(3));
     }
