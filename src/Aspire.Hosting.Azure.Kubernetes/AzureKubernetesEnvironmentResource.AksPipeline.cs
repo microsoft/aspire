@@ -639,17 +639,19 @@ public partial class AzureKubernetesEnvironmentResource
     /// null result from a provider. Falling back to the app's own subscription in that case would
     /// be worse than failing: provisioning would have thrown, while the credential fetch would
     /// quietly target the wrong scope and could adopt a same-named cluster there. Empty is rejected
-    /// for the same reason, since it would be dropped by the string.IsNullOrEmpty checks downstream.
+    /// for the same reason, since the string.IsNullOrEmpty checks downstream would treat it as
+    /// unpinned. Nothing upstream rejects empty (the scope constructors and
+    /// <c>AsExistingInResourceGroup</c> only guard against null), so a literal is checked too.
     /// </remarks>
     internal static async Task<string?> ResolveScopeValueAsync(object? value, CancellationToken cancellationToken)
         => value switch
         {
             null => null,
-            string s => s,
-            IValueProvider provider =>
-                await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } resolved
-                    ? resolved
-                    : throw new InvalidOperationException("The Azure resource scope value cannot be null or empty."),
+            string { Length: > 0 } s => s,
+            IValueProvider provider when
+                await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } resolved => resolved,
+            string or IValueProvider => throw new InvalidOperationException(
+                "The Azure resource scope value cannot be null or empty."),
             _ => throw new NotSupportedException(
                 $"The Azure scope value type {value.GetType()} is not supported.")
         };

@@ -772,6 +772,24 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             invocations);
     }
 
+    [Fact]
+    public async Task DeploymentScopeThrowsWhenScopeValueIsEmptyString()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        // Nothing upstream rejects an empty scope string: AsExistingInResourceGroup and the
+        // AzureBicepResourceScope constructors only guard against null. Without this check the
+        // value would be treated as unpinned and silently fall back to the global scope.
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+                scopedSubscription: "",
+                scopedResourceGroup: null,
+                services,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
+    }
+
     private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)    {
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         var azureState = new JsonObject { ["SubscriptionId"] = subscriptionId };
