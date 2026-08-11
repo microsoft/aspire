@@ -14,15 +14,15 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// The 'aspire' workload has been deprecated and should be uninstalled.
 /// Users with this workload installed may encounter conflicts or confusion.
 /// </remarks>
-internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger) : IEnvironmentCheck
+internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment) : IEnvironmentCheck
 {
     internal const string CheckName = "aspire-workload";
 
     private static readonly TimeSpan s_processTimeout = TimeSpan.FromSeconds(10);
     private readonly Func<ProcessStartInfo, Process?> _startProcess = Process.Start;
 
-    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, Func<ProcessStartInfo, Process?> startProcess)
-        : this(logger)
+    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment, Func<ProcessStartInfo, Process?> startProcess)
+        : this(logger, environment)
     {
         _startProcess = startProcess;
     }
@@ -35,7 +35,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
         {
             var processInfo = new ProcessStartInfo
             {
-                FileName = DotNetSdkInstaller.ResolveDotNetPath(),
+                FileName = DotNetSdkInstaller.ResolveDotNetPath(environment),
                 Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

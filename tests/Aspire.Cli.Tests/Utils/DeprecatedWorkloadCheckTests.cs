@@ -15,7 +15,8 @@ public class DeprecatedWorkloadCheckTests
     public async Task CheckAsync_UsesResolvedDotNetPath()
     {
         ProcessStartInfo? capturedStartInfo = null;
-        var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, startInfo =>
+        var environment = new TestEnvironment();
+        var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, environment, startInfo =>
         {
             capturedStartInfo = startInfo;
             return null;
@@ -24,7 +25,7 @@ public class DeprecatedWorkloadCheckTests
         await check.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(capturedStartInfo);
-        Assert.Equal(DotNetSdkInstaller.ResolveDotNetPath(), capturedStartInfo.FileName);
+        Assert.Equal(DotNetSdkInstaller.ResolveDotNetPath(environment), capturedStartInfo.FileName);
     }
 
     [Fact]
