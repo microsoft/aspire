@@ -227,6 +227,14 @@ class CheckoutTargetTests(unittest.TestCase):
             ).stdout.strip(),
             target_commit,
         )
+        self.assertEqual(
+            _git(
+                workspace,
+                "rev-parse",
+                "refs/remotes/origin/release/13.5",
+            ).stdout.strip(),
+            target_commit,
+        )
 
     def test_missing_target_reports_clear_error(self) -> None:
         workspace = self._clone(

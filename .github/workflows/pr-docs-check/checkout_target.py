@@ -67,7 +67,10 @@ def _ensure_remote_ref(
     # The generated PR checkout can populate origin/* from the Aspire source
     # repository. Fetch the aspire.dev target into an isolated namespace so a
     # source branch with the same name cannot be mistaken for the docs target.
+    # gh-aw v0.85.4 later resolves the patch base through origin/<base>, so
+    # overwrite that remote-tracking ref from the same explicit aspire.dev fetch.
     remote_ref = f"refs/remotes/gh-aw-target/{effective_target}"
+    patch_base_ref = f"refs/remotes/origin/{effective_target}"
 
     depth_arguments: list[str] = []
     if _git_output(workspace, "rev-parse", "--is-shallow-repository") == "true":
@@ -84,6 +87,7 @@ def _ensure_remote_ref(
         *depth_arguments,
         repository_url,
         f"+refs/heads/{effective_target}:{remote_ref}",
+        f"+refs/heads/{effective_target}:{patch_base_ref}",
     )
     if fetch.returncode != 0:
         detail = fetch.stderr.decode(errors="replace").strip()
@@ -96,6 +100,24 @@ def _ensure_remote_ref(
         raise CheckoutError(
             f"Resolved target branch '{effective_target}' is missing from the "
             "local checkout after fetch."
+        )
+
+    if not _verify_remote_ref(workspace, patch_base_ref):
+        raise CheckoutError(
+            f"Resolved target branch '{effective_target}' is missing from the "
+            "patch base after fetch."
+        )
+
+    target_commit = _git_output(workspace, "rev-parse", f"{remote_ref}^{{commit}}")
+    patch_base_commit = _git_output(
+        workspace,
+        "rev-parse",
+        f"{patch_base_ref}^{{commit}}",
+    )
+    if patch_base_commit != target_commit:
+        raise CheckoutError(
+            f"Resolved target branch '{effective_target}' does not match its "
+            "patch base after fetch."
         )
 
     return remote_ref
