@@ -1,0 +1,38 @@
+{
+  "run_id": 31468992084,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31468992084",
+  "analyzed_at": "2026-08-11T08:21:03Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19215,
+    "title": "Fix metric label selection behavior",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/fix-metric-label-selection",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19215"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 93708350787,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31468992084/job/93708350787",
+      "classification": "flaky-test",
+      "reason": "Single test failure in Aspire.Cli.Tests unrelated to PR changes (dashboard chart filtering code). Timing-sensitive assertion on RPC connection failure timing under CI load; matches known prior flaky-test cause.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected RPC connection to fail promptly after the server process exited, but it took 00:00:09.4160860.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 153",
+      "classification": "flaky",
+      "reason": "PR only modifies dashboard chart/filtering code (ChartContainer.razor.cs, ChartFilterTags.razor, DimensionFilterViewModel.cs); this CLI test in an unrelated area fails intermittently due to timing sensitivity on Windows runner, matching known prior cause cli-apphostserversession-rpc-timeout-flaky."
+    }
+  ],
+  "causes": ["cli-apphostserversession-rpc-timeout-flaky"]
+}
