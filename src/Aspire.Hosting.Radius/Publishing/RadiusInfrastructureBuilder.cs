@@ -2126,6 +2126,24 @@ internal sealed class RadiusInfrastructureBuilder
     /// </summary>
     private async Task ResolveReferenceExpressionPartsAsync(ReferenceExpression expression, IResource owner, List<EnvPart> parts, IResource referencedResource, bool allowRecipeSubstitutions = true)
     {
+        // A conditional expression carries no format at all and exposes the *union* of both
+        // branches' providers, so the splice below would resolve both branches — potentially
+        // failing the publish on the inactive one — and then append nothing, leaving the variable
+        // empty. Select the branch first, matching ReferenceExpression.GetValueAsync and
+        // ExpressionResolver.EvalExpressionAsync.
+        if (expression.IsConditional)
+        {
+            var conditionContext = new ValueProviderContext { ExecutionContext = _executionContext, Caller = owner };
+            var conditionValue = await expression.Condition!.GetValueAsync(conditionContext, _cancellationToken).ConfigureAwait(false);
+
+            var branch = string.Equals(conditionValue, expression.MatchValue, StringComparison.OrdinalIgnoreCase)
+                ? expression.WhenTrue!
+                : expression.WhenFalse!;
+
+            await ResolveReferenceExpressionPartsAsync(branch, owner, parts, referencedResource, allowRecipeSubstitutions).ConfigureAwait(false);
+            return;
+        }
+
         // No providers: the format string is already the literal value (after un-escaping braces).
         if (expression.ValueProviders.Count == 0)
         {
