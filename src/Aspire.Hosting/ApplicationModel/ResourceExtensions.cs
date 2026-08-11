@@ -255,16 +255,14 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gather argument values, but do not resolve them. Used to allow multiple callbacks to constructively contribute to
-    /// the argument list before resolving.
+    /// Gathers argument values without resolving them or using cached callback results.
     /// </summary>
     /// <param name="resource">The resource to retrieve argument values for.</param>
     /// <param name="executionContext">The execution context used during the retrieval of argument values.</param>
     /// <param name="logger">The logger used for logging information or errors during the retrieval of argument values.</param>
     /// <param name="cancellationToken">A token for cancelling the operation, if needed.</param>
     /// <returns>A list of unprocessed argument values.</returns>
-    [Obsolete("Use ExecutionConfigurationBuilder instead.")]
-    internal static async ValueTask<List<object>> GatherArgumentValuesAsync(
+    internal static async ValueTask<List<object>> GatherArgumentValuesWithoutCachingAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -386,7 +384,7 @@ public static class ResourceExtensions
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        var args = await GatherArgumentValuesAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
+        var args = await GatherArgumentValuesWithoutCachingAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
 
         await ProcessGatheredArgumentValuesAsync(resource, executionContext, args, processValue, logger, cancellationToken).ConfigureAwait(false);
     }

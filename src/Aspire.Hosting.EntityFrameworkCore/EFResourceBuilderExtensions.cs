@@ -453,31 +453,14 @@ public static class EFResourceBuilderExtensions
                 CreateNoWindow = true
             };
 
-            // Build command-line arguments by directly invoking each annotation's Callback.
-            // We intentionally bypass ExecutionConfigurationBuilder.WithArgumentsConfig() here
-            // because it uses EvaluateOnceAsync which caches callback results. When the tool
-            // resource is reused across sequential EF commands (e.g., script then bundle),
-            // the cached BuildToolExecArguments callback does not re-populate the shared
-            // callbackContext.Args list, so later annotations (the per-command EF args) run
-            // against an empty list.
-            if (toolResource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var cmdLineAnnotations))
+            var toolArguments = await GatherToolArgumentsAsync(
+                toolResource,
+                executionContext,
+                context.Logger,
+                context.CancellationToken).ConfigureAwait(false);
+            foreach (var argument in toolArguments)
             {
-                IList<object> args = [];
-                var callbackContext = new CommandLineArgsCallbackContext(args, toolResource, context.CancellationToken)
-                {
-                    Logger = context.Logger,
-                    ExecutionContext = executionContext
-                };
-
-                foreach (var ann in cmdLineAnnotations)
-                {
-                    await ann.Callback(callbackContext).ConfigureAwait(false);
-                }
-
-                foreach (var arg in callbackContext.Args)
-                {
-                    startInfo.ArgumentList.Add(arg.ToString()!);
-                }
+                startInfo.ArgumentList.Add(argument.ToString()!);
             }
 
             foreach (var kvp in GetToolEnvironmentVariables(executionConfiguration, executionContext.IsPublishMode))
@@ -606,6 +589,21 @@ public static class EFResourceBuilderExtensions
         {
             process?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Composes the EF tool arguments without cached callback results so sequential commands remain independent.
+    /// </summary>
+    internal static ValueTask<List<object>> GatherToolArgumentsAsync(
+        DotnetToolResource toolResource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        return toolResource.GatherArgumentValuesWithoutCachingAsync(
+            executionContext,
+            logger,
+            cancellationToken);
     }
 
     // Selects the environment variables to apply to the EF tool process. In publish mode connection
