@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
@@ -207,11 +208,18 @@ public partial class AzureKubernetesEnvironmentResource
     /// </summary>
     private async Task GetAksCredentialsAsync(PipelineStepContext context)
     {
-        await GetAksCredentialsAsync(context, resourceGroup: null, subscriptionId: null).ConfigureAwait(false);
+        // Get the actual provisioned cluster name from the Bicep output.
+        // The Azure.Provisioning SDK may add a unique suffix to the name
+        // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
+        var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
+            ?? Name;
+
+        await GetAksCredentialsAsync(context, clusterName, resourceGroup: null, subscriptionId: null).ConfigureAwait(false);
     }
 
     private async Task GetAksCredentialsAsync(
         PipelineStepContext context,
+        string clusterName,
         string? resourceGroup,
         string? subscriptionId)
     {
@@ -223,12 +231,6 @@ public partial class AzureKubernetesEnvironmentResource
         {
             try
             {
-                // Get the actual provisioned cluster name from the Bicep output.
-                // The Azure.Provisioning SDK may add a unique suffix to the name
-                // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
-                var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-                    ?? Name;
-
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
@@ -319,15 +321,30 @@ public partial class AzureKubernetesEnvironmentResource
         // still needs to uninstall an external chart or delete another cluster-scoped resource.
         var resourceGroupName = stateSection.Data["ResourceGroup"]?.ToString();
         var subscriptionId = stateSection.Data["SubscriptionId"]?.ToString();
-        if (string.IsNullOrEmpty(resourceGroupName) || string.IsNullOrEmpty(subscriptionId))
+        var deploymentStateSection = await deploymentStateManager
+            .AcquireSectionAsync($"Azure:Deployments:{Name}", context.CancellationToken)
+            .ConfigureAwait(false);
+
+        // Azure deployment outputs are persisted as a JSON string with the ARM output shape:
+        //   { "name": { "type": "String", "value": "aks-abc123" } }
+        // Read it directly because the provisioning step that normally populates Outputs is not
+        // part of a fresh destroy process.
+        var outputsJson = deploymentStateSection.Data["Outputs"]?.GetValue<string>();
+        var clusterName = string.IsNullOrEmpty(outputsJson)
+            ? null
+            : JsonNode.Parse(outputsJson)?["name"]?["value"]?.GetValue<string>();
+
+        if (string.IsNullOrEmpty(resourceGroupName) ||
+            string.IsNullOrEmpty(subscriptionId) ||
+            string.IsNullOrEmpty(clusterName))
         {
             context.Logger.LogInformation(
-                "No Azure deployment state found for AKS environment '{EnvironmentName}'. Skipping credential acquisition.",
+                "No complete Azure deployment state found for AKS environment '{EnvironmentName}'. Skipping credential acquisition.",
                 Name);
             return;
         }
 
-        await GetAksCredentialsAsync(context, resourceGroupName, subscriptionId).ConfigureAwait(false);
+        await GetAksCredentialsAsync(context, clusterName, resourceGroupName, subscriptionId).ConfigureAwait(false);
     }
 
     /// <summary>

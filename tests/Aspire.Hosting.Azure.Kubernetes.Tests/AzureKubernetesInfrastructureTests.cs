@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
@@ -16,7 +17,6 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -288,7 +288,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DestroyCredentialAcquisitionUsesPersistedAzureTarget()
+    public async Task DestroyPipelineUsesPersistedAksOutputWithoutProvisioning()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var stateManager = new InMemoryDeploymentStateManager();
@@ -297,15 +297,28 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             ["ResourceGroup"] = "persisted-resource-group",
             ["SubscriptionId"] = "00000000-1111-2222-3333-444444444444"
         });
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Outputs"] = new JsonObject
+            {
+                ["name"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = "aks-physical-name"
+                }
+            }.ToJsonString()
+        });
         string? azArguments = null;
         var azCommandCount = 0;
 
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            workspace.Path);
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
         builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
-        aks.Resource.Outputs["name"] = "aks";
         aks.Resource.AzCommandRunner = arguments =>
         {
             azCommandCount++;
@@ -313,33 +326,27 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             return Task.FromResult((0, "apiVersion: v1", string.Empty));
         };
 
-        await using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var pipelineContext = new PipelineContext(
-            model,
-            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
-            app.Services,
-            NullLogger.Instance,
-            CancellationToken.None);
-        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
-
-        await GetAksCredentialsForDestroyAsync(aks.Resource, new PipelineStepContext
+        // Keep the test on the real destroy target while excluding the final ARM deletion,
+        // which has separate coverage and would require Azure credentials.
+        var azureEnvironment = builder.Resources.OfType<AzureEnvironmentResource>().Single();
+        azureEnvironment.Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
-            PipelineContext = pipelineContext,
-            ReportingStep = reportingStep
-        });
+            var destroyAzureStep = context.GetSteps(azureEnvironment)
+                .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
+            destroyAzureStep.RequiredBySteps.Remove(WellKnownPipelineSteps.Destroy);
+            return Task.CompletedTask;
+        }));
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(1, azCommandCount);
         Assert.Equal(
-            "aks get-credentials --resource-group \"persisted-resource-group\" --name \"aks\" --file - " +
+            "aks get-credentials --resource-group \"persisted-resource-group\" --name \"aks-physical-name\" --file - " +
             "--subscription \"00000000-1111-2222-3333-444444444444\"",
             azArguments);
+        Assert.Empty(aks.Resource.Outputs);
     }
-
-    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "GetAksCredentialsForDestroyAsync")]
-    private static extern Task GetAksCredentialsForDestroyAsync(
-        AzureKubernetesEnvironmentResource resource,
-        PipelineStepContext context);
 
     private static string GetDirectDependencies(List<string> diagnosticLines, string stepName)
     {
