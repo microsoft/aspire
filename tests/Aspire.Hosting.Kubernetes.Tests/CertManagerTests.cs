@@ -120,9 +120,16 @@ public class CertManagerTests
             .WithHttp01Solver();
 
         // A gateway that adopts this issuer must end up referenced as a parentRef on the
-        // generated solver, so cert-manager's HTTP-01 HTTPRoute can attach to it.
+        // generated solver, so cert-manager's HTTP-01 HTTPRoute can attach to it. The gateway
+        // needs a route, otherwise it is skipped during materialization and referencing it
+        // would produce a parentRef to a Gateway that never exists in the cluster.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
         k8s.AddGateway("PUBLIC-GW")
             .WithGatewayClass("nginx")
+            .WithRoute("/", api.GetEndpoint("http"))
             .WithTls(issuer);
 
         using var app = builder.Build();
@@ -149,6 +156,43 @@ public class CertManagerTests
         Assert.Contains("gatewayHTTPRoute:", yaml);
         // Gateway parentRef must also be lowercase to match the actual emitted Gateway name.
         Assert.Contains("name: public-gw", yaml);
+    }
+
+    [Fact]
+    public async Task BuildClusterIssuerManifest_RouteLessGateway_IsNotEmittedAsParentRef()
+    {
+        // A gateway with no routes is skipped during materialization, so emitting it as a
+        // solver parentRef would point cert-manager's HTTP-01 HTTPRoute at a Gateway that
+        // never exists in the cluster, leaving Certificates stuck in 'Pending' forever.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var issuer = k8s.AddCertManager("cert-manager")
+            .AddIssuer("le-prod")
+            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithHttp01Solver();
+
+        k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithTls(issuer);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var certManagerResource = model.Resources.OfType<CertManagerResource>().Single();
+        var issuerResource = certManagerResource.Issuers.Single();
+
+        var yaml = await CertManagerExtensions.BuildClusterIssuerManifestAsync(
+            model,
+            certManagerResource,
+            issuerResource,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        // The solver is still emitted, but with no parentRefs block at all, which is also what
+        // makes the "no routed Gateway adopts this issuer" warning fire.
+        Assert.Contains("- http01:", yaml);
+        Assert.Contains("gatewayHTTPRoute:", yaml);
+        Assert.DoesNotContain("parentRefs:", yaml);
+        Assert.DoesNotContain("name: public", yaml);
     }
 
     [Fact]

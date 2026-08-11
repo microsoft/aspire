@@ -290,6 +290,33 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddIngress_NoPathsWithTls_DoesNotRegisterTlsBootstrapStep()
+    {
+        // An ingress with no paths and no default backend is skipped during materialization, so
+        // collecting its TLS secret would bootstrap a self-signed cert for an Ingress that is
+        // never created, leaving an orphaned secret in the cluster.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "empty");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var steps = await PipelineStepTestHelpers.CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Empty(PipelineStepTestHelpers.GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
     public async Task AddIngress_NoPaths_DoesNotGenerateYaml()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
