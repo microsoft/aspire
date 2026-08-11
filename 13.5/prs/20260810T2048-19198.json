@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Engineering-only: adds third-party signing entries for Hex1b/QRCoder, no user-facing behavior",
+  "mergedAt": "2026-08-10T20:48:10Z",
+  "number": 19198,
+  "runDate": "2026-08-11T00:11:54Z",
+  "status": "excluded",
+  "title": "[release/13.5] Add third-party signing entries for Hex1b and QRCoder"
+}

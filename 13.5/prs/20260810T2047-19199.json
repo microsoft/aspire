@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #19079: fixes missed replacement detection for recreated DCP objects during local run",
+  "mergedAt": "2026-08-10T20:47:33Z",
+  "number": 19199,
+  "runDate": "2026-08-11T00:11:54Z",
+  "status": "included",
+  "title": "[release/13.5] Improve handling of object change notifications during local run"
+}
