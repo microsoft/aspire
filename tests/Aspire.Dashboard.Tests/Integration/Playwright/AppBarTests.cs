@@ -68,7 +68,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     [InlineData("Light", "rgb(81, 43, 212)", "rgb(116, 85, 221)")]
-    [InlineData("Dark", "rgb(185, 170, 238)", "rgb(194, 180, 239)")]
+    [InlineData("Dark", "rgb(185, 170, 238)", "rgb(220, 213, 246)")]
     public async Task AppBar_AccentColors_UseFluentDesignTokens(string theme, string expectedRest, string expectedHover)
     {
         await RunTestAsync(async page =>
@@ -111,12 +111,31 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                         normalize(fluent.accentFillHover.getValueFor(root).createCSS()),
                         normalize(fluent.accentForegroundHover.getValueFor(root).createCSS()),
                         normalize(fluent.accentStrokeControlHover.getValueFor(root).createCSS()),
+                        normalize(style.getPropertyValue('--accent-fill-hover')),
+                        normalize(style.getPropertyValue('--accent-foreground-hover')),
+                        normalize(style.getPropertyValue('--accent-stroke-control-hover')),
+                        normalize(fluent.accentFillActive.getValueFor(root).createCSS()),
+                        normalize(fluent.accentForegroundActive.getValueFor(root).createCSS()),
+                        normalize(fluent.accentStrokeControlActive.getValueFor(root).createCSS()),
+                        normalize(style.getPropertyValue('--accent-fill-active')),
+                        normalize(style.getPropertyValue('--accent-foreground-active')),
+                        normalize(style.getPropertyValue('--accent-stroke-control-active')),
+                        normalize(fluent.accentFillFocus.getValueFor(root).createCSS()),
+                        normalize(fluent.accentForegroundFocus.getValueFor(root).createCSS()),
+                        normalize(fluent.accentStrokeControlFocus.getValueFor(root).createCSS()),
+                        normalize(style.getPropertyValue('--accent-fill-focus')),
+                        normalize(style.getPropertyValue('--accent-foreground-focus')),
+                        normalize(style.getPropertyValue('--accent-stroke-control-focus')),
+                        normalize(style.getPropertyValue('--dash-focus-ring-color')),
                     ];
                 }
                 """).DefaultTimeout();
 
             Assert.All(colors[..6], color => Assert.Equal(expectedRest, color));
-            Assert.All(colors[6..], color => Assert.Equal(expectedHover, color));
+            Assert.All(colors[6..12], color => Assert.Equal(expectedHover, color));
+            Assert.All(colors[12..18], color => Assert.Equal(expectedRest, color));
+            Assert.All(colors[18..24], color => Assert.Equal(expectedRest, color));
+            Assert.Equal(expectedRest, colors[24]);
         });
     }
 }
