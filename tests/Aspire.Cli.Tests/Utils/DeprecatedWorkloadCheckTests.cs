@@ -2,16 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Tests.Acquisition;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class DeprecatedWorkloadCheckTests
 {
     [Fact]
     public async Task CheckAsync_UsesResolvedDotNetPath()
     {
+        using var dotnetPathEnvironment = new TestDotNetPathEnvironment();
         ProcessStartInfo? capturedStartInfo = null;
         var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, startInfo =>
         {
@@ -19,10 +24,10 @@ public class DeprecatedWorkloadCheckTests
             return null;
         });
 
-        await check.CheckAsync(TestContext.Current.CancellationToken);
+        await check.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(capturedStartInfo);
-        Assert.Equal(PathLookupHelper.ResolveExecutablePath("dotnet"), capturedStartInfo.FileName);
+        Assert.Equal(dotnetPathEnvironment.ExpectedPath, capturedStartInfo.FileName);
     }
 
     [Fact]

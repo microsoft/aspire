@@ -34,7 +34,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
         {
             var processInfo = new ProcessStartInfo
             {
-                FileName = PathLookupHelper.ResolveExecutablePath("dotnet"),
+                FileName = PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"),
                 Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
