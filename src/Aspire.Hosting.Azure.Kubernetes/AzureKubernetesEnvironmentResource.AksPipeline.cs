@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
+#pragma warning disable ASPIREPIPELINES002 // IDeploymentStateManager is experimental
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
@@ -12,7 +13,6 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -221,7 +221,22 @@ public partial class AzureKubernetesEnvironmentResource
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
 
-                var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
+                var (subscriptionId, savedResourceGroup) = await GetAzureDeploymentContextAsync(
+                    context.Services,
+                    context.CancellationToken).ConfigureAwait(false);
+
+                ValidateAzureResourceName(subscriptionId, "subscription ID");
+
+                Task<AzCommandResult> RunAzAsync(string path, string arguments)
+                    => RunAzCommandAsync(path, arguments, context.Logger);
+
+                var resourceGroup = await GetResourceGroupAsync(
+                    azPath,
+                    clusterName,
+                    subscriptionId,
+                    savedResourceGroup,
+                    context.Logger,
+                    RunAzAsync)
                     .ConfigureAwait(false);
 
                 ValidateAzureResourceName(resourceGroup, "resource group");
@@ -237,20 +252,16 @@ public partial class AzureKubernetesEnvironmentResource
                     "Fetching AKS credentials: cluster={ClusterName}, resourceGroup={ResourceGroup}",
                     clusterName, resourceGroup);
 
-                var result = await RunAzCommandAsync(
+                var kubeConfigContent = await FetchKubeConfigAsync(
                     azPath,
-                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -",
-                    context.Logger).ConfigureAwait(false);
-
-                if (result.ExitCode != 0)
-                {
-                    throw new InvalidOperationException(
-                        $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
-                }
+                    subscriptionId,
+                    resourceGroup,
+                    clusterName,
+                    RunAzAsync).ConfigureAwait(false);
 
                 // Write kubeconfig content to a temp file we control.
                 // The IFileSystemService temp directory is auto-cleaned on dispose.
-                await File.WriteAllTextAsync(kubeConfigPath, result.StandardOutput, context.CancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(kubeConfigPath, kubeConfigContent, context.CancellationToken).ConfigureAwait(false);
 
                 // On Unix, restrict file permissions to owner-only (0600)
                 if (!OperatingSystem.IsWindows())
@@ -272,7 +283,8 @@ public partial class AzureKubernetesEnvironmentResource
 
                 context.Summary.Add(
                     "🔑 Connect to cluster",
-                    new MarkdownString($"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName}`"));
+                    new MarkdownString(
+                        $"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName} --subscription {subscriptionId}`"));
 
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
@@ -539,33 +551,60 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
-    /// Gets the resource group, trying deployment state first, falling back to az CLI query.
-    /// On first deploy, the deployment state may not be loaded into IConfiguration yet
-    /// because it's written during the pipeline run (after create-provisioning-context).
+    /// Gets the current Azure subscription and resource group from deployment state.
     /// </summary>
-    private static async Task<string> GetResourceGroupAsync(
-        string azPath,
-        string clusterName,
-        PipelineStepContext context)
+    internal static async Task<(string SubscriptionId, string? ResourceGroup)> GetAzureDeploymentContextAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken)
     {
-        // Try deployment state first (works on re-deploys)
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
-        var resourceGroup = configuration["Azure:ResourceGroup"];
+        var deploymentStateManager = services.GetRequiredService<IDeploymentStateManager>();
+        var azureState = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
 
-        if (!string.IsNullOrEmpty(resourceGroup))
+        // Use ToString() rather than GetValue<string>() to match how AzureEnvironmentResource reads
+        // these same keys, and because GetValue<string>() throws if hand-edited state stores a
+        // non-string JSON value.
+        var subscriptionId = azureState.Data["SubscriptionId"]?.ToString();
+
+        if (string.IsNullOrEmpty(subscriptionId))
         {
-            return resourceGroup;
+            throw new InvalidOperationException(
+                "Could not resolve the Azure subscription selected for deployment. " +
+                "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
         }
 
-        // Fallback for first deploy: query Azure directly
-        context.Logger.LogDebug(
+        var resourceGroup = azureState.Data["ResourceGroup"]?.ToString();
+        return (subscriptionId, resourceGroup);
+    }
+
+    /// <summary>
+    /// Gets the resource group, trying deployment state first, falling back to an Azure CLI query.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the Azure CLI
+    /// fallback is scoped to the deployment subscription without invoking the real az CLI.
+    /// </remarks>
+    internal static async Task<string> GetResourceGroupAsync(
+        string azPath,
+        string clusterName,
+        string subscriptionId,
+        string? savedResourceGroup,
+        ILogger logger,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        if (!string.IsNullOrEmpty(savedResourceGroup))
+        {
+            return savedResourceGroup;
+        }
+
+        // Older or incomplete deployment state may not contain the resource group. Keep the
+        // Azure query scoped to the subscription selected by Aspire rather than the CLI default.
+        logger.LogDebug(
             "Resource group not in deployment state, querying Azure for cluster '{ClusterName}'",
             clusterName);
 
-        var result = await RunAzCommandAsync(
+        var result = await runAzCommandAsync(
             azPath,
-            $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv",
-            context.Logger).ConfigureAwait(false);
+            BuildResourceGroupQueryArguments(subscriptionId, clusterName)).ConfigureAwait(false);
 
         if (result.ExitCode != 0)
         {
@@ -573,7 +612,7 @@ public partial class AzureKubernetesEnvironmentResource
                 $"az resource list failed (exit code {result.ExitCode}): {result.StandardError}");
         }
 
-        resourceGroup = result.StandardOutput.Trim().ReplaceLineEndings("").Trim();
+        var resourceGroup = result.StandardOutput.Trim().ReplaceLineEndings("").Trim();
 
         if (string.IsNullOrEmpty(resourceGroup))
         {
@@ -584,6 +623,42 @@ public partial class AzureKubernetesEnvironmentResource
 
         return resourceGroup;
     }
+
+    /// <summary>
+    /// Fetches the kubeconfig content for the cluster from the Azure CLI.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the credential
+    /// fetch is scoped to the deployment subscription without invoking the real az CLI.
+    /// </remarks>
+    internal static async Task<string> FetchKubeConfigAsync(
+        string azPath,
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        var result = await runAzCommandAsync(
+            azPath,
+            BuildGetCredentialsArguments(subscriptionId, resourceGroup, clusterName)).ConfigureAwait(false);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
+        }
+
+        return result.StandardOutput;
+    }
+
+    internal static string BuildGetCredentialsArguments(
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName)
+        => $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\"";
+
+    internal static string BuildResourceGroupQueryArguments(string subscriptionId, string clusterName)
+        => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
 
     /// <summary>
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
@@ -620,7 +695,7 @@ public partial class AzureKubernetesEnvironmentResource
         }
     }
 
-    private sealed record AzCommandResult(int ExitCode, string StandardOutput, string StandardError);
+    internal sealed record AzCommandResult(int ExitCode, string StandardOutput, string StandardError);
 
     /// <summary>
     /// Validates that an Azure resource name contains only expected characters.
