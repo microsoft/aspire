@@ -165,8 +165,8 @@ internal sealed class AddCommand : BaseCommand
             // the C# API directly and are never filtered; --all opts out of filtering entirely.
             //
             // The filter is opt-in and off by default: resolving the allow-list depends on the package source
-            // honouring a `tags:polyglot` search, which Azure DevOps Artifacts feeds silently do not (they
-            // return no results rather than an error). Because the filter fails closed, an unresolvable
+            // answering a `tags:polyglot` search, which no remote feed does usefully today (see the notes on
+            // PackageChannel.PolyglotTagSearchTerm). Because the filter fails closed, an unresolvable
             // allow-list is indistinguishable from "nothing is compatible" and hides every integration.
             // See https://github.com/microsoft/aspire/issues/19161.
             var applyPolyglotFilter = _features.IsFeatureEnabled(KnownFeatures.PolyglotIntegrationFilterEnabled, false)
