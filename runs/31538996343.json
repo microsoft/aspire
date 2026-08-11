@@ -1,0 +1,38 @@
+{
+  "run_id": 31538996343,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31538996343",
+  "analyzed_at": "2026-08-11T22:20:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19221,
+    "title": "[Automated] Update Microsoft Foundry Models",
+    "author": "aspire-repo-bot[bot]",
+    "state": "closed",
+    "head_branch": "update-ai-foundry-models",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19221"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 93939255064,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31538996343/job/93939255064",
+      "classification": "flaky-test",
+      "reason": "The only failing test is a known-flaky timing-sensitive test (ProcessGuestLauncherTests) unrelated to the PR, which only touches Foundry model generated files. Matches prior cause processguest-blockingsignaler-timeout.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected process exit to win over the still-blocked signaler but it took 00:00:07.6710899.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 192\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Timing-sensitive assertion under CI load; test file not touched by PR (which only changes Foundry model generated files). Matches previously identified recurring cause processguest-blockingsignaler-timeout."
+    }
+  ],
+  "causes": ["processguest-blockingsignaler-timeout"]
+}
