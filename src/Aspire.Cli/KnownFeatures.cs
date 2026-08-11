@@ -97,7 +97,7 @@ internal static class KnownFeatures
 
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,
-            "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because the tag cannot be resolved from package sources that ignore 'tags:' query scoping (notably Azure DevOps Artifacts feeds), which makes the filter hide every integration. Enable it only when every configured source honours tag search, such as a pinned local package source.",
+            "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
             DefaultValue: false)
     };
 

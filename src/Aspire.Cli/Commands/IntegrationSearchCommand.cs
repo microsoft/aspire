@@ -68,9 +68,9 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             // export coverage (the `polyglot` NuGet tag), so list/search hide the rest unless --all is
             // passed. The language is only known when an AppHost was resolved; otherwise show everything.
             //
-            // The filter is opt-in and off by default for the same reason as `aspire add`: package sources
-            // that ignore `tags:` query scoping (notably Azure DevOps Artifacts feeds) yield an empty
-            // allow-list, and the filter fails closed, so every integration disappears.
+            // The filter is opt-in and off by default for the same reason as `aspire add`: no remote feed
+            // answers a `tags:polyglot` search usefully (see PackageChannel.PolyglotTagSearchTerm), so the
+            // allow-list comes back empty and the filter fails closed, hiding every integration.
             // See https://github.com/microsoft/aspire/issues/19161.
             var applyPolyglotFilter = _features.IsFeatureEnabled(KnownFeatures.PolyglotIntegrationFilterEnabled, false)
                 && languageId is not null
