@@ -36,7 +36,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
-            var dotnetPath = PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+            var dotnetPath = ResolveDotNetPath();
 
             using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
@@ -118,6 +118,9 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             return (false, null, minimumVersion);
         }
     }
+
+    internal static string ResolveDotNetPath() =>
+        PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
 
     private static ProcessStartInfo CreateProcessStartInfo(string dotnetPath, string arguments)
     {
