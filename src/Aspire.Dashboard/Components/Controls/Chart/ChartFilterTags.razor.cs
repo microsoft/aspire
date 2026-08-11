@@ -49,12 +49,34 @@ public partial class ChartFilterTags : IDisposable
         await OnSelectionChanged.InvokeAsync(Filter);
     }
 
-    private async Task OnTagKeyDownAsync(KeyboardEventArgs args, DimensionValueViewModel tag, bool isChecked)
+    private Task OnTagClickedAsync(MouseEventArgs args, DimensionValueViewModel tag)
+    {
+        return OnTagActivatedAsync(tag, args.ShiftKey);
+    }
+
+    private async Task OnTagActivatedAsync(DimensionValueViewModel tag, bool toggleSelection)
+    {
+        var isChecked = true;
+        if (toggleSelection)
+        {
+            isChecked = !Filter.SelectedValues.Contains(tag);
+        }
+        else
+        {
+            Filter.SelectedValues.Clear();
+        }
+
+        await OnTagSelectionChangedAsync(tag, isChecked);
+    }
+
+    private Task OnTagKeyDownAsync(KeyboardEventArgs args, DimensionValueViewModel tag)
     {
         if (args.Key is "Enter" or " ")
         {
-            await OnTagSelectionChangedAsync(tag, isChecked);
+            return OnTagActivatedAsync(tag, args.ShiftKey);
         }
+
+        return Task.CompletedTask;
     }
 
     private void ShowPopover()

@@ -97,6 +97,7 @@ public class ChartFiltersTests : DashboardTestContext
     {
         SetupChartFilters();
         var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "POST"));
         var changed = false;
 
         var cut = RenderChartFilters(dimensionFilter, _ => changed = true);
@@ -108,8 +109,67 @@ public class ChartFiltersTests : DashboardTestContext
         getTag.KeyDown(new KeyboardEventArgs { Key = "Enter" });
 
         Assert.True(changed);
-        Assert.Single(dimensionFilter.SelectedValues);
-        Assert.Equal("GET", dimensionFilter.SelectedValues.Single().Text);
+        var selectedValue = Assert.Single(dimensionFilter.SelectedValues);
+        Assert.Equal("GET", selectedValue.Text);
+    }
+
+    [Fact]
+    public void ShiftKeyDown_UnselectedFilterValueTag_AddsValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "POST"));
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.KeyDown(new KeyboardEventArgs { Key = "Enter", ShiftKey = true });
+
+        Assert.Equal(["GET", "POST"], dimensionFilter.SelectedValues.Select(v => v.Text).Order());
+    }
+
+    [Fact]
+    public void Click_FilterValueTag_SelectsOnlyClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "POST"));
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.Click(new MouseEventArgs());
+
+        var selectedValue = Assert.Single(dimensionFilter.SelectedValues);
+        Assert.Equal("GET", selectedValue.Text);
+    }
+
+    [Fact]
+    public void ShiftClick_UnselectedFilterValueTag_AddsClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "POST"));
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.Click(new MouseEventArgs { ShiftKey = true });
+
+        Assert.Equal(["GET", "POST"], dimensionFilter.SelectedValues.Select(v => v.Text).Order());
+    }
+
+    [Fact]
+    public void ShiftClick_SelectedFilterValueTag_RemovesClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "GET"));
+        dimensionFilter.SelectedValues.Add(dimensionFilter.Values.Single(v => v.Text == "POST"));
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.Click(new MouseEventArgs { ShiftKey = true });
+
+        var selectedValue = Assert.Single(dimensionFilter.SelectedValues);
+        Assert.Equal("POST", selectedValue.Text);
     }
 
     [Fact]

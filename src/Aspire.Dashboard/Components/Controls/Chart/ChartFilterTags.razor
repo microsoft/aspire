@@ -31,8 +31,8 @@
                       role="button"
                       tabindex="0"
                       aria-pressed="@isIncludedInFilters"
-                      @onclick="@(() => OnTagSelectionChangedAsync(item, !Filter.SelectedValues.Contains(item)))"
-                      @onkeydown="@(args => OnTagKeyDownAsync(args, item, !Filter.SelectedValues.Contains(item)))">
+                      @onclick="args => OnTagClickedAsync(args, item)"
+                      @onkeydown="args => OnTagKeyDownAsync(args, item)">
                     @item.Text
                 </span>
             </FluentOverflowItem>
