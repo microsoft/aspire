@@ -27,6 +27,9 @@ suite('Aspire Azure Functions E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
+        // Opening the generated workspace reloads the extension host and returns VS Code to Explorer.
+        // Reopen the Aspire view so its visibility-driven runtime state polling observes the AppHost.
+        await openAspireView();
 
         const appHostPath = getPrimaryAppHostProjectPath();
         const taskSequenceBeforeRun = getTaskProcessEventCount();

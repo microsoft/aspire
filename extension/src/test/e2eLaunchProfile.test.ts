@@ -235,6 +235,20 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
     });
 
+    test('reopens the Aspire view after loading the generated Azure Functions workspace', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'azureFunctions.e2e.test.ts'), 'utf8');
+        const firstOpenIndex = spec.indexOf('await openAspireView();');
+        const workspaceLoadedIndex = spec.indexOf('await waitForWorkspaceAppHost();');
+        const reopenedViewIndex = spec.indexOf('await openAspireView();', firstOpenIndex + 1);
+        const runAppHostIndex = spec.indexOf("name: 'runAppHost'");
+
+        assert.ok(firstOpenIndex >= 0);
+        assert.ok(workspaceLoadedIndex > firstOpenIndex);
+        assert.ok(reopenedViewIndex > workspaceLoadedIndex);
+        assert.ok(runAppHostIndex > reopenedViewIndex);
+    });
+
     test('keeps Linux E2E recordings for successful runs by default', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
