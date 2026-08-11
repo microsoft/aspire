@@ -131,6 +131,7 @@ public class ResourceOutgoingPeerResolverTests
     {
         var resources = new Dictionary<string, ResourceViewModel>
         {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
             ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
             ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
         };
