@@ -1181,7 +1181,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// are being built, so it cannot see whether an Ingress ultimately rendered — each entry carries
     /// its owner so <see cref="BootstrapTlsSecretsAsync"/> can re-check that at deploy time.
     /// </remarks>
-    internal static List<TlsSecretRequest> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)    {
+    internal static List<TlsSecretRequest> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
+    {
         var tlsSecrets = new List<TlsSecretRequest>();
 
         var gateways = model.Resources

@@ -4,6 +4,8 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -319,6 +321,37 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddIngress_NoPaths_WarnsThatIngressAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Ingress (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Ingress 'empty' has no path rules or default backend configured. The Ingress and its TLS certificate will not be created.",
+            warning.Message);
+    }
+
+    [Fact]
     public async Task AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap()
     {
         // An Ingress can be configured with paths (so it passes the publish-time materialization
@@ -390,6 +423,41 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
         var request = Assert.Single(collected);
         Assert.Same(ingress.Resource, request.Owner);
         Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task CollectTlsSecrets_BeforePublish_DoesNotDependOnGeneratedIngress()
+    {
+        // Guards the trap that makes this area easy to "fix" incorrectly. In production the pipeline
+        // builds every step before running any of them, so CollectTlsSecrets always executes while
+        // GeneratedIngress is still null. Moving the materialization check into collection would
+        // therefore disable TLS bootstrap for *every* Ingress, yet the other tests here would not
+        // notice, because they inspect collection after app.Run() has already populated it.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Null(ingress.Resource.GeneratedIngress);
+        var collectedBeforePublish = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        Assert.Same(ingress.Resource, Assert.Single(collectedBeforePublish).Owner);
+
+        // The Ingress does render, so the deploy-time re-check still lets the bootstrap through.
+        app.Run();
+        Assert.NotNull(ingress.Resource.GeneratedIngress);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(ingress.Resource));
     }
 
     [Fact]
