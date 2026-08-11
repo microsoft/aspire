@@ -36,6 +36,8 @@ public partial class AzureKubernetesEnvironmentResource :
         //     can observe the annotations.
         //   - aks-get-credentials-{name}: fetches AKS credentials into an isolated
         //     kubeconfig file after AKS is provisioned, before Helm prepare runs.
+        //   - aks-get-credentials-for-destroy-{name}: fetches credentials from saved
+        //     deployment state before cluster-scoped destroy steps run.
         Annotations.Add(new PipelineStepAnnotation(_ =>
         {
             var k8sEnv = KubernetesEnvironment;
@@ -67,7 +69,39 @@ public partial class AzureKubernetesEnvironmentResource :
                 RequiredBySteps = [$"prepare-{k8sEnv.Name}"]
             };
 
-            return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep]);
+            var getDestroyCredentialsStep = new PipelineStep
+            {
+                Name = $"aks-get-credentials-for-destroy-{Name}",
+                Description = $"Fetches AKS credentials for destroying {Name}",
+                Action = ctx => GetAksCredentialsForDestroyAsync(ctx),
+                // Keep this separate from the deploy credential step: depending on Azure
+                // provisioning here would pull provisioning into the destroy graph.
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+
+            return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep, getDestroyCredentialsStep]);
+        }));
+
+        Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var k8sEnv = KubernetesEnvironment;
+            var getDestroyCredentialsStep = context.GetSteps(this)
+                .Single(step => step.Name == $"aks-get-credentials-for-destroy-{Name}");
+            var kubernetesDestroySteps = context
+                .GetSteps(HelmDeploymentEngine.GetKubernetesDestroyTag(k8sEnv.Name))
+                .ToList();
+
+            var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().Single();
+            var destroyAzureStep = context.GetSteps(azureEnvironment)
+                .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
+
+            foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
+            {
+                kubernetesDestroyStep.DependsOn(getDestroyCredentialsStep);
+                destroyAzureStep.DependsOn(kubernetesDestroyStep);
+            }
+
+            return Task.CompletedTask;
         }));
     }
 

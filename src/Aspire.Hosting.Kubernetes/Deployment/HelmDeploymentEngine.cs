@@ -30,6 +30,8 @@ internal static partial class HelmDeploymentEngine
     private const string HelmUninstallTag = "helm-uninstall";
     internal const string PrintSummaryTag = "print-summary";
 
+    internal static string GetKubernetesDestroyTag(string environmentName) => $"kubernetes-destroy-{environmentName}";
+
     /// <summary>
     /// Gets the environment-specific values file name, mirroring Docker Compose's .env.{envName} pattern.
     /// </summary>
@@ -183,6 +185,7 @@ internal static partial class HelmDeploymentEngine
         {
             Name = $"destroy-helm-{environment.Name}",
             Description = $"Confirms and destroys the Helm deployment for {environment.Name}.",
+            Tags = [GetKubernetesDestroyTag(environment.Name)],
             Action = async ctx =>
             {
                 // Check deployment state to verify this environment was actually deployed

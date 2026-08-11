@@ -112,7 +112,8 @@ public static partial class KubernetesHelmChartExtensions
                     Name = $"helm-uninstall-{name}",
                     Description = $"Uninstalls Helm chart '{name}' from namespace '{@namespace}'",
                     Action = ctx => UninstallHelmChartAsync(ctx, environment, resource, releaseName, @namespace),
-                    DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+                    DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
+                    Tags = [HelmDeploymentEngine.GetKubernetesDestroyTag(environment.Name)]
                 };
                 // The uninstall path shells out to `helm uninstall`, so it must observe the same
                 // Helm CLI / version preflight as the deploy path. Without this dep, a missing or

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
+#pragma warning disable ASPIREPIPELINES002 // Deployment state is used to skip destroy credentials when no Helm deployment exists
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
@@ -286,6 +287,29 @@ public partial class AzureKubernetesEnvironmentResource
                 throw;
             }
         }
+    }
+
+    private async Task GetAksCredentialsForDestroyAsync(PipelineStepContext context)
+    {
+        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var stateSection = await deploymentStateManager
+            .AcquireSectionAsync("Azure", context.CancellationToken)
+            .ConfigureAwait(false);
+
+        // Azure state remains until the entire destroy pipeline succeeds. Use it rather than the
+        // main Helm release state, which may already be gone when retrying a partial teardown that
+        // still needs to uninstall an external chart or delete another cluster-scoped resource.
+        var resourceGroupName = stateSection.Data["ResourceGroup"]?.ToString();
+        var subscriptionId = stateSection.Data["SubscriptionId"]?.ToString();
+        if (string.IsNullOrEmpty(resourceGroupName) || string.IsNullOrEmpty(subscriptionId))
+        {
+            context.Logger.LogInformation(
+                "No Azure deployment state found for AKS environment '{EnvironmentName}'. Skipping credential acquisition.",
+                Name);
+            return;
+        }
+
+        await GetAksCredentialsAsync(context).ConfigureAwait(false);
     }
 
     /// <summary>

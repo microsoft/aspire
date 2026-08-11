@@ -191,4 +191,103 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Contains(logs, msg => msg.Contains("aks-get-credentials-aks"));
         Assert.DoesNotContain(logs, msg => msg.Contains("aks-k8s"));
     }
+
+    [Fact]
+    public async Task DestroyPipelineFetchesCredentialsBeforeClusterCleanupAndDeletesAzureLast()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+
+        var reporter = new TestPipelineActivityReporter(output);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
+            .WithDestroy();
+        aks.AddCertManager("cert-manager")
+            .AddIssuer("letsencrypt");
+        builder.AddContainer("api", "myimage")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var diagnosticLines = reporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .SelectMany(message => message.Split('\n'))
+            .Select(line => line.Trim())
+            .ToList();
+
+        Assert.Equal(
+            "Direct dependencies: destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "aks-get-credentials-for-destroy-aks"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "destroy-helm-aks"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, check-helm-prereqs-aks, cm-issuer-delete-letsencrypt, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "helm-uninstall-cert-manager-chart"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, check-helm-prereqs-aks, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "helm-uninstall-podinfo"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "cm-issuer-delete-letsencrypt"));
+        Assert.Equal(
+            "Direct dependencies: cm-issuer-delete-letsencrypt, destroy-helm-aks, destroy-prereq, helm-uninstall-cert-manager-chart, helm-uninstall-podinfo",
+            GetDirectDependencies(diagnosticLines, "destroy-azure-azure-environment"));
+    }
+
+    [Fact]
+    public async Task DestroyPipelineUsesMatchingCredentialsForEachAksEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+
+        var reporter = new TestPipelineActivityReporter(output);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var east = builder.AddAzureKubernetesEnvironment("east");
+        var west = builder.AddAzureKubernetesEnvironment("west");
+        builder.AddContainer("east-api", "myimage")
+            .WithComputeEnvironment(east);
+        builder.AddContainer("west-api", "myimage")
+            .WithComputeEnvironment(west);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var diagnosticLines = reporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .SelectMany(message => message.Split('\n'))
+            .Select(line => line.Trim())
+            .ToList();
+
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-east, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "destroy-helm-east"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-west, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "destroy-helm-west"));
+        Assert.Equal(
+            "Direct dependencies: destroy-helm-east, destroy-helm-west, destroy-prereq",
+            GetDirectDependencies(diagnosticLines, "destroy-azure-azure-environment"));
+    }
+
+    private static string GetDirectDependencies(List<string> diagnosticLines, string stepName)
+    {
+        var targetLine = diagnosticLines.IndexOf($"If targeting '{stepName}':");
+        Assert.InRange(targetLine, 0, diagnosticLines.Count - 2);
+        return diagnosticLines[targetLine + 1];
+    }
 }

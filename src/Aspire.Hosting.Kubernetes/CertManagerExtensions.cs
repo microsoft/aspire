@@ -398,7 +398,8 @@ public static class CertManagerExtensions
                 Name = $"cm-issuer-delete-{captured.Name}",
                 Description = $"Deletes cert-manager ClusterIssuer '{captured.Name}'",
                 Action = ctx => DeleteClusterIssuerAsync(ctx, certManager, captured),
-                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
+                Tags = [HelmDeploymentEngine.GetKubernetesDestroyTag(certManager.Parent.Name)]
             };
 
             // Run before the cert-manager helm chart is uninstalled. Once the chart goes,
