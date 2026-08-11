@@ -695,13 +695,9 @@ pre-agent-steps:
       echo "Candidate     : ${CANDIDATE} (source: ${CANDIDATE_SOURCE})"
 
       # --- 5. Enumerate release/* branches on microsoft/aspire.dev ---------
-      # Primary: local git on the current workspace, which is checked out at
-      # microsoft/aspire.dev with `release/*` refs fetched into
-      # `refs/remotes/origin/release/*` via the workflow `checkout:` block.
-      #
-      # Fallback: `gh api /repos/microsoft/aspire.dev/branches` paginated.
-      # Used if the local fetch produced nothing (e.g., no release branches
-      # have been pushed yet, or the fetch silently failed). The GH_TOKEN
+      # Query aspire.dev directly. The generated PR checkout configures origin
+      # for microsoft/aspire before this step, so its remote-tracking refs must
+      # never be used to infer which branches exist in aspire.dev. The GH_TOKEN
       # used here is the aspire-bot installation token minted at the top of
       # `pre-agent-steps`, which has explicit `contents: read` on both
       # microsoft/aspire and microsoft/aspire.dev — the default GITHUB_TOKEN
@@ -711,23 +707,14 @@ pre-agent-steps:
       RELEASE_BRANCHES_FILE="$(mktemp)"
       : > "${RELEASE_BRANCHES_FILE}"
 
-      git -C "${GITHUB_WORKSPACE}" for-each-ref \
-        --format='%(refname:short)' 'refs/remotes/origin/release/*' \
-        | sed 's|^origin/||' > "${RELEASE_BRANCHES_FILE}" || true
-
-      if [ -s "${RELEASE_BRANCHES_FILE}" ]; then
-        ENUMERATION_SOURCE="git"
+      if python3 \
+          "${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/enumerate_release_branches.py" \
+          > "${RELEASE_BRANCHES_FILE}"; then
+        ENUMERATION_SOURCE="gh_api"
       else
-        echo "Local git enumeration returned no release/* branches; falling back to gh api"
-        if gh api --paginate "/repos/microsoft/aspire.dev/branches?per_page=100" \
-            | jq -r '.[].name | select(startswith("release/"))' \
-            > "${RELEASE_BRANCHES_FILE}" 2>/dev/null; then
-          ENUMERATION_SOURCE="gh_api"
-        else
-          echo "  WARN: gh api fallback for aspire.dev branches failed; treating list as empty"
-          : > "${RELEASE_BRANCHES_FILE}"
-          ENUMERATION_SOURCE="empty"
-        fi
+        echo "  WARN: aspire.dev branch enumeration failed; treating list as empty"
+        : > "${RELEASE_BRANCHES_FILE}"
+        ENUMERATION_SOURCE="empty"
       fi
 
       # De-duplicate and sort so the JSON output is deterministic across runs.
