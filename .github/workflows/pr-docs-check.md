@@ -87,16 +87,6 @@ checkout:
       owner: "microsoft"
       repositories: ["aspire.dev"]
     current: true
-    # Fetch release/* refs in addition to the default branch so the
-    # `Resolve and check out target aspire.dev branch` pre-agent step can
-    # enumerate aspire.dev's release/* branches locally and switch the
-    # workspace to the selected branch before the agent starts. The refs live in
-    # `refs/remotes/origin/release/*`. If this fetch silently produces
-    # nothing (e.g., the action ignores the refspec), the resolver still
-    # falls back to a `gh api /repos/microsoft/aspire.dev/branches` call
-    # using the aspire-bot installation token, so target-branch selection
-    # remains correct — the local refs are just a faster, offline path.
-    fetch: ["release/*"]
 
 permissions:
   contents: read
@@ -707,15 +697,10 @@ pre-agent-steps:
       RELEASE_BRANCHES_FILE="$(mktemp)"
       : > "${RELEASE_BRANCHES_FILE}"
 
-      if python3 \
-          "${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/enumerate_release_branches.py" \
-          > "${RELEASE_BRANCHES_FILE}"; then
-        ENUMERATION_SOURCE="gh_api"
-      else
-        echo "  WARN: aspire.dev branch enumeration failed; treating list as empty"
-        : > "${RELEASE_BRANCHES_FILE}"
-        ENUMERATION_SOURCE="empty"
-      fi
+      python3 \
+        "${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/enumerate_release_branches.py" \
+        > "${RELEASE_BRANCHES_FILE}"
+      ENUMERATION_SOURCE="gh_api"
 
       # De-duplicate and sort so the JSON output is deterministic across runs.
       sort -u -o "${RELEASE_BRANCHES_FILE}" "${RELEASE_BRANCHES_FILE}"
