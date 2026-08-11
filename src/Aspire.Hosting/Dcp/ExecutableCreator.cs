@@ -105,7 +105,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // process-launched one does.
         var launchToolArgumentsData = configuration.AdditionalConfigurationData.OfType<LaunchToolArgumentsData>().FirstOrDefault();
         var resolvedLaunchToolArgumentCount = launchToolArgumentsData?.Count ?? 0;
-        await ApplyLaunchConfigurationAsync(er, exe, resolvedLaunchToolArgumentCount, cancellationToken).ConfigureAwait(false);
+        var hasPreparedProjectArguments = spec.Args is { Count: > 0 };
+        await ApplyLaunchConfigurationAsync(er, exe, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments, cancellationToken).ConfigureAwait(false);
+        ApplyResolvedProjectArguments(er, exe, resolvedLaunchToolArgumentCount);
 
         var omittedLaunchToolArgumentCount = OmitLaunchToolArguments(er, spec)
             ? resolvedLaunchToolArgumentCount
@@ -120,7 +122,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             resolvedLaunchToolArgumentCount,
             omittedLaunchToolArgumentCount,
             launchToolArgumentsData?.ShowInCommandLine ?? true);
-        if (!HasProjectLaunchArgsOverride(er.ModelResource))
+        if (resolvedLaunchToolArgumentCount > 0 || !HasProjectLaunchArgsOverride(er.ModelResource))
         {
             AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
         }
@@ -136,7 +138,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // Argument and launch-configuration callbacks can change on restart. Derive fallback availability from the
         // final execution type and resolved command line every time instead of carrying a preparation-time guess.
-        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, resolvedLaunchToolArgumentCount, omittedLaunchToolArgumentCount)
+        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, resolvedLaunchToolArgumentCount, omittedLaunchToolArgumentCount, hasPreparedProjectArguments)
             ? [ExecutionType.Process]
             : null;
 
@@ -197,7 +199,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// executables, so their "project" launch configuration is applied here for IDE/F5 parity with <c>AddProject</c>.
     /// All other types (plain executables and project subtypes like azure-functions) are also handled here.
     /// </remarks>
-    private async Task ApplyLaunchConfigurationAsync(RenderedModelResource<Executable> er, Executable exe, int resolvedLaunchToolArgumentCount, CancellationToken cancellationToken)
+    private async Task ApplyLaunchConfigurationAsync(
+        RenderedModelResource<Executable> er,
+        Executable exe,
+        int resolvedLaunchToolArgumentCount,
+        bool hasPreparedProjectArguments,
+        CancellationToken cancellationToken)
     {
         if (er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || HasProjectLaunchArgsOverride(er.ModelResource)
@@ -245,7 +252,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
         catch (Exception ex)
         {
-            if (HasIncompleteProcessCommand(er.ModelResource, supportsDebuggingAnnotation, resolvedLaunchToolArgumentCount))
+            if (HasIncompleteProcessCommand(er.ModelResource, supportsDebuggingAnnotation, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments))
             {
                 // This project-backed executable suppressed its process scaffold because the custom launch
                 // configuration performs the tool invocation. With no resolved prefix to replace it, Process
@@ -286,7 +293,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// both the IDE form and the process form of the command line: when the tool-invocation prefix is omitted for the
     /// IDE, no fallback can be offered.
     /// </remarks>
-    private bool ShouldOfferProcessFallback(IResource modelResource, ExecutableSpec spec, int resolvedLaunchToolArgumentCount, int omittedLaunchToolArgumentCount)
+    private bool ShouldOfferProcessFallback(
+        IResource modelResource,
+        ExecutableSpec spec,
+        int resolvedLaunchToolArgumentCount,
+        int omittedLaunchToolArgumentCount,
+        bool hasPreparedProjectArguments)
     {
         if (spec.ExecutionType != ExecutionType.IDE || omittedLaunchToolArgumentCount > 0)
         {
@@ -301,7 +313,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Project-backed resources suppress their process scaffold when the active launch configuration owns the
         // tool invocation. If that prefix resolves empty, the remaining command line is IDE-only and cannot be used
         // as a Process fallback.
-        if (HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount))
+        if (HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments))
         {
             return false;
         }
@@ -310,9 +322,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             || annotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project;
     }
 
-    private static bool HasIncompleteProcessCommand(IResource modelResource, SupportsDebuggingAnnotation annotation, int resolvedLaunchToolArgumentCount)
+    private static bool HasIncompleteProcessCommand(
+        IResource modelResource,
+        SupportsDebuggingAnnotation annotation,
+        int resolvedLaunchToolArgumentCount,
+        bool hasPreparedProjectArguments)
     {
         return resolvedLaunchToolArgumentCount == 0
+            && !hasPreparedProjectArguments
             && modelResource.HasAnnotationOfType<IProjectMetadata>()
             && modelResource.HasLaunchToolArgsOwnedBy(annotation);
     }
@@ -397,26 +414,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // applied later in CreateExecutableAsync() after endpoints are allocated,
                     // unless the IDE didn't send DEBUG_SESSION_INFO (handled by the fallback branch below).
 
-                    // File-based apps (.cs files) are not supported by all IDEs (e.g. Visual Studio
-                    // returns 500 for them). Populate fallback process args so that when the IDE
-                    // rejects the launch request and DCP falls back to ExecutionType.Process, the
-                    // executable starts with the correct `dotnet run --file` arguments.
-                    if (projectMetadata.IsFileBasedApp)
+                    // Keep a candidate Process command so custom IDE launch configurations whose launch-tool
+                    // callback resolves empty have a runnable fallback. This also preserves the existing fallback
+                    // for file-based apps, which some IDEs reject. CreateExecutableAsync removes the candidate
+                    // when the active launch configuration or a non-empty launch-tool prefix replaces it.
+                    if (executableAnnotation is null &&
+                        (projectMetadata.IsFileBasedApp ||
+                         supportsDebuggingAnnotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project))
                     {
-                        projectArgs.Add("run");
-                        projectArgs.Add("--file");
-                        projectArgs.Add(projectMetadata.ProjectPath);
-                        projectArgs.Add("--no-cache");
-                        if (projectMetadata.SuppressBuild)
-                        {
-                            projectArgs.Add("--no-build");
-                        }
-                        projectArgs.Add("--no-launch-profile");
-
-                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
-                        {
-                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
-                        }
+                        AddDefaultProjectProcessArgs(projectArgs, projectMetadata);
                     }
                 }
                 else if (!persistent && !forceProcessExecution && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation, executableAnnotation))
@@ -434,58 +440,27 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     exe.Spec.ExecutionType = ExecutionType.IDE;
 
                     await ApplyProjectLaunchConfigurationAsync(exe, project, projectMetadata, supportsDebuggingAnnotation: null, cancellationToken).ConfigureAwait(false);
+
+                    if (executableAnnotation is null && projectMetadata.IsFileBasedApp)
+                    {
+                        AddDefaultProjectProcessArgs(projectArgs, projectMetadata);
+                    }
                 }
                 else
                 {
                     exe.Spec.ExecutionType = ExecutionType.Process;
 
-                    // Some ProjectResource subtypes provide their own executable command, and WithLaunchToolArgs
-                    // replaces the implicit project invocation even when its callback resolves empty. Do not prefix
-                    // either shape with Aspire's default `dotnet run --project ...` wrapper.
-                    if (executableAnnotation is null && !HasLaunchToolArgsDeclaration(project))
+                    // Some ProjectResource subtypes, such as MAUI platform resources, intentionally
+                    // provide their own executable command and SDK-shaped app host args. Do not prefix
+                    // those args with Aspire's default `dotnet run --project ...` wrapper.
+                    if (executableAnnotation is null)
                     {
                         var projectLaunchConfiguration = new ProjectLaunchConfiguration
                         {
                             ProjectPath = projectMetadata.ProjectPath
                         };
 
-                        // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
-                        if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
-                        {
-                            projectArgs.Add("run");
-                            projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
-                            projectArgs.Add(projectMetadata.ProjectPath);
-                            if (projectMetadata.IsFileBasedApp)
-                            {
-                                projectArgs.Add("--no-cache");
-                            }
-                            if (projectMetadata.SuppressBuild)
-                            {
-                                projectArgs.Add("--no-build");
-                            }
-                        }
-                        else
-                        {
-                            projectArgs.AddRange([
-                                "watch",
-                                "--non-interactive",
-                                "--no-hot-reload",
-                                "--project",
-                                projectMetadata.ProjectPath
-                            ]);
-                        }
-
-                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
-                        {
-                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
-                        }
-
-                        // We pretty much always want to suppress the normal launch profile handling
-                        // because the settings from the profile will override the ambient environment settings, which is not what we want
-                        // (the ambient environment settings for service processes come from the application model
-                        // and should be HIGHER priority than the launch profile settings).
-                        // This means we need to apply the launch profile settings manually inside CreateExecutableAsync().
-                        projectArgs.Add("--no-launch-profile");
+                        AddDefaultProjectProcessArgs(projectArgs, projectMetadata);
 
                         // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
                         exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, projectLaunchConfiguration);
@@ -504,6 +479,68 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 _appResources.Add(exeAppResource);
             }
         }
+    }
+
+    private static void ApplyResolvedProjectArguments(RenderedModelResource<Executable> er, Executable exe, int resolvedLaunchToolArgumentCount)
+    {
+        if (er.ModelResource is not ProjectResource ||
+            !er.ModelResource.TryGetProjectMetadata(out var projectMetadata))
+        {
+            return;
+        }
+
+        var projectLaunchConfigurationOwnsInvocation =
+            exe.Spec.ExecutionType == ExecutionType.IDE &&
+            exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigurations) &&
+            launchConfigurations.Any(static configuration => configuration.Type is KnownLaunchConfigurationTypes.Project);
+
+        // ResourceProjectArgsAnnotation carries a candidate Process command. Discard it before effective argument
+        // indexes are assigned when a resolved launch-tool prefix replaces it, or when a normal project IDE launch
+        // owns the invocation. File-based apps retain their Process command because IDEs can reject that launch type.
+        if (resolvedLaunchToolArgumentCount > 0 ||
+            (projectLaunchConfigurationOwnsInvocation &&
+             !projectMetadata.IsFileBasedApp))
+        {
+            exe.Spec.Args = null;
+        }
+    }
+
+    private void AddDefaultProjectProcessArgs(List<string> projectArgs, IProjectMetadata projectMetadata)
+    {
+        // `dotnet watch` does not work with file-based apps yet, so use `dotnet run` in that case.
+        if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
+        {
+            projectArgs.Add("run");
+            projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
+            projectArgs.Add(projectMetadata.ProjectPath);
+            if (projectMetadata.IsFileBasedApp)
+            {
+                projectArgs.Add("--no-cache");
+            }
+            if (projectMetadata.SuppressBuild)
+            {
+                projectArgs.Add("--no-build");
+            }
+        }
+        else
+        {
+            projectArgs.AddRange([
+                "watch",
+                "--non-interactive",
+                "--no-hot-reload",
+                "--project",
+                projectMetadata.ProjectPath
+            ]);
+        }
+
+        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+        {
+            projectArgs.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
+        }
+
+        // Suppress dotnet's launch-profile handling because the application model materializes those settings
+        // and they must take precedence over the ambient values that `dotnet run` would otherwise apply.
+        projectArgs.Add("--no-launch-profile");
     }
 
     private void PreparePlainExecutables()
@@ -721,11 +758,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Follows behavior in the IDE execution spec when in IDE execution mode:
         // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
         var appHostArgList = appHostArgs.ToList();
-        var hasLaunchToolArgsDeclaration = HasLaunchToolArgsDeclaration(er.ModelResource);
 #pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var hasProjectLaunchArgsOverride = er.ModelResource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var projectLaunchArgsOverride);
 #pragma warning restore ASPIREPROJECTS001
-        if (projectLaunchArgsOverride?.LeadingResourceArgumentToRemove is { } leadingResourceArgumentToRemove &&
+        var useProjectLaunchArgsOverride = hasProjectLaunchArgsOverride && launchToolArgumentCount == 0;
+        if (useProjectLaunchArgsOverride &&
+            projectLaunchArgsOverride?.LeadingResourceArgumentToRemove is { } leadingResourceArgumentToRemove &&
             appHostArgList.Count > 0 &&
             string.Equals(appHostArgList[0].Value, leadingResourceArgumentToRemove, StringComparison.Ordinal))
         {
@@ -749,19 +787,30 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // If the executable is a project then include any command line args from the launch profile.
-        if (!hasProjectLaunchArgsOverride && er.ModelResource is ProjectResource project)
+        if (!useProjectLaunchArgsOverride && er.ModelResource is ProjectResource project)
         {
+            var projectLaunchConfigurationHandlesLaunchProfile =
+                spec.ExecutionType == ExecutionType.IDE &&
+                er.DcpResource.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var projectLaunchConfigurations) &&
+                projectLaunchConfigurations.Any(static configuration => configuration.Type is KnownLaunchConfigurationTypes.Project);
+            var ordinaryAppHostArgumentCount = Math.Max(0, appHostArgList.Count - launchToolArgumentCount);
+
             // Args in the launch profile is used when:
             // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
-            // 2. The project is run by the IDE and no app host args are specified.
-            if (spec.ExecutionType == ExecutionType.Process || (spec.ExecutionType == ExecutionType.IDE && appHostArgList.Count == 0))
+            // 2. A custom IDE launch configuration cannot carry launch_profile, so DCP supplies those args.
+            // 3. A project IDE launch has no ordinary app host args, so the profile args are displayed.
+            if (spec.ExecutionType == ExecutionType.Process ||
+                !projectLaunchConfigurationHandlesLaunchProfile ||
+                ordinaryAppHostArgumentCount == 0)
             {
-                // When the .NET project is launched from an IDE the launch profile args are automatically added.
-                // We still want to display the args in the dashboard so only add them to the custom arg annotations.
-                includeProfileArgsInSpec = spec.ExecutionType != ExecutionType.IDE;
+                includeProfileArgsInSpec =
+                    spec.ExecutionType == ExecutionType.Process ||
+                    !projectLaunchConfigurationHandlesLaunchProfile;
 
                 projectLaunchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
-                if (projectLaunchProfileArgs.Count > 0 && appHostArgList.Count > 0 && !hasLaunchToolArgsDeclaration)
+                if (projectLaunchProfileArgs.Count > 0 &&
+                    ordinaryAppHostArgumentCount > 0 &&
+                    launchToolArgumentCount == 0)
                 {
                     // The implicit `dotnet run` scaffold needs a double-dash before application arguments. A custom
                     // launch-tool declaration owns its complete invocation, including any separator its tool requires.
@@ -769,22 +818,57 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 }
             }
         }
-        else if (er.ModelResource is DotnetToolResource)
+        else if (er.ModelResource is DotnetToolResource dotnetToolResource)
         {
-            // Dotnet tools compose args as `tool exec <package> ... -- <app args>`. Keep hiding the invocation
-            // through `--`, but let the shared loop below apply launch-tool omission and visibility. A launch-tool
-            // prefix can have its own separator, so search only the ordinary argument segment for this boundary.
-            var argSeparatorIndex = appHostArgList.FindIndex(
-                launchToolArgumentCount,
-                static a => a.Value == DotnetToolResourceExtensions.ArgumentSeparator);
+            // AddDotnetTool contributes `tool exec <package> ... --` through the ordinary argument segment because
+            // its separate EF command executor replays those callbacks directly. A resolved launch-tool prefix
+            // replaces that built-in invocation for DCP execution; otherwise keep hiding it from the dashboard.
+            var toolConfiguration = dotnetToolResource.ToolConfiguration;
+            var builtInInvocationStartIndex = -1;
+            if (toolConfiguration is not null)
+            {
+                for (var i = launchToolArgumentCount; i <= appHostArgList.Count - 5; i++)
+                {
+                    if (appHostArgList[i].Value == "tool" &&
+                        appHostArgList[i + 1].Value == "exec" &&
+                        appHostArgList[i + 2].Value == toolConfiguration.PackageId)
+                    {
+                        builtInInvocationStartIndex = i;
+                        break;
+                    }
+                }
+            }
 
-            firstVisibleAppHostArgumentIndex = argSeparatorIndex + 1;
+            var builtInInvocationEndIndex = -1;
+            if (builtInInvocationStartIndex >= 0)
+            {
+                for (var i = builtInInvocationStartIndex + 4; i < appHostArgList.Count; i++)
+                {
+                    if (appHostArgList[i].Value == DotnetToolResourceExtensions.ArgumentSeparator &&
+                        appHostArgList[i - 1].Value == "--yes")
+                    {
+                        builtInInvocationEndIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (launchToolArgumentCount > 0 && builtInInvocationEndIndex >= 0)
+            {
+                appHostArgList.RemoveRange(
+                    builtInInvocationStartIndex,
+                    builtInInvocationEndIndex - builtInInvocationStartIndex + 1);
+            }
+            else if (builtInInvocationEndIndex >= 0)
+            {
+                firstVisibleAppHostArgumentIndex = builtInInvocationEndIndex + 1;
+            }
         }
 
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
         // the implicit `dotnet run` scaffold, keep its prefix first and insert profile arguments before ordinary
         // app-host arguments. Without such a declaration, preserve the existing profile-before-app-host ordering.
-        var projectLaunchProfileArgumentInsertIndex = hasLaunchToolArgsDeclaration
+        var projectLaunchProfileArgumentInsertIndex = launchToolArgumentCount > 0
             ? Math.Min(launchToolArgumentCount, appHostArgList.Count)
             : 0;
 
@@ -840,17 +924,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         List<LaunchArgument>? launchProfileArgs = null;
-        if (runIndex > 0 &&
-            launchArgs[0].Executable &&
-            string.Equals(launchArgs[0].Value, "--", StringComparison.Ordinal))
+        var firstExecutableArgumentIndex = launchArgs.FindIndex(static argument => argument.Executable);
+        if (firstExecutableArgumentIndex >= 0 &&
+            runIndex > firstExecutableArgumentIndex &&
+            string.Equals(launchArgs[firstExecutableArgumentIndex].Value, "--", StringComparison.Ordinal))
         {
-            // Process execution passes project launch-profile args before "dotnet run", separated by "--".
-            // IDE execution already owns the launch profile via ProjectLaunchConfiguration, so keep those
-            // values out of the executable argument list while we insert the AppHost configuration flags
-            // immediately after "dotnet run".
-            launchProfileArgs = launchArgs.GetRange(0, runIndex);
-            launchArgs.RemoveRange(0, runIndex);
-            runIndex = 0;
+            // Executable launch-profile args were composed before the caller-provided `dotnet run` command.
+            // Preserve any non-executable launch-tool display prefix, then move the profile segment after
+            // `dotnet run` so the SDK parses it as application arguments.
+            var launchProfileArgumentCount = runIndex - firstExecutableArgumentIndex;
+            launchProfileArgs = launchArgs.GetRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
+            launchArgs.RemoveRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
+            runIndex -= launchProfileArgumentCount;
         }
 
         var argsToInsert = new List<string>();
@@ -913,11 +998,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 #pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         return resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _);
 #pragma warning restore ASPIREPROJECTS001
-    }
-
-    private static bool HasLaunchToolArgsDeclaration(IResource resource)
-    {
-        return resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out _);
     }
 
     private static void ReindexExecutableLaunchArgs(List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
