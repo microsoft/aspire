@@ -282,15 +282,30 @@ public static class MongoDBBuilderExtensions
     /// secrets store, so it remains stable across runs (required for persistent containers — changing file
     /// content would force container recreation).
     /// </para>
+    /// <para>
+    /// This method is only supported when running the AppHost (F5/<c>aspire run</c>). The manifest publisher
+    /// serializes the <c>--keyFile</c> argument without invoking the container file callback that writes the
+    /// keyfile, so publishing would produce a container that references a keyfile that never gets created.
+    /// </para>
     /// </remarks>
     /// <param name="builder">The resource builder.</param>
     /// <param name="replicaSetName">The name of the replica set. Defaults to <c>rs0</c>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the MongoDB container to start as a single-node replica set")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="NotSupportedException">Thrown if called while publishing.</exception>
+    [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string replicaSetName = "rs0")
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(replicaSetName);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            // The manifest publisher serializes resource args as-is but never invokes ContainerFileSystemCallbackAnnotation
+            // callbacks, so the keyfile this method writes via WithContainerFiles would never be materialized in a
+            // published container. Fail fast instead of emitting a manifest/container that can't start MongoDB.
+            throw new NotSupportedException($"{nameof(WithReplicaSet)} is only supported when running the AppHost and is not supported when publishing.");
+        }
 
         if (builder.Resource.ReplicaSetName is not null)
         {

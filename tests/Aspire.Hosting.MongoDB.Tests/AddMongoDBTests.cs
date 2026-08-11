@@ -264,6 +264,15 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithReplicaSetThrowsInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var mongo = builder.AddMongoDB("mongodb");
+
+        Assert.Throws<NotSupportedException>(() => mongo.WithReplicaSet());
+    }
+
+    [Fact]
     public async Task WithReplicaSetAddsCorrectContainerArgs()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -297,7 +306,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
             .Single(a => a.DestinationPath == "/tmp");
 
         var entries1 = await annotation.Callback(
-            new() { Model = mongo.Resource, ServiceProvider = app.Services },
+            new() { Model = mongo.Resource, Services = app.Services },
             CancellationToken.None);
         var keyfile1 = Assert.IsType<ContainerFile>(Assert.Single(entries1));
 
@@ -305,7 +314,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
         // value is generated lazily and cached on the ParameterResource for the lifetime of the AppHost,
         // and is persisted to user secrets so it stays stable across runs as well.
         var entries2 = await annotation.Callback(
-            new() { Model = mongo.Resource, ServiceProvider = app.Services },
+            new() { Model = mongo.Resource, Services = app.Services },
             CancellationToken.None);
         var keyfile2 = Assert.IsType<ContainerFile>(Assert.Single(entries2));
 
