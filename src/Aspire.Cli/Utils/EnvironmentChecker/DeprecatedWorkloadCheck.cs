@@ -18,6 +18,13 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
     internal const string CheckName = "aspire-workload";
 
     private static readonly TimeSpan s_processTimeout = TimeSpan.FromSeconds(10);
+    private readonly Func<ProcessStartInfo, Process?> _startProcess = Process.Start;
+
+    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, Func<ProcessStartInfo, Process?> startProcess)
+        : this(logger)
+    {
+        _startProcess = startProcess;
+    }
 
     public int Order => 32; // After SDK check (30), before dev certs (35)
 
@@ -27,7 +34,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
         {
             var processInfo = new ProcessStartInfo
             {
-                FileName = "dotnet",
+                FileName = PathLookupHelper.ResolveExecutablePath("dotnet"),
                 Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -35,7 +42,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(processInfo);
+            using var process = _startProcess(processInfo);
             if (process is null)
             {
                 logger.LogDebug("Failed to start dotnet workload list process");

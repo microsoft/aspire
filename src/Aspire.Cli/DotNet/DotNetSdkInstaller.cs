@@ -13,9 +13,9 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNetSdkInstaller
 {
-    private readonly Func<string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
+    private readonly Func<string, string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
 
-    internal DotNetSdkInstaller(IConfiguration configuration, Func<string, ProcessStartInfo> createProcessStartInfo)
+    internal DotNetSdkInstaller(IConfiguration configuration, Func<string, string, ProcessStartInfo> createProcessStartInfo)
         : this(configuration)
     {
         _createProcessStartInfo = createProcessStartInfo;
@@ -36,8 +36,9 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
+            var dotnetPath = PathLookupHelper.ResolveExecutablePath("dotnet");
 
-            using var process = new Process { StartInfo = _createProcessStartInfo(arguments) };
+            using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
             process.Start();
             var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -118,11 +119,11 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
         }
     }
 
-    private static ProcessStartInfo CreateProcessStartInfo(string arguments)
+    private static ProcessStartInfo CreateProcessStartInfo(string dotnetPath, string arguments)
     {
         return new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = dotnetPath,
             Arguments = arguments,
             UseShellExecute = false,
             RedirectStandardOutput = true,
