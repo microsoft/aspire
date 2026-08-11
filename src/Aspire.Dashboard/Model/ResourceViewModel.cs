@@ -22,6 +22,7 @@ public sealed class ResourceViewModel
     private readonly ImmutableArray<HealthReportViewModel> _healthReports = [];
     private readonly KnownResourceState? _knownState;
     private Lazy<ImmutableArray<string>>? _cachedAddresses;
+    private Lazy<string?>? _cachedDatabaseName;
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
@@ -59,6 +60,9 @@ public sealed class ResourceViewModel
     /// </summary>
     public ImmutableArray<string> CachedAddresses => (_cachedAddresses ??= new Lazy<ImmutableArray<string>>(ExtractResourceAddresses)).Value;
 
+    /// <summary>Gets the database name parsed from the resource connection string.</summary>
+    internal string? CachedDatabaseName => (_cachedDatabaseName ??= new Lazy<string?>(ExtractDatabaseName)).Value;
+
     private ImmutableArray<string> ExtractResourceAddresses()
     {
         var addresses = new List<string>();
@@ -89,6 +93,18 @@ public sealed class ResourceViewModel
         }
 
         return addresses.ToImmutableArray();
+    }
+
+    private string? ExtractDatabaseName()
+    {
+        if (Properties.TryGetValue(KnownProperties.Resource.ConnectionString, out var connectionStringProperty) &&
+            connectionStringProperty.Value.TryConvertToString(out var connectionString) &&
+            ConnectionStringParser.TryDetectDatabaseName(connectionString, out var databaseName))
+        {
+            return databaseName;
+        }
+
+        return null;
     }
 
     public required ImmutableArray<HealthReportViewModel> HealthReports

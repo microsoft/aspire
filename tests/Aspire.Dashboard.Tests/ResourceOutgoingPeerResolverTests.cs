@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
@@ -121,6 +122,51 @@ public class ResourceOutgoingPeerResolverTests
         // Act & Assert
         Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "5000")], out var value));
         Assert.Equal("test", value);
+    }
+
+    [Theory]
+    [InlineData("db.namespace", "catalogdb")]
+    [InlineData("db.name", "CATALOGDB")]
+    public void DatabaseAttributeMatchesDatabaseResourceOverContainerResource(string databaseAttribute, string databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create(databaseAttribute, databaseName)
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchDatabaseResource_MatchesContainerResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres")
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("postgres", value);
     }
 
     [Fact]
@@ -326,7 +372,7 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("key-vault", value);
     }
 
-    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString)
+    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -342,7 +388,9 @@ public class ResourceOutgoingPeerResolverTests
 
         return ModelTestHelpers.CreateResource(
             resourceName: name,
-            resourceType: KnownResourceTypes.ConnectionString,
+            displayName: displayName,
+            resourceType: resourceType,
+            relationships: relationships,
             properties: properties);
     }
 

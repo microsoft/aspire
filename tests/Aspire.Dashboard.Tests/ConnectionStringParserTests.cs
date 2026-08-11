@@ -119,6 +119,20 @@ public class ConnectionStringParserTests
         }
     }
 
+    [Theory]
+    [InlineData("Host=localhost;Port=5432;Database=catalogdb", true, "catalogdb")]
+    [InlineData("Data Source=localhost;Initial Catalog=Catalog", true, "Catalog")]
+    [InlineData("Server=localhost;Database Name=Catalog", true, "Catalog")]
+    [InlineData("jdbc:sqlserver://localhost:1433;databaseName=Catalog", true, "Catalog")]
+    [InlineData("Host=localhost;Port=5432", false, null)]
+    public void TryDetectDatabaseName_VariousFormats_ReturnsExpectedResults(string connectionString, bool expectedResult, string? expectedDatabaseName)
+    {
+        var result = ConnectionStringParser.TryDetectDatabaseName(connectionString, out var databaseName);
+
+        Assert.Equal(expectedResult, result);
+        Assert.Equal(expectedDatabaseName, databaseName);
+    }
+
     [Fact]
     public void TryDetectHostAndPort_IPv6URI_ReturnsCorrectHost()
     {

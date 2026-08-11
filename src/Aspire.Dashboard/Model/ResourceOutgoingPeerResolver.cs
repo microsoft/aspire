@@ -13,6 +13,11 @@ namespace Aspire.Dashboard.Model;
 
 public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver, IAsyncDisposable
 {
+    // db.name was renamed to db.namespace in the stable OpenTelemetry database semantic conventions.
+    // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+    private const string DatabaseNamespaceAttribute = "db.namespace";
+    private const string DatabaseNameAttribute = "db.name";
+
     // Some libraries use "127.0.0.1" instead of "localhost".
     // Also handle container to host addresses.
     [GeneratedRegex(@"^(?:127\.0\.0\.1|host\.docker\.internal|host\.containers\.internal):", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -158,11 +163,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         var address = OtlpHelpers.GetPeerAddress(attributes);
         if (address != null)
         {
+            var databaseName = attributes.GetValueWithFallback(DatabaseNamespaceAttribute, DatabaseNameAttribute);
+
             // Apply transformers to the peer address cumulatively
             var transformedAddress = address;
 
             // First check exact match
-            if (TryMatchAgainstResources(transformedAddress, resources, out name, out resourceMatch))
+            if (TryMatchAgainstResources(transformedAddress, databaseName, resources, out name, out resourceMatch))
             {
                 return true;
             }
@@ -171,7 +178,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             foreach (var transformer in s_addressTransformers)
             {
                 transformedAddress = transformer(transformedAddress);
-                if (TryMatchAgainstResources(transformedAddress, resources, out name, out resourceMatch))
+                if (TryMatchAgainstResources(transformedAddress, databaseName, resources, out name, out resourceMatch))
                 {
                     return true;
                 }
@@ -186,26 +193,46 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     /// <summary>
     /// Checks if a transformed peer address matches any of the resource addresses using their cached addresses.
     /// Applies the same transformations to resource addresses for consistent matching.
-    /// Returns true and outputs the first matching resource if a match is found; otherwise, returns false.
+    /// Prefers a resource whose database matches the telemetry, then a database server resource, then the first address match.
     /// </summary>
-    private static bool TryMatchAgainstResources(string peerAddress, IDictionary<string, ResourceViewModel> resources, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
+    private static bool TryMatchAgainstResources(string peerAddress, string? databaseName, IDictionary<string, ResourceViewModel> resources, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
     {
+        ResourceViewModel? firstMatch = null;
+        ResourceViewModel? serverMatch = null;
+        var hasDatabaseResourceMatch = false;
+
         foreach (var (_, resource) in resources)
         {
             foreach (var resourceAddress in resource.CachedAddresses)
             {
                 if (DoesAddressMatch(resourceAddress, peerAddress))
                 {
-                    name = ResourceViewModel.GetResourceName(resource, resources);
-                    resourceMatch = resource;
-                    return true;
+                    firstMatch ??= resource;
+
+                    if (resource.CachedDatabaseName is { } resourceDatabaseName)
+                    {
+                        hasDatabaseResourceMatch = true;
+
+                        if (databaseName is not null && string.Equals(resourceDatabaseName, databaseName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            name = ResourceViewModel.GetResourceName(resource, resources);
+                            resourceMatch = resource;
+                            return true;
+                        }
+                    }
+                    else if (resource.Properties.ContainsKey(KnownProperties.Resource.ConnectionString))
+                    {
+                        serverMatch ??= resource;
+                    }
+
+                    break;
                 }
             }
         }
 
-        name = null;
-        resourceMatch = null;
-        return false;
+        resourceMatch = hasDatabaseResourceMatch ? serverMatch ?? firstMatch : firstMatch;
+        name = resourceMatch is not null ? ResourceViewModel.GetResourceName(resourceMatch, resources) : null;
+        return resourceMatch is not null;
     }
 
     private static bool DoesAddressMatch(string endpoint, string value)
