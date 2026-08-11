@@ -214,16 +214,20 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var call = Assert.Single(launcher.Calls);
         Assert.Equal("node", call.Command);
         Assert.Equal([expectedCompiledPath], call.Args);
+        Assert.Equal(
+            """{"type":"module"}""",
+            File.ReadAllText(Path.Combine(directory.FullName, "node_modules/.tmp/aspire-apphost/package.json")).Trim());
     }
 
     [Fact]
     public async Task RunAsync_NoBuildSkipsTypeScriptBuildAndRunsCompiledAppHost()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var spec = CreateTypeScriptRuntimeSpec();
         var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
-        var appHostFile = new FileInfo("/tmp/apphost.ts");
-        var directory = new DirectoryInfo("/tmp");
+        var directory = workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         var (exitCode, _) = await runtime.RunAsync(
             appHostFile,
@@ -371,6 +375,68 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_WhenPreExecuteFails_DeletesCompiledOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot;
+        var staleOutputDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "node_modules", ".tmp", "aspire-apphost"));
+        // Simulate a build output file left behind by an earlier, successful compile - this is the
+        // stale-but-runnable file the fix must remove once a later compile attempt fails.
+        var staleOutputFile = Path.Combine(staleOutputDirectory.FullName, "apphost.js");
+        File.WriteAllText(staleOutputFile, "console.log('stale');");
+
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{compiledAppHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "typecheck-cmd",
+                    Args = ["--noEmitOnError"]
+                }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        launcher.ExitCodes.Enqueue(2);
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(2, exitCode);
+        Assert.False(Directory.Exists(staleOutputDirectory.FullName));
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenPreExecuteSucceeds_PreservesCompiledOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot;
+        var outputDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "node_modules", ".tmp", "aspire-apphost"));
+        var outputFile = Path.Combine(outputDirectory.FullName, "apphost.js");
+        File.WriteAllText(outputFile, "console.log('fresh');");
+
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{compiledAppHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "typecheck-cmd",
+                    Args = ["--noEmitOnError"]
+                }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        // A successful pre-execute run must never trigger cleanup - only the failure path should.
+        Assert.True(File.Exists(outputFile));
+    }
+
+    [Fact]
     public async Task RunAsync_WhenExecuteCommandCannotResolve_DoesNotCallAfterAppHostLaunched()
     {
         var spec = CreateTestSpec(execute: new CommandSpec { Command = "missing-cmd", Args = ["{appHostFile}"] });
@@ -490,11 +556,12 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_NoBuildSkipsTypeScriptBuildAndRunsCompiledAppHost()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var spec = CreateTypeScriptRuntimeSpec();
         var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
-        var appHostFile = new FileInfo("/tmp/apphost.ts");
-        var directory = new DirectoryInfo("/tmp");
+        var directory = workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         var (exitCode, _) = await runtime.PublishAsync(
             appHostFile,

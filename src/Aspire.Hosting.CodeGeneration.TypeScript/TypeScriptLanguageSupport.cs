@@ -147,12 +147,11 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
-        // Manual builds share the same emit-on-error and TS5096 exposure as the CLI's own compile step
-        // (see TypeScriptAppHostToolchainResolver.CreateBuildCommandArgs): --noEmitOnError keeps a failed
-        // `npm run build` from leaving stale output for a later `aspire run --no-build` to execute.
-        // --rewriteRelativeImportExtensions supports tsconfig files that allow .ts imports, while the
-        // source-map flags ensure breakpoints bind even when an existing tsconfig isn't migrated.
-        scripts["aspire:build"] = $"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}";
+        // --noEmitOnError doesn't remove output from an earlier successful build, so the one-shot build
+        // script deletes stale output on failure. The watch-only script never executes its output;
+        // Aspire's run watch path uses one-shot builds with the same cleanup on every cycle.
+        scripts["aspire:build"] = TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(
+            $"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}");
         scripts["aspire:dev"] = $"tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}";
 
         if (!hasExistingPackageJson)
@@ -293,8 +292,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                         "--outDir", AppHostBuildOutputDirectory,
                         "--rootDir", ".",
                         // Command-line compiler options always win over tsconfig.json, so this
-                        // unconditionally forces emit. --noEmitOnError keeps a failed typecheck from
-                        // leaving a stale-but-runnable compiled AppHost behind. The remaining flags
+                        // unconditionally forces emit. GuestRuntime deletes stale output from an
+                        // earlier successful build if this compilation fails. The remaining flags
                         // support .ts imports and debugging even when an existing tsconfig isn't migrated.
                         "--noEmit", "false",
                         "--noEmitOnError",
@@ -321,7 +320,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".aspire/modules/",
-                    "--exec", $"npx --no-install tsc --incremental --tsBuildInfoFile {AppHostBuildTsBuildInfoFileName} --outDir {AppHostBuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName} && node \"{{compiledAppHostFile}}\""
+                    "--exec", TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(
+                        $"npx --no-install tsc --incremental --tsBuildInfoFile {AppHostBuildTsBuildInfoFileName} --outDir {AppHostBuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}") + $" && node \"{{compiledAppHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

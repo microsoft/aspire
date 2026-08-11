@@ -11,6 +11,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 {
     private readonly TypeScriptLanguageSupport _languageSupport = new();
 
+    // Keep in sync with TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure: appended to a tsc
+    // invocation so a failing compile deletes stale output from an earlier, successful compile.
+    private const string CleanupOnFailureSuffix = " || node -e \"process.exitCode=1;require('fs').rmSync('./node_modules/.tmp/aspire-apphost',{recursive:true,force:true})\"";
+
     [Fact]
     public void Scaffold_CreatesAppHostSpecificScriptsAndTsConfig_ForNewProject()
     {
@@ -36,7 +40,7 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.True(packageJson["private"]?.GetValue<bool>());
         Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal($"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix}", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
@@ -61,6 +65,7 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./node_modules/.tmp/aspire-apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
+        Assert.Equal(["node"], tsConfig["compilerOptions"]?["types"]?.AsArray().Select(node => node?.GetValue<string>()));
         Assert.Contains("apphost.ts", tsConfig["include"]!.AsArray().Select(node => node?.GetValue<string>()));
     }
 
@@ -109,7 +114,7 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         // Scaffold should only contain Aspire-desired scripts
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal($"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix}", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.False(scripts.ContainsKey("dev"));
@@ -276,7 +281,7 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("node", runtimeSpec.Execute.Command);
         Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Contains(
-            "npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && node \"{compiledAppHostFile}\"",
+            $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix} && node \"{{compiledAppHostFile}}\"",
             watchExecute.Args);
     }
 

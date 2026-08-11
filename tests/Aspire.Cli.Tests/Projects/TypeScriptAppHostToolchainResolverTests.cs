@@ -14,6 +14,12 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     private const string BuildOutputDirectory = "./node_modules/.tmp/aspire-apphost";
     private const string BuildTsBuildInfoFileName = "./node_modules/.tmp/aspire-apphost.tsbuildinfo";
 
+    // Matches Aspire.Shared.TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure: `--noEmitOnError`
+    // only blocks output from a failing compile, it doesn't remove output an earlier, successful
+    // compile left behind, so a shell `||` fallback deletes the stale directory when tsc fails.
+    private const string CleanupOnFailureSuffix =
+        " || node -e \"process.exitCode=1;require('fs').rmSync('" + BuildOutputDirectory + "',{recursive:true,force:true})\"";
+
     [Fact]
     public void Resolve_WhenPackageManagerIsBun_ReturnsBun()
     {
@@ -430,7 +436,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "--ext", "ts,mts",
                 "--ignore", "node_modules/",
                 "--ignore", ".aspire/modules/",
-                "--exec", $"bun run tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && bun run \"{{compiledAppHostFile}}\""
+                "--exec", $"bun run tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix} && bun run \"{{compiledAppHostFile}}\""
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node-compiled-apphost.v1", runtimeSpec.ExtensionLaunchCapability);
@@ -450,10 +456,18 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(
             ["run", "tsc", "--incremental", "--tsBuildInfoFile", BuildTsBuildInfoFileName, "--outDir", BuildOutputDirectory, "--rootDir", ".", "--noEmit", "false", "--noEmitOnError", "--rewriteRelativeImportExtensions", "--sourceMap", "--inlineSources", "-p", "tsconfig.apphost.json"],
             preExecute.Args);
-        Assert.Equal("node", runtimeSpec.Execute.Command);
-        Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
+        // Yarn 4 defaults to the Plug'n'Play linker, which plain `node` cannot resolve dependencies
+        // under. Route the compiled AppHost through `yarn node` so it gets the same `.pnp.cjs`/
+        // `.pnp.loader.mjs` hooks Yarn's own commands rely on.
+        Assert.Equal("yarn", runtimeSpec.Execute.Command);
+        Assert.Equal(["node", "{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("yarn", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains($"yarn run tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        // Assert on the run half of the composite nodemon --exec string only (not the full string,
+        // which also embeds the build command and is independently covered by other assertions/tests):
+        // the compiled AppHost must launch via `yarn node`, matching the non-watch Execute command.
+        var watchExecString = Assert.Single(runtimeSpec.WatchExecute?.Args ?? [], arg => arg.Contains("tsc", StringComparison.Ordinal));
+        Assert.EndsWith("&& yarn node \"{compiledAppHostFile}\"", watchExecString);
+        Assert.Contains(CleanupOnFailureSuffix, watchExecString);
     }
 
     [Fact]
@@ -476,7 +490,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal("node", runtimeSpec.Execute.Command);
         Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains($"pnpm exec tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains($"pnpm exec tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix} && node \"{{compiledAppHostFile}}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     [Fact]
@@ -497,7 +511,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["{compiledAppHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("npx", runtimeSpec.WatchExecute?.Command);
         Assert.Contains(
-            $"npx --no-install tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\"",
+            $"npx --no-install tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json{CleanupOnFailureSuffix} && node \"{{compiledAppHostFile}}\"",
             runtimeSpec.WatchExecute?.Args ?? []);
     }
 

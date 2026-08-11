@@ -241,6 +241,80 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task YarnPnpRunsNativeAppHostTs()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(
+            repoRoot,
+            strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync(
+            "export YARN_NPM_REGISTRY_SERVER=https://packagefeedproxy.microsoft.io/npm/",
+            counter);
+
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        var appHostMtsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        var appHostTsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.Move(appHostMtsPath, appHostTsPath);
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(aspireConfigPath))!.AsObject();
+        aspireConfig["appHost"]!["path"] = "apphost.ts";
+        File.WriteAllText(aspireConfigPath, $"{aspireConfig.ToJsonString(new JsonSerializerOptions { WriteIndented = true })}{Environment.NewLine}");
+
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(
+            workspace.WorkspaceRoot.FullName,
+            "yarn",
+            cleanInstallState: true,
+            useYarnNodeModulesLinker: false);
+
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".yarnrc.yml")));
+
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
+
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".pnp.cjs")));
+        Assert.Equal(
+            """{"type":"module"}""",
+            File.ReadAllText(Path.Combine(
+                workspace.WorkspaceRoot.FullName,
+                "node_modules",
+                ".tmp",
+                "aspire-apphost",
+                "package.json")).Trim());
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
     [Theory]
     [MemberData(nameof(SupportedToolchains))]
     [CaptureWorkspaceOnFailure]

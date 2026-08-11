@@ -5,8 +5,8 @@
   "scripts": {
     "aspire:lint": "eslint apphost.mts",
     "aspire:start": "aspire run",
-    "aspire:build": "tsc --noEmitOnError --rewriteRelativeImportExtensions -p tsconfig.apphost.json",
-    "aspire:dev": "tsc --watch --noEmitOnError --rewriteRelativeImportExtensions -p tsconfig.apphost.json",
+    "aspire:build": "tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json || node -e \"process.exitCode=1;require('fs').rmSync('./node_modules/.tmp/aspire-apphost',{recursive:true,force:true})\"",
+    "aspire:dev": "tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p tsconfig.apphost.json",
     "lint": "npm run aspire:lint",
     "predev": "npm run aspire:lint",
     "dev": "npm run aspire:start",

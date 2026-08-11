@@ -180,9 +180,16 @@ internal sealed class GuestRuntime
             : _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        EnsureCompiledOutputModuleTypeMarker(appHostFile, commandSpec.Args);
         if (!useWatchCommand && !noBuild)
         {
-            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            var preExecuteResult = await RunPreExecuteCommandsAsync(
+                appHostFile,
+                directory,
+                environmentVariables,
+                launcher,
+                ReferencesCompiledAppHost(commandSpec.Args),
+                cancellationToken);
             if (preExecuteResult.ExitCode != 0)
             {
                 return preExecuteResult;
@@ -220,9 +227,16 @@ internal sealed class GuestRuntime
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        EnsureCompiledOutputModuleTypeMarker(appHostFile, commandSpec.Args);
         if (!noBuild)
         {
-            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            var preExecuteResult = await RunPreExecuteCommandsAsync(
+                appHostFile,
+                directory,
+                environmentVariables,
+                launcher,
+                ReferencesCompiledAppHost(commandSpec.Args),
+                cancellationToken);
             if (preExecuteResult.ExitCode != 0)
             {
                 return preExecuteResult;
@@ -240,6 +254,7 @@ internal sealed class GuestRuntime
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         IGuestProcessLauncher launcher,
+        bool deleteCompiledOutputOnFailure,
         CancellationToken cancellationToken)
     {
         if (_spec.PreExecute is null or { Length: 0 })
@@ -260,11 +275,35 @@ internal sealed class GuestRuntime
             if (exitCode != 0)
             {
                 activity.SetError($"{_spec.DisplayName} pre-execution exited with code {exitCode}.");
+                if (deleteCompiledOutputOnFailure)
+                {
+                    DeleteCompiledOutput(directory);
+                }
                 return (exitCode, output ?? new OutputCollector());
             }
         }
 
         return (0, new OutputCollector());
+    }
+
+    /// <summary>
+    /// Deletes compiled AppHost output after a failed pre-execute command so a later
+    /// <c>aspire run --no-build</c> cannot execute output from an earlier successful build.
+    /// </summary>
+    private void DeleteCompiledOutput(DirectoryInfo directory)
+    {
+        var outputDirectory = Path.Combine(directory.FullName, CompiledAppHostOutputDirectory);
+        try
+        {
+            if (Directory.Exists(outputDirectory))
+            {
+                Directory.Delete(outputDirectory, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to remove stale build output at {Path} after a failed pre-execute command.", outputDirectory);
+        }
     }
 
     private async Task<(int ExitCode, OutputCollector? Output)> ExecuteCommandAsync(
@@ -332,6 +371,37 @@ internal sealed class GuestRuntime
             }
         }
     }
+
+    /// <summary>
+    /// Ensures the native TypeScript compiler's output directory declares itself as an ESM package
+    /// before the compiled AppHost is executed.
+    /// </summary>
+    /// <remarks>
+    /// Node determines a bare <c>.js</c> file's module format from the nearest ancestor
+    /// <c>package.json</c>, but package-scope lookup stops at a <c>node_modules</c> boundary. Because
+    /// Aspire emits beneath <c>node_modules/.tmp</c>, the output cannot inherit the source package's
+    /// <c>"type": "module"</c> declaration. An explicit marker keeps emitted <c>.js</c> AppHosts in
+    /// ESM mode for every package manager.
+    /// </remarks>
+    private static void EnsureCompiledOutputModuleTypeMarker(FileInfo appHostFile, string[] commandArgs)
+    {
+        if (!ReferencesCompiledAppHost(commandArgs))
+        {
+            // This runtime's execute/watch command doesn't launch a compiled output file
+            // (e.g. the tsx-based transpile-in-place flow, or a non-TypeScript language), so there's
+            // no compiled output directory to annotate.
+            return;
+        }
+
+        var outputDirectory = Path.Combine(appHostFile.DirectoryName!, CompiledAppHostOutputDirectory);
+        Directory.CreateDirectory(outputDirectory);
+
+        var packageJsonPath = Path.Combine(outputDirectory, "package.json");
+        File.WriteAllText(packageJsonPath, """{"type":"module"}""" + Environment.NewLine);
+    }
+
+    private static bool ReferencesCompiledAppHost(string[] commandArgs) =>
+        commandArgs.Any(static arg => arg.Contains("{compiledAppHostFile}", StringComparison.Ordinal));
 
     /// <summary>
     /// Creates the default process-based launcher for this runtime.

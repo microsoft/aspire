@@ -256,9 +256,17 @@ internal static class TypeScriptAppHostToolchainResolver
             };
         }
 
-        return toolchain == TypeScriptAppHostToolchain.Bun
-            ? new CommandSpec { Command = "bun", Args = ["run", "{compiledAppHostFile}"] }
-            : new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] };
+        return toolchain switch
+        {
+            TypeScriptAppHostToolchain.Bun => new CommandSpec { Command = "bun", Args = ["run", "{compiledAppHostFile}"] },
+            // Yarn 4 defaults to the Plug'n'Play linker, which has no node_modules tree for plain `node`
+            // to resolve dependencies from. `yarn node` injects the `.pnp.cjs` require hook and the
+            // `.pnp.loader.mjs` ESM loader Yarn's own commands rely on, so the compiled AppHost can
+            // resolve its dependencies (e.g. vscode-jsonrpc) the same way under PnP as it does under the
+            // node-modules linker.
+            TypeScriptAppHostToolchain.Yarn => new CommandSpec { Command = "yarn", Args = ["node", "{compiledAppHostFile}"] },
+            _ => new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] }
+        };
     }
 
     private static CommandSpec CreateWatchCommand(
@@ -342,8 +350,10 @@ internal static class TypeScriptAppHostToolchainResolver
             "--outDir", BuildOutputDirectory,
             "--rootDir", ".",
             // Command-line compiler options always win over tsconfig.json, so this unconditionally forces
-            // emit. --noEmitOnError keeps a failed typecheck from leaving a stale-but-runnable compiled
-            // AppHost behind. --rewriteRelativeImportExtensions avoids TS5096 for tsconfigs that set
+            // emit. --noEmitOnError blocks new output from a failing compile but leaves output from
+            // an earlier successful compile. GuestRuntime deletes that output when this direct command
+            // fails; the watch command's shell fallback does the same for each nodemon cycle.
+            // --rewriteRelativeImportExtensions avoids TS5096 for tsconfigs that set
             // "allowImportingTsExtensions" (which otherwise requires "noEmit"); it's a no-op otherwise,
             // and is only reached once ApplyToRuntimeSpec has confirmed @typescript/native (TypeScript
             // >= 7.0.2) is in use, so it's always understood. See
@@ -365,7 +375,15 @@ internal static class TypeScriptAppHostToolchainResolver
         bool usesNativeTypeScriptCompiler)
     {
         var command = CreateBuildCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler);
-        return $"{command.Command} {string.Join(" ", command.Args)}";
+        var commandString = $"{command.Command} {string.Join(" ", command.Args)}";
+
+        // This string is embedded in nodemon's --exec argument, which nodemon runs through a shell,
+        // so (unlike CreateBuildCommand's CommandSpec above) it can use the shell "||" fallback to
+        // self-clean a stale compile. Each nodemon restart runs one one-shot tsc invocation that
+        // exits normally, so the fallback only fires for that cycle's own failure.
+        return usesNativeTypeScriptCompiler
+            ? TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(commandString)
+            : commandString;
     }
 
     private static string CreateRunCommandString(
@@ -375,9 +393,14 @@ internal static class TypeScriptAppHostToolchainResolver
     {
         if (usesNativeTypeScriptCompiler)
         {
-            return toolchain == TypeScriptAppHostToolchain.Bun
-                ? "bun run \"{compiledAppHostFile}\""
-                : "node \"{compiledAppHostFile}\"";
+            // Keep this in sync with CreateExecuteCommand: the watch command's nodemon --exec string
+            // must launch the compiled AppHost the same way the non-watch Execute command does.
+            return toolchain switch
+            {
+                TypeScriptAppHostToolchain.Bun => "bun run \"{compiledAppHostFile}\"",
+                TypeScriptAppHostToolchain.Yarn => "yarn node \"{compiledAppHostFile}\"",
+                _ => "node \"{compiledAppHostFile}\""
+            };
         }
 
         return toolchain switch

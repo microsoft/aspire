@@ -28,7 +28,15 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// <see langword="true"/> to remove prior package-manager lock files and <c>node_modules</c>
     /// so the selected toolchain can restore from a clean state.
     /// </param>
-    internal static void SetPackageManager(string projectRoot, string toolchain, bool cleanInstallState = false)
+    /// <param name="useYarnNodeModulesLinker">
+    /// <see langword="true"/> to configure Yarn's node-modules linker; <see langword="false"/> to
+    /// exercise Yarn's default Plug'n'Play linker.
+    /// </param>
+    internal static void SetPackageManager(
+        string projectRoot,
+        string toolchain,
+        bool cleanInstallState = false,
+        bool useYarnNodeModulesLinker = true)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectRoot);
         ArgumentException.ThrowIfNullOrEmpty(toolchain);
@@ -42,7 +50,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
         if (!cleanInstallState)
         {
-            ConfigureToolchainFiles(projectRoot, toolchain);
+            ConfigureToolchainFiles(projectRoot, toolchain, useYarnNodeModulesLinker);
             return;
         }
 
@@ -61,7 +69,22 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             Directory.Delete(nodeModulesPath, recursive: true);
         }
 
-        ConfigureToolchainFiles(projectRoot, toolchain);
+        foreach (var pnpFileName in new[] { ".pnp.cjs", ".pnp.loader.mjs" })
+        {
+            var pnpFilePath = Path.Combine(projectRoot, pnpFileName);
+            if (File.Exists(pnpFilePath))
+            {
+                File.Delete(pnpFilePath);
+            }
+        }
+
+        var yarnStatePath = Path.Combine(projectRoot, ".yarn");
+        if (Directory.Exists(yarnStatePath))
+        {
+            Directory.Delete(yarnStatePath, recursive: true);
+        }
+
+        ConfigureToolchainFiles(projectRoot, toolchain, useYarnNodeModulesLinker);
     }
 
     /// <summary>
@@ -152,10 +175,10 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
-    private static void ConfigureToolchainFiles(string projectRoot, string toolchain)
+    private static void ConfigureToolchainFiles(string projectRoot, string toolchain, bool useYarnNodeModulesLinker)
     {
         var yarnConfigPath = Path.Combine(projectRoot, YarnConfigurationFileName);
-        if (NormalizeToolchain(toolchain) == "yarn")
+        if (NormalizeToolchain(toolchain) == "yarn" && useYarnNodeModulesLinker)
         {
             // Yarn 4 defaults to Plug'n'Play, but the generated AppHost/Vite workflows exercised
             // here expect node_modules resolution across tsx, nodemon, and Vite.
