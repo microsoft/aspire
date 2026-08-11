@@ -426,6 +426,123 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.assert.calledOnceWithExactly(process.kill as sinon.SinonStub, 4242);
     });
 
+    test('reports task exit, worker disappearance, and explicit stop through DCP', async () => {
+        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+        const buildOutputPath = path.dirname(targetPath);
+        const taskExitExecution = createFuncTaskExecution(buildOutputPath);
+        const explicitStopExecution = createFuncTaskExecution(buildOutputPath);
+        const taskEvents = stubFuncTaskEvents();
+        const processKill = process.kill as sinon.SinonStub;
+        const missingProcessError = Object.assign(new Error('Process not found'), { code: 'ESRCH' });
+        const startFuncProcess = sinon.stub();
+        const sendNotification = sinon.stub();
+        const aspireDebugSession = createAspireDebugSession(sendNotification);
+        const runIds = {
+            taskExit: 'task-exit-run',
+            workerDisappeared: 'worker-disappeared-run',
+            explicitStop: 'explicit-stop-run',
+        };
+
+        startFuncProcess.onCall(0).callsFake(async () => {
+            taskEvents.start(taskExitExecution);
+            return { success: true, processId: '4242' };
+        });
+        startFuncProcess.onCall(1).resolves({ success: true, processId: '4243' });
+        startFuncProcess.onCall(2).callsFake(async () => {
+            taskEvents.start(explicitStopExecution);
+            return { success: true, processId: '4244' };
+        });
+        processKill.withArgs(4243, 0).throws(missingProcessError);
+        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        stubActiveTaskExecutions();
+        installAzureFunctionsExtensionStub(createAzureFunctionsApi(startFuncProcess));
+
+        const startAndTrack = async (runId: string) => {
+            const launchOptions = createLaunchOptions(false, aspireDebugSession);
+            launchOptions.runId = runId;
+            const preparedSession = await prepareDebugSession(
+                { type: 'aspire', request: 'launch', name: 'Aspire', program: '' },
+                createLaunchConfiguration(projectPath),
+                [],
+                [],
+                launchOptions,
+                azureFunctionsDebuggerExtension);
+
+            assert.ok(preparedSession.alreadyStartedSession);
+            const trackedSession = aspireDebugSession.trackAlreadyStartedResourceSession(
+                preparedSession.debugConfiguration,
+                preparedSession.alreadyStartedSession);
+            assert.ok(trackedSession);
+
+            return preparedSession.alreadyStartedSession;
+        };
+
+        try {
+            const taskExitSession = await startAndTrack(runIds.taskExit);
+            taskEvents.end(taskExitExecution, 17);
+            assert.strictEqual(await taskExitSession.termination, 17);
+            await Promise.resolve();
+
+            const workerDisappearedSession = await startAndTrack(runIds.workerDisappeared);
+            assert.strictEqual(await workerDisappearedSession.termination, 0);
+            await Promise.resolve();
+
+            const explicitStopSession = await startAndTrack(runIds.explicitStop);
+            await explicitStopSession.stopSession();
+            assert.strictEqual(await explicitStopSession.termination, -1);
+            await Promise.resolve();
+
+            assert.deepStrictEqual(sendNotification.getCalls().map(call => call.args[0]), [
+                {
+                    notification_type: 'processRestarted',
+                    session_id: runIds.taskExit,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    pid: 4242,
+                },
+                {
+                    notification_type: 'sessionTerminated',
+                    session_id: runIds.taskExit,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    exit_code: 17,
+                },
+                {
+                    notification_type: 'processRestarted',
+                    session_id: runIds.workerDisappeared,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    pid: 4243,
+                },
+                {
+                    notification_type: 'sessionTerminated',
+                    session_id: runIds.workerDisappeared,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    exit_code: 0,
+                },
+                {
+                    notification_type: 'processRestarted',
+                    session_id: runIds.explicitStop,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    pid: 4244,
+                },
+                {
+                    notification_type: 'sessionTerminated',
+                    session_id: runIds.explicitStop,
+                    dcp_id: 'azure-functions-test-debug-session',
+                    exit_code: -1,
+                },
+            ]);
+            sinon.assert.notCalled(taskExitExecution.terminate as sinon.SinonStub);
+            sinon.assert.calledOnce(explicitStopExecution.terminate as sinon.SinonStub);
+            assert.deepStrictEqual(processKill.args, [[4243, 0], [4244]]);
+        } finally {
+            aspireDebugSession.dispose();
+            for (const runId of Object.values(runIds)) {
+                cleanupRun(runId);
+            }
+        }
+    });
+
     test('reports a func host exit that occurs before the startup API returns', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
@@ -730,7 +847,7 @@ function installAzureFunctionsExtensionStub(api: ReturnType<typeof createAzureFu
     });
 }
 
-function createAspireDebugSession(): AspireDebugSession {
+function createAspireDebugSession(sendNotification: sinon.SinonStub = sinon.stub()): AspireDebugSession {
     const parentDebugSession = {
         id: 'azure-functions-test-debug-session',
         type: 'aspire',
@@ -749,5 +866,5 @@ function createAspireDebugSession(): AspireDebugSession {
         isDebugConfigEnvironmentLoggingEnabled: () => false,
     };
 
-    return new AspireDebugSession(parentDebugSession, {} as any, { sendNotification: sinon.stub() } as any, terminalProvider as any, () => { });
+    return new AspireDebugSession(parentDebugSession, {} as any, { sendNotification } as any, terminalProvider as any, () => { });
 }

@@ -41,6 +41,7 @@ interface AzureFunctionsApiProvider {
 }
 
 type FuncHostTaskShell = 'cmd' | 'fish' | 'powershell' | 'posix';
+type FuncHostCompletionReason = 'taskExit' | 'workerDisappeared' | 'explicitStop';
 
 type TerminalProfileConfiguration = {
     path?: string | string[];
@@ -302,6 +303,10 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         const api = await getAzureFunctionsApi();
         extensionLogOutputChannel.info(`Got Azure Functions API (version ${api.apiVersion}), calling startFuncProcess`);
 
+        // The task supplies an exit status when it can be captured. The worker PID is used for
+        // debugger attach and emergency cleanup, with liveness polling as a fallback only when
+        // no task can be captured. cleanupRun owns teardown, and the termination promise below
+        // is the single handoff that reports completion through AspireDebugSession to DCP.
         let funcExecution: vscode.TaskExecution | undefined;
         let pendingFuncExitCode: number | undefined;
         let completeFuncSession: ((exitCode: number) => void) | undefined;
@@ -386,7 +391,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
                 completeSession = resolve;
             });
             let completed = false;
-            const complete = (exitCode: number, naturalExit = false): void => {
+            const complete = (reason: FuncHostCompletionReason, exitCode: number): void => {
                 if (completed) {
                     return;
                 }
@@ -394,7 +399,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
                 completed = true;
                 taskEndSubscription?.dispose();
                 processExitWatcher?.dispose();
-                if (naturalExit) {
+                if (reason !== 'explicitStop') {
                     // The task/worker has already exited. Removing both entries before
                     // cleanup prevents a recycled worker PID from receiving SIGTERM.
                     taskExecutionsByRunId.delete(runId);
@@ -403,12 +408,14 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
                 cleanupRun(runId);
                 completeSession(exitCode);
             };
-            completeFuncSession = exitCode => complete(exitCode, true);
+            completeFuncSession = exitCode => complete('taskExit', exitCode);
             if (pendingFuncExitCode !== undefined) {
-                complete(pendingFuncExitCode, true);
+                complete('taskExit', pendingFuncExitCode);
             } else if (!funcExecution) {
                 extensionLogOutputChannel.warn(`Did not capture a func host task for runId ${runId}; monitoring worker PID ${workerPidNumber} for termination.`);
-                processExitWatcher = watchWorkerProcessExit(workerPidNumber, () => complete(0, true));
+                // A signal-0 probe only reveals liveness, not the process exit status. Normalize
+                // an unobserved exit to 0, matching a VS Code task event without an exit code.
+                processExitWatcher = watchWorkerProcessExit(workerPidNumber, () => complete('workerDisappeared', 0));
             }
 
             return {
@@ -416,7 +423,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
                 processId: workerPidNumber,
                 session: { id: runId } as vscode.DebugSession,
                 stopSession: async () => {
-                    complete(-1);
+                    complete('explicitStop', -1);
                 },
                 termination
             };
