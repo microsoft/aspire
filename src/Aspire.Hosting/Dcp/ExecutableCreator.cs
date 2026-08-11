@@ -213,13 +213,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     private async Task PrepareProjectExecutablesAsync(CancellationToken cancellationToken)
     {
-        var modelProjectResources = _model.GetProjectResources();
-
-        foreach (var project in modelProjectResources)
+        foreach (var project in _model.GetProjectAnnotatedResources())
         {
             if (!project.TryGetProjectMetadata(out var projectMetadata))
             {
-                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata."); // Should never happen.
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required project metadata annotation, despite being returned from GetProjectAnnotatedResources().");
             }
 
             EnsureRequiredAnnotations(project);
@@ -412,18 +410,21 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     private void PreparePlainExecutables()
     {
-        var modelExecutableResources = _model.GetExecutableResources();
-
-        foreach (var executable in modelExecutableResources)
+        foreach (var executable in _model.GetExecutableAnnotatedResources())
         {
+            if (!executable.TryGetExecutableAnnotation(out var executableAnnotation))
+            {
+                throw new InvalidOperationException($"Executable resource '{executable.Name}' is missing required executable annotation, despite being returned from GetExecutableAnnotatedResources().");
+            }
+
             EnsureRequiredAnnotations(executable);
 
             var exeInstance = DcpExecutor.GetDcpInstance(executable, instanceIndex: 0);
-            var exePath = executable.Command;
+            var exePath = executableAnnotation.Command;
             var exe = Executable.Create(exeInstance.Name, exePath);
 
             // The working directory is always relative to the app host project directory (if it exists).
-            exe.Spec.WorkingDirectory = executable.WorkingDirectory;
+            exe.Spec.WorkingDirectory = executableAnnotation.WorkingDirectory;
             exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
             exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, executable.GetOtelServiceInstanceId(exeInstance));
             exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
@@ -648,7 +649,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // If the executable is a project then include any command line args from the launch profile.
-        if (!hasProjectLaunchArgsOverride && er.ModelResource is ProjectResource project)
+        if (!hasProjectLaunchArgsOverride && er.ModelResource.TryGetProjectAnnotation(out _))
         {
             // Args in the launch profile is used when:
             // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
@@ -659,7 +660,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // We still want to display the args in the dashboard so only add them to the custom arg annotations.
                 var executableArg = spec.ExecutionType != ExecutionType.IDE;
 
-                var launchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
+                LaunchProfile? launchProfile = er.ModelResource.GetEffectiveLaunchProfile()?.LaunchProfile;
+                var launchProfileArgs = GetLaunchProfileArgs(launchProfile);
                 if (launchProfileArgs.Count > 0 && appHostArgList.Count > 0)
                 {
                     // If there are app host args, add a double-dash to separate them from the launch args.
@@ -669,7 +671,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 launchArgs.AddRange(launchProfileArgs.Select(a => CreateLaunchArgument(a, isSensitive: false, executableArg, display: true)));
             }
         }
-        else if (er.ModelResource is DotnetToolResource)
+        else if (er.ModelResource.TryGetAnnotationsOfType<DotnetToolAnnotation>(out _))
         {
             var argSeparator = appHostArgList.Select((a, i) => (index: i, value: a.Value))
                 .FirstOrDefault(x => x.value == DotnetToolResourceExtensions.ArgumentSeparator);
