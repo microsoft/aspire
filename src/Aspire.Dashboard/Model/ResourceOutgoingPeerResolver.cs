@@ -163,14 +163,15 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         var address = OtlpHelpers.GetPeerAddress(attributes);
         if (address != null)
         {
-            var databaseName = attributes.GetValueWithFallback(DatabaseNamespaceAttribute, DatabaseNameAttribute);
+            var matchContext = new PeerMatchContext(resources, attributes.GetValueWithFallback(DatabaseNamespaceAttribute, DatabaseNameAttribute));
 
             // Apply transformers to the peer address cumulatively
             var transformedAddress = address;
 
             // First check exact match
-            if (TryMatchAgainstResources(transformedAddress, databaseName, resources, out name, out resourceMatch))
+            if (TryMatchAgainstResources(transformedAddress, matchContext, out resourceMatch))
             {
+                name = ResourceViewModel.GetResourceName(resourceMatch, resources);
                 return true;
             }
 
@@ -178,10 +179,18 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             foreach (var transformer in s_addressTransformers)
             {
                 transformedAddress = transformer(transformedAddress);
-                if (TryMatchAgainstResources(transformedAddress, databaseName, resources, out name, out resourceMatch))
+                if (TryMatchAgainstResources(transformedAddress, matchContext, out resourceMatch))
                 {
+                    name = ResourceViewModel.GetResourceName(resourceMatch, resources);
                     return true;
                 }
+            }
+
+            resourceMatch = matchContext.FallbackMatch;
+            if (resourceMatch is not null)
+            {
+                name = ResourceViewModel.GetResourceName(resourceMatch, resources);
+                return true;
             }
         }
 
@@ -193,36 +202,31 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     /// <summary>
     /// Checks if a transformed peer address matches any of the resource addresses using their cached addresses.
     /// Applies the same transformations to resource addresses for consistent matching.
-    /// Prefers a resource whose database matches the telemetry, then a database server resource, then the first resource with a different database, and finally the first address match.
+    /// Returns a resource whose database matches the telemetry and records lower-priority matches for fallback after all peer address transformations have been checked.
     /// </summary>
-    private static bool TryMatchAgainstResources(string peerAddress, string? databaseName, IDictionary<string, ResourceViewModel> resources, [NotNullWhen(true)] out string? name, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
+    private static bool TryMatchAgainstResources(string peerAddress, PeerMatchContext context, [NotNullWhen(true)] out ResourceViewModel? resourceMatch)
     {
-        ResourceViewModel? firstAddressMatch = null;
-        ResourceViewModel? firstServerMatch = null;
-        ResourceViewModel? firstDatabaseMatch = null;
-
-        foreach (var (_, resource) in resources)
+        foreach (var (_, resource) in context.Resources)
         {
             foreach (var resourceAddress in resource.CachedAddresses)
             {
                 if (DoesAddressMatch(resourceAddress, peerAddress))
                 {
-                    firstAddressMatch ??= resource;
+                    context.FirstAddressMatch ??= resource;
 
                     if (resource.CachedDatabaseName is { } resourceDatabaseName)
                     {
-                        firstDatabaseMatch ??= resource;
+                        context.FirstDatabaseMatch ??= resource;
 
-                        if (databaseName is not null && string.Equals(resourceDatabaseName, databaseName, StringComparison.OrdinalIgnoreCase))
+                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.OrdinalIgnoreCase))
                         {
-                            name = ResourceViewModel.GetResourceName(resource, resources);
                             resourceMatch = resource;
                             return true;
                         }
                     }
                     else if (resource.Properties.ContainsKey(KnownProperties.Resource.ConnectionString))
                     {
-                        firstServerMatch ??= resource;
+                        context.FirstServerMatch ??= resource;
                     }
 
                     break;
@@ -230,9 +234,8 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             }
         }
 
-        resourceMatch = firstServerMatch ?? firstDatabaseMatch ?? firstAddressMatch;
-        name = resourceMatch is not null ? ResourceViewModel.GetResourceName(resourceMatch, resources) : null;
-        return resourceMatch is not null;
+        resourceMatch = null;
+        return false;
     }
 
     private static bool DoesAddressMatch(string endpoint, string value)
@@ -317,5 +320,15 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         _watchContainersTokenSource.Dispose();
 
         await TaskHelpers.WaitIgnoreCancelAsync(_watchTask).ConfigureAwait(false);
+    }
+
+    private sealed class PeerMatchContext(IDictionary<string, ResourceViewModel> resources, string? databaseName)
+    {
+        public IDictionary<string, ResourceViewModel> Resources { get; } = resources;
+        public string? DatabaseName { get; } = databaseName;
+        public ResourceViewModel? FirstAddressMatch { get; set; }
+        public ResourceViewModel? FirstServerMatch { get; set; }
+        public ResourceViewModel? FirstDatabaseMatch { get; set; }
+        public ResourceViewModel? FallbackMatch => FirstServerMatch ?? FirstDatabaseMatch ?? FirstAddressMatch;
     }
 }

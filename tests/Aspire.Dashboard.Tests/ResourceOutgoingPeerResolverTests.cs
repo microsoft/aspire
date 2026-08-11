@@ -146,6 +146,25 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("catalogdb", value);
     }
 
+    [Fact]
+    public void DatabaseAttributeMatchesDatabaseResourceAfterAddressTransformationOverExactContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=127.0.0.1;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "127.0.0.1"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create("db.namespace", "catalogdb")
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
     [Theory]
     [InlineData("unknown")]
     [InlineData(null)]
