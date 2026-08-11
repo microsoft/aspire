@@ -14,7 +14,9 @@ import {
 const GRAPHQL = "https://api.github.com/graphql";
 const HISTORY_PAGE_SIZE = 100;
 const MAX_HISTORY_PAGES = 10;
+const HISTORY_CACHE_LIMIT = 100;
 const PARTIAL_MIN_MS = 250;
+const historySearchCache = new Map();
 
 const HEALTH_INITIAL_QUERY = `
 query RepositoryHealth($owner:String!, $name:String!, $after:String) {
@@ -32,6 +34,7 @@ query RepositoryHealth($owner:String!, $name:String!, $after:String) {
           statusCheckRollup {
             state
             contexts(first:100) {
+              pageInfo { hasNextPage endCursor }
               nodes {
                 __typename
                 ... on CheckRun { name status conclusion detailsUrl startedAt completedAt }
@@ -78,6 +81,27 @@ query RepositoryHealthHistory($owner:String!, $name:String!, $after:String!) {
   }
 }`;
 
+const HEALTH_CONTEXTS_QUERY = `
+query RepositoryHealthContexts($owner:String!, $name:String!, $oid:GitObjectID!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    object(oid:$oid) {
+      ... on Commit {
+        oid
+        statusCheckRollup {
+          contexts(first:100, after:$after) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              __typename
+              ... on CheckRun { name status conclusion detailsUrl startedAt completedAt }
+              ... on StatusContext { context state targetUrl createdAt }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
 export async function loadHealthDashboard({
   accounts,
   pipelines = [],
@@ -87,6 +111,7 @@ export async function loadHealthDashboard({
   githubLoader = loadGitHubRepositoryHealth,
   azureLoader = loadAzureDevOpsPipelineHealth,
   azureDiscovery = discoverAzureDevOpsPipelines,
+  historyCache = historySearchCache,
 } = {}) {
   const usable = (accounts ?? []).filter((account) => account?.token && account?.login);
   const configuredPipelines = Array.isArray(pipelines) ? pipelines : [];
@@ -108,7 +133,7 @@ export async function loadHealthDashboard({
     const counts = healthCounts(items);
     const errors = [...new Set(errorsRaw
       .filter((error) => !error.sourceKey || !successfulGitHubSources.has(error.sourceKey))
-      .map((error) => error.message))];
+      .map((error) => error.message))].sort();
     const configured = usable.length > 0 || configuredPipelines.length > 0;
     return {
       authenticated: configured,
@@ -170,6 +195,7 @@ export async function loadHealthDashboard({
               repository,
               graphqlUrl: account.graphql,
               now,
+              historyCache,
             });
             successfulGitHubSources.add(sourceKey);
             if (!itemById.has(item.id)) itemById.set(item.id, item);
@@ -224,6 +250,7 @@ export async function loadGitHubRepositoryHealth({
   graphqlUrl = GRAPHQL,
   now = new Date(),
   fetchImpl = globalThis.fetch,
+  historyCache = historySearchCache,
 } = {}) {
   const parts = splitRepository(repository);
   if (!token || !parts) {
@@ -264,31 +291,55 @@ export async function loadGitHubRepositoryHealth({
     };
   }
 
+  const head = branch.head;
+  const host = githubHost(graphqlUrl, repo.url);
+  const name = repo.nameWithOwner || repository;
+  const historyKey = githubHealthId(host, name);
   const history = [];
   let connection = branch.historyTarget?.history;
   appendHistory(history, connection?.nodes);
-  let pages = 1;
-  while (!findSuccessfulCommit(history) && connection?.pageInfo?.hasNextPage && pages < MAX_HISTORY_PAGES) {
-    const next = await gql(fetchImpl, token, HEALTH_HISTORY_QUERY, {
-      owner: parts.owner,
-      name: parts.name,
-      after: connection.pageInfo.endCursor,
-    }, graphqlUrl);
-    connection = next.repository?.defaultBranchRef?.target?.history;
-    appendHistory(history, connection?.nodes);
-    pages++;
+  const firstPageLength = history.length;
+  const cachedHistory = historyCache?.get?.(historyKey);
+  let successSearchTruncated = false;
+  // Check the newest page on every poll because rollups can settle without a new head.
+  // Older pages are immutable enough to reuse while the head SHA is unchanged, avoiding
+  // up to nine repeated history queries for repositories with no recent success.
+  if (cachedHistory?.headOid === head.oid) {
+    if (!findSuccessfulCommit(history)) appendHistory(history, cachedHistory.tail);
+    successSearchTruncated = !findSuccessfulCommit(history) && cachedHistory.successSearchTruncated;
+  } else {
+    let pages = 1;
+    while (!findSuccessfulCommit(history) && connection?.pageInfo?.hasNextPage && pages < MAX_HISTORY_PAGES) {
+      const next = await gql(fetchImpl, token, HEALTH_HISTORY_QUERY, {
+        owner: parts.owner,
+        name: parts.name,
+        after: connection.pageInfo.endCursor,
+      }, graphqlUrl);
+      connection = next.repository?.defaultBranchRef?.target?.history;
+      appendHistory(history, connection?.nodes);
+      pages++;
+    }
+    successSearchTruncated = !findSuccessfulCommit(history) && !!connection?.pageInfo?.hasNextPage;
+    setHistorySearchCache(historyCache, historyKey, {
+      headOid: head.oid,
+      tail: history.slice(firstPageLength),
+      successSearchTruncated,
+    });
   }
 
-  const head = branch.head;
-  const host = githubHost(graphqlUrl, repo.url);
-  const checks = normalizeChecks(head.statusCheckRollup?.contexts?.nodes);
+  const checks = normalizeChecks(await loadCheckContexts({
+    fetchImpl,
+    token,
+    graphqlUrl,
+    parts,
+    head,
+  }));
   const failedChecks = checks.filter((check) => check.state === "failing" || check.state === "degraded");
   const linkedPullRequest = selectAssociatedPullRequest(head.associatedPullRequests?.nodes);
   const lastSuccess = findSuccessfulCommit(history);
   const state = githubRollupState(head.statusCheckRollup?.state);
   const failureStreak = consecutiveFailures(history);
   const lastSuccessAt = lastSuccess?.committedDate ?? null;
-  const successSearchTruncated = !lastSuccess && !!connection?.pageInfo?.hasNextPage;
   const reasons = githubReasons({
     state,
     failedChecks,
@@ -299,7 +350,6 @@ export async function loadGitHubRepositoryHealth({
     successSearchTruncated,
     now,
   });
-  const name = repo.nameWithOwner || repository;
   const url = repo.url ?? repositoryUrl(host, repository);
 
   return {
@@ -591,6 +641,45 @@ function githubEvidence(failedChecks, linkedPullRequest) {
 function appendHistory(target, nodes) {
   for (const node of Array.isArray(nodes) ? nodes : []) {
     if (node?.oid) target.push(node);
+  }
+}
+
+async function loadCheckContexts({ fetchImpl, token, graphqlUrl, parts, head }) {
+  const nodes = [...(head.statusCheckRollup?.contexts?.nodes ?? [])];
+  let connection = head.statusCheckRollup?.contexts;
+  const seenCursors = new Set();
+  while (connection?.pageInfo?.hasNextPage) {
+    const cursor = connection.pageInfo.endCursor;
+    if (!cursor || seenCursors.has(cursor)) {
+      throw new Error("GitHub check context pagination returned an invalid cursor");
+    }
+    seenCursors.add(cursor);
+    // Pin pagination to the original commit so a default-branch update between requests
+    // cannot combine check contexts from two different heads.
+    const next = await gql(fetchImpl, token, HEALTH_CONTEXTS_QUERY, {
+      owner: parts.owner,
+      name: parts.name,
+      oid: head.oid,
+      after: cursor,
+    }, graphqlUrl);
+    const commit = next.repository?.object;
+    const nextConnection = commit?.statusCheckRollup?.contexts;
+    if (commit?.oid !== head.oid || !nextConnection) {
+      throw new Error("GitHub check context pagination returned an unexpected commit");
+    }
+    nodes.push(...(nextConnection.nodes ?? []));
+    connection = nextConnection;
+  }
+  return nodes;
+}
+
+function setHistorySearchCache(cache, key, value) {
+  if (!cache?.set) return;
+  cache.delete?.(key);
+  cache.set(key, value);
+  while (cache.size > HISTORY_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
   }
 }
 

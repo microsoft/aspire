@@ -1298,6 +1298,75 @@ test("invalid Azure pipeline settings keep the draft and show the provider valid
   assert.match(app.innerHTML, /value="https:\/\/example\.com\/build\/1"/);
 });
 
+test("Azure pipeline mutations preserve unsaved settings fields across renders", async () => {
+  const elements = {
+    "release-input": { value: "13.4-preview" },
+    "s-drafts": { checked: true },
+    "n-review": { checked: false },
+    "n-ready": { checked: true },
+    "n-changes": { checked: false },
+    "n-ci": { checked: false },
+  };
+  const resetToPersistedValues = () => {
+    elements["release-input"].value = "13.1";
+    elements["s-drafts"].checked = false;
+    elements["n-review"].checked = true;
+    elements["n-ready"].checked = false;
+    elements["n-changes"].checked = true;
+    elements["n-ci"].checked = true;
+  };
+  const app = {
+    html: "",
+    get innerHTML() { return this.html; },
+    set innerHTML(value) {
+      this.html = value;
+      if (value.includes("<h2>Settings</h2>")) resetToPersistedValues();
+    },
+    removeAttribute() {},
+    classList: classList(),
+  };
+  const added = {
+    id: "azdo:dnceng:internal:1602",
+    name: "microsoft-aspire",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    branch: "refs/heads/release/13.1",
+    definitionId: 1602,
+  };
+  const { api } = createRendererHarness({
+    app,
+    elements,
+    fetch: async (path) => String(path) === "api/health/pipeline/add"
+      ? jsonResponse({
+          dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+          prefs: { ...rendererPrefs(), azurePipelines: [added] },
+        })
+      : new Promise(() => {}),
+  });
+  api.setState({ ...healthDashboard([], emptyHealthCounts(), true), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.setPipelineDrafts(added.url, "");
+
+  await api.addAzurePipeline();
+
+  assert.equal(elements["release-input"].value, "13.4-preview");
+  assert.equal(elements["s-drafts"].checked, true);
+  assert.equal(elements["n-review"].checked, false);
+  assert.equal(elements["n-ready"].checked, true);
+  assert.equal(elements["n-changes"].checked, false);
+  assert.equal(elements["n-ci"].checked, false);
+});
+
+test("settings Enter shortcut leaves interactive controls to their native actions", () => {
+  const source = APP_JS.match(/function isSettingsSaveShortcut\(event\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source);
+  const isSettingsSaveShortcut = vm.runInNewContext(`(${source})`);
+
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", id: "pipeline-add-btn" } }), false);
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", className: "pipeline-remove" } }), false);
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "INPUT", id: "release-input" } }), true);
+});
+
 function rendererPrefs() {
   return {
     mode: "health",
@@ -1336,7 +1405,7 @@ function healthDashboard(items, counts, authenticated) {
 }
 
 function createRendererHarness(overrides = {}) {
-  const app = {
+  const app = overrides.app ?? {
     innerHTML: "",
     removeAttribute() {},
     classList: classList(),

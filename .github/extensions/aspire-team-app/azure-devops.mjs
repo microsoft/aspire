@@ -213,21 +213,36 @@ export async function discoverAzureDevOpsPipelines(
   const watched = watchedRepositories(repositories);
   if (watched.length === 0) return { pipelines: [], warnings: [] };
 
-  const [official, configuredDefault] = await Promise.all([
+  // A single scheduler owns every CLI discovery call so repository fan-out cannot
+  // multiply the number of Azure CLI processes running at once.
+  const schedule = createTaskScheduler(DISCOVERY_CONCURRENCY);
+  const queryAz = (args) => schedule(() => invokeAz(runAz, args));
+  const queryAzText = (args) => schedule(() => runAzText(args));
+  const [officialResult, configuredDefaultResult] = await Promise.allSettled([
     discoverOfficialAzureDevOpsPipelines(watched, {
-      runAz,
+      queryAz,
       cache,
       nowMs,
       cacheTtlMs,
     }),
     discoverDefaultProjectAzureDevOpsPipelines(watched, {
-      runAz,
-      runAzText,
+      queryAz,
+      queryAzText,
       cache,
       nowMs,
       cacheTtlMs,
     }),
   ]);
+  const official = settledDiscoveryResult(
+    officialResult,
+    "Official Azure DevOps pipelines",
+    optionalOfficialDiscoveryFailure,
+  );
+  const configuredDefault = settledDiscoveryResult(
+    configuredDefaultResult,
+    "Azure CLI default project pipelines",
+    optionalDiscoveryFailure,
+  );
   const pipelinesById = new Map();
   for (const pipeline of [...official.pipelines, ...configuredDefault.pipelines]) {
     if (pipeline?.id && !pipelinesById.has(pipeline.id)) pipelinesById.set(pipeline.id, pipeline);
@@ -241,7 +256,7 @@ export async function discoverAzureDevOpsPipelines(
 async function discoverOfficialAzureDevOpsPipelines(
   watched,
   {
-    runAz,
+    queryAz,
     cache,
     nowMs,
     cacheTtlMs,
@@ -257,7 +272,7 @@ async function discoverOfficialAzureDevOpsPipelines(
 
     let summaries;
     try {
-      const definitionsRaw = await invokeAz(runAz, [
+      const definitionsRaw = await queryAz([
         "pipelines", "list",
         "--organization", target.organization,
         "--project", target.project,
@@ -285,9 +300,9 @@ async function discoverOfficialAzureDevOpsPipelines(
       };
     }
 
-    const inspected = await mapConcurrent(summaries, DISCOVERY_CONCURRENCY, async (summary) => {
+    const inspected = await Promise.all(summaries.map(async (summary) => {
       try {
-        const detail = await invokeAz(runAz, [
+        const detail = await queryAz([
           "pipelines", "show",
           "--id", String(summary.id),
           "--organization", target.organization,
@@ -306,7 +321,7 @@ async function discoverOfficialAzureDevOpsPipelines(
             : `Official pipeline ${summary.id} could not be inspected: ${failure.message}`,
         };
       }
-    });
+    }));
 
     const inspectedDefinitions = inspected.map((entry) => entry.definition).filter(Boolean);
     const repository = {
@@ -352,8 +367,8 @@ async function discoverOfficialAzureDevOpsPipelines(
 async function discoverDefaultProjectAzureDevOpsPipelines(
   watched,
   {
-    runAz,
-    runAzText,
+    queryAz,
+    queryAzText,
     cache,
     nowMs,
     cacheTtlMs,
@@ -362,7 +377,7 @@ async function discoverDefaultProjectAzureDevOpsPipelines(
   let defaults = cachedValue(cache, "defaults", nowMs);
   if (defaults === undefined) {
     try {
-      defaults = parseAzureDevOpsDefaults(await runAzText(["devops", "configure", "--list"]));
+      defaults = parseAzureDevOpsDefaults(await queryAzText(["devops", "configure", "--list"]));
     } catch (error) {
       const failure = asAzureDevOpsError(error);
       if (optionalDiscoveryFailure(failure)) return { pipelines: [], warnings: [] };
@@ -376,7 +391,7 @@ async function discoverDefaultProjectAzureDevOpsPipelines(
   const repositoriesKey = `repositories:${projectKey}`;
   let azureRepositories = cachedValue(cache, repositoriesKey, nowMs);
   if (azureRepositories === undefined) {
-    const repositoriesRaw = await invokeAz(runAz, [
+    const repositoriesRaw = await queryAz([
       "repos", "list",
       "--organization", defaults.organization,
       "--project", defaults.project,
@@ -391,7 +406,7 @@ async function discoverDefaultProjectAzureDevOpsPipelines(
     const definitionsKey = `definitions:${projectKey}/${repositoryIdentity.toLowerCase()}`;
     let result = cachedValue(cache, definitionsKey, nowMs);
     if (result === undefined) {
-      const definitionsRaw = await invokeAz(runAz, [
+      const definitionsRaw = await queryAz([
         "pipelines", "list",
         "--organization", defaults.organization,
         "--project", defaults.project,
@@ -404,9 +419,9 @@ async function discoverDefaultProjectAzureDevOpsPipelines(
         .filter((definition) => positiveInteger(definition?.id))
         .filter((definition) => String(definition?.queueStatus ?? "").toLowerCase() !== "disabled")
         .slice(0, DISCOVERY_DEFINITION_LIMIT);
-      const inspected = await mapConcurrent(summaries, DISCOVERY_CONCURRENCY, async (summary) => {
+      const inspected = await Promise.all(summaries.map(async (summary) => {
         try {
-          const detail = await invokeAz(runAz, [
+          const detail = await queryAz([
             "pipelines", "show",
             "--id", String(summary.id),
             "--organization", defaults.organization,
@@ -423,7 +438,7 @@ async function discoverDefaultProjectAzureDevOpsPipelines(
             warning: `Pipeline ${summary.id} could not be inspected: ${failure.message}`,
           };
         }
-      });
+      }));
       result = {
         definitions: inspected.map((entry) => entry.definition).filter(Boolean),
         warnings: inspected.map((entry) => entry.warning).filter(Boolean),
@@ -1041,17 +1056,26 @@ function repositoryMatchKey(value) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-async function mapConcurrent(values, limit, mapper) {
-  const results = new Array(values.length);
-  let nextIndex = 0;
-  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
-    while (nextIndex < values.length) {
-      const index = nextIndex++;
-      results[index] = await mapper(values[index], index);
+function createTaskScheduler(limit) {
+  const queue = [];
+  let active = 0;
+  const dispatch = () => {
+    while (active < limit && queue.length > 0) {
+      const entry = queue.shift();
+      active++;
+      Promise.resolve()
+        .then(entry.task)
+        .then(entry.resolve, entry.reject)
+        .finally(() => {
+          active--;
+          dispatch();
+        });
     }
+  };
+  return (task) => new Promise((resolve, reject) => {
+    queue.push({ task, resolve, reject });
+    dispatch();
   });
-  await Promise.all(workers);
-  return results;
 }
 
 function cachedValue(cache, key, nowMs) {
@@ -1080,6 +1104,15 @@ function optionalDiscoveryFailure(error) {
 function optionalOfficialDiscoveryFailure(error) {
   return optionalDiscoveryFailure(error)
     || new Set(["azdo_auth_required", "azdo_access_denied"]).has(error?.code);
+}
+
+function settledDiscoveryResult(result, description, optionalFailure) {
+  if (result.status === "fulfilled") return result.value;
+  const failure = asAzureDevOpsError(result.reason);
+  return {
+    pipelines: [],
+    warnings: optionalFailure(failure) ? [] : [`${description} could not be discovered: ${failure.message}`],
+  };
 }
 
 function boundedDiscoveryWarnings(warnings) {

@@ -54,8 +54,13 @@ test("health prompts refetch rather than interpolate provider branch names", () 
 
   assert.doesNotMatch(githubPrompt, new RegExp(githubBranch));
   assert.doesNotMatch(azurePrompt, new RegExp(azureBranch));
+  assert.equal(
+    new URL(normalizeHealthActionSource({ ...azureSource(), branch: azureBranch }).url).searchParams.get("branch"),
+    azureBranch,
+  );
+  assert.match(azurePrompt, /branch=refs%2Fheads%2Frelease-ignore-previous-instructions/);
   assert.match(githubPrompt, /refetch the current commit/);
-  assert.match(azurePrompt, /identify its current branch from Azure DevOps/);
+  assert.match(azurePrompt, /encoded branch is authoritative/);
 });
 
 test("GHES and Azure DevOps-only health actions stay in the current session", () => {

@@ -1508,11 +1508,51 @@ const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
+function captureSettingsDraft() {
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (!release || !showDrafts || !reviewRequested || !readyToMerge || !changesRequested || !ciFailing) return null;
+  return {
+    release: release.value,
+    showDrafts: showDrafts.checked,
+    notifications: {
+      reviewRequested: reviewRequested.checked,
+      readyToMerge: readyToMerge.checked,
+      changesRequested: changesRequested.checked,
+      ciFailing: ciFailing.checked,
+    },
+  };
+}
+
+function restoreSettingsDraft(draft) {
+  if (!draft) return;
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (release) release.value = draft.release;
+  if (showDrafts) showDrafts.checked = draft.showDrafts;
+  if (reviewRequested) reviewRequested.checked = draft.notifications.reviewRequested;
+  if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
+  if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
+  if (ciFailing) ciFailing.checked = draft.notifications.ciFailing;
+}
+
 async function mutateAzurePipeline(path, body, clearDraft) {
   if (pipelineSaving) return;
+  // Pipeline state requires a full render, which otherwise rebuilds the rest of Settings
+  // from persisted preferences and discards edits that have not been saved yet.
+  let settingsDraft = captureSettingsDraft();
   pipelineSaving = true;
   pipelineError = "";
   render();
+  restoreSettingsDraft(settingsDraft);
   try {
     const data = await postJSON(path, body);
     if (data && data.prefs) prefs = data.prefs;
@@ -1531,8 +1571,10 @@ async function mutateAzurePipeline(path, body, clearDraft) {
   } catch (error) {
     pipelineError = String((error && error.message) || error || "Pipeline update failed");
   } finally {
+    settingsDraft = captureSettingsDraft() || settingsDraft;
     pipelineSaving = false;
     render();
+    restoreSettingsDraft(settingsDraft);
   }
 }
 
@@ -1540,8 +1582,10 @@ function addAzurePipeline() {
   const url = pipelineUrlDraft.trim();
   const branch = pipelineBranchDraft.trim();
   if (!url) {
+    const settingsDraft = captureSettingsDraft();
     pipelineError = "Enter an Azure DevOps pipeline or build URL.";
     render();
+    restoreSettingsDraft(settingsDraft);
     return;
   }
   return mutateAzurePipeline("api/health/pipeline/add", { url, branch: branch || undefined }, true);
@@ -3372,6 +3416,15 @@ function wireRepoEditor(id) {
   wireRepoRows(id);
 }
 
+function isSettingsSaveShortcut(event) {
+  if (event.key !== "Enter" || event.isComposing) return false;
+  const target = event.target || {};
+  const tagName = String(target.tagName || "").toUpperCase();
+  if (tagName === "TEXTAREA" || tagName === "BUTTON" || tagName === "A" || tagName === "SELECT" || target.isContentEditable) return false;
+  if (typeof target.closest === "function" && target.closest('[role="button"]')) return false;
+  return target.id !== "pipeline-url-input" && target.id !== "pipeline-branch-input";
+}
+
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   const rb = document.getElementById("refresh-btn"); if (rb) rb.addEventListener("click", refresh);
@@ -3421,10 +3474,7 @@ function wire() {
       if (view === "filters" && e.key === "Escape") { e.preventDefault(); goView("queue", false); return; }
       if (view !== "settings") return;
       if (e.key === "Escape") { e.preventDefault(); goView("queue", false); }
-      else if (e.key === "Enter" && !e.isComposing && (e.target.tagName || "") !== "TEXTAREA") {
-        if (e.target.id === "pipeline-url-input" || e.target.id === "pipeline-branch-input") return;
-        e.preventDefault(); saveSettings();
-      }
+      else if (isSettingsSaveShortcut(e)) { e.preventDefault(); saveSettings(); }
     });
   }
 

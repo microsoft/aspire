@@ -100,6 +100,7 @@ test("loadGitHubRepositoryHealth finds the last success and explains a failing D
     repository: "microsoft/aspire-samples",
     fetchImpl,
     now: new Date("2026-08-06T15:00:00Z"),
+    historyCache: new Map(),
   });
 
   assert.deepEqual(cursors, [null, "next-page"]);
@@ -111,6 +112,117 @@ test("loadGitHubRepositoryHealth finds the last success and explains a failing D
   assert.ok(health.reasons.some((reason) => reason.code === "dependabot_auto_merge"));
   assert.ok(health.reasons.some((reason) => reason.code === "commit_failure_streak"));
   assert.equal(health.canOpenRepoSession, true);
+});
+
+test("loadGitHubRepositoryHealth paginates every check context for the same head commit", async () => {
+  const requests = [];
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    if (body.query.includes("RepositoryHealthContexts")) {
+      return jsonResponse({
+        data: {
+          repository: {
+            object: {
+              oid: "head-sha",
+              statusCheckRollup: {
+                contexts: {
+                  nodes: [{
+                    __typename: "CheckRun",
+                    name: "Check 101",
+                    status: "COMPLETED",
+                    conclusion: "FAILURE",
+                    detailsUrl: "https://github.com/microsoft/aspire/actions/runs/101",
+                  }],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+    return jsonResponse({
+      data: {
+        repository: githubHealthRepository({
+          contexts: [{
+            __typename: "CheckRun",
+            name: "Check 1",
+            status: "COMPLETED",
+            conclusion: "SUCCESS",
+            detailsUrl: "https://github.com/microsoft/aspire/actions/runs/1",
+          }],
+          contextPageInfo: { hasNextPage: true, endCursor: "check-page-2" },
+          history: [commit("head-sha", "2026-08-06T12:00:00Z", "SUCCESS")],
+        }),
+      },
+    });
+  };
+
+  const health = await loadGitHubRepositoryHealth({
+    token: "token",
+    repository: "microsoft/aspire",
+    fetchImpl,
+    now: new Date("2026-08-06T15:00:00Z"),
+    historyCache: new Map(),
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].variables.oid, "head-sha");
+  assert.equal(requests[1].variables.after, "check-page-2");
+  assert.deepEqual(health.failedChecks.map((check) => check.name), ["Check 101"]);
+});
+
+test("loadGitHubRepositoryHealth reuses older history pages while the head SHA is unchanged", async () => {
+  let initialQueries = 0;
+  let historyQueries = 0;
+  const fetchImpl = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.query.includes("RepositoryHealthHistory")) {
+      historyQueries++;
+      return jsonResponse({
+        data: {
+          repository: {
+            defaultBranchRef: {
+              target: {
+                history: {
+                  nodes: [commit("older-sha", "2026-08-05T12:00:00Z", "FAILURE")],
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+    initialQueries++;
+    return jsonResponse({
+      data: {
+        repository: githubHealthRepository({
+          contexts: [],
+          history: [commit("head-sha", "2026-08-06T12:00:00Z", "FAILURE")],
+          historyPageInfo: { hasNextPage: true, endCursor: "history-page-2" },
+        }),
+      },
+    });
+  };
+  const historyCache = new Map();
+  const options = {
+    token: "token",
+    repository: "microsoft/aspire",
+    fetchImpl,
+    now: new Date("2026-08-06T15:00:00Z"),
+    historyCache,
+  };
+
+  const first = await loadGitHubRepositoryHealth(options);
+  const second = await loadGitHubRepositoryHealth(options);
+
+  assert.equal(initialQueries, 2);
+  assert.equal(historyQueries, 1);
+  assert.equal(first.historyExamined, 2);
+  assert.equal(second.historyExamined, 2);
+  assert.equal(second.lastSuccessAt, null);
 });
 
 test("githubReasons does not blame a PR without auto-merge evidence", () => {
@@ -155,6 +267,24 @@ test("loadHealthDashboard keeps partial provider results and counts unavailable 
   assert.ok(partials.every((partial) => partial.loading && partial.health.loading));
   assert.equal(dashboard.loading, false);
   assert.equal(dashboard.health.loading, false);
+});
+
+test("loadHealthDashboard sorts provider errors independently of completion order", async () => {
+  const dashboard = await loadHealthDashboard({
+    accounts: [{
+      token: "token",
+      login: "octo",
+      repos: ["org/a", "org/b"],
+    }],
+    githubLoader: async ({ repository }) => {
+      if (repository === "org/a") await new Promise((resolve) => setImmediate(resolve));
+      throw new Error(repository === "org/a" ? "A failed" : "B failed");
+    },
+    azureDiscovery: async () => [],
+    now: new Date("2026-08-06T15:00:00Z"),
+  });
+
+  assert.deepEqual(dashboard.errors, ["org/a: A failed", "org/b: B failed"]);
 });
 
 test("loadHealthDashboard auto-discovers and groups a matching Azure delivery source", async () => {
@@ -406,6 +536,36 @@ test("healthSummaryForAgent excludes provider-controlled text", () => {
 
 function commit(oid, committedDate, state) {
   return { oid, committedDate, statusCheckRollup: { state } };
+}
+
+function githubHealthRepository({
+  repository = "microsoft/aspire",
+  contexts = [],
+  contextPageInfo = { hasNextPage: false, endCursor: null },
+  history = [],
+  historyPageInfo = { hasNextPage: false, endCursor: null },
+} = {}) {
+  return {
+    nameWithOwner: repository,
+    url: `https://github.com/${repository}`,
+    defaultBranchRef: {
+      name: "main",
+      head: {
+        oid: "head-sha",
+        committedDate: "2026-08-06T12:00:00Z",
+        messageHeadline: "Health test",
+        author: { user: { login: "octo" }, name: "Octo" },
+        statusCheckRollup: {
+          state: "FAILURE",
+          contexts: { nodes: contexts, pageInfo: contextPageInfo },
+        },
+        associatedPullRequests: { nodes: [] },
+      },
+      historyTarget: {
+        history: { nodes: history, pageInfo: historyPageInfo },
+      },
+    },
+  };
 }
 
 function healthItem(id, provider, name, state) {

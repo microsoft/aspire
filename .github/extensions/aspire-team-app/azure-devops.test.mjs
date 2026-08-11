@@ -160,6 +160,66 @@ test("Azure discovery selects and caches one production delivery pipeline for a 
   assert.equal(calls.filter((args) => args[0] === "pipelines" && args[1] === "show").length, 5);
 });
 
+test("Azure discovery bounds pipeline inspection concurrency across repositories", async () => {
+  const repositoryCount = 8;
+  const repositories = Array.from({ length: repositoryCount }, (_, index) => ({
+    id: `repo-${index}`,
+    name: `repo-${index}`,
+    type: "TfsGit",
+    defaultBranch: "refs/heads/main",
+  }));
+  const definitions = new Map(repositories.map((repository, index) => {
+    const id = 2000 + index;
+    return [id, {
+      id,
+      name: `Repo ${index} Release Production`,
+      path: `\\repo-${index}`,
+      queueStatus: "enabled",
+      process: { type: 2, yamlFilename: "pipelines/release.yml" },
+      repository,
+    }];
+  }));
+  let activeShows = 0;
+  let maxConcurrentShows = 0;
+  let releaseShows;
+  const showGate = new Promise((resolve) => { releaseShows = resolve; });
+  let releaseScheduled = false;
+  const runAz = async (args) => {
+    if (args[0] === "repos" && args[1] === "list") return repositories;
+    if (args[0] === "pipelines" && args[1] === "list") {
+      const repositoryId = args[args.indexOf("--repository") + 1];
+      const index = Number(repositoryId.replace("repo-", ""));
+      const definition = definitions.get(2000 + index);
+      return [{ id: definition.id, name: definition.name, path: definition.path, queueStatus: definition.queueStatus }];
+    }
+    if (args[0] === "pipelines" && args[1] === "show") {
+      activeShows++;
+      maxConcurrentShows = Math.max(maxConcurrentShows, activeShows);
+      if (activeShows === 6 && !releaseScheduled) {
+        releaseScheduled = true;
+        setImmediate(releaseShows);
+      }
+      await showGate;
+      activeShows--;
+      return definitions.get(Number(args[args.indexOf("--id") + 1]));
+    }
+    throw new Error(`Unexpected az call: ${args.join(" ")}`);
+  };
+
+  const result = await discoverAzureDevOpsPipelines(
+    { repositories: repositories.map((repository) => `microsoft/${repository.name}`) },
+    {
+      runAz,
+      runAzText: async () => "[defaults]\norganization = https://dev.azure.com/dnceng\nproject = aspire-msft\n",
+      cache: new Map(),
+      nowMs: Date.parse("2026-08-06T15:00:00Z"),
+    },
+  );
+
+  assert.equal(result.pipelines.length, repositoryCount);
+  assert.equal(maxConcurrentShows, 6);
+});
+
 test("Azure discovery loads curated official Aspire pipelines without CLI defaults", async () => {
   const calls = [];
   let defaultsCalls = 0;
@@ -206,6 +266,50 @@ test("Azure discovery loads curated official Aspire pipelines without CLI defaul
   assert.equal(listCall[listCall.indexOf("--organization") + 1], "https://dev.azure.com/dnceng");
   assert.equal(listCall[listCall.indexOf("--project") + 1], "internal");
   assert.equal(listCall[listCall.indexOf("--repository") + 1], "microsoft-aspire");
+});
+
+test("default project discovery failure does not discard official Aspire pipelines", async (t) => {
+  const definitions = new Map([
+    [1599, officialDefinition(1599, "microsoft-aspire-codeql", "eng/pipelines/azure-pipelines-codeql.yml")],
+    [1600, officialDefinition(1600, "microsoft-aspire-Release-To-NuGet", "eng/pipelines/release-publish-nuget.yml")],
+    [1602, officialDefinition(1602, "microsoft-aspire", "eng/pipelines/azure-pipelines.yml")],
+  ]);
+  for (const failurePoint of ["repos list", "pipelines list"]) {
+    await t.test(failurePoint, async () => {
+      const result = await discoverAzureDevOpsPipelines(
+        { repositories: ["microsoft/aspire"] },
+        {
+          runAz: async (args) => {
+            if (args[0] === "repos" && args[1] === "list") {
+              if (failurePoint === "repos list") {
+                throw new AzureDevOpsError("azdo_query_failed", "Default project discovery failed.");
+              }
+              return [{ id: "repo-microsoft-aspire", name: "microsoft-aspire", type: "TfsGit" }];
+            }
+            if (args[0] === "pipelines" && args[1] === "list") {
+              const project = args[args.indexOf("--project") + 1];
+              if (project === "aspire-msft") {
+                throw new AzureDevOpsError("azdo_query_failed", "Default project discovery failed.");
+              }
+              return [...definitions.values()].map(({ id, name, path, queueStatus }) => ({ id, name, path, queueStatus }));
+            }
+            if (args[0] === "pipelines" && args[1] === "show") {
+              return definitions.get(Number(args[args.indexOf("--id") + 1]));
+            }
+            throw new Error(`Unexpected az call: ${args.join(" ")}`);
+          },
+          runAzText: async () => "[defaults]\norganization = https://dev.azure.com/dnceng\nproject = aspire-msft\n",
+          cache: new Map(),
+          nowMs: Date.parse("2026-08-06T15:00:00Z"),
+        },
+      );
+
+      assert.deepEqual(result.pipelines.map((pipeline) => pipeline.definitionId), [1599, 1600, 1602]);
+      assert.deepEqual(result.warnings, [
+        "Azure CLI default project pipelines could not be discovered: Default project discovery failed.",
+      ]);
+    });
+  }
 });
 
 test("official Azure discovery quietly skips missing CLI, authentication, and internal access", async (t) => {
