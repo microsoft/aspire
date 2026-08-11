@@ -51,6 +51,11 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("What if", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
+        Assert.True(
+            result.Output.IndexOf("Write route sidecar", StringComparison.Ordinal) <
+            result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal),
+            "Bundle setup should be planned after the install-route sidecar is written.");
     }
 
     [Fact]
@@ -127,6 +132,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
     }
 
     [Fact]
