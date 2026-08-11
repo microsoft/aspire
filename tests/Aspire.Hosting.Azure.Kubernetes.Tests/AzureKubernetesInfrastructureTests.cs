@@ -421,4 +421,194 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             "kubeconfig-content",
             await File.ReadAllTextAsync(aks.Resource.KubernetesEnvironment.KubeConfigPath!, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task GetCredentialsStepUsesExistingClusterScopeInsteadOfDeploymentState()
+    {
+        const string appSubscriptionId = "00000000-0000-0000-0000-000000000001";
+        const string clusterSubscriptionId = "00000000-0000-0000-0000-000000000002";
+        const string clusterResourceGroup = "shared-platform-rg";
+        const string clusterName = "shared-aks";
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        // The app deploys into its own subscription and resource group...
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        deploymentStateManager.SetSection("Azure", new JsonObject
+        {
+            ["SubscriptionId"] = appSubscriptionId,
+            ["ResourceGroup"] = "app-rg"
+        });
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+
+        // ...but the cluster it targets already exists somewhere else entirely.
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExistingInResourceGroup(clusterName, clusterResourceGroup, clusterSubscriptionId);
+
+        aks.Resource.Outputs["name"] = clusterName;
+
+        var invocations = new List<string>();
+        aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
+        aks.Resource.AzCommandRunnerForTesting = (path, arguments, logger) =>
+        {
+            invocations.Add(arguments);
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(0, "kubeconfig-content", ""));
+        };
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in aks.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = aks.Resource
+            }));
+        }
+
+        var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
+
+        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        await getCredentialsStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        });
+
+        // Only get-credentials should run: the resource group is pinned by the annotation, so no
+        // discovery query is needed. Both scope values must come from the annotation, not the
+        // app's own deployment state.
+        Assert.Equal(
+            [$"aks get-credentials --resource-group \"{clusterResourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{clusterSubscriptionId}\""],
+            invocations);
+
+        var connectHint = Assert.Single(
+            pipelineContext.Summary.Items,
+            item => item.Key == "🔑 Connect to cluster");
+        Assert.Equal(
+            $"`az aks get-credentials --resource-group {clusterResourceGroup} --name {clusterName} --subscription {clusterSubscriptionId}`",
+            connectHint.Value);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeFallsBackToDeploymentStateWhenResourcePinsNothing()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: null,
+            scopedResourceGroup: null,
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(("sub-global", "rg-global"), scope);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeKeepsDeploymentResourceGroupWhenResourcePinsSameSubscription()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: "sub-global",
+            scopedResourceGroup: null,
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(("sub-global", "rg-global"), scope);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeDropsDeploymentResourceGroupWhenResourcePinsAnotherSubscription()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: "sub-other",
+            scopedResourceGroup: null,
+            services,
+            TestContext.Current.CancellationToken);
+
+        // "rg-global" names a group inside "sub-global" only. Carrying it across the subscription
+        // boundary could miss entirely or hit an unrelated group with the same name, so the step
+        // must rediscover it instead.
+        Assert.Equal(("sub-other", (string?)null), scope);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeUsesDeploymentSubscriptionWhenResourcePinsOnlyResourceGroup()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: null,
+            scopedResourceGroup: "rg-pinned",
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(("sub-global", "rg-pinned"), scope);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeIgnoresDeploymentStateWhenResourcePinsBothValues()
+    {
+        // No Azure section at all: a fully pinned resource must not depend on deployment state.
+        var services = new ServiceCollection()
+            .AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager())
+            .BuildServiceProvider();
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: "sub-pinned",
+            scopedResourceGroup: "rg-pinned",
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(("sub-pinned", "rg-pinned"), scope);
+    }
+
+    [Fact]
+    public async Task DeploymentScopeResolvesParameterBackedScopeValues()
+    {
+        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+
+        var subscriptionParameter = new ParameterResource("sub", _ => "sub-from-parameter");
+        var resourceGroupParameter = new ParameterResource("rg", _ => "rg-from-parameter");
+
+        var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            subscriptionParameter,
+            resourceGroupParameter,
+            services,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(("sub-from-parameter", "rg-from-parameter"), scope);
+    }
+
+    private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        var azureState = new JsonObject { ["SubscriptionId"] = subscriptionId };
+
+        if (resourceGroup is not null)
+        {
+            azureState["ResourceGroup"] = resourceGroup;
+        }
+
+        deploymentStateManager.SetSection("Azure", azureState);
+
+        return new ServiceCollection()
+            .AddSingleton<IDeploymentStateManager>(deploymentStateManager)
+            .BuildServiceProvider();
+    }
 }

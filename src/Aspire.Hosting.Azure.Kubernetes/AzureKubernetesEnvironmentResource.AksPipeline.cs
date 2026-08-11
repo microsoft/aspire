@@ -229,7 +229,14 @@ public partial class AzureKubernetesEnvironmentResource
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
 
-                var (subscriptionId, savedResourceGroup) = await GetAzureDeploymentContextAsync(
+                // Resolve the scope this cluster actually lives in before touching the CLI. A cluster
+                // adopted via AsExistingInResourceGroup(...) can sit outside the app's own
+                // subscription/resource group, and the provisioner already targets that scope.
+                var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
+
+                var (subscriptionId, savedResourceGroup) = await ResolveDeploymentScopeAsync(
+                    scopedSubscription,
+                    scopedResourceGroup,
                     context.Services,
                     context.CancellationToken).ConfigureAwait(false);
 
@@ -559,9 +566,48 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
+    /// Gets the subscription and resource group this resource explicitly targets, if any.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ExistingAzureResourceAnnotation"/> is what <c>AsExistingInResourceGroup</c> and
+    /// friends attach, and it is the same annotation the provisioner turns into the deployment
+    /// scope. Values are returned unresolved because they may be a literal string, a
+    /// <see cref="ParameterResource"/>, or a <see cref="BicepOutputReference"/>.
+    /// </remarks>
+    private (object? Subscription, object? ResourceGroup) GetExplicitScopeValues()
+    {
+        // A tenant-scoped resource pins neither value, so fall through to the deployment state.
+        if (this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && !existing.IsTenantScope)
+        {
+            return (existing.Subscription, existing.ResourceGroup);
+        }
+
+        return (null, null);
+    }
+
+    /// <summary>
     /// Gets the current Azure subscription and resource group from deployment state.
     /// </summary>
     internal static async Task<(string SubscriptionId, string? ResourceGroup)> GetAzureDeploymentContextAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var (subscriptionId, resourceGroup) = await TryGetAzureDeploymentStateAsync(services, cancellationToken).ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            throw new InvalidOperationException(
+                "Could not resolve the Azure subscription selected for deployment. " +
+                "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
+        }
+
+        return (subscriptionId, resourceGroup);
+    }
+
+    /// <summary>
+    /// Reads the global Azure deployment state without requiring a subscription to be present.
+    /// </summary>
+    internal static async Task<(string? SubscriptionId, string? ResourceGroup)> TryGetAzureDeploymentStateAsync(
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
@@ -571,7 +617,60 @@ public partial class AzureKubernetesEnvironmentResource
         // Use ToString() rather than GetValue<string>() to match how AzureEnvironmentResource reads
         // these same keys, and because GetValue<string>() throws if hand-edited state stores a
         // non-string JSON value.
-        var subscriptionId = azureState.Data["SubscriptionId"]?.ToString();
+        return (azureState.Data["SubscriptionId"]?.ToString(), azureState.Data["ResourceGroup"]?.ToString());
+    }
+
+    /// <summary>
+    /// Resolves a scope value that may be a literal string or a deferred value such as a
+    /// <see cref="ParameterResource"/> or a <see cref="BicepOutputReference"/>.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors how <c>BicepUtilities</c> materializes scope values when emitting the deployment
+    /// scope, so the credential fetch resolves the same way the provisioner does.
+    /// </remarks>
+    internal static async Task<string?> ResolveScopeValueAsync(object? value, CancellationToken cancellationToken)
+        => value switch
+        {
+            null => null,
+            string s => s,
+            IValueProvider provider => await provider.GetValueAsync(cancellationToken).ConfigureAwait(false),
+            _ => throw new NotSupportedException(
+                $"The Azure scope value type {value.GetType()} is not supported.")
+        };
+
+    /// <summary>
+    /// Resolves the subscription and resource group that this AKS cluster actually lives in.
+    /// </summary>
+    /// <remarks>
+    /// A cluster adopted with <c>AsExistingInResourceGroup(...)</c> can sit in a different
+    /// subscription and resource group than the one Aspire deploys the rest of the app into, and the
+    /// provisioner targets that per-resource scope. The Azure CLI calls here have to agree with it,
+    /// otherwise we would authenticate against the wrong subscription and could even find a
+    /// same-named cluster in the wrong place. Values the resource does not pin fall back to the
+    /// global deployment state.
+    /// </remarks>
+    internal static async Task<(string SubscriptionId, string? ResourceGroup)> ResolveDeploymentScopeAsync(
+        object? scopedSubscription,
+        object? scopedResourceGroup,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var subscriptionId = await ResolveScopeValueAsync(scopedSubscription, cancellationToken).ConfigureAwait(false);
+        var resourceGroup = await ResolveScopeValueAsync(scopedResourceGroup, cancellationToken).ConfigureAwait(false);
+
+        // Fully pinned by the resource, so the global deployment state is irrelevant and must not be
+        // required. This matters because the app's own subscription may legitimately be absent when
+        // every Azure resource is an adopted existing one.
+        if (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup))
+        {
+            return (subscriptionId, resourceGroup);
+        }
+
+        var (globalSubscriptionId, globalResourceGroup) =
+            await TryGetAzureDeploymentStateAsync(services, cancellationToken).ConfigureAwait(false);
+
+        var pinnedSubscription = !string.IsNullOrEmpty(subscriptionId);
+        subscriptionId = pinnedSubscription ? subscriptionId : globalSubscriptionId;
 
         if (string.IsNullOrEmpty(subscriptionId))
         {
@@ -580,7 +679,16 @@ public partial class AzureKubernetesEnvironmentResource
                 "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
         }
 
-        var resourceGroup = azureState.Data["ResourceGroup"]?.ToString();
+        if (string.IsNullOrEmpty(resourceGroup))
+        {
+            // The saved resource group only names a group inside the saved subscription. Inheriting it
+            // across a subscription boundary would point at a group that may not exist there, or worse
+            // at an unrelated group that happens to share the name, so force discovery instead.
+            resourceGroup = pinnedSubscription && !string.Equals(subscriptionId, globalSubscriptionId, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : globalResourceGroup;
+        }
+
         return (subscriptionId, resourceGroup);
     }
 
