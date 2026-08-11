@@ -8165,11 +8165,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
         var kubernetesService = new TestKubernetesService();
-        var failedResources = new List<IResource>();
+        using var resourceLoggerService = new ResourceLoggerService();
+        var failedResources = new List<(IResource Resource, string? ErrorMessage)>();
         var events = new DcpExecutorEvents();
         events.Subscribe<OnResourceFailedToStartContext>(context =>
         {
-            failedResources.Add(context.Resource);
+            failedResources.Add((context.Resource, context.ErrorMessage));
             return Task.CompletedTask;
         });
 
@@ -8179,12 +8180,28 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             distributedAppModel,
             kubernetesService: kubernetesService,
             configuration: configuration,
+            resourceLoggerService: resourceLoggerService,
             events: events);
 
         await appExecutor.RunApplicationAsync();
 
         Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "TestDotnetProject"));
-        Assert.Same(resource, Assert.Single(failedResources));
+        var failure = Assert.Single(failedResources);
+        Assert.Same(resource, failure.Resource);
+        Assert.NotNull(failure.ErrorMessage);
+        Assert.Contains("Launch configuration failed.", failure.ErrorMessage);
+        Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            line.IsErrorMessage &&
+            line.Content.Contains("Launch configuration failed.", StringComparison.Ordinal) &&
+            line.Content.Contains("Process fallback is unavailable", StringComparison.Ordinal));
 
         static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
         {
