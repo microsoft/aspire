@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -22,8 +23,8 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
-    private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", identityChannel: "local", debugMode: debugMode);
+    private static CliExecutionContext CreateExecutionContext(bool debugMode = false, LogLevel? consoleLogLevel = null, string? logFilePath = null) =>
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", identityChannel: "local", debugMode: debugMode, consoleLogLevel: consoleLogLevel);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
@@ -283,6 +284,45 @@ public class ConsoleInteractionServiceTests
         var outputString = output.ToString();
         Assert.Contains(statusText, outputString);
         // In debug mode, should use DisplaySubtleMessage instead of spinner
+    }
+
+    [Theory]
+    [InlineData(LogLevel.Trace)]
+    [InlineData(LogLevel.Debug)]
+    [InlineData(LogLevel.Information)]
+    [InlineData(LogLevel.Warning)]
+    [InlineData(LogLevel.Error)]
+    [InlineData(LogLevel.Critical)]
+    public async Task StatusMethods_WithConsoleLogging_DoNotStartSpinner(LogLevel consoleLogLevel)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(consoleLogLevel: consoleLogLevel));
+
+        var asyncStatusValue = await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
+        var dynamicStatusValue = await interactionService.ShowDynamicStatusAsync("Working...", _ => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
+        var synchronousStatusValue = -1;
+        interactionService.ShowStatus("Working...", () => synchronousStatusValue = GetInStatus(interactionService));
+
+        Assert.Equal(0, asyncStatusValue);
+        Assert.Equal(0, dynamicStatusValue);
+        Assert.Equal(0, synchronousStatusValue);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task ShowStatusAsync_WithConsoleLoggingDisabled_StartsSpinner()
+    {
+        var interactionService = CreateInteractionService(AnsiConsole.Console, CreateExecutionContext(consoleLogLevel: LogLevel.None));
+
+        var statusValue = await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
+
+        Assert.Equal(1, statusValue);
     }
 
     [Fact]

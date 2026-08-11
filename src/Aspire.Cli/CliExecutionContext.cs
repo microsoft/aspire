@@ -4,10 +4,11 @@
 using System.CommandLine;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, LogLevel? consoleLogLevel = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -179,6 +180,8 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
             : Utils.CliPathHelper.GetAspireHomeDirectory());
 
     public bool DebugMode { get; } = debugMode;
+
+    public LogLevel? ConsoleLogLevel { get; } = consoleLogLevel;
 
     private Command? _command;
 
