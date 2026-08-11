@@ -211,8 +211,11 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
 
             var builder = DistributedApplication.CreateBuilder(args);
 
+            // Pin both pools to the VM family provisioned by the deployment test subscription.
+            // Without the explicit workload pool, AKS creates it with the Standard_D2s_v5 default.
             var aks = builder.AddAzureKubernetesEnvironment("aks")
                 .WithSystemNodePool("Standard_D2as_v5");
+            aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
 
             // Omitting WithStorageClass exercises the standard AKS default StorageClass,
             // which dynamically provisions an Azure Managed Disk.
