@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />
+    <Compile Include="$(SharedDir)DashboardImage.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Yaml\*.cs" LinkBase="Shared\Yaml" />
   </ItemGroup>
