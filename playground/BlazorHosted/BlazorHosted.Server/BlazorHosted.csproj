@@ -16,20 +16,16 @@
   </ItemGroup>
 
   <!-- These targets prototype the contract that will eventually be provided by the SDKs.
-       The server asks every evaluated ProjectReference whether it is a Blazor WebAssembly
+       The server asks every evaluated ProjectReference whether it is a WebAssembly
        project and collects the project paths returned by references that recognize the target. -->
-  <Target Name="ResolveBlazorWebAssemblyProjectReferences">
+  <Target Name="ResolveWebAssemblyProjectReferences">
     <MSBuild
         Projects="@(ProjectReference)"
-        Targets="GetBlazorWebAssemblyProjectReference"
+        Targets="GetWebAssemblyProjectReference"
         BuildInParallel="true"
         SkipNonexistentTargets="true">
-      <Output TaskParameter="TargetOutputs" ItemName="_BlazorWebAssemblyProjectReference" />
+      <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
     </MSBuild>
-
-    <ItemGroup>
-      <BlazorWebAssemblyProjectReference Include="@(_BlazorWebAssemblyProjectReference)" />
-    </ItemGroup>
   </Target>
 
 </Project>

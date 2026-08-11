@@ -45,14 +45,13 @@
     <ProjectReference Include="..\BlazorHosted.ClientServiceDefaults\BlazorHosted.ClientServiceDefaults.csproj" />
   </ItemGroup>
 
-  <!-- This target prototypes the Blazor WebAssembly SDK side of project discovery.
+  <!-- This target prototypes the WebAssembly SDK side of project discovery.
        Returning the evaluated full path lets the referencing project consume TargetOutputs
        without parsing the referenced project file or depending on its physical XML shape. -->
-  <Target Name="GetBlazorWebAssemblyProjectReference"
-          Returns="@(_BlazorWebAssemblyProjectReference)">
+  <Target Name="GetWebAssemblyProjectReference"
+          Returns="@(_WebAssemblyProjectReference)">
     <ItemGroup>
-      <_BlazorWebAssemblyProjectReference Include="$(MSBuildProjectFullPath)"
-                                          Condition="'$(UsingMicrosoftNETSdkBlazorWebAssembly)' == 'true'" />
+      <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
     </ItemGroup>
   </Target>
 

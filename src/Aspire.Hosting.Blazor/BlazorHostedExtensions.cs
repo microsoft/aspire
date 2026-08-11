@@ -196,9 +196,9 @@ public static class BlazorHostedExtensions
             serverProjectPath,
             "msbuild",
             [
-                "-t:ResolveBlazorWebAssemblyProjectReferences",
+                "-t:ResolveWebAssemblyProjectReferences",
                 "-getProperty:MSBuildVersion",
-                "-getItem:BlazorWebAssemblyProjectReference",
+                "-getItem:WebAssemblyProjectReference",
                 "-nologo"
             ],
             machineReadableOutput: true,
@@ -214,9 +214,9 @@ public static class BlazorHostedExtensions
             using var output = JsonDocument.Parse(result.StandardOutput);
 
             // MSBuild emits:
-            // { "Items": { "BlazorWebAssemblyProjectReference": [{ "Identity": "/path/Client.csproj" }] } }
+            // { "Items": { "WebAssemblyProjectReference": [{ "Identity": "/path/Client.csproj" }] } }
             if (output.RootElement.TryGetProperty("Items", out var items)
-                && items.TryGetProperty("BlazorWebAssemblyProjectReference", out var projectReferences))
+                && items.TryGetProperty("WebAssemblyProjectReference", out var projectReferences))
             {
                 foreach (var projectReference in projectReferences.EnumerateArray())
                 {
