@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -314,6 +316,80 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
 
         var steps = await PipelineStepTestHelpers.CreateStepsAsync(app.Services, k8s.Resource);
         Assert.Empty(PipelineStepTestHelpers.GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap()
+    {
+        // An Ingress can be configured with paths (so it passes the publish-time materialization
+        // check) and still be dropped from the chart when none of its backends resolve to a
+        // deployment target. Bootstrapping its certificate anyway would leave an orphaned secret in
+        // the cluster, so eligibility is re-checked at deploy time.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var otherEnvironment = builder.AddKubernetesEnvironment("other");
+
+        // Assigning the container to a different environment keeps it out of "env"'s deployment
+        // targets, so the Ingress backend cannot be resolved.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(otherEnvironment);
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "public");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The secret is still collected, because step factories run before publish populates the
+        // generated objects and therefore cannot know the Ingress will be dropped.
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+
+        // The deploy-time re-check is what prevents the orphaned secret.
+        Assert.False(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task AddIngress_ResolvableBackendWithTls_EligibleForTlsBootstrap()
+    {
+        // Positive control for AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap:
+        // an Ingress that does render must remain eligible, so the deploy-time re-check cannot
+        // silently suppress every certificate.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
     }
 
     [Fact]

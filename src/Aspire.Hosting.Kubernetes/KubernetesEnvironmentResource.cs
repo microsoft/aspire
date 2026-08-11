@@ -188,6 +188,21 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal sealed record CapturedHelmValueProvider(string Section, string ResourceKey, string ValueKey, IValueProvider ValueProvider);
 
     /// <summary>
+    /// A TLS secret that may need a self-signed bootstrap certificate, together with the routing
+    /// resource that requested it.
+    /// </summary>
+    /// <remarks>
+    /// The owner is carried through to deploy time because eligibility is only partially known when
+    /// the pipeline steps are built. Step factories run before any step executes (see
+    /// <c>DistributedApplicationPipeline.ResolveStepsAsync</c>), so at collection time we can only
+    /// tell whether a resource is *configured* to materialize — the actual rendered object does not
+    /// exist yet. An Ingress can still drop out later when none of its backends resolve, so the
+    /// bootstrap step re-checks the owner before creating a certificate. Without this, we would
+    /// create a secret for an Ingress that never made it into the chart.
+    /// </remarks>
+    internal sealed record TlsSecretRequest(ReferenceExpression SecretName, ReferenceExpression Hostname, IResource Owner);
+
+    /// <summary>
     /// Captured value provider references populated during publish, consumed during deploy
     /// to resolve values from external sources (e.g., Azure Bicep outputs).
     /// </summary>
@@ -1158,9 +1173,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         };
     }
 
-    private static HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
-    {
-        var tlsSecrets = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
+    /// <summary>
+    /// Collects the TLS secrets that may need a self-signed bootstrap certificate.
+    /// </summary>
+    /// <remarks>
+    /// Only resources configured to materialize are considered. This runs while the pipeline steps
+    /// are being built, so it cannot see whether an Ingress ultimately rendered — each entry carries
+    /// its owner so <see cref="BootstrapTlsSecretsAsync"/> can re-check that at deploy time.
+    /// </remarks>
+    internal static List<TlsSecretRequest> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)    {
+        var tlsSecrets = new List<TlsSecretRequest>();
 
         var gateways = model.Resources
             .OfType<KubernetesGatewayResource>()
@@ -1172,7 +1194,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 foreach (var host in gateway.Hostnames)
                 {
-                    tlsSecrets.Add((tls.SecretName, host));
+                    tlsSecrets.Add(new TlsSecretRequest(tls.SecretName, host, gateway));
                 }
             }
         }
@@ -1187,13 +1209,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 foreach (var host in ingress.Hostnames)
                 {
-                    tlsSecrets.Add((tls.SecretName, host));
+                    tlsSecrets.Add(new TlsSecretRequest(tls.SecretName, host, ingress));
                 }
             }
         }
 
         return tlsSecrets;
     }
+
+    /// <summary>
+    /// Determines whether the routing resource that requested a TLS secret actually made it into
+    /// the rendered chart. Called at deploy time, once publish has populated the generated objects.
+    /// </summary>
+    internal static bool OwnerWasMaterialized(IResource owner) => owner switch
+    {
+        // BuildIngressObject returns null when every configured path and the default backend fail
+        // to resolve to a deployment target, so a configured Ingress can still be absent from the
+        // chart. GeneratedIngress is the authoritative signal for whether it rendered.
+        KubernetesIngressResource ingress => ingress.GeneratedIngress is not null,
+
+        // BuildGatewayObjects always emits the Gateway once it has routes, so ShouldMaterialize
+        // (already applied during collection) is sufficient for gateways.
+        _ => true,
+    };
 
     /// <summary>
     /// Collects gateway TLS configurations that have no hostnames specified and need
@@ -2015,7 +2053,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     private static async Task BootstrapTlsSecretsAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
-        HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> tlsSecrets)
+        List<TlsSecretRequest> tlsSecrets)
     {
         var @namespace = "default";
         if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
@@ -2027,8 +2065,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
         }
 
-        foreach (var (secretNameExpr, hostnameExpr) in tlsSecrets)
+        // Re-check materialization now that publish has run. An Ingress that was configured with
+        // paths can still be dropped from the chart if none of its backends resolved, and
+        // bootstrapping a certificate for it would leave an orphaned secret in the cluster.
+        // Dedupe on (secret, hostname) so two routing resources sharing a secret only bootstrap it
+        // once, matching the behavior before owners were tracked.
+        var seen = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
+
+        foreach (var tlsSecret in tlsSecrets)
         {
+            if (!OwnerWasMaterialized(tlsSecret.Owner))
+            {
+                context.Logger.LogDebug(
+                    "Skipping TLS bootstrap for '{ResourceName}' because it was not included in the generated chart.",
+                    tlsSecret.Owner.Name);
+                continue;
+            }
+
+            if (!seen.Add((tlsSecret.SecretName, tlsSecret.Hostname)))
+            {
+                continue;
+            }
+
+            var (secretNameExpr, hostnameExpr) = (tlsSecret.SecretName, tlsSecret.Hostname);
             var secretName = await ResolveExpressionAtDeployTimeAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
             var hostname = await ResolveExpressionAtDeployTimeAsync(hostnameExpr, context.CancellationToken).ConfigureAwait(false);
 

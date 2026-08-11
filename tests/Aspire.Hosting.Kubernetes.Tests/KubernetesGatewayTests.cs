@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using static Aspire.Hosting.Kubernetes.Tests.PipelineStepTestHelpers;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
@@ -206,6 +209,35 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
         // future gateway/TLS step added without the route-eligibility filter also fails here.
         var steps = await CreateStepsAsync(app.Services, k8s.Resource);
         Assert.Empty(GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddGateway_NoRoutes_WarnsThatGatewayAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Gateway (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddGateway("empty").WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Gateway 'empty' has no routes configured. The Gateway, routes, TLS certificate, and load-balancer frontend will not be created.",
+            warning.Message);
     }
 
     [Fact]
