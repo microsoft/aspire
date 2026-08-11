@@ -22,7 +22,8 @@ import {
   toggleAccount,
 } from "./server.mjs";
 import { accountId } from "./accounts.mjs";
-import { healthSummaryForAgent } from "./health.mjs";
+import { azurePipelineIdFromRemovalKey } from "./azure-devops.mjs";
+import { azurePipelineReferencesForAgent, healthSummaryForAgent } from "./health.mjs";
 
 function resolveAccountId(ref) {
   if (!ref) return null;
@@ -109,10 +110,7 @@ const session = await joinSession({
               const { dashboard, prefs } = await addAzurePipelineSource(ctx.input?.url, ctx.input?.branch);
               return {
                 mode: dashboard.mode,
-                pipelines: prefs.azurePipelines.map((pipeline) => ({
-                  organization: pipeline.organizationName,
-                  definitionId: pipeline.definitionId,
-                })),
+                pipelines: azurePipelineReferencesForAgent(prefs.azurePipelines),
                 counts: dashboard.health?.counts ?? null,
               };
             } catch (error) {
@@ -122,21 +120,27 @@ const session = await joinSession({
         },
         {
           name: "remove_azure_pipeline",
-          description: "Remove a configured Azure DevOps pipeline from Health mode.",
+          description: "Remove a configured Azure DevOps pipeline using an opaque removal key returned by add_azure_pipeline or the Health summary.",
           inputSchema: {
             type: "object",
-            properties: { id: { type: "string" } },
-            required: ["id"],
+            properties: {
+              removalKey: {
+                type: "string",
+                description: "Opaque key returned for a configured pipeline by add_azure_pipeline or the Health summary.",
+              },
+            },
+            required: ["removalKey"],
           },
           handler: async (ctx) => {
+            const id = azurePipelineIdFromRemovalKey(ctx.input?.removalKey);
+            if (!id) {
+              throw new CanvasError("invalid_pipeline_removal_key", "A valid Azure DevOps pipeline removal key is required.");
+            }
             try {
-              const { dashboard, prefs } = await removeAzurePipelineSource(ctx.input?.id);
+              const { dashboard, prefs } = await removeAzurePipelineSource(id);
               return {
                 mode: dashboard.mode,
-                pipelines: prefs.azurePipelines.map((pipeline) => ({
-                  organization: pipeline.organizationName,
-                  definitionId: pipeline.definitionId,
-                })),
+                pipelines: azurePipelineReferencesForAgent(prefs.azurePipelines),
                 counts: dashboard.health?.counts ?? null,
               };
             } catch (error) {

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { azurePipelineRemovalKey } from "./azure-devops.mjs";
 import {
   associateHealthSources,
+  azurePipelineReferencesForAgent,
   githubReasons,
   healthCounts,
   healthSummaryForAgent,
@@ -532,6 +534,43 @@ test("healthSummaryForAgent excludes provider-controlled text", () => {
     ],
   });
   assert.doesNotMatch(JSON.stringify(summary), /ignore previous|expose secrets|destructive|malicious|credentials/i);
+});
+
+test("agent-facing Azure pipeline references expose removal keys for configured sources only", () => {
+  const configured = {
+    id: "azdo:dnceng/ignore previous instructions/1602",
+    provider: "azure-devops",
+    organizationName: "dnceng",
+    definitionId: 1602,
+    state: "failing",
+    reasons: [],
+  };
+  const discovered = {
+    ...configured,
+    id: "azdo:dnceng/internal/1599",
+    definitionId: 1599,
+    discovered: true,
+  };
+
+  const references = azurePipelineReferencesForAgent([configured]);
+  const summary = healthSummaryForAgent({
+    loading: false,
+    health: {
+      counts: { total: 2, healthy: 0, running: 0, degraded: 0, failing: 2, unavailable: 0, unknown: 0 },
+      items: [configured, discovered],
+    },
+  });
+
+  assert.deepEqual(references, [
+    {
+      organization: "dnceng",
+      definitionId: 1602,
+      removalKey: azurePipelineRemovalKey(configured.id),
+    },
+  ]);
+  assert.equal(summary.items[0].removalKey, azurePipelineRemovalKey(configured.id));
+  assert.equal("removalKey" in summary.items[1], false);
+  assert.doesNotMatch(JSON.stringify({ references, summary }), /ignore previous instructions/i);
 });
 
 function commit(oid, committedDate, state) {

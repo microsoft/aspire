@@ -177,8 +177,9 @@ No credential is written to the extension preferences.
 - `set_account_active` — activate or deactivate an account by id/login; active
   accounts interleave across every tab.
 - `add_azure_pipeline` — validate and add an Azure DevOps pipeline/build URL, with
-  an optional branch override.
-- `remove_azure_pipeline` — remove a configured Azure DevOps pipeline by ID.
+  an optional branch override; the result includes opaque removal keys.
+- `remove_azure_pipeline` — remove a configured Azure DevOps pipeline using a
+  removal key returned by `add_azure_pipeline` or the Health summary.
 - `accounts` — list every detected credential, its active state, and repo access.
 - `summary` — return PR/issue counts or Health status counts and reasons without
   opening the canvas.

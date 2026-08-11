@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   AzureDevOpsError,
+  azurePipelineIdFromRemovalKey,
+  azurePipelineRemovalKey,
   discoverAzureDevOpsPipelines,
   loadAzureDevOpsPipelineHealth,
   parseAzureDevOpsPipelineUrl,
@@ -11,6 +13,20 @@ import {
   resolveAzureDevOpsPipeline,
   unavailableAzureDevOpsHealth,
 } from "./azure-devops.mjs";
+
+test("Azure pipeline removal keys are opaque, stable, and project-specific", () => {
+  const firstId = "azdo:dnceng/internal/1602";
+  const secondId = "azdo:dnceng/other project/1602";
+  const firstKey = azurePipelineRemovalKey(firstId);
+  const secondKey = azurePipelineRemovalKey(secondId);
+
+  assert.equal(azurePipelineIdFromRemovalKey(firstKey), firstId);
+  assert.equal(azurePipelineRemovalKey(firstId), firstKey);
+  assert.notEqual(firstKey, secondKey);
+  assert.doesNotMatch(secondKey, /other project/i);
+  assert.equal(azurePipelineIdFromRemovalKey(`${firstKey}x`), null);
+  assert.equal(azurePipelineRemovalKey("not-an-azure-pipeline"), null);
+});
 
 test("parseAzureDevOpsPipelineUrl accepts definition, build, and legacy URLs", () => {
   assert.deepEqual(

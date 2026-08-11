@@ -3,6 +3,7 @@
 // Pipeline configuration stores only normalized coordinates. Authentication remains
 // owned by Azure CLI (`az login`) or AZURE_DEVOPS_EXT_PAT and is never persisted here.
 
+import { Buffer } from "node:buffer";
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { win32 } from "node:path";
@@ -18,6 +19,9 @@ const COMMAND_MAX_BUFFER = 16 * 1024 * 1024;
 const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const DISCOVERY_DEFINITION_LIMIT = 100;
 const DISCOVERY_CONCURRENCY = 6;
+const PIPELINE_ID_MAX_LENGTH = 512;
+const PIPELINE_REMOVAL_KEY_MAX_LENGTH = 2048;
+const PIPELINE_REMOVAL_KEY_PREFIX = "azp1_";
 const discoveryCache = new Map();
 const OFFICIAL_PIPELINE_TARGETS = [{
   githubRepository: "microsoft/aspire",
@@ -37,6 +41,30 @@ export class AzureDevOpsError extends Error {
     super(message);
     this.name = "AzureDevOpsError";
     this.code = code;
+  }
+}
+
+export function azurePipelineRemovalKey(value) {
+  const id = normalizedPipelineId(value);
+  if (!id) return null;
+  // Pipeline IDs include provider-owned project text. Keep that text out of agent-facing
+  // output while retaining a stable, versioned key that the removal action can decode.
+  const key = `${PIPELINE_REMOVAL_KEY_PREFIX}${Buffer.from(id, "utf8").toString("base64url")}`;
+  return key.length <= PIPELINE_REMOVAL_KEY_MAX_LENGTH ? key : null;
+}
+
+export function azurePipelineIdFromRemovalKey(value) {
+  const key = String(value ?? "").trim();
+  if (!key.startsWith(PIPELINE_REMOVAL_KEY_PREFIX)
+      || key.length > PIPELINE_REMOVAL_KEY_MAX_LENGTH
+      || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    return null;
+  }
+  try {
+    const id = Buffer.from(key.slice(PIPELINE_REMOVAL_KEY_PREFIX.length), "base64url").toString("utf8");
+    return azurePipelineRemovalKey(id) === key ? id : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1149,6 +1177,15 @@ function normalizeBranch(value) {
     throw new AzureDevOpsError("invalid_branch", "The Azure DevOps branch is invalid.");
   }
   return branch.startsWith("refs/") ? branch : `refs/heads/${branch}`;
+}
+
+function normalizedPipelineId(value) {
+  const id = String(value ?? "").trim();
+  return id.startsWith("azdo:")
+      && id.length <= PIPELINE_ID_MAX_LENGTH
+      && !/[\u0000-\u001f\u007f]/.test(id)
+    ? id
+    : null;
 }
 
 function azurePipelineId(organization, project, definitionId) {

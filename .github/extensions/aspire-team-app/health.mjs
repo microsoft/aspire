@@ -6,6 +6,7 @@
 
 import { dayMs } from "./constants.mjs";
 import {
+  azurePipelineRemovalKey,
   discoverAzureDevOpsPipelines,
   loadAzureDevOpsPipelineHealth,
   unavailableAzureDevOpsHealth,
@@ -488,10 +489,25 @@ export function healthSummaryForAgent(dashboard) {
       summary.repository = item.repository;
     } else if (provider === "azure-devops") {
       summary.definitionId = positiveInteger(item?.definitionId);
+      const removalKey = item?.discovered ? null : azurePipelineRemovalKey(item?.id);
+      if (removalKey) summary.removalKey = removalKey;
     }
     return summary;
   });
   return { loading: !!dashboard.loading, counts, items };
+}
+
+export function azurePipelineReferencesForAgent(pipelines) {
+  return (Array.isArray(pipelines) ? pipelines : []).flatMap((pipeline) => {
+    const definitionId = positiveInteger(pipeline?.definitionId);
+    const removalKey = azurePipelineRemovalKey(pipeline?.id);
+    if (!definitionId || !removalKey) return [];
+    return [{
+      organization: pipeline?.organizationName,
+      definitionId,
+      removalKey,
+    }];
+  });
 }
 
 export function githubReasons({
