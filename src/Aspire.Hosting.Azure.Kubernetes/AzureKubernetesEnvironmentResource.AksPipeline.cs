@@ -25,6 +25,11 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 public partial class AzureKubernetesEnvironmentResource
 {
     /// <summary>
+    /// Overrides Azure CLI execution for tests that validate generated commands.
+    /// </summary>
+    internal Func<string, Task<(int ExitCode, string StandardOutput, string StandardError)>>? AzCommandRunner { get; set; }
+
+    /// <summary>
     /// Per-environment AKS preparation work invoked by the <c>prepare-aks-{name}</c> pipeline
     /// step. Ensures a default user node pool exists and applies node-pool affinity and
     /// workload-identity annotations to compute resources targeting this AKS environment so
@@ -202,6 +207,14 @@ public partial class AzureKubernetesEnvironmentResource
     /// </summary>
     private async Task GetAksCredentialsAsync(PipelineStepContext context)
     {
+        await GetAksCredentialsAsync(context, resourceGroup: null, subscriptionId: null).ConfigureAwait(false);
+    }
+
+    private async Task GetAksCredentialsAsync(
+        PipelineStepContext context,
+        string? resourceGroup,
+        string? subscriptionId)
+    {
         var getCredsTask = await context.ReportingStep.CreateTaskAsync(
             $"Fetching AKS credentials for {Name}",
             context.CancellationToken).ConfigureAwait(false);
@@ -216,16 +229,18 @@ public partial class AzureKubernetesEnvironmentResource
                 var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
                     ?? Name;
 
-                var azPath = FindAzCli();
-
                 // Defense-in-depth: validate that values used as CLI arguments
                 // contain only expected characters (alphanumeric, hyphens, underscores, dots).
                 ValidateAzureResourceName(clusterName, "cluster name");
 
-                var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
+                resourceGroup ??= await GetResourceGroupAsync(clusterName, context)
                     .ConfigureAwait(false);
 
                 ValidateAzureResourceName(resourceGroup, "resource group");
+                if (subscriptionId is not null)
+                {
+                    ValidateAzureResourceName(subscriptionId, "subscription ID");
+                }
 
                 // Fetch kubeconfig content to stdout using --file - to avoid az CLI
                 // writing credentials with potentially permissive file permissions.
@@ -239,8 +254,8 @@ public partial class AzureKubernetesEnvironmentResource
                     clusterName, resourceGroup);
 
                 var result = await RunAzCommandAsync(
-                    azPath,
-                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -",
+                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -" +
+                        (subscriptionId is null ? string.Empty : $" --subscription \"{subscriptionId}\""),
                     context.Logger).ConfigureAwait(false);
 
                 if (result.ExitCode != 0)
@@ -273,7 +288,10 @@ public partial class AzureKubernetesEnvironmentResource
 
                 context.Summary.Add(
                     "🔑 Connect to cluster",
-                    new MarkdownString($"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName}`"));
+                    new MarkdownString(
+                        $"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName}" +
+                        (subscriptionId is null ? string.Empty : $" --subscription {subscriptionId}") +
+                        "`"));
 
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
@@ -309,7 +327,7 @@ public partial class AzureKubernetesEnvironmentResource
             return;
         }
 
-        await GetAksCredentialsAsync(context).ConfigureAwait(false);
+        await GetAksCredentialsAsync(context, resourceGroupName, subscriptionId).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -567,8 +585,7 @@ public partial class AzureKubernetesEnvironmentResource
     /// On first deploy, the deployment state may not be loaded into IConfiguration yet
     /// because it's written during the pipeline run (after create-provisioning-context).
     /// </summary>
-    private static async Task<string> GetResourceGroupAsync(
-        string azPath,
+    private async Task<string> GetResourceGroupAsync(
         string clusterName,
         PipelineStepContext context)
     {
@@ -587,7 +604,6 @@ public partial class AzureKubernetesEnvironmentResource
             clusterName);
 
         var result = await RunAzCommandAsync(
-            azPath,
             $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv",
             context.Logger).ConfigureAwait(false);
 
@@ -613,13 +629,19 @@ public partial class AzureKubernetesEnvironmentResource
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
     /// Returns the captured stdout, stderr, and exit code.
     /// </summary>
-    private static async Task<AzCommandResult> RunAzCommandAsync(
-        string azPath,
+    private async Task<AzCommandResult> RunAzCommandAsync(
         string arguments,
         ILogger logger)
     {
+        if (AzCommandRunner is not null)
+        {
+            var result = await AzCommandRunner(arguments).ConfigureAwait(false);
+            return new AzCommandResult(result.ExitCode, result.StandardOutput, result.StandardError);
+        }
+
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
+        var azPath = FindAzCli();
 
         var spec = new ProcessSpec(azPath)
         {
