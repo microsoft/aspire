@@ -11,12 +11,12 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
 /// </summary>
-internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNetSdkInstaller
+internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment) : IDotNetSdkInstaller
 {
     private readonly Func<string, string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
 
-    internal DotNetSdkInstaller(IConfiguration configuration, Func<string, string, ProcessStartInfo> createProcessStartInfo)
-        : this(configuration)
+    internal DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment, Func<string, string, ProcessStartInfo> createProcessStartInfo)
+        : this(configuration, environment)
     {
         _createProcessStartInfo = createProcessStartInfo;
     }
@@ -36,7 +36,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
-            var dotnetPath = ResolveDotNetPath();
+            var dotnetPath = ResolveDotNetPath(environment);
 
             using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
@@ -121,8 +121,8 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
 
     // Use the explicit Windows executable name so lookup still finds dotnet.exe when PATHEXT omits .EXE
     // and does not select an extensionless PATH entry that Process.Start cannot execute on Windows.
-    internal static string ResolveDotNetPath() =>
-        PathLookupHelper.ResolveExecutablePath(OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+    internal static string ResolveDotNetPath(IEnvironment environment) =>
+        PathLookupHelper.ResolveExecutablePath(environment.IsWindows() ? "dotnet.exe" : "dotnet");
 
     private static ProcessStartInfo CreateProcessStartInfo(string dotnetPath, string arguments)
     {
