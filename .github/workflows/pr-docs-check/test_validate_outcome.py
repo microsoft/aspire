@@ -308,12 +308,41 @@ class SideEffectOutcomeTests(unittest.TestCase):
             drafted_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
         self.assertTrue(outcome["allow_sme_review"])
         self.assertEqual("drafted", outcome["render_kind"])
         self.assertEqual(EXPECTED_SOURCE_PR_NUMBER, outcome["source_pr_number"])
+
+    def test_wrong_base_draft_allows_only_generic_warning(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        outcome = build_side_effect_outcome(
+            drafted_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "main",
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
+        self.assertIn("does not match canonical", outcome["diagnostic"])
+
+    def test_skipped_without_pr_allows_success_comment(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload(),
+            "",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "",
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("skipped", outcome["render_kind"])
 
     def test_duplicate_notifications_allow_only_generic_warning(self) -> None:
         duplicate_payload = payload("drafted")
@@ -323,6 +352,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             duplicate_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -334,6 +364,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload(source_pr_number=EXPECTED_SOURCE_PR_NUMBER + 1),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertFalse(outcome["allow_comment"])
@@ -344,6 +375,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload(source_pr_number=18868.0),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertFalse(outcome["allow_comment"])
@@ -357,6 +389,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             contradictory_payload,
             "",
             EXPECTED_SOURCE_PR_NUMBER,
+            "",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -368,6 +401,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload("draft_failed"),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -410,6 +444,39 @@ class ValidatorCliTests(unittest.TestCase):
                 )
 
         self.assertNotEqual(0, exit_code)
+
+    def test_side_effect_main_rejects_wrong_actual_base(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = self._write_payload(directory, drafted_payload)
+            event_path = Path(directory) / "event.json"
+            event_path.write_text(
+                json.dumps({"pull_request": {"number": EXPECTED_SOURCE_PR_NUMBER}}),
+                encoding="utf-8",
+            )
+            side_effect_path = Path(directory) / "side-effect.json"
+
+            exit_code = main(
+                [
+                    "--agent-output",
+                    str(output_path),
+                    "--created-pr-url",
+                    "https://github.com/microsoft/aspire.dev/pull/1447",
+                    "--created-pr-base",
+                    "main",
+                    "--github-event-path",
+                    str(event_path),
+                    "--write-side-effect-outcome",
+                    str(side_effect_path),
+                ]
+            )
+            outcome = json.loads(side_effect_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, exit_code)
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
 
     def test_process_exits_zero_for_success(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

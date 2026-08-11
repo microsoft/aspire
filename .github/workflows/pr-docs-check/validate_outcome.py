@@ -108,7 +108,7 @@ def _validate_drafted_base_contract(
     payload: Any,
     notification: dict[str, Any],
     created_pr_url: str,
-    created_pr_base: str | None,
+    created_pr_base: str,
 ) -> None:
     if _CREATED_PR_URL_RE.fullmatch(created_pr_url) is None:
         raise OutcomeValidationError(
@@ -131,9 +131,6 @@ def _validate_drafted_base_contract(
             f"{notification_target}."
         )
 
-    if created_pr_base is None:
-        return
-
     actual_base = _require_target_branch(created_pr_base, "drafted PR base branch")
     if actual_base != canonical_base:
         raise OutcomeValidationError(
@@ -146,7 +143,7 @@ def _validate_outcome(
     payload: Any,
     created_pr_url: str,
     expected_source_pr_number: object,
-    created_pr_base: str | None,
+    created_pr_base: str,
 ) -> str:
     item = _validate_agent_association(payload, expected_source_pr_number)
 
@@ -228,6 +225,7 @@ def build_side_effect_outcome(
     payload: Any,
     created_pr_url: str,
     expected_source_pr_number: int,
+    created_pr_base: str,
 ) -> dict[str, Any]:
     base_outcome: dict[str, Any] = {
         "allow_comment": False,
@@ -270,7 +268,7 @@ def build_side_effect_outcome(
             payload,
             created_pr_url,
             expected_source_pr_number,
-            created_pr_base=None,
+            created_pr_base,
         )
     except OutcomeValidationError as error:
         base_outcome["diagnostic"] = str(error)
@@ -317,6 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 payload,
                 args.created_pr_url,
                 expected_source_pr_number,
+                args.created_pr_base,
             )
         except OutcomeValidationError as error:
             outcome = {

@@ -134,12 +134,21 @@ jobs:
         with:
           name: agent
           path: /tmp/gh-aw/
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: aspire-dev-token
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        uses: actions/create-github-app-token@v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
       - name: Resolve drafted PR base
         id: drafted-pr-base
         if: needs.safe_outputs.outputs.created_pr_url != ''
         env:
           CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -317,13 +326,47 @@ safe-outputs:
             path: _validator
             sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
             sparse-checkout-cone-mode: false
+        - name: Mint aspire-bot token (microsoft/aspire.dev)
+          id: aspire-dev-token
+          if: needs.safe_outputs.outputs.created_pr_url != ''
+          uses: actions/create-github-app-token@v3.1.1
+          with:
+            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+            private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+            owner: microsoft
+            repositories: aspire.dev
+        - name: Resolve drafted PR base
+          id: drafted-pr-base
+          if: needs.safe_outputs.outputs.created_pr_url != ''
+          env:
+            CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+            GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+          run: |
+            set -euo pipefail
+
+            if ! [[ "${CREATED_PR_URL}" =~ ^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$ ]]; then
+              echo "ERROR: Created PR URL is not a microsoft/aspire.dev pull request." >&2
+              exit 1
+            fi
+
+            ACTUAL_BASE="$(gh api \
+              "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
+              --jq '.base.ref // ""')"
+            if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
+              echo "ERROR: Drafted PR has an invalid target branch." >&2
+              exit 1
+            fi
+
+            echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
         - name: Prepare trusted documentation outcome
           env:
+            CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
             CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
           run: >-
             python _validator/.github/workflows/pr-docs-check/validate_outcome.py
             --agent-output "${GH_AW_AGENT_OUTPUT}"
             --created-pr-url "${CREATED_PR_URL}"
+            --created-pr-base "${CREATED_PR_BASE}"
             --github-event-path "${GITHUB_EVENT_PATH}"
             --write-side-effect-outcome "${RUNNER_TEMP}/pr-docs-check-side-effect-outcome.json"
         - name: Mint aspire-bot token (microsoft/aspire)
@@ -334,15 +377,6 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
-        - name: Mint aspire-bot token (microsoft/aspire.dev)
-          id: aspire-dev-token
-          if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/create-github-app-token@v3.1.1
-          with:
-            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-            private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-            owner: microsoft
-            repositories: aspire.dev
         - name: Post status comment on source PR
           uses: actions/github-script@v9
           env:

@@ -82,6 +82,7 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 
             Assert.Contains("Resolve drafted PR base", validationJob, StringComparison.Ordinal);
             Assert.Contains("if: needs.safe_outputs.outputs.created_pr_url != ''", validationJob, StringComparison.Ordinal);
+            AssertCrossRepoLookupUsesAppToken(validationJob);
             var urlValidationIndex = validationJob.IndexOf(
                 @"^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$",
                 StringComparison.Ordinal);
@@ -100,6 +101,40 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             AssertShellVariablesAreBound(
                 validationStep,
                 ["CREATED_PR_BASE", "CREATED_PR_URL", "EXPECTED_SOURCE_PR_NUMBER"]);
+        }
+    }
+
+    [Fact]
+    public void SourceAndCompiledWorkflowValidateBaseBeforeDraftedSideEffects()
+    {
+        foreach (var workflowName in new[] { "pr-docs-check.md", "pr-docs-check.lock.yml" })
+        {
+            var workflow = ReadWorkflow(workflowName);
+            var notifyJob = GetSection(
+                workflow,
+                workflowName.EndsWith(".md", StringComparison.Ordinal)
+                    ? "^    notify-source-pr:"
+                    : "^  notify_source_pr:",
+                workflowName.EndsWith(".md", StringComparison.Ordinal)
+                    ? "^# The agent that follows"
+                    : "^  safe_outputs:");
+
+            AssertCrossRepoLookupUsesAppToken(notifyJob);
+            var mintIndex = notifyJob.IndexOf("Mint aspire-bot token (microsoft/aspire.dev)", StringComparison.Ordinal);
+            var resolveIndex = notifyJob.IndexOf("Resolve drafted PR base", StringComparison.Ordinal);
+            var prepareIndex = notifyJob.IndexOf("Prepare trusted documentation outcome", StringComparison.Ordinal);
+            var commentIndex = notifyJob.IndexOf("Post status comment on source PR", StringComparison.Ordinal);
+            var reviewIndex = notifyJob.IndexOf("Request SME review on draft PR", StringComparison.Ordinal);
+
+            Assert.True(resolveIndex > mintIndex, "The drafted PR lookup must run after app-token minting.");
+            Assert.True(prepareIndex > resolveIndex, "Side-effect validation must run after the actual base lookup.");
+            Assert.True(commentIndex > prepareIndex, "Source comments must use the base-validated outcome.");
+            Assert.True(reviewIndex > prepareIndex, "SME review requests must use the base-validated outcome.");
+            Assert.Contains(
+                "CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}",
+                notifyJob,
+                StringComparison.Ordinal);
+            Assert.Contains("--created-pr-base \"${CREATED_PR_BASE}\"", notifyJob, StringComparison.Ordinal);
         }
     }
 
@@ -201,5 +236,25 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 
         Assert.Equal(expectedVariables, referencedVariables);
         Assert.All(referencedVariables, variable => Assert.Contains(variable, boundVariables));
+    }
+
+    private static void AssertCrossRepoLookupUsesAppToken(string job)
+    {
+        var mintIndex = job.IndexOf("Mint aspire-bot token (microsoft/aspire.dev)", StringComparison.Ordinal);
+        var resolveIndex = job.IndexOf("Resolve drafted PR base", StringComparison.Ordinal);
+        Assert.True(mintIndex >= 0, "The job must mint an aspire.dev app token.");
+        Assert.True(resolveIndex > mintIndex, "The drafted PR lookup must run after app-token minting.");
+
+        var resolveStep = GetSection(
+            job,
+            "^      (?:  )?- name: Resolve drafted PR base",
+            "^      (?:  )?- name:");
+        Assert.Contains(
+            "GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}",
+            resolveStep,
+            StringComparison.Ordinal);
+        Assert.False(
+            resolveStep.Contains("github.token", StringComparison.Ordinal),
+            "The cross-repository lookup must not use the repository-scoped github.token.");
     }
 }
