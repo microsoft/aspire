@@ -559,7 +559,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, "13.4.5");
         var dnxPath = await CreateFakeDnxAsync(fakeCliDirectory.FullName);
-        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        var environment = new Dictionary<string, string>
+        {
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+        };
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        environment["ASPIRE_HOME"] = aspireHome;
 
         var buildResult = await RunDotNetWithArgumentsAsync(
             project.ProjectDirectory,
@@ -577,6 +582,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", properties["_AspireCliVersionSupportsRunHook"]);
         Assert.Equal(GetExpectedDnxRunCommand(dnxPath), properties["RunCommand"]);
         Assert.Equal(GetExpectedDnxRunArguments(dnxPath, project, "--custom foo"), properties["RunArguments"]);
+        Assert.True(
+            File.Exists(Path.Combine(aspireHome, "bundle", "dcp", OperatingSystem.IsWindows() ? "dcp.exe" : "dcp")),
+            buildResult.Output);
+        Assert.True(
+            File.Exists(Path.Combine(aspireHome, "bundle", "managed", OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed")),
+            buildResult.Output);
     }
 
     [Fact]
@@ -912,6 +923,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     echo "13.5.0"
                     exit 0
                 fi
+                if [ "$1" = "--yes" ] && [ "$2" = "aspire.cli@13.5.0" ] && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                    mkdir -p "$6/bundle/dcp" "$6/bundle/managed"
+                    : > "$6/bundle/dcp/dcp"
+                    : > "$6/bundle/managed/aspire-managed"
+                    exit 0
+                fi
                 printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
                 """).ReplaceLineEndings("\n"));
 
@@ -986,12 +1003,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     echo {{version}}
                     exit /b 0
                 )
-                type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
-                :loop
-                if "%~1"=="" exit /b 0
-                >> "%ASPIRE_TEST_CAPTURE_PATH%" echo %~1
-                shift
-                goto loop
+                exit /b 42
                 """);
 
             return;
@@ -1004,7 +1016,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 echo "{{version}}"
                 exit 0
             fi
-            printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+            exit 42
             """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }

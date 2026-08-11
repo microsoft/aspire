@@ -10,6 +10,20 @@ if (args is ["--list-sdks"])
 var dnxArgumentIndex = Array.IndexOf(args, "dnx");
 var forwardedArgs = dnxArgumentIndex >= 0 ? args[(dnxArgumentIndex + 1)..] : args;
 
+var setupArgumentIndex = Array.IndexOf(forwardedArgs, "setup");
+var installPathArgumentIndex = Array.IndexOf(forwardedArgs, "--install-path");
+if (setupArgumentIndex >= 0 &&
+    installPathArgumentIndex >= 0 &&
+    installPathArgumentIndex + 1 < forwardedArgs.Length)
+{
+    var installPath = forwardedArgs[installPathArgumentIndex + 1];
+    var dcpDirectory = Directory.CreateDirectory(Path.Combine(installPath, "bundle", "dcp"));
+    var managedDirectory = Directory.CreateDirectory(Path.Combine(installPath, "bundle", "managed"));
+    File.WriteAllText(Path.Combine(dcpDirectory.FullName, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
+    File.WriteAllText(Path.Combine(managedDirectory.FullName, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), "");
+    return;
+}
+
 if (forwardedArgs.Length > 0 && forwardedArgs[^1] == "--version")
 {
     if (File.Exists(Path.Combine(AppContext.BaseDirectory, "fail-version")))

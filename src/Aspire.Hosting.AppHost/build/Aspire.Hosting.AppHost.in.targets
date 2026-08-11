@@ -218,10 +218,6 @@ namespace Projects%3B
     </ResolveAspireCliInvocation>
 
     <PropertyGroup>
-      <!-- A usable DNX host can supply DCP/Dashboard paths at runtime when a PATH Aspire candidate
-           later fails its version probe. Explicit paths still require build-time validation so
-           configuration mistakes fail with ASPIRE009. -->
-      <_AspireCliBundleResolutionOptional Condition="'$(AspireCliPath)' == '' and '$(AspireCliBundlePath)' == '' and ('$(_AspireResolvedCliInvocationMode)' == 'Dnx' or '$(_AspireResolvedDnxHostPath)' != '')">true</_AspireCliBundleResolutionOptional>
       <_AspireResolvedDnxHostArgumentsPrefix Condition="'$(_AspireResolvedDnxHostArguments)' != ''">$(_AspireResolvedDnxHostArguments) </_AspireResolvedDnxHostArgumentsPrefix>
     </PropertyGroup>
 
@@ -230,9 +226,100 @@ namespace Projects%3B
 
   <Target Name="ResolveAspireCliBundlePaths"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                              AspireCliPath="$(AspireCliPath)">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+      <Output TaskParameter="AspireHomeDirectory" PropertyName="_AspireDefaultHomeDirectory" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
+      <_AspireCliSetupPath Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</_AspireCliSetupPath>
+      <_AspireCliSetupPath Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliSetupPath>
+      <_AspireCliSetupPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(_AspireCliSetupPath)' != '' and ($(_AspireCliSetupPath.ToLowerInvariant().EndsWith('.cmd')) or $(_AspireCliSetupPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliSetupPathIsWindowsCommandShim>
+      <_AspireCliSetupPathWithEscapedMetacharacters Condition="'$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireCliSetupPathWithEscapedMetacharacters>
+      <!-- Exec writes a temporary batch file, which invokes a nested cmd /C for command shims.
+           Each literal percent must survive both command processors: %% escapes the outer batch,
+           while the leading carets keep the resulting percent signs literal in the nested command. -->
+      <_AspireCliSetupPathForCommandShim Condition="'$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPathWithEscapedMetacharacters), '%', '^^%%'))</_AspireCliSetupPathForCommandShim>
+      <_AspireCliSetupHome Condition="'$(ASPIRE_HOME)' != ''">$(ASPIRE_HOME)</_AspireCliSetupHome>
+      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
+
+      <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' != 'true'">"$(_AspireCliSetupPath)" setup</_AspireCliSetupCommand>
+      <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">cmd /D /V:OFF /C $(_AspireCliSetupPathForCommandShim) setup</_AspireCliSetupCommand>
+      <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupCommand>
+    </PropertyGroup>
+
+    <!-- Script installs normally extract during installation. This fallback also covers older
+         installers and DNX-only machines, and runs during real builds so IDE and command-line
+         builds stamp concrete DCP and dashboard assembly metadata. -->
+    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupCommand)' to prepare it." Importance="Low"
+            Condition="'$(_AspireCliSetupCommand)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
+    <Exec Command="$(_AspireCliSetupCommand)"
+          Condition="'$(_AspireCliSetupCommand)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="120000">
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
+    </Exec>
+
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                            AspireCliPath="$(AspireCliPath)"
+                            Condition="'$(_AspireCliSetupCommand)' != ''">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
+      <!-- An unusable PATH CLI must not shadow the paired CLI package when DNX is available.
+           Explicit AspireCliPath remains authoritative and never falls back. -->
+      <_AspireCliFallbackDnxSetupCommand Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and Exists('$(_AspireResolvedDnxHostPath)')">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliFallbackDnxSetupCommand>
+    </PropertyGroup>
+
+    <Message Text="The PATH Aspire CLI did not prepare a usable bundle. Running '$(_AspireCliFallbackDnxSetupCommand)' through DNX." Importance="Low"
+             Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''" />
+    <Exec Command="$(_AspireCliFallbackDnxSetupCommand)"
+          Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="120000">
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
+    </Exec>
+
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                            AspireCliPath="$(AspireCliPath)"
+                            Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
@@ -255,10 +342,22 @@ namespace Projects%3B
         $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
         Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.
       </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupCommand)' != '' or '$(_AspireCliFallbackDnxSetupCommand)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExitCode)' != '' and '$(_AspireCliSetupExitCode)' != '0'">
+        $(_AspireCliBundleNotFoundError)
+        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
+        $(_AspireCliBundleNotFoundError)
+        Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"
-           Condition="'$(_AspireCliBundleResolutionOptional)' != 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))"
+           Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
            Text="$(_AspireCliBundleNotFoundError)" />
   </Target>
 

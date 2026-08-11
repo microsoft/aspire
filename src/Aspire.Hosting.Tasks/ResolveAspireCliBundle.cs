@@ -29,6 +29,12 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public string? AspireCliPath { get; set; }
 
     /// <summary>
+    /// The Aspire home directory used to find and prepare extracted bundle layouts.
+    /// </summary>
+    [Output]
+    public string? AspireHomeDirectory { get; set; }
+
+    /// <summary>
     /// The resolved DCP directory.
     /// </summary>
     [Output]
@@ -69,6 +75,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 
     public override bool Execute()
     {
+        var aspireHomeDirectory = GetDefaultAspireHomeDirectory();
+        AspireHomeDirectory = aspireHomeDirectory;
+
         if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
         {
             if (TryResolveFromLayoutPath(AspireCliBundlePath, out var explicitBundle))
@@ -99,7 +108,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return true;
         }
 
-        if (TryResolveFromLayoutPath(GetDefaultAspireHomeDirectory(), out var aspireHomeBundle))
+        if (TryResolveFromLayoutPath(aspireHomeDirectory, out var aspireHomeBundle))
         {
             SetOutputs(aspireHomeBundle);
             return true;

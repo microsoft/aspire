@@ -62,6 +62,12 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("download", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("install", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("[DRY RUN]", result.Output);
+        Assert.Contains("[DRY RUN] Would run:", result.Output);
+        Assert.Contains("aspire setup", result.Output);
+        Assert.True(
+            result.Output.IndexOf("route sidecar", StringComparison.OrdinalIgnoreCase) <
+            result.Output.IndexOf("[DRY RUN] Would run:", StringComparison.Ordinal),
+            "Bundle setup should be planned after the install-route sidecar is written.");
     }
 
     [Fact]
@@ -155,6 +161,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aspire setup", result.Output);
     }
 
     [Theory]

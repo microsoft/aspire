@@ -332,5 +332,6 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);
             }
         }
+
     }
 }
