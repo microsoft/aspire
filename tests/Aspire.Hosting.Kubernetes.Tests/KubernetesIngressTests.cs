@@ -75,7 +75,7 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
         // override file (and chart values.yaml placeholder) include the entry.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Pipeline:ClearCache=true prevents loading of leaked deployment state from
-        // ~/.aspire/deployments/<sha>/<env>.json (which would otherwise auto-resolve
+        // <ASPIRE_HOME>/deployments/<sha>/<env>.json (which would otherwise auto-resolve
         // parameters from prior test runs and bypass the MissingParameterValueException path).
         var builder = TestDistributedApplicationBuilder.Create(
             "AppHost:Operation=publish",

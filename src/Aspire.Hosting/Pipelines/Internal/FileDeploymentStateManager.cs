@@ -67,9 +67,16 @@ internal sealed partial class FileDeploymentStateManager(
             throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", "EnvironmentName");
         }
 
+        var aspireHome = configuration[KnownConfigNames.AspireHome];
+        if (string.IsNullOrWhiteSpace(aspireHome))
+        {
+            aspireHome = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".aspire");
+        }
+
         var aspireDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".aspire",
+            aspireHome,
             "deployments",
             appHostSha
         );

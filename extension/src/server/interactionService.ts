@@ -160,6 +160,7 @@ function getConsoleLineText(line: ConsoleLine): string {
 type DebugSessionOptions = {
     command?: string;
     args?: string[];
+    env?: { [key: string]: string };
 };
 
 export class InteractionService implements IInteractionService {
@@ -673,6 +674,7 @@ export class InteractionService implements IInteractionService {
             program: projectFile ?? workingDirectory,
             command: command as AspireExtendedDebugConfiguration['command'],
             args: options?.args,
+            env: options?.env,
             noDebug: !debug,
         };
 

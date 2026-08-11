@@ -153,6 +153,32 @@ suite('InteractionService endpoints', () => {
 		showQuickPickStub.restore();
 	});
 
+	test('startDebugSession forwards CLI environment to the debug configuration', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				'/workspace/apphost.cs',
+				true,
+				{
+					command: 'deploy',
+					env: {
+						ASPIRE_HOME: '/isolated/aspire-home',
+					},
+				});
+
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.deepStrictEqual(debugConfiguration.env, {
+				ASPIRE_HOME: '/isolated/aspire-home',
+			});
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
 	test('displayError endpoint', async () => {
 		const testInfo = await createTestRpcServer();
 		const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
