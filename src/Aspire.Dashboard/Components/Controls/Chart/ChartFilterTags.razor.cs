@@ -43,12 +43,6 @@ public partial class ChartFilterTags : IDisposable
         InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnTagSelectionChangedAsync(DimensionValueViewModel tag, bool isChecked)
-    {
-        Filter.OnTagSelectionChanged(tag, isChecked);
-        await OnSelectionChanged.InvokeAsync(Filter);
-    }
-
     private Task OnTagClickedAsync(MouseEventArgs args, DimensionValueViewModel tag)
     {
         return OnTagActivatedAsync(tag, args.ShiftKey);
@@ -56,43 +50,22 @@ public partial class ChartFilterTags : IDisposable
 
     private async Task OnTagActivatedAsync(DimensionValueViewModel tag, bool toggleSelection)
     {
-        var isChecked = true;
         if (toggleSelection)
         {
-            isChecked = !Filter.SelectedValues.Contains(tag);
+            Filter.OnTagSelectionChanged(tag, !Filter.SelectedValues.Contains(tag));
         }
         else
         {
-            Filter.SelectedValues.Clear();
+            Filter.SetSelectedValues([tag]);
         }
 
-        await OnTagSelectionChangedAsync(tag, isChecked);
-    }
-
-    private Task OnTagKeyDownAsync(KeyboardEventArgs args, DimensionValueViewModel tag)
-    {
-        if (args.Key is "Enter" or " ")
-        {
-            return OnTagActivatedAsync(tag, args.ShiftKey);
-        }
-
-        return Task.CompletedTask;
+        await OnSelectionChanged.InvokeAsync(Filter);
     }
 
     private void ShowPopover()
     {
         Filter.PopupVisible = true;
         Filter.NotifyStateChanged?.Invoke();
-    }
-
-    private Task OnOverflowTagKeyDownAsync(KeyboardEventArgs args)
-    {
-        if (args.Key is "Enter" or " ")
-        {
-            ShowPopover();
-        }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>
