@@ -376,6 +376,55 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsSecretParameterReferencedByOwningResourceEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        // Mimic AddPostgres: a generated secret password parameter that is referenced by the owning
+        // resource's own environment but is never registered as a top-level resource in the model. Prior
+        // to the fix for https://github.com/microsoft/aspire/issues/19241 the redaction set only contained
+        // top-level ParameterResources, so the owning resource leaked this value in plaintext even though
+        // the same value was redacted when it flowed into a dependent resource.
+        var passwordParameter = new ParameterResource("pg-password", _ => "generated-s3cr3t", secret: true);
+        var owner = builder.AddResource(new CustomResourceWithEnvironment("pg"))
+            .WithEnvironment(context => context.EnvironmentVariables["POSTGRES_PASSWORD"] = passwordParameter);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        // Simulate the generated parameter having been resolved to its runtime value.
+        passwordParameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        passwordParameter.WaitForValueTcs.SetResult("generated-s3cr3t");
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("POSTGRES_PASSWORD", "generated-s3cr3t", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "pg");
+        var password = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "POSTGRES_PASSWORD");
+
+        // The owning resource's own environment variable must be redacted even though the secret parameter
+        // is only referenced by the resource and is not a top-level resource in the model.
+        Assert.Null(password.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_DoesNotBlockOnUnresolvedSecretParameter()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -930,6 +979,10 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     private sealed class CustomResource(string name) : Resource(name)
+    {
+    }
+
+    private sealed class CustomResourceWithEnvironment(string name) : Resource(name), IResourceWithEnvironment
     {
     }
 

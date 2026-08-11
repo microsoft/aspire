@@ -33,6 +33,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
+    // The set of secret parameter instances reachable from the model is fixed once the application is
+    // running, so it is discovered once and cached for the lifetime of the connection. Only the
+    // parameters' resolved values change over time, and those are re-read on every snapshot. See
+    // GetSecretParametersAsync.
+    private IReadOnlyList<ParameterResource>? _secretParameters;
+
     #region V2 API Methods
 
     /// <summary>
@@ -975,7 +981,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // This is a point-in-time batch, so the set of resolved secret values is identical for
         // every resource. Compute it once here rather than once per resource.
-        var secretParameterValues = GetResolvedSecretParameterValues();
+        var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
 
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
@@ -1025,9 +1031,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             // Recompute the resolved secret values for every event. Secrets can be resolved between
-            // events (e.g. interactive parameter entry after the watch starts), so caching the set
-            // once outside the loop would let a value that becomes secret later bypass redaction.
-            var secretParameterValues = GetResolvedSecretParameterValues();
+            // events (e.g. interactive parameter entry after the watch starts), so reading the values
+            // once outside the loop would let a value that becomes secret later bypass redaction. Only
+            // the resolved values are re-read here; the set of secret parameter instances is cached by
+            // GetSecretParametersAsync.
+            var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
@@ -1211,26 +1219,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         => value is not null && secretParameterValues.Contains(value) ? null : value;
 
     /// <summary>
-    /// Collects the resolved values of secret parameters in the application model so they can
-    /// be redacted from data sent to clients. Only values that have already been resolved are
+    /// Collects the resolved values of secret parameters reachable from the application model so they
+    /// can be redacted from data sent to clients. Only values that have already been resolved are
     /// returned; this never blocks waiting for interactive parameter resolution.
     /// </summary>
-    private HashSet<string> GetResolvedSecretParameterValues()
+    private async Task<HashSet<string>> GetResolvedSecretParameterValuesAsync(CancellationToken cancellationToken)
     {
         var secretValues = new HashSet<string>(StringComparer.Ordinal);
 
-        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        foreach (var parameter in await GetSecretParametersAsync(cancellationToken).ConfigureAwait(false))
         {
-            return secretValues;
-        }
-
-        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
-        {
-            if (!parameter.Secret)
-            {
-                continue;
-            }
-
             if (parameter.WaitForValueTcs is { } waitForValueTcs)
             {
                 // Run mode: peek at the resolved value without waiting for resolution.
@@ -1257,6 +1255,76 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
 
         return secretValues;
+    }
+
+    /// <summary>
+    /// Gets the set of secret <see cref="ParameterResource"/> instances reachable from the application
+    /// model, including parameters that are only referenced by another resource rather than registered
+    /// as a top-level resource.
+    /// </summary>
+    /// <remarks>
+    /// Enumerating only <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> misses generated
+    /// parameters such as the password created by <c>AddPostgres("pg")</c>, which is referenced by the
+    /// owning resource but never added to the model. That gap let the owning resource's own environment
+    /// variable (e.g. <c>POSTGRES_PASSWORD</c>) leak the secret in plaintext even though the same value
+    /// was redacted for dependent resources (https://github.com/microsoft/aspire/issues/19241). Discovery
+    /// mirrors <see cref="ParameterProcessor"/> — the component that actually resolves these
+    /// parameters — so the redaction set matches the set of secret values that can flow into a resource.
+    /// The result is cached because the model's topology is fixed once the application is running; only the
+    /// parameters' resolved values change over time and those are re-read by
+    /// <see cref="GetResolvedSecretParameterValuesAsync"/> on every snapshot.
+    /// </remarks>
+    private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
+    {
+        if (_secretParameters is { } cached)
+        {
+            return cached;
+        }
+
+        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        {
+            return _secretParameters = [];
+        }
+
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        // Keyed by name to de-duplicate a parameter that is both a top-level resource and referenced elsewhere.
+        var secretParameters = new Dictionary<string, ParameterResource>(StringComparer.Ordinal);
+
+        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
+            {
+                secretParameters[parameter.Name] = parameter;
+            }
+        }
+
+        foreach (var resource in appModel.Resources)
+        {
+            IReadOnlySet<IResource> dependencies;
+            try
+            {
+                // Dependency discovery runs environment/argument callbacks to find referenced resources.
+                // A misbehaving callback must not break describe, so failures are logged and skipped; any
+                // top-level secret parameters were already collected above.
+                dependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.Recursive, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to compute dependencies for resource {ResourceName} while collecting secret parameters for redaction.", resource.Name);
+                continue;
+            }
+
+            foreach (var parameter in dependencies.OfType<ParameterResource>())
+            {
+                if (parameter.Secret)
+                {
+                    secretParameters[parameter.Name] = parameter;
+                }
+            }
+        }
+
+        return _secretParameters = [.. secretParameters.Values];
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
