@@ -666,9 +666,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var ingressResource in ingressResources)
         {
-            if (ingressResource.Paths.Count == 0 && ingressResource.DefaultBackend is null)
+            if (!ingressResource.ShouldMaterialize)
             {
-                logger.LogWarning("Ingress '{IngressName}' has no path rules or default backend configured. Skipping.", ingressResource.Name);
+                logger.LogWarning(
+                    "Ingress '{IngressName}' has no path rules or default backend configured. The Ingress and its TLS certificate will not be created.",
+                    ingressResource.Name);
                 continue;
             }
 
@@ -877,9 +879,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var gatewayResource in gatewayResources)
         {
-            if (gatewayResource.Routes.Count == 0)
+            if (!gatewayResource.ShouldMaterialize)
             {
-                logger.LogWarning("Gateway '{GatewayName}' has no routes configured. Skipping.", gatewayResource.Name);
+                logger.LogWarning(
+                    "Gateway '{GatewayName}' has no routes configured. The Gateway, routes, TLS certificate, and load-balancer frontend will not be created.",
+                    gatewayResource.Name);
                 continue;
             }
 
@@ -1158,7 +1162,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var tlsSecrets = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             foreach (var tls in gateway.TlsConfigs)
             {
@@ -1169,7 +1177,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
         }
 
-        foreach (var ingress in model.Resources.OfType<KubernetesIngressResource>().Where(i => i.Parent == environment))
+        var ingresses = model.Resources
+            .OfType<KubernetesIngressResource>()
+            .Where(i => i.Parent == environment && i.ShouldMaterialize);
+
+        foreach (var ingress in ingresses)
         {
             foreach (var tls in ingress.TlsConfigs)
             {
@@ -1193,7 +1205,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var results = new List<(KubernetesGatewayResource Gateway, ReferenceExpression SecretName)>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             foreach (var tls in gateway.TlsConfigs)
             {
@@ -1218,7 +1234,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var results = new List<KubernetesGatewayResource>();
 
-        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        var gateways = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == environment && g.ShouldMaterialize);
+
+        foreach (var gateway in gateways)
         {
             if (gateway.TlsConfigs.Count > 0)
             {
