@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -9,9 +10,17 @@ namespace Infrastructure.Tests;
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
     [Fact]
-    public async Task PythonTestsPass()
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task PythonTestsPassOnWindows() => PythonTestsPass("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task PythonTestsPassOnUnix() => PythonTestsPass("python3");
+
+    private async Task PythonTestsPass(string python)
     {
-        var python = OperatingSystem.IsWindows() ? "python" : "python3";
         var startInfo = new ProcessStartInfo(python)
         {
             WorkingDirectory = RepoRoot.Path,
