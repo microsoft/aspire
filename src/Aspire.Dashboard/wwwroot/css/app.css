@@ -365,9 +365,9 @@ fluent-combobox {
     /* A 10% black mix subtly darkens dialogs while preserving the ramp's blue-violet undertone. */
     --dialog-background-color: color-mix(in srgb, var(--neutral-layer-2) 90%, #000000);
     --dialog-border-color: var(--neutral-stroke-rest);
-    /* A mid periwinkle-violet keeps the focus ring above the WCAG 1.4.11 3:1 non-text contrast
-       minimum on the generated dark surfaces without becoming a near-white halo. */
-    --dash-focus-ring-color: #a98eff;
+    /* The secondary brand purple emitted by Fluent's accent token keeps the focus ring above the
+       WCAG 1.4.11 3:1 non-text contrast minimum without introducing a custom blend. */
+    --dash-focus-ring-color: var(--accent-fill-rest);
     /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css).
        Dark theme: a restrained tint of the seed over the neutral layer replaces the old
        near-black / over-saturated floods (#3F1011, #411200, #052505), while the border stays
