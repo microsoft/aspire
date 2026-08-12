@@ -388,6 +388,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // the environments' steps silently skip it (which would result in the resource
         // never being deployed).
 
+        // This step is only wired as RequiredBy 'before-start', so the task DAG schedules it
+        // concurrently with any other step that shares that relationship — including
+        // 'azure-prepare-resources', which appends resources to the model. Enumerating the live
+        // model here is safe because IResourceCollection serves reads from an immutable
+        // copy-on-write snapshot; see ResourceCollection for the hazard this protects against.
         var computeEnvironments = model.Resources.OfType<IComputeEnvironmentResource>().ToList();
         if (computeEnvironments.Count <= 1)
         {

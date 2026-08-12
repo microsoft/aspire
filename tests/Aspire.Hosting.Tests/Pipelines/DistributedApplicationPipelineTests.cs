@@ -978,6 +978,62 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.True(executionTimes["D"] >= executionTimes["C"], "D should start after C completes");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ConcurrentStepMutatingModel_DoesNotBreakEnumerationInAnotherStep()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19266.
+        // ExecuteStepsAsTaskDag runs steps with no ordering relationship concurrently, and every
+        // step shares one DistributedApplicationModel. A step appending a resource used to
+        // invalidate an in-flight enumerator in a peer step ("Collection was modified; enumeration
+        // operation may not execute"). Force that exact interleaving with a two-way handshake so
+        // the test never depends on thread timing.
+        using var builder = CreatePipelineTestBuilder();
+        builder.AddResource(new CustomResource("resource-1"));
+        builder.AddResource(new CustomResource("resource-2"));
+
+        var enumerationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mutationCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        List<string>? observedResources = null;
+        pipeline.AddStep("reader", async ctx =>
+        {
+            var names = new List<string>();
+
+            using var enumerator = ctx.Model.Resources.GetEnumerator();
+
+            Assert.True(enumerator.MoveNext());
+            names.Add(enumerator.Current.Name);
+
+            enumerationStarted.SetResult();
+            await mutationCompleted.Task;
+
+            while (enumerator.MoveNext())
+            {
+                names.Add(enumerator.Current.Name);
+            }
+
+            observedResources = names;
+        });
+
+        pipeline.AddStep("mutator", async ctx =>
+        {
+            await enumerationStarted.Task;
+            ctx.Model.Resources.Add(new CustomResource("added-by-mutator"));
+            mutationCompleted.SetResult();
+        });
+
+        var app = builder.Build();
+        var context = CreateDeployingContext(app);
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        // The reader keeps serving the snapshot it started with, so it never observes the append.
+        Assert.NotNull(observedResources);
+        Assert.DoesNotContain("added-by-mutator", observedResources);
+        Assert.Contains("added-by-mutator", app.Services.GetRequiredService<DistributedApplicationModel>().Resources.Select(r => r.Name));
+    }
+
     private static PipelineContext CreateDeployingContext(DistributedApplication app)
     {
         return new PipelineContext(

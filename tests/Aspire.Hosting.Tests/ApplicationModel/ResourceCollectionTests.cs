@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.ObjectModel;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests.ApplicationModel;
 
@@ -235,6 +236,129 @@ public class ResourceCollectionTests
         Assert.True(collection.TryGetByName("TEST", out _));
 
         Assert.False(collection.TryGetByName("nonexistent", out _));
+    }
+
+    [Fact]
+    public void Enumeration_IsNotInvalidatedByConcurrentMutation()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19266.
+        // Pipeline steps run concurrently and share a single DistributedApplicationModel, so one
+        // step can append a resource while another is enumerating. Interleave deterministically by
+        // driving the enumerator by hand rather than relying on thread timing.
+        var collection = new ResourceCollection();
+        collection.Add(new TestResource("res1"));
+        collection.Add(new TestResource("res2"));
+
+        var observed = new List<string>();
+
+        using var enumerator = collection.GetEnumerator();
+
+        Assert.True(enumerator.MoveNext());
+        observed.Add(enumerator.Current.Name);
+
+        collection.Add(new TestResource("added-during-enumeration"));
+        collection.Remove(collection.Single(resource => resource.Name == "res2"));
+
+        while (enumerator.MoveNext())
+        {
+            observed.Add(enumerator.Current.Name);
+        }
+
+        // The enumerator keeps serving the snapshot taken when enumeration started.
+        Assert.Equal(["res1", "res2"], observed);
+    }
+
+    [Fact]
+    public void Enumeration_ReflectsMutationsOnSubsequentEnumeration()
+    {
+        var collection = new ResourceCollection();
+        collection.Add(new TestResource("res1"));
+
+        Assert.Equal(["res1"], collection.Select(resource => resource.Name));
+
+        collection.Add(new TestResource("res2"));
+
+        Assert.Equal(["res1", "res2"], collection.Select(resource => resource.Name));
+
+        collection.RemoveAt(0);
+
+        Assert.Equal(["res2"], collection.Select(resource => resource.Name));
+    }
+
+    [Fact]
+    public async Task ConcurrentAddsAndEnumerations_DoNotCorruptCollection()
+    {
+        const int resourceCount = 500;
+
+        var collection = new ResourceCollection();
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var writer = Task.Run(async () =>
+        {
+            await startGate.Task;
+
+            for (var i = 0; i < resourceCount; i++)
+            {
+                collection.Add(new TestResource($"res{i}"));
+            }
+        });
+
+        var reader = Task.Run(async () =>
+        {
+            await startGate.Task;
+
+            // Enumerate continuously while the writer appends. Without snapshot-based reads this
+            // throws "Collection was modified; enumeration operation may not execute."
+            while (!writer.IsCompleted)
+            {
+                foreach (var resource in collection)
+                {
+                    Assert.StartsWith("res", resource.Name, StringComparison.Ordinal);
+                }
+            }
+        });
+
+        startGate.SetResult();
+        await Task.WhenAll(writer, reader).DefaultTimeout();
+
+        var enumerated = collection.ToList();
+
+        Assert.Equal(resourceCount, collection.Count);
+        Assert.Equal(resourceCount, enumerated.Count);
+        Assert.True(collection.TryGetByName($"res{resourceCount - 1}", out _));
+    }
+
+    [Fact]
+    public async Task ConcurrentAdds_KeepListAndNameIndexConsistent()
+    {
+        const int writerCount = 8;
+        const int perWriterCount = 250;
+
+        var collection = new ResourceCollection();
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var writers = Enumerable.Range(0, writerCount).Select(writerIndex => Task.Run(async () =>
+        {
+            await startGate.Task;
+
+            for (var i = 0; i < perWriterCount; i++)
+            {
+                collection.Add(new TestResource($"res{writerIndex}-{i}"));
+            }
+        })).ToArray();
+
+        startGate.SetResult();
+        await Task.WhenAll(writers).DefaultTimeout();
+
+        // A torn List<T> append loses entries; a torn Dictionary write loses name lookups.
+        Assert.Equal(writerCount * perWriterCount, collection.Count);
+        Assert.Equal(writerCount * perWriterCount, collection.Select(resource => resource.Name).Distinct().Count());
+
+        foreach (var resource in collection)
+        {
+            Assert.True(collection.TryGetByName(resource.Name, out var found));
+            Assert.Same(resource, found);
+        }
     }
 
     private sealed class TestResource(string name) : Resource(name)

@@ -1,9 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
 using System.Net.Sockets;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -94,6 +98,53 @@ public class ComputeEnvironmentValidationTests
         Assert.Contains("Endpoint 'redis' must specify a port for scheme 'redis'.", ex.Message);
     }
 
+    [Fact]
+    public async Task MultipleComputeEnvironments_ModelMutatedDuringValidation_DoesNotThrow()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19266.
+        //
+        // 'validate-compute-environments' is only wired as RequiredBy 'before-start', so the task
+        // DAG schedules it concurrently with every other step that shares that relationship —
+        // including 'azure-prepare-resources', which appends role-assignment and identity resources
+        // to the model. An append landing while validation enumerated model.Resources used to
+        // invalidate the enumerator ("Collection was modified; enumeration operation may not
+        // execute").
+        //
+        // Reproduce that interleaving deterministically rather than racing threads: the gate
+        // resource mutates the model from inside its Annotations getter, which validation invokes
+        // (via GetComputeEnvironment) while its enumerator over model.Resources is still in flight.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env1 = builder.AddResource(new TestComputeEnvironmentResource("env1"));
+        builder.AddResource(new TestComputeEnvironmentResource("env2"));
+
+        var gate = new AnnotationGateComputeResource("api");
+        builder.AddResource(gate).WithComputeEnvironment(env1);
+
+        // Validation must pull at least one more element after the gate fires, otherwise the
+        // mutation happens after enumeration has already finished and proves nothing.
+        builder.AddResource(new TestComputeResource("tail")).WithComputeEnvironment(env1);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Arming from a step that validation is required by guarantees the gate is inert during
+        // step resolution, which also reads Annotations, and armed by the time validation runs.
+        builder.Pipeline.AddStep(
+            "arm-model-mutation-gate",
+            _ =>
+            {
+                gate.Arm(() => model.Resources.Add(new TestResource("added-during-validation")));
+                return Task.CompletedTask;
+            },
+            requiredBy: WellKnownPipelineSteps.ValidateComputeEnvironments);
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        Assert.True(gate.Fired, "The gate never fired, so the mutation did not overlap validation.");
+        Assert.Contains(model.Resources, resource => resource.Name == "added-during-validation");
+    }
+
     private static EndpointReference CreateEndpointReference(string uriScheme, int? port, int? targetPort)
     {
         var resource = new TestComputeResource("api");
@@ -113,5 +164,41 @@ public class ComputeEnvironmentValidationTests
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEndpoints
     {
+    }
+
+    private sealed class TestResource(string name) : Resource(name)
+    {
+    }
+
+    /// <summary>
+    /// A compute resource whose <see cref="Annotations"/> getter runs a one-shot callback once armed.
+    /// Compute-environment validation reads annotations (through <c>GetComputeEnvironment</c>) from
+    /// inside its enumeration of <c>model.Resources</c>, so the callback fires while that enumerator
+    /// is live. That makes it a deterministic stand-in for a concurrently scheduled pipeline step
+    /// mutating the model mid-enumeration, with no reliance on thread timing.
+    /// </summary>
+    private sealed class AnnotationGateComputeResource(string name) : Resource(name), IComputeResource
+    {
+        private Action? _onAnnotationsAccessed;
+
+        public bool Fired { get; private set; }
+
+        public void Arm(Action onAnnotationsAccessed) => Volatile.Write(ref _onAnnotationsAccessed, onAnnotationsAccessed);
+
+        public override ResourceAnnotationCollection Annotations
+        {
+            get
+            {
+                // Exchange so the callback runs exactly once even though annotations are read
+                // repeatedly during application build and step resolution.
+                if (Interlocked.Exchange(ref _onAnnotationsAccessed, null) is { } callback)
+                {
+                    Fired = true;
+                    callback();
+                }
+
+                return base.Annotations;
+            }
+        }
     }
 }

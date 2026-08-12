@@ -7,12 +7,42 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+/// <summary>
+/// The default <see cref="IResourceCollection"/> implementation backing
+/// <see cref="DistributedApplicationModel.Resources"/>. Maintains a name index alongside the
+/// ordered resource list and supports reads that are concurrent with mutations.
+/// </summary>
+/// <remarks>
+/// This collection is safe to read (enumerate, index, look up by name) while it is being mutated
+/// from another thread. That matters because <see cref="DistributedApplicationModel.Resources"/> is a
+/// single shared instance handed to every pipeline step, and <c>DistributedApplicationPipeline</c>
+/// runs independent steps concurrently (see <c>ExecuteStepsAsTaskDag</c>). Steps that only declare a
+/// <c>RequiredBySteps</c> relationship to a common aggregation step — for example
+/// <c>azure-prepare-resources</c>, which appends role-assignment and identity resources, and
+/// <c>validate-compute-environments</c>, which enumerates the model — have no ordering relative to
+/// one another and therefore genuinely overlap. Backing the reads with a plain <see cref="List{T}"/>
+/// meant an append on one step invalidated an in-flight enumerator on another
+/// ("Collection was modified; enumeration operation may not execute"), and two concurrent appends
+/// could corrupt the list and the name index. See https://github.com/microsoft/aspire/issues/19266.
+/// <para>
+/// Reads are served from an immutable copy-on-write snapshot rather than the live list, so a reader
+/// observes a stable point-in-time view for the duration of its enumeration and never sees a torn
+/// state. The snapshot is built lazily and cached, so a burst of mutations (the common case, during
+/// application build) costs a single rebuild on the next read instead of one per mutation. Writes
+/// take the lock, which also protects the name index and the backing list from concurrent writers.
+/// </para>
+/// </remarks>
 [DebuggerDisplay("Count = {Count}")]
 [DebuggerTypeProxy(typeof(ApplicationResourceCollectionDebugView))]
 internal sealed class ResourceCollection : IResourceCollection
 {
     private readonly List<IResource> _resources = [];
     private readonly Dictionary<string, IResource> _resourcesByName = new(StringComparers.ResourceName);
+    private readonly object _lock = new();
+
+    // Cached copy-on-write view of _resources, or null when a mutation has invalidated it.
+    // Only ever published from inside _lock so it always matches _resources at publication time.
+    private IResource[]? _snapshot;
 
     public ResourceCollection() { }
 
@@ -31,74 +61,129 @@ internal sealed class ResourceCollection : IResourceCollection
 
     public IResource this[int index]
     {
-        get => _resources[index];
+        get => GetSnapshot()[index];
         set
         {
-            var old = _resources[index];
-
-            // Allow replacing with same name (same slot), but reject if a *different* slot already has this name.
-            if (!StringComparers.ResourceName.Equals(old.Name, value.Name) &&
-                _resourcesByName.TryGetValue(value.Name, out var existing))
+            lock (_lock)
             {
-                ThrowDuplicateResource(value, existing);
-            }
+                var old = _resources[index];
 
-            _resources[index] = value;
-            _resourcesByName.Remove(old.Name);
-            _resourcesByName[value.Name] = value;
+                // Allow replacing with same name (same slot), but reject if a *different* slot already has this name.
+                if (!StringComparers.ResourceName.Equals(old.Name, value.Name) &&
+                    _resourcesByName.TryGetValue(value.Name, out var existing))
+                {
+                    ThrowDuplicateResource(value, existing);
+                }
+
+                _resources[index] = value;
+                _resourcesByName.Remove(old.Name);
+                _resourcesByName[value.Name] = value;
+                _snapshot = null;
+            }
         }
     }
 
-    public int Count => _resources.Count;
+    public int Count
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _resources.Count;
+            }
+        }
+    }
+
     public bool IsReadOnly => false;
 
     public void Add(IResource item)
     {
-        if (!_resourcesByName.TryAdd(item.Name, item))
+        lock (_lock)
         {
-            ThrowDuplicateResource(item, _resourcesByName[item.Name]);
-        }
+            if (!_resourcesByName.TryAdd(item.Name, item))
+            {
+                ThrowDuplicateResource(item, _resourcesByName[item.Name]);
+            }
 
-        _resources.Add(item);
+            _resources.Add(item);
+            _snapshot = null;
+        }
     }
 
     public void Clear()
     {
-        _resources.Clear();
-        _resourcesByName.Clear();
+        lock (_lock)
+        {
+            _resources.Clear();
+            _resourcesByName.Clear();
+            _snapshot = null;
+        }
     }
 
-    public bool Contains(IResource item) => _resources.Contains(item);
-    public void CopyTo(IResource[] array, int arrayIndex) => _resources.CopyTo(array, arrayIndex);
-    public IEnumerator<IResource> GetEnumerator() => _resources.GetEnumerator();
-    public int IndexOf(IResource item) => _resources.IndexOf(item);
+    public bool Contains(IResource item)
+    {
+        lock (_lock)
+        {
+            return _resources.Contains(item);
+        }
+    }
+
+    public void CopyTo(IResource[] array, int arrayIndex)
+    {
+        lock (_lock)
+        {
+            _resources.CopyTo(array, arrayIndex);
+        }
+    }
+
+    public IEnumerator<IResource> GetEnumerator() => ((IEnumerable<IResource>)GetSnapshot()).GetEnumerator();
+
+    public int IndexOf(IResource item)
+    {
+        lock (_lock)
+        {
+            return _resources.IndexOf(item);
+        }
+    }
 
     public void Insert(int index, IResource item)
     {
-        if (!_resourcesByName.TryAdd(item.Name, item))
+        lock (_lock)
         {
-            ThrowDuplicateResource(item, _resourcesByName[item.Name]);
-        }
+            if (!_resourcesByName.TryAdd(item.Name, item))
+            {
+                ThrowDuplicateResource(item, _resourcesByName[item.Name]);
+            }
 
-        _resources.Insert(index, item);
+            _resources.Insert(index, item);
+            _snapshot = null;
+        }
     }
 
     public bool Remove(IResource item)
     {
-        if (_resources.Remove(item))
+        lock (_lock)
         {
-            _resourcesByName.Remove(item.Name);
-            return true;
-        }
+            if (_resources.Remove(item))
+            {
+                _resourcesByName.Remove(item.Name);
+                _snapshot = null;
+                return true;
+            }
 
-        return false;
+            return false;
+        }
     }
 
     public void RemoveAt(int index)
     {
-        var item = _resources[index];
-        _resources.RemoveAt(index);
-        _resourcesByName.Remove(item.Name);
+        lock (_lock)
+        {
+            var item = _resources[index];
+            _resources.RemoveAt(index);
+            _resourcesByName.Remove(item.Name);
+            _snapshot = null;
+        }
     }
 
     public bool TryGetByName(string name, [NotNullWhen(true)] out IResource? resource)
@@ -109,10 +194,37 @@ internal sealed class ResourceCollection : IResourceCollection
             return false;
         }
 
-        return _resourcesByName.TryGetValue(name, out resource);
+        lock (_lock)
+        {
+            return _resourcesByName.TryGetValue(name, out resource);
+        }
     }
 
-    IEnumerator IEnumerable.GetEnumerator() => _resources.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    private IResource[] GetSnapshot()
+    {
+        // Lock-free fast path. A snapshot that a concurrent mutation invalidates immediately after
+        // this read is still a valid point-in-time view, which is exactly what a reader wants.
+        var snapshot = Volatile.Read(ref _snapshot);
+        if (snapshot is not null)
+        {
+            return snapshot;
+        }
+
+        lock (_lock)
+        {
+            // Another reader may have published a snapshot while this one waited for the lock.
+            snapshot = _snapshot;
+            if (snapshot is null)
+            {
+                snapshot = _resources.ToArray();
+                Volatile.Write(ref _snapshot, snapshot);
+            }
+
+            return snapshot;
+        }
+    }
 
     [DoesNotReturn]
     private static void ThrowDuplicateResource(IResource newResource, IResource existingResource)
