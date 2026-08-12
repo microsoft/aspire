@@ -25,6 +25,7 @@ VALIDATOR_PATH = Path(__file__).with_name("validate_outcome.py")
 def payload(
     result: object = "skipped",
     source_pr_number: object = EXPECTED_SOURCE_PR_NUMBER,
+    target_branch: object = "",
 ) -> dict:
     return {
         "items": [
@@ -32,31 +33,69 @@ def payload(
                 "type": "notify_source_pr",
                 "source_pr_number": source_pr_number,
                 "result": result,
+                "target_branch": target_branch,
             }
         ]
     }
 
 
-def create_pull_request_item() -> dict:
+def create_pull_request_item(base_branch: object = "release/13.5") -> dict:
     return {
         "type": "create_pull_request",
         "title": "Draft docs",
         "body": "Docs",
+        "base_branch": base_branch,
     }
 
 
 class ValidateOutcomeTests(unittest.TestCase):
-    def test_drafted_with_created_pr_passes(self) -> None:
+    def test_drafted_with_correct_actual_base_passes(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
         message = validate_outcome(
-            payload("drafted"),
+            drafted_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertEqual(
             "Confirmed drafted documentation PR: https://github.com/microsoft/aspire.dev/pull/1447",
             message,
         )
+
+    def test_drafted_with_actual_base_mismatch_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Drafted PR base branch main does not match canonical "
+            "create_pull_request base_branch release/13.5",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "main",
+            )
+
+    def test_drafted_with_notification_target_mismatch_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="main")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Canonical create_pull_request base_branch release/13.5 does not match "
+            "notify_source_pr target_branch main",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "release/13.5",
+            )
 
     def test_skipped_without_created_pr_passes(self) -> None:
         message = validate_outcome(
@@ -262,16 +301,48 @@ class ValidateOutcomeTests(unittest.TestCase):
 
 class SideEffectOutcomeTests(unittest.TestCase):
     def test_valid_draft_allows_comment_and_sme_review(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
         outcome = build_side_effect_outcome(
-            payload("drafted"),
+            drafted_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
         self.assertTrue(outcome["allow_sme_review"])
         self.assertEqual("drafted", outcome["render_kind"])
         self.assertEqual(EXPECTED_SOURCE_PR_NUMBER, outcome["source_pr_number"])
+
+    def test_wrong_base_draft_allows_only_generic_warning(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        outcome = build_side_effect_outcome(
+            drafted_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "main",
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
+        self.assertIn("does not match canonical", outcome["diagnostic"])
+
+    def test_skipped_without_pr_allows_success_comment(self) -> None:
+        outcome = build_side_effect_outcome(
+            payload(),
+            "",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "",
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("skipped", outcome["render_kind"])
 
     def test_duplicate_notifications_allow_only_generic_warning(self) -> None:
         duplicate_payload = payload("drafted")
@@ -281,6 +352,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             duplicate_payload,
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -292,6 +364,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload(source_pr_number=EXPECTED_SOURCE_PR_NUMBER + 1),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertFalse(outcome["allow_comment"])
@@ -302,6 +375,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload(source_pr_number=18868.0),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertFalse(outcome["allow_comment"])
@@ -315,6 +389,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             contradictory_payload,
             "",
             EXPECTED_SOURCE_PR_NUMBER,
+            "",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -326,6 +401,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
             payload("draft_failed"),
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
         )
 
         self.assertTrue(outcome["allow_comment"])
@@ -368,6 +444,39 @@ class ValidatorCliTests(unittest.TestCase):
                 )
 
         self.assertNotEqual(0, exit_code)
+
+    def test_side_effect_main_rejects_wrong_actual_base(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = self._write_payload(directory, drafted_payload)
+            event_path = Path(directory) / "event.json"
+            event_path.write_text(
+                json.dumps({"pull_request": {"number": EXPECTED_SOURCE_PR_NUMBER}}),
+                encoding="utf-8",
+            )
+            side_effect_path = Path(directory) / "side-effect.json"
+
+            exit_code = main(
+                [
+                    "--agent-output",
+                    str(output_path),
+                    "--created-pr-url",
+                    "https://github.com/microsoft/aspire.dev/pull/1447",
+                    "--created-pr-base",
+                    "main",
+                    "--github-event-path",
+                    str(event_path),
+                    "--write-side-effect-outcome",
+                    str(side_effect_path),
+                ]
+            )
+            outcome = json.loads(side_effect_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, exit_code)
+        self.assertTrue(outcome["allow_comment"])
+        self.assertFalse(outcome["allow_sme_review"])
+        self.assertEqual("invalid", outcome["render_kind"])
 
     def test_process_exits_zero_for_success(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

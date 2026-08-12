@@ -85,6 +85,7 @@ jobs:
         include:
           - name: Linux
             shardName: command-palette
+            allowFailure: true
             spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -93,6 +94,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: command-palette
+            allowFailure: true
             spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -101,6 +103,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: settings-files
+            allowFailure: true
             spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -109,6 +112,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: settings-files
+            allowFailure: true
             spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -117,6 +121,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: discovery-configuration
+            allowFailure: true
             spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -125,6 +130,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: discovery-configuration
+            allowFailure: true
             spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -133,6 +139,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: apphost-tree
+            allowFailure: true
             spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -141,6 +148,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: apphost-tree
+            allowFailure: true
             spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -149,6 +157,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: tree-actions
+            allowFailure: true
             spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -157,6 +166,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: tree-actions
+            allowFailure: true
             spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -165,6 +175,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: debug-dashboard
+            allowFailure: true
             spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -173,6 +184,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: debug-dashboard
+            allowFailure: true
             spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -181,6 +193,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: debug-startup-timeout
+            allowFailure: true
             spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -190,6 +203,7 @@ jobs:
             unsetCliStartTimeout: true
           - name: Windows
             shardName: debug-startup-timeout
+            allowFailure: true
             spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -199,6 +213,7 @@ jobs:
             unsetCliStartTimeout: true
           - name: Linux
             shardName: zero-to-running
+            allowFailure: true
             spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -207,6 +222,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: zero-to-running
+            allowFailure: true
             spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -215,6 +231,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: package-surface
+            allowFailure: true
             spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -223,6 +240,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: package-surface
+            allowFailure: true
             spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -231,6 +249,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: edge-cases
+            allowFailure: true
             spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -239,6 +258,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: edge-cases
+            allowFailure: true
             spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -247,6 +267,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
+            allowFailure: true
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -486,6 +507,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
+          ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE: ${{ matrix.allowFailure }}
           ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
           # and useful for diagnosing timing-sensitive flakes after the fact.

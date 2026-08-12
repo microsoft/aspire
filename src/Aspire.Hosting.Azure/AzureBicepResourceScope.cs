@@ -92,7 +92,14 @@ public sealed class AzureBicepResourceScope
     /// </summary>
     public bool IsTenantScope { get; }
 
-    internal bool HasResourceGroup => _resourceGroup is not null;
+    /// <summary>
+    /// Gets a value indicating whether the scope targets a resource group.
+    /// </summary>
+    /// <remarks>
+    /// Use this to test the scope before reading <see cref="ResourceGroup"/>, which throws for
+    /// subscription- and tenant-scoped resources.
+    /// </remarks>
+    public bool HasResourceGroup => _resourceGroup is not null;
 
     internal static AzureBicepResourceScope? FromExistingResourceAnnotation(ExistingAzureResourceAnnotation annotation)
     {

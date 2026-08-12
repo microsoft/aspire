@@ -1016,6 +1016,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
+            launchSettingsEnvVars[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
 
             // Generate a backchannel socket path for CLI to connect to AppHost server
             var backchannelSocketPath = GetBackchannelSocketPath();
@@ -1120,6 +1121,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                     includeLaunchProfileEnvironmentVariables: false,
                     args: context.Arguments);
+                environmentVariables[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
                 environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
                 environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
                 environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;

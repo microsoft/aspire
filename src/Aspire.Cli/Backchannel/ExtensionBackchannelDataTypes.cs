@@ -79,4 +79,10 @@ internal sealed class DebugSessionOptions
     /// </summary>
     [JsonPropertyName("args")]
     public string[]? Args { get; set; }
+
+    /// <summary>
+    /// Gets or sets environment variables to pass to the CLI process started by the debug session.
+    /// </summary>
+    [JsonPropertyName("env")]
+    public Dictionary<string, string>? EnvironmentVariables { get; set; }
 }

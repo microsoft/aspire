@@ -157,9 +157,9 @@
         <target state="needs-review-translation">--apphost 옵션이 지정되지 않았고 앱 호스트 프로젝트 파일이 여러 개 검색되었습니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">프로젝트 인수가 지정되지 않았고 앱 호스트 프로젝트 파일이 감지되지 않았습니다.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

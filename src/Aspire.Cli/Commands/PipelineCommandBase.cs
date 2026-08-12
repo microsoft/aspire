@@ -153,7 +153,19 @@ internal abstract class PipelineCommandBase : BaseCommand
             var commandArgs = GetCommandArgs(parseResult).Concat(parseResult.UnmatchedTokens).ToArray();
 
             extensionInteractionService.DisplayConsolePlainText($"Detected aspire {Name} inside the Aspire extension, starting a debug session in VS Code...");
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, debug: true, new DebugSessionOptions { Command = Name, Args = commandArgs.Length > 0 ? commandArgs : null });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                debug: true,
+                new DebugSessionOptions
+                {
+                    Command = Name,
+                    Args = commandArgs.Length > 0 ? commandArgs : null,
+                    EnvironmentVariables = new Dictionary<string, string>
+                    {
+                        [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName
+                    }
+                });
             return CommandResult.Success();
         }
 
@@ -184,7 +196,10 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
 
-            var env = new Dictionary<string, string>();
+            var env = new Dictionary<string, string>
+            {
+                [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName
+            };
 
             // Set interactivity enabled based on host environment capabilities
             if (!_hostEnvironment.SupportsInteractiveInput)

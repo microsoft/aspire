@@ -101,7 +101,7 @@ Run the full local E2E suite from `extension/`:
 ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
-On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.122.1 and the ExTester version pinned in `package.json` and `yarn.lock`; override with `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` when you need to investigate VS Code-specific behavior. That override takes a concrete version such as `1.122.1`, or ExTester's `min`/`max`; `latest` is rejected because a cache key built from it would never change when the alias does. The runner also pins `CODE_VERSION` and `CODE_TYPE` for the ExTester child process, so an ambient value cannot make it download a version or a release stream the cache key does not describe. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
+On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.130.0 while ExTester 8.23.0 remains the newest version anonymously available from `dotnet-public-npm`. That is the current macOS ceiling for this dependency pair: VS Code 1.130.0 contains `Contents/MacOS/Code` plus an `Electron -> Code` compatibility symlink, but VS Code 1.131.0 removes that legacy path and ExTester 8.23.0 only launches it. Override `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` with another concrete version, or with ExTester's `min`/`max`, when you need to investigate package-supported behavior. On macOS, concrete versions at or above 1.131.0 are rejected until ExTester is upgraded; Linux and Windows use compatible executable paths. `latest` is rejected because it moves independently of the pinned dependency, so a cache key built from that literal would keep serving the first release downloaded after the alias changed. `min` and `max` are deterministic because the cache key also includes the pinned ExTester version whose support metadata resolves them. The runner also pins `CODE_VERSION` and `CODE_TYPE` for the ExTester child process, so an ambient value cannot make it download a version or a release stream the cache key does not describe. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
 
 VS Code and its matching ChromeDriver are cached under `<git-common-dir>/aspire-extension-e2e-cache`, so the main checkout and every linked worktree reuse the same immutable downloads instead of re-acquiring them on each run. Settings, installed extensions, workspaces, screenshots, diagnostics, and `ASPIRE_HOME` stay isolated under the per-run temporary root, so concurrent runs cannot interfere with each other or mutate the shared cache. Cache entries are partitioned by OS, architecture, VS Code version, and ExTester version, so switching any of those acquires a separate entry rather than invalidating the existing one. Set `ASPIRE_EXTENSION_E2E_CACHE_ROOT` to override the cache location, or delete the cache directory to force a clean acquisition. A checkout under an awkward path works on every platform: ExTester interpolates the storage path into unquoted shell commands - `unzip -qo <archive>` when unpacking on macOS and Linux, and `<chromedriver> -v` when checking an already downloaded driver everywhere, Windows included - so any cache path containing something the command interpreter would act on is staged through an inert link under the per-run temporary root instead of being handed over verbatim. On macOS and Linux that means a space, `(`, `&`, `$`, `;` or a quote; on Windows it means a space, `&`, `%`, `^`, `!` or any of the `,`, `;` and `=` that end a `cmd.exe` command token, and the link is a junction so no elevation is needed. Because the tools are already present, the test run itself passes `--offline` to ExTester.
 
@@ -163,6 +163,27 @@ corepack yarn install
 ```
 
 The build rejects public registry URLs in `yarn.lock`; ensure regenerated entries resolve through the `dotnet-public-npm` feed (public, so no credentials are needed to consume it).
+
+> **Check feed availability before pinning a just-published version.** `dotnet-public-npm` mirrors npmjs on a lag, and package metadata can appear before its tarball is anonymously available. CI then fails at `yarn install --frozen-lockfile`; for example:
+>
+> ```text
+> error Error: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/vscode-extension-tester/-/vscode-extension-tester-8.24.0.tgz: Request failed "401 Unauthorized"
+> ```
+>
+> This is easy to miss locally, because a global `.npmrc` pointing at another registry lets `yarn install` succeed on your machine while the rewritten `yarn.lock` URL remains unavailable to anonymous CI. The options are to wait or to pin a version the approved feed already serves anonymously. Check the whole set of new `resolved` URLs, since a bump also drags in transitive dependencies published at the same time:
+>
+> ```bash
+> git diff origin/main -- yarn.lock | grep '^+.*resolved "' | sed 's/^+ *resolved "//; s/".*$//' | sort -u \
+>   | while read -r url; do echo "$(curl -s -o /dev/null -w '%{http_code}' "$url")  $url"; done
+> ```
+>
+> Only `303` confirms that the tarball is anonymously available and safe to pin. `401` means it is unavailable to anonymous consumers; treat any other status as inconclusive rather than assuming the package is ready.
+>
+> Pinning back to the previous release is not automatically a neutral fallback for `vscode-extension-tester`, because consecutive releases can declare disjoint VS Code ranges. Compare the `supportedVersions` field of both candidates before downgrading — 8.23.0 declares `1.109.5`–`1.111.0` while 8.24.0 declares `1.129.1`–`1.131.0`, so reverting the pin while using `min`/`max` would move the alias backwards. If the approved feed does not anonymously serve the newer package yet, keep the available dependency and use a concrete VS Code default until the package can be safely updated:
+>
+> ```bash
+> npm view vscode-extension-tester@8.24.0 supportedVersions
+> ```
 
 ## Updating the Yarn version
 

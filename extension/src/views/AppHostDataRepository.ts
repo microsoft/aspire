@@ -837,8 +837,11 @@ export class AppHostDataRepository {
             return;
         }
 
+        // `Window` rather than `Notification`: discovery runs for as long as the workspace scan
+        // takes and a progress notification cannot be dismissed while it is active, so it covers
+        // the editor for the whole scan (https://github.com/microsoft/aspire/issues/19036).
         void vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
+            location: vscode.ProgressLocation.Window,
             title: appHostDiscoveryProgress,
             cancellable: false,
         }, () => new Promise<void>(resolve => {

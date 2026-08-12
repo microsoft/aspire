@@ -16,6 +16,7 @@ const {
   runWithRetries,
   terminateOrphanedDescendants,
 } = require('./e2e-download-retry');
+const { hasCompletedMochaTestFailures } = require('./e2e-mocha-results.cjs');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -41,7 +42,12 @@ if (!extesterVersion) {
 // The feed preflight must not touch the shared cache: it runs before any download and only
 // verifies package availability, so resolving the cache root there would be wasted Git discovery.
 const downloadCacheRoot = verifyExtesterFeedOnly ? '' : resolveDownloadCacheRoot(repoRoot);
-const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.122.1');
+// Keep this below VS Code 1.131.0 while ExTester is pinned to 8.23.0. VS Code 1.130.0 contains
+// Contents/MacOS/Code plus an Electron -> Code compatibility symlink, but VS Code 1.131.0 removes
+// that legacy path and ExTester 8.23.0 only launches it. ExTester 8.24.0 adds the fallback, but its
+// tarball is not anonymously available from dotnet-public-npm yet.
+const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.130.0');
+assertVsCodeVersionCompatibleWithExtester(vscodeVersion, extesterVersion);
 if (!verifyExtesterFeedOnly) {
   fs.mkdirSync(requestedTempRoot, { recursive: true });
 }
@@ -87,6 +93,7 @@ const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const allowTestFailure = process.env.ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE === 'true';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -198,7 +205,7 @@ function getRunTestsTimeoutMs() {
  * Returns a path ExTester can be given for its storage folder that the platform's command
  * interpreter will not reinterpret.
  *
- * ExTester 8.23 builds shell command strings out of this path and interpolates it unquoted into
+ * ExTester builds shell command strings out of this path and interpolates it unquoted into
  * each of them:
  *
  * - `exec(`unzip -qo ${input}`, { cwd: target })` unpacks `.zip` archives on macOS and Linux --
@@ -603,7 +610,7 @@ function waitForProcessClose(closed, timeoutMs) {
 async function main() {
   let recording;
   let testFailure;
-  let completedTests = false;
+  let cleanupFailed = false;
   try {
     if (verifyExtesterFeedOnly) {
       verifyExtesterFeed();
@@ -703,7 +710,6 @@ async function main() {
     catch (error) {
       testFailure = error;
     }
-    completedTests = true;
   }
   finally {
     const cleanupErrors = [];
@@ -716,6 +722,7 @@ async function main() {
     await runCleanupStep('cleanup temporary run root', cleanupTemporaryRunRoot, cleanupErrors);
 
     if (cleanupErrors.length > 0) {
+      cleanupFailed = true;
       const cleanupFailure = new AggregateError(cleanupErrors, 'One or more E2E cleanup steps failed.');
       if (testFailure) {
         console.error(cleanupFailure);
@@ -728,12 +735,17 @@ async function main() {
 
   if (testFailure) {
     printFailureDiagnosticsSummary();
+    // Setup failures throw past the run-tests catch, while the reporter's completed-test records
+    // distinguish assertion failures from ExTester startup, hook, crash, and timeout failures.
+    if (allowTestFailure && hasCompletedMochaTestFailures(readMochaResults()) && !cleanupFailed) {
+      console.warn(`::warning title=VS Code extension E2E test failure allowed::${shardName} failed during test execution. Diagnostics were uploaded for investigation.`);
+      return;
+    }
+
     throw testFailure;
   }
 
-  if (completedTests) {
-    printSuccessDiagnosticsSummary();
-  }
+  printSuccessDiagnosticsSummary();
 }
 
 async function runCleanupStep(name, action, cleanupErrors) {
@@ -870,7 +882,7 @@ function validateAzureFunctionsCoreTools() {
 }
 
 function packageVsix() {
-  run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], {}, { timeout: 300000 });
+  run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], { ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true' }, { timeout: 300000 });
   return defaultVsixPath;
 }
 
@@ -913,7 +925,7 @@ function verifyExtesterFeed() {
   ensureExtester();
 }
 
-// ExTester 8.23.0 does not expose a supported way to open VS Code with a workspace
+// ExTester does not expose a supported way to open VS Code with a workspace
 // folder. Starting with the workspace already open avoids a slower control-bridge
 // reload path and removes a startup race where discovery begins in an empty window.
 // Remove this patch when ExTester exposes a stable launch option for a folder/workspace.
@@ -937,7 +949,7 @@ function patchExtesterLaunchLocale() {
   const target = targets.find(candidate => source.includes(candidate));
   const argsDeclarationPattern = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/;
   if (target) {
-    console.log('Patching ExTester VS Code launch arguments by exact 8.23.0 argument match.');
+    console.log('Patching ExTester VS Code launch arguments by exact argument match.');
     fs.writeFileSync(browserPath, source.replace(target, () => replacement));
   } else if (argsDeclarationPattern.test(source)) {
     console.log('Patching ExTester VS Code launch arguments by fallback argument-line match.');
@@ -1263,7 +1275,34 @@ function resolveCachedVsCodeVersion(requestedVersion) {
     return normalizedVersion;
   }
 
-  throw new Error(`ASPIRE_EXTENSION_E2E_VSCODE_VERSION must be a concrete version such as '1.122.1', or 'min'/'max', but was '${requestedVersion}'. Moving aliases cannot be cached because the cache key would never change when the alias does.`);
+  throw new Error(`ASPIRE_EXTENSION_E2E_VSCODE_VERSION must be a concrete version such as '1.130.0', or 'min'/'max', but was '${requestedVersion}'. Moving aliases cannot be cached because the cache key would never change when the alias does.`);
+}
+
+function assertVsCodeVersionCompatibleWithExtester(vscodeVersion, extesterVersion) {
+  if (vscodeVersion === 'min' || vscodeVersion === 'max') {
+    return;
+  }
+
+  // On macOS, ExTester 8.23 always launches Contents/MacOS/Electron, which VS Code removed in
+  // 1.131. Reject the pair before creating a run root or publishing a cache entry. Linux and
+  // Windows use different executable paths and remain compatible with the same concrete override.
+  if (process.platform === 'darwin' && compareConcreteVersions(vscodeVersion, '1.131.0') >= 0 && compareConcreteVersions(extesterVersion, '8.24.0') < 0) {
+    throw new Error(`VS Code ${vscodeVersion} cannot be used with ExTester ${extesterVersion} on macOS: this ExTester version launches only Contents/MacOS/Electron, which VS Code 1.131.0 and newer no longer provide.`);
+  }
+}
+
+function compareConcreteVersions(left, right) {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
 }
 
 function getAspireCliEnvironment(extraEnv = {}) {

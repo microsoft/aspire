@@ -134,14 +134,48 @@ jobs:
         with:
           name: agent
           path: /tmp/gh-aw/
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: aspire-dev-token
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        uses: actions/create-github-app-token@v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+      - name: Resolve drafted PR base
+        id: drafted-pr-base
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        env:
+          CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${CREATED_PR_URL}" =~ ^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$ ]]; then
+            echo "ERROR: Created PR URL is not a microsoft/aspire.dev pull request." >&2
+            exit 1
+          fi
+
+          ACTUAL_BASE="$(gh api \
+            "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
+            --jq '.base.ref // ""')"
+          if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
+            echo "ERROR: Drafted PR has an invalid target branch." >&2
+            exit 1
+          fi
+
+          echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
       - name: Require a conclusive documentation outcome
         env:
+          CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
           CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
           EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         run: >-
           python .github/workflows/pr-docs-check/validate_outcome.py
           --agent-output /tmp/gh-aw/agent_output.json
           --created-pr-url "${CREATED_PR_URL}"
+          --created-pr-base "${CREATED_PR_BASE}"
           --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
 
 safe-outputs:
@@ -180,9 +214,46 @@ safe-outputs:
   # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
   # in v0.85.4 and downgrade the app token from contents: write to contents: read.
   steps:
-    - name: Set safe-output patch base fallback
+    - name: Resolve safe-output patch base from canonical agent output
       id: resolve-target
-      run: echo "branch=main" >> "${GITHUB_OUTPUT}"
+      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      run: |
+        set -euo pipefail
+        python3 - "${GITHUB_OUTPUT}" <<'PY'
+        import json
+        import re
+        import sys
+        from pathlib import Path
+
+        output_path = Path("/tmp/gh-aw/agent_output.json")
+        try:
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise SystemExit(f"Failed to read canonical agent output: {error}")
+
+        items = payload.get("items") if isinstance(payload, dict) else None
+        create_items = [
+            item
+            for item in items if isinstance(item, dict)
+            and item.get("type") == "create_pull_request"
+        ] if isinstance(items, list) else []
+        if len(create_items) != 1:
+            raise SystemExit(
+                "Expected exactly one canonical create_pull_request item, "
+                f"found {len(create_items)}."
+            )
+
+        base_branch = create_items[0].get("base_branch")
+        if (
+            not isinstance(base_branch, str)
+            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
+            is None
+        ):
+            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+
+        with open(sys.argv[1], "a", encoding="utf-8") as github_output:
+            github_output.write(f"branch={base_branch}\n")
+        PY
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
@@ -192,8 +263,9 @@ safe-outputs:
     # safe-output job below requests the SME on the drafted PR after creation.
     draft: true
     # Generate the agent-time patch against the aspire.dev branch selected below.
-    # The separate safe-outputs job emits main from the fallback step with the same
-    # ID, then honors the agent's allowlisted per-call base override when applying.
+    # At apply time, the separate safe-outputs job reads that trusted branch back
+    # from the canonical create_pull_request item instead of relying on a model
+    # supplied per-call `base` override.
     base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}
     allowed-base-branches:
       - main
@@ -254,13 +326,47 @@ safe-outputs:
             path: _validator
             sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
             sparse-checkout-cone-mode: false
+        - name: Mint aspire-bot token (microsoft/aspire.dev)
+          id: aspire-dev-token
+          if: needs.safe_outputs.outputs.created_pr_url != ''
+          uses: actions/create-github-app-token@v3.1.1
+          with:
+            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+            private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+            owner: microsoft
+            repositories: aspire.dev
+        - name: Resolve drafted PR base
+          id: drafted-pr-base
+          if: needs.safe_outputs.outputs.created_pr_url != ''
+          env:
+            CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+            GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+          run: |
+            set -euo pipefail
+
+            if ! [[ "${CREATED_PR_URL}" =~ ^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$ ]]; then
+              echo "ERROR: Created PR URL is not a microsoft/aspire.dev pull request." >&2
+              exit 1
+            fi
+
+            ACTUAL_BASE="$(gh api \
+              "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
+              --jq '.base.ref // ""')"
+            if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
+              echo "ERROR: Drafted PR has an invalid target branch." >&2
+              exit 1
+            fi
+
+            echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
         - name: Prepare trusted documentation outcome
           env:
+            CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
             CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
           run: >-
             python _validator/.github/workflows/pr-docs-check/validate_outcome.py
             --agent-output "${GH_AW_AGENT_OUTPUT}"
             --created-pr-url "${CREATED_PR_URL}"
+            --created-pr-base "${CREATED_PR_BASE}"
             --github-event-path "${GITHUB_EVENT_PATH}"
             --write-side-effect-outcome "${RUNNER_TEMP}/pr-docs-check-side-effect-outcome.json"
         - name: Mint aspire-bot token (microsoft/aspire)
@@ -271,15 +377,6 @@ safe-outputs:
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
-        - name: Mint aspire-bot token (microsoft/aspire.dev)
-          id: aspire-dev-token
-          if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/create-github-app-token@v3.1.1
-          with:
-            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-            private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-            owner: microsoft
-            repositories: aspire.dev
         - name: Post status comment on source PR
           uses: actions/github-script@v9
           env:

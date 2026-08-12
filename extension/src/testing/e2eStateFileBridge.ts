@@ -542,6 +542,25 @@ async function executeE2eControlCommand(
       const commands = await vscode.commands.getCommands(true);
       return commands.filter(commandId => commandId.startsWith('aspire-vscode.')).sort();
     }
+    case 'getDebugSessionProcessInfo': {
+      markStarted();
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      const appHostPath = command.appHostPath;
+      const debugSession = aspireContext.aspireDebugSessions.find(session =>
+        appHostPath === undefined ||
+        (typeof session.appHostPath === 'string' && isSamePath(session.appHostPath, appHostPath)));
+      const appHost = state.appHosts.find(candidate =>
+        appHostPath === undefined || isSamePath(candidate.appHostPath, appHostPath)) ??
+        (state.workspaceAppHost && (appHostPath === undefined || isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
+          ? state.workspaceAppHost
+          : undefined);
+
+      return {
+        appHostPath: debugSession?.appHostPath ?? appHost?.appHostPath,
+        cliPid: debugSession?.cliProcessId,
+        appHostPid: appHost?.appHostPid,
+      };
+    }
     case 'getResourceDebuggerExtensions': {
       markStarted();
       return getResourceDebuggerExtensions().map(extension => ({
@@ -641,6 +660,22 @@ async function executeE2eControlCommand(
       markStarted();
       clearPendingE2eControlFile();
       await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(folderPath), false);
+      return undefined;
+    }
+    case 'stopOwnedDebugSessionProcesses': {
+      markStarted();
+      const appHostPath = command.appHostPath;
+      const debugSessions = aspireContext.aspireDebugSessions.filter(session =>
+        appHostPath === undefined ||
+        (typeof session.appHostPath === 'string' && isSamePath(session.appHostPath, appHostPath)));
+      await Promise.race([
+        Promise.allSettled(debugSessions.map(session => session.requestCliStopForExtensionShutdown())),
+        delay(5000),
+      ]);
+      for (const session of debugSessions) {
+        session.terminateCliProcessTree({ force: true });
+      }
+
       return undefined;
     }
     case 'getWorkspaceFolders': {

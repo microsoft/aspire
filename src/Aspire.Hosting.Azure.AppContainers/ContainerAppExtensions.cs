@@ -149,7 +149,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the container app job via a callback.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource, Action<AzureResourceInfrastructure, ContainerAppJob> configure)
         where T : IComputeResource
     {
@@ -186,7 +186,7 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource)
         where T : IComputeResource
     {
@@ -235,7 +235,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the scheduled container app job via a callback.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression, Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
         where T : IComputeResource
     {

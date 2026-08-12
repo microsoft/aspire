@@ -1,14 +1,21 @@
 import * as vscode from 'vscode';
 import { defaultConfigurationName } from '../loc/strings';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { AppHostDiscoveryService, getDebugTargetForCandidate } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
+import { appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
-    constructor(private readonly _appHostDiscoveryService: AppHostDiscoveryService) {
+    constructor(
+        private readonly _appHostDiscoveryService: AppHostDiscoveryService,
+        // VS Code writes the configurations returned by an `Initial`-kind provider verbatim into a
+        // newly created launch.json, while `Dynamic`-kind configurations stay ephemeral. Only the
+        // ephemeral ones may carry the internal selection-origin marker: persisting it would bake a
+        // stale provenance into a user-owned file and permanently defeat the launch-configuration
+        // scoping this marker exists to enable. See https://github.com/microsoft/aspire/issues/19080.
+        private readonly _triggerKind: vscode.DebugConfigurationProviderTriggerKind = vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
     }
 
     async provideDebugConfigurations(folder: vscode.WorkspaceFolder | undefined, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration[]> {
@@ -31,16 +38,17 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             return [this.createDefaultConfiguration(folder)];
         }
 
-        return [{
+        return [this.withProvidedSelectionOrigin({
             type: 'aspire',
             request: 'launch',
             name: defaultConfigurationName,
-            program: getDebugTargetForCandidate(candidate)
-        }];
+            program: getDebugTargetForCandidate(candidate),
+        })];
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
+        this.ensureAppHostSelectionOrigin(aspireConfig);
         if (!aspireConfig.skipCliAvailabilityCheck) {
             const result = await checkCliAvailableOrRedirect('debug_gate');
             if (!result.available) {
@@ -69,10 +77,19 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
     async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
+        this.ensureAppHostSelectionOrigin(aspireConfig);
         delete aspireConfig.skipCliAvailabilityCheck;
 
         if (typeof config.program === 'string') {
             const program = config.program;
+            if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && this.isWorkspaceFolderRoot(program, folder)) {
+                // Only a program pointing at the workspace folder root delegates the choice back to
+                // normal discovery, which is what the extension's own default configuration does. A
+                // configuration naming a specific AppHost file *or* subdirectory is scoped to that
+                // target and must not become the workspace default.
+                aspireConfig[appHostSelectionOriginConfigKey] = 'default-discovery';
+            }
+
             config.program = await this.resolveDebugTarget(program, folder);
 
             const telemetryTarget = await this.tryFindWorkspaceDefaultCandidate(program, folder);
@@ -118,11 +135,37 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     }
 
     private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
-        return {
+        return this.withProvidedSelectionOrigin({
             type: 'aspire',
             request: 'launch',
             name: defaultConfigurationName,
-            program: folder.uri.fsPath
-        };
+            program: folder.uri.fsPath,
+        });
+    }
+
+    private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
+        if (this._triggerKind !== vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
+            // Leave the marker off so resolve-time classification runs against whatever the user
+            // ends up with in launch.json rather than against provenance frozen at creation time.
+            return config;
+        }
+
+        return { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' };
+    }
+
+    private isWorkspaceFolderRoot(program: string, folder: vscode.WorkspaceFolder | undefined): boolean {
+        const owningFolder = folder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
+
+        return owningFolder !== undefined && isSamePath(program, owningFolder.uri.fsPath);
+    }
+
+    private ensureAppHostSelectionOrigin(config: AspireExtendedDebugConfiguration): void {
+        if (config[appHostSelectionOriginConfigKey]) {
+            return;
+        }
+
+        config[appHostSelectionOriginConfigKey] = config.program
+            ? 'explicit-launch-configuration'
+            : 'default-discovery';
     }
 }
