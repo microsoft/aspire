@@ -144,6 +144,25 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
 
     [Fact]
     [RequiresTools(["bash", "git"])]
+    public async Task ReleaseBranchAcceptsLegacyDoneMarkerFromBaseBranchWorkflow()
+    {
+        var repository = await CreateReleaseBranchRepositoryAsync(
+            currentSectionBodyFactory: (fromSha, toSha) => $$"""
+                <!-- aspire-ext-changelog-done from={{fromSha}} to={{toSha}} base=1.98.0 -->
+                ### Fixes
+
+                - Ship finalized extension release notes.
+                """,
+            addExtensionChangeOnMain: false);
+
+        var result = await RunGateScriptAsync(repository.ReleaseBranchEnvironment);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("extension/CHANGELOG.md is finalized.\n", result.Output.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "git"])]
     public async Task ReleaseBranchAllowsSyntacticallyValidButMissingFromSha()
     {
         const string missingFromSha = "1111111111111111111111111111111111111111";

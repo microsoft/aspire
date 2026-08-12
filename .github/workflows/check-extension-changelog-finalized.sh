@@ -4,8 +4,8 @@ set -euo pipefail
 display_path="extension/CHANGELOG.md"
 changelog_path="${1:-$display_path}"
 pending_marker_prefix='<!-- aspire-ext-changelog from='
-finalized_marker_prefix='<!-- aspire-ext-changelog-finalized from='
-finalized_marker_regex='^<!-- aspire-ext-changelog-finalized from=([0-9a-f]{40}) to=([0-9a-f]{40}) base=[^>]* -->$'
+finalized_marker_prefix_regex='<!-- aspire-ext-changelog-(finalized|done) from='
+finalized_marker_regex='^<!-- aspire-ext-changelog-(finalized|done) from=([0-9a-f]{40}) to=([0-9a-f]{40}) base=[^>]* -->$'
 restore_and_retrigger_guidance="Restore the pending placeholder entry, update the release branch if needed, and re-add the \`vscode-extension-release\` label to retrigger the placeholder workflow."
 
 if [[ ! -f "$changelog_path" ]]; then
@@ -116,7 +116,7 @@ heading_line_number="${heading_line_match%%:*}"
 current_section="$(extract_section_after_heading "$version_heading" "$changelog_path")"
 current_section_with_line_numbers="$(extract_section_after_heading_with_line_numbers "$version_heading" "$changelog_path")"
 
-mapfile -t finalized_markers < <(printf '%s\n' "$current_section_with_line_numbers" | grep -F "$finalized_marker_prefix" || true)
+mapfile -t finalized_markers < <(printf '%s\n' "$current_section_with_line_numbers" | grep -E "$finalized_marker_prefix_regex" || true)
 if [[ "${#finalized_markers[@]}" -ne 1 ]]; then
   emit_release_error "$heading_line_number" "Expected exactly one finalized release marker in the current release entry for $version_heading."
   exit 1
@@ -130,8 +130,8 @@ if [[ ! "$finalized_marker_line" =~ ${finalized_marker_regex} ]]; then
   exit 1
 fi
 
-from_sha="${BASH_REMATCH[1]}"
-to_sha="${BASH_REMATCH[2]}"
+from_sha="${BASH_REMATCH[2]}"
+to_sha="${BASH_REMATCH[3]}"
 
 if ! printf '%s\n' "$current_section" | grep -Fxq "$finalized_marker_line"; then
   emit_release_error "$heading_line_number" "The current release section $version_heading must contain the finalized release marker."
