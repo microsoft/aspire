@@ -833,9 +833,19 @@ function resolveAzureFunctionsVsixPaths() {
     return [];
   }
 
-  // The Functions extension activates the Azure Resource Groups extension directly.
-  // Install both VSIXes explicitly because the E2E VS Code instance runs offline.
+  // Aspire advertises its azure-functions launch capability only when both the C# and
+  // Azure Functions extensions are installed. Install C# with its required .NET runtime
+  // dependency, plus the Azure Resource Groups extension that Functions activates directly.
+  // All dependencies must be explicit because the E2E VS Code instance runs offline.
   return [
+    {
+      displayName: '.NET Install Tool',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
+    },
+    {
+      displayName: 'C#',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
+    },
     {
       displayName: 'Azure Resource Groups',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
