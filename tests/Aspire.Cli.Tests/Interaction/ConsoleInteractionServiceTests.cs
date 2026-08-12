@@ -274,16 +274,14 @@ public class ConsoleInteractionServiceTests
         var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
         var statusText = "Processing request...";
-        var result = "test result";
 
         // Act
-        var actualResult = await interactionService.ShowStatusAsync(statusText, () => Task.FromResult(result)).DefaultTimeout();
+        var statusValue = await interactionService.ShowStatusAsync(statusText, () => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
 
         // Assert
-        Assert.Equal(result, actualResult);
+        Assert.Equal(0, statusValue);
         var outputString = output.ToString();
         Assert.Contains(statusText, outputString);
-        // In debug mode, should use DisplaySubtleMessage instead of spinner
     }
 
     [Fact]
@@ -299,13 +297,13 @@ public class ConsoleInteractionServiceTests
 
         var interactionService = CreateInteractionService(console, CreateExecutionContext(debugMode: true));
 
-        var result = await interactionService.ShowDynamicStatusAsync("Processing request...", updateStatus =>
+        var statusValue = await interactionService.ShowDynamicStatusAsync("Processing request...", updateStatus =>
         {
             updateStatus("Still processing...");
-            return Task.FromResult("test result");
+            return Task.FromResult(GetInStatus(interactionService));
         }).DefaultTimeout();
 
-        Assert.Equal("test result", result);
+        Assert.Equal(0, statusValue);
         Assert.Contains("Processing request...", output.ToString());
         Assert.Contains("Still processing...", output.ToString());
     }
@@ -370,16 +368,15 @@ public class ConsoleInteractionServiceTests
         var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
         var statusText = "Processing synchronous request...";
-        var actionCalled = false;
+        var statusValue = -1;
 
         // Act
-        interactionService.ShowStatus(statusText, () => actionCalled = true);
+        interactionService.ShowStatus(statusText, () => statusValue = GetInStatus(interactionService));
 
         // Assert
-        Assert.True(actionCalled);
+        Assert.Equal(0, statusValue);
         var outputString = output.ToString();
         Assert.Contains(statusText, outputString);
-        // In debug mode, should use DisplaySubtleMessage instead of spinner
     }
 
     [Fact]
