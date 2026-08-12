@@ -2,12 +2,19 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Sequence
 
 
 class OutcomeValidationError(ValueError):
     pass
+
+
+_TARGET_BRANCH_RE = re.compile(r"^(?:main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?)$")
+_CREATED_PR_URL_RE = re.compile(
+    r"^https://github\.com/microsoft/aspire\.dev/pull/[1-9][0-9]*$"
+)
 
 
 def encode_workflow_command_data(value: object) -> str:
@@ -75,16 +82,80 @@ def _has_create_pull_request(payload: Any) -> bool:
     )
 
 
-def validate_outcome(
+def _get_create_pull_request(payload: Any) -> dict[str, Any]:
+    create_pull_requests = [
+        item
+        for item in _get_items(payload)
+        if isinstance(item, dict) and item.get("type") == "create_pull_request"
+    ]
+    if len(create_pull_requests) != 1:
+        raise OutcomeValidationError(
+            "Expected exactly one create_pull_request item for a drafted outcome, "
+            f"found {len(create_pull_requests)}."
+        )
+
+    return create_pull_requests[0]
+
+
+def _require_target_branch(value: object, field_name: str) -> str:
+    if not isinstance(value, str) or _TARGET_BRANCH_RE.fullmatch(value) is None:
+        raise OutcomeValidationError(f"Invalid {field_name}.")
+
+    return value
+
+
+def _validate_drafted_base_contract(
+    payload: Any,
+    notification: dict[str, Any],
+    created_pr_url: str,
+    created_pr_base: str,
+) -> None:
+    if _CREATED_PR_URL_RE.fullmatch(created_pr_url) is None:
+        raise OutcomeValidationError(
+            "Safe outputs returned an invalid microsoft/aspire.dev pull request URL."
+        )
+
+    create_pull_request = _get_create_pull_request(payload)
+    canonical_base = _require_target_branch(
+        create_pull_request.get("base_branch"),
+        "canonical create_pull_request base_branch",
+    )
+    notification_target = _require_target_branch(
+        notification.get("target_branch"),
+        "notify_source_pr target_branch",
+    )
+    if notification_target != canonical_base:
+        raise OutcomeValidationError(
+            "Canonical create_pull_request base_branch "
+            f"{canonical_base} does not match notify_source_pr target_branch "
+            f"{notification_target}."
+        )
+
+    actual_base = _require_target_branch(created_pr_base, "drafted PR base branch")
+    if actual_base != canonical_base:
+        raise OutcomeValidationError(
+            f"Drafted PR base branch {actual_base} does not match canonical "
+            f"create_pull_request base_branch {canonical_base}."
+        )
+
+
+def _validate_outcome(
     payload: Any,
     created_pr_url: str,
     expected_source_pr_number: object,
+    created_pr_base: str,
 ) -> str:
     item = _validate_agent_association(payload, expected_source_pr_number)
 
     result = str(item.get("result") or "").strip().lower()
     created_pr_url = created_pr_url.strip()
     if result == "drafted" and created_pr_url:
+        _validate_drafted_base_contract(
+            payload,
+            item,
+            created_pr_url,
+            created_pr_base,
+        )
         return f"Confirmed drafted documentation PR: {created_pr_url}"
     if result == "skipped" and _has_create_pull_request(payload):
         raise OutcomeValidationError(
@@ -114,6 +185,20 @@ def validate_outcome(
     )
 
 
+def validate_outcome(
+    payload: Any,
+    created_pr_url: str,
+    expected_source_pr_number: object,
+    created_pr_base: str = "",
+) -> str:
+    return _validate_outcome(
+        payload,
+        created_pr_url,
+        expected_source_pr_number,
+        created_pr_base,
+    )
+
+
 def load_expected_source_pr_number(path: Path) -> int:
     event = load_payload(path)
     if not isinstance(event, dict):
@@ -140,6 +225,7 @@ def build_side_effect_outcome(
     payload: Any,
     created_pr_url: str,
     expected_source_pr_number: int,
+    created_pr_base: str,
 ) -> dict[str, Any]:
     base_outcome: dict[str, Any] = {
         "allow_comment": False,
@@ -178,7 +264,12 @@ def build_side_effect_outcome(
     result = str(item.get("result") or "").strip().lower()
     created_pr_url = created_pr_url.strip()
     try:
-        validate_outcome(payload, created_pr_url, expected_source_pr_number)
+        _validate_outcome(
+            payload,
+            created_pr_url,
+            expected_source_pr_number,
+            created_pr_base,
+        )
     except OutcomeValidationError as error:
         base_outcome["diagnostic"] = str(error)
         if result == "drafted" and not created_pr_url:
@@ -205,6 +296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agent-output", required=True, type=Path)
     parser.add_argument("--created-pr-url", default="")
+    parser.add_argument("--created-pr-base", default="")
     parser.add_argument("--expected-source-pr-number", type=int)
     parser.add_argument("--github-event-path", type=Path)
     parser.add_argument("--write-side-effect-outcome", type=Path)
@@ -223,6 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 payload,
                 args.created_pr_url,
                 expected_source_pr_number,
+                args.created_pr_base,
             )
         except OutcomeValidationError as error:
             outcome = {
@@ -246,6 +339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             load_payload(args.agent_output),
             args.created_pr_url,
             args.expected_source_pr_number,
+            args.created_pr_base,
         )
     except OutcomeValidationError as error:
         print(f"::error::{encode_workflow_command_data(error)}")

@@ -1,10 +1,15 @@
 import * as assert from 'assert';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import * as cliModule from '../debugger/languages/cli';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
+import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { AspireResourceExtendedDebugConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
@@ -62,6 +67,313 @@ suite('AspireDebugSession tests', () => {
         tempDirs.length = 0;
     });
 
+    test('extension shutdown reuses an in-flight CLI stop request', async () => {
+        let completeStop!: () => void;
+        const stopRequest = new Promise<void>(resolve => {
+            completeStop = resolve;
+        });
+        const stopCli = sinon.stub().returns(stopRequest);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            configuration: {},
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        (aspireDebugSession as any)._rpcClient = { stopCli };
+
+        const firstRequest = aspireDebugSession.requestCliStopForExtensionShutdown();
+        const secondRequest = aspireDebugSession.requestCliStopForExtensionShutdown();
+
+        assert.strictEqual(secondRequest, firstRequest);
+        sinon.assert.calledOnce(stopCli);
+
+        completeStop();
+        await firstRequest;
+    });
+
+    test('extension shutdown waits for a CLI RPC client that connects after the stop request', async () => {
+        let onNewConnection!: (client: { debugSessionId: string; stopCli: () => Promise<void> }) => void;
+        const stopCli = sinon.stub().resolves();
+        const cliProcess = createFakeCliProcess(4320);
+        sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const aspireDebugSession = createSessionForSpawn(
+            async () => '/usr/local/bin/aspire',
+            () => { },
+            callback => {
+                onNewConnection = callback;
+                return { dispose: sinon.stub() };
+            });
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        const stopRequest = aspireDebugSession.requestCliStopForExtensionShutdown();
+        let stopSettled = false;
+        void stopRequest.then(() => { stopSettled = true; });
+        await Promise.resolve();
+
+        assert.strictEqual(stopSettled, false);
+
+        onNewConnection({ debugSessionId: aspireDebugSession.debugSessionId, stopCli });
+        await stopRequest;
+
+        sinon.assert.calledOnce(stopCli);
+    });
+
+    test('spawns the Aspire CLI as a process-group leader and retains the child process', async () => {
+        const cliProcess = createFakeCliProcess(4321);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        try {
+            const aspireDebugSession = createSessionForSpawn();
+
+            await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+            const options = spawnStub.firstCall.args[3];
+            // Without a process group there is no way to signal the AppHost and resource processes
+            // the CLI owns, and without retaining the child there is nothing to signal at all.
+            assert.strictEqual(options?.createProcessGroup, true);
+            assert.strictEqual((aspireDebugSession as any)._cliProcess, cliProcess);
+        }
+        finally {
+            spawnStub.restore();
+        }
+    });
+
+    test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
+        // `terminateCliProcess` is stubbed rather than executed: on Windows it shells out to
+        // `taskkill /pid <pid> /t` instead of calling `child.kill`, so running it for real would
+        // both fail this assertion on the Windows CI agents and signal whatever process happens to
+        // own the made-up PID there.
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const running = createFakeCliProcess(4322);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession as any)._cliProcess = running;
+
+        aspireDebugSession.terminateCliProcessTree();
+
+        // The cooperative `stopCli` RPC cannot terminate the process, so the signal is what
+        // actually ends the CLI and the resource tree beneath it.
+        sinon.assert.calledOnce(terminateStub);
+        assert.strictEqual(terminateStub.firstCall.args[0], running);
+
+        const exited = createFakeCliProcess(4323, 0);
+        const exitedAspireDebugSession = createSessionForSpawn();
+        (exitedAspireDebugSession as any)._cliProcess = exited;
+
+        exitedAspireDebugSession.terminateCliProcessTree();
+
+        // An exited leader is still forwarded: `terminateCliProcess` reaps the surviving members of
+        // its managed process group, which is the only path that collects an AppHost and resource
+        // processes that outlived the CLI.
+        sinon.assert.calledTwice(terminateStub);
+        assert.strictEqual(terminateStub.secondCall.args[0], exited);
+    });
+
+    test('terminateCliProcessTree is idempotent after signalling a CLI process', () => {
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const cliProcess = createFakeCliProcess(4324);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession as any)._cliProcess = cliProcess;
+
+        aspireDebugSession.terminateCliProcessTree({ force: true });
+        aspireDebugSession.terminateCliProcessTree();
+
+        sinon.assert.calledOnce(terminateStub);
+        assert.strictEqual(terminateStub.firstCall.args[0], cliProcess);
+        assert.deepStrictEqual(terminateStub.firstCall.args[2], { force: true });
+    });
+
+    test('a POSIX CLI process that exits on its own still has its process group collected', async () => {
+        // The behaviour under test is selected by `process.platform`, so it has to be pinned rather
+        // than inherited from whichever agent runs the suite. Without this the test asserts POSIX
+        // behaviour on the Windows agents, where the branch it covers deliberately does not run.
+        const platformStub = sinon.stub(process, 'platform').value('linux');
+        // Already exited: the leader is gone by the time the exit callback runs, which is exactly
+        // the state the old early return skipped on.
+        const cliProcess = createFakeCliProcess(4325, 0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = createSessionForSpawn();
+
+        try {
+            await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+            spawnStub.firstCall.args[3]?.exitCallback?.(0);
+
+            // The CLI is gone but the AppHost and resource processes in its detached group need not
+            // be, and once the leader's PID is released the group id can be recycled — so the
+            // collection has to happen here rather than on a later timer.
+            sinon.assert.calledOnceWithExactly(
+                terminateStub,
+                cliProcess,
+                `Aspire CLI for debug session ${aspireDebugSession.debugSessionId}`,
+                { force: true });
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
+
+    test('a Windows CLI process that exits on its own is not swept by stale PID', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const cliProcess = createFakeCliProcess(4327, 0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = createSessionForSpawn();
+
+        try {
+            await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+            spawnStub.firstCall.args[3]?.exitCallback?.(0);
+
+            // On Windows, taskkill can only walk the tree while the target PID still names a live
+            // process. The close callback runs after that PID can be recycled, so a force sweep here
+            // is both unreliable for descendants and unsafe for an unrelated process that reused it.
+            sinon.assert.notCalled(terminateStub);
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
+
+    test('a Windows CLI process that exits on its own is not swept after the cooperative grace period', async () => {
+        // The exit callback runs `dispose()`, which re-runs the CLI disposable and schedules the
+        // forced escalation. Asserting only at exit time therefore proves nothing about the sweep
+        // that actually reaches taskkill, so this test has to advance past the grace period.
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const cliProcess = createFakeCliProcess(4328, 0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = createSessionForSpawn();
+
+        try {
+            await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+            spawnStub.firstCall.args[3]?.exitCallback?.(0);
+
+            // Well past the 10s cooperative grace period, so any scheduled escalation has fired.
+            await clock.tickAsync(30_000);
+
+            // The recorded PID named a process that has already exited, so Windows may have handed
+            // it to something unrelated by now. Nothing may aim taskkill at it.
+            sinon.assert.notCalled(terminateStub);
+        }
+        finally {
+            platformStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('a disposed Windows CLI process that exits releases extension ownership', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const cliProcess = createFakeCliProcess(4329, 0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const removeAspireDebugSession = sinon.stub();
+        sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = createSessionForSpawn(
+            async () => '/usr/local/bin/aspire',
+            removeAspireDebugSession);
+
+        try {
+            await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+            aspireDebugSession.dispose();
+            spawnStub.firstCall.args[3]?.exitCallback?.(0);
+
+            // dispose() keeps a stopped session registered while the delayed CLI termination is
+            // pending. When the Windows close callback retires that PID without signalling it, the
+            // callback has to release the same ownership because the later dispose() call is a no-op.
+            sinon.assert.calledOnceWithExactly(removeAspireDebugSession, aspireDebugSession);
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
+
+    test('a forced CLI process tree termination is not repeated by the exit callback', async () => {
+        const cliProcess = createFakeCliProcess(4326, 0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = createSessionForSpawn();
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        aspireDebugSession.terminateCliProcessTree({ force: true });
+        spawnStub.firstCall.args[3]?.exitCallback?.(0);
+
+        sinon.assert.calledOnceWithExactly(
+            terminateStub,
+            cliProcess,
+            `Aspire CLI for debug session ${aspireDebugSession.debugSessionId}`,
+            { force: true });
+    });
+
+    test('a launch that resolves the CLI path after disposal does not spawn an orphan CLI', async () => {
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
+        const infoStub = sinon.stub(extensionLogOutputChannel, 'info');
+        let releaseCliPath!: (cliPath: string) => void;
+        const cliPath = new Promise<string>(resolve => {
+            releaseCliPath = resolve;
+        });
+        let cliPathRequested!: () => void;
+        const cliPathRequestObserved = new Promise<void>(resolve => {
+            cliPathRequested = resolve;
+        });
+        const aspireDebugSession = createSessionForSpawn(() => {
+            cliPathRequested();
+            return cliPath;
+        });
+
+        const spawning = aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+        await cliPathRequestObserved;
+        // Deactivation can complete while the CLI path is still resolving. Set the state `dispose()`
+        // establishes rather than calling it, so this covers the spawn guard alone and not VS Code's
+        // parent-session teardown.
+        (aspireDebugSession as any)._disposed = true;
+        releaseCliPath('/usr/local/bin/aspire');
+        await spawning;
+
+        // A detached process group spawned here would outlive the extension host itself.
+        sinon.assert.notCalled(spawnStub);
+        assert.strictEqual((aspireDebugSession as any)._cliProcess, undefined);
+        sinon.assert.calledWithMatch(infoStub, 'Skipping Aspire CLI launch for disposed or shutting-down debug session');
+    });
+
+    test('a launch that resolves the CLI path after extension shutdown was requested does not spawn an orphan CLI', async () => {
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
+        const infoStub = sinon.stub(extensionLogOutputChannel, 'info');
+        let releaseCliPath!: (cliPath: string) => void;
+        const cliPath = new Promise<string>(resolve => {
+            releaseCliPath = resolve;
+        });
+        let cliPathRequested!: () => void;
+        const cliPathRequestObserved = new Promise<void>(resolve => {
+            cliPathRequested = resolve;
+        });
+        const aspireDebugSession = createSessionForSpawn(() => {
+            cliPathRequested();
+            return cliPath;
+        });
+
+        const spawning = aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+        await cliPathRequestObserved;
+        const stopRequest = aspireDebugSession.requestCliStopForExtensionShutdown();
+        releaseCliPath('/usr/local/bin/aspire');
+        await spawning;
+        await stopRequest;
+
+        // The extension context can request shutdown before it has disposed this session. The
+        // session must still remember that no later async continuation is allowed to create a
+        // detached CLI process after the deactivation force sweep has already run.
+        sinon.assert.notCalled(spawnStub);
+        assert.strictEqual((aspireDebugSession as any)._cliProcess, undefined);
+        sinon.assert.calledWithMatch(infoStub, 'Skipping Aspire CLI launch for disposed or shutting-down debug session');
+    });
+
     test('suppresses the Aspire CLI first-run banner for extension-managed launches', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -95,6 +407,38 @@ suite('AspireDebugSession tests', () => {
             '--apphost',
             '/workspace/apphost.cs',
         ]);
+    });
+
+    test('forwards explicit launch configuration provenance to the Aspire CLI', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+                __aspireAppHostSelectionOrigin: 'explicit-launch-configuration',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+        await waitFor(() => spawnStub.calledOnce);
+        assert.deepStrictEqual(spawnStub.firstCall.args[4], [{
+            name: 'ASPIRE_CLI_APPHOST_SELECTION_ORIGIN',
+            value: 'explicit-launch-configuration',
+        }]);
     });
 
     test('describes a no-debug launch as an Aspire run session', async () => {
@@ -1388,6 +1732,77 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(startDebuggingStub.firstCall.args[2], undefined);
     });
 
+    test('resource stopSession deduplicates concurrent stops and retries after rejection', async () => {
+        let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
+        const firstStop = createDeferred<void>();
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'Project',
+            request: 'launch',
+            program: '/workspace/App/bin/App.dll',
+        } as AspireResourceExtendedDebugConfiguration;
+        const resourceSession = {
+            id: 'resource-session',
+            type: 'coreclr',
+            name: 'Project',
+            configuration: debugConfig,
+        } as unknown as vscode.DebugSession;
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(callback => {
+            startSessionCallback = callback;
+            return { dispose: sinon.stub() };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').callsFake(async () => {
+            startSessionCallback?.(resourceSession);
+            return true;
+        });
+        const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging');
+        stopDebugging.onFirstCall().returns(firstStop.promise);
+        stopDebugging.onSecondCall().resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            terminalProvider as any,
+            () => { });
+        sinon.stub(aspireDebugSession as any, 'createDebugAdapterTrackerCore');
+
+        const resource = await aspireDebugSession.startAndGetDebugSession(debugConfig);
+        assert.ok(resource);
+
+        const first = resource.stopSession();
+        const concurrent = resource.stopSession();
+        assert.strictEqual(concurrent, first);
+        assert.strictEqual(stopDebugging.calledOnce, true);
+
+        firstStop.reject(new Error('stop failed'));
+        await assert.rejects(Promise.resolve(first), /stop failed/);
+
+        await resource.stopSession();
+        assert.strictEqual(stopDebugging.callCount, 2);
+
+        aspireDebugSession.dispose();
+    });
+
     test('stops MAUI resource debug sessions that start after Aspire session disposal', async () => {
         let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
         let resolveStart: ((value: boolean) => void) | undefined;
@@ -1461,6 +1876,20 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         });
     });
 
+    function createDeferred<T>(): {
+        promise: Promise<T>;
+        reject(reason?: unknown): void;
+        resolve(value: T | PromiseLike<T>): void;
+    } {
+        let resolve!: (value: T | PromiseLike<T>) => void;
+        let reject!: (reason?: unknown) => void;
+        const promise = new Promise<T>((promiseResolve, promiseReject) => {
+            resolve = promiseResolve;
+            reject = promiseReject;
+        });
+        return { promise, reject, resolve };
+    }
+
     async function waitFor(predicate: () => boolean): Promise<void> {
         const start = Date.now();
         while (!predicate()) {
@@ -1481,5 +1910,39 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
             await clock.tickAsync(10);
         }
+    }
+
+    function createSessionForSpawn(
+        getAspireCliExecutablePath: () => Promise<string> = async () => '/usr/local/bin/aspire',
+        removeAspireDebugSession: (session: AspireDebugSession) => void = () => { },
+        onNewConnection: (callback: (client: any) => void) => vscode.Disposable = () => ({ dispose: () => { } })): AspireDebugSession {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            configuration: {},
+        } as unknown as vscode.DebugSession;
+
+        return new AspireDebugSession(
+            parentDebugSession,
+            { onNewConnection } as any,
+            { recordAppHostProcessExit: () => { } } as any,
+            {
+                getAspireCliExecutablePath,
+                createEnvironment: () => ({}),
+            } as any,
+            removeAspireDebugSession);
+    }
+
+    function createFakeCliProcess(pid: number, exitCode: number | null = null): ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
+        const kill = sinon.stub().returns(true);
+        return Object.assign(new EventEmitter(), {
+            stdin: new PassThrough(),
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+            killed: false,
+            exitCode,
+            signalCode: null,
+            pid,
+            kill,
+        }) as unknown as ChildProcessWithoutNullStreams & { kill: sinon.SinonStub };
     }
 });

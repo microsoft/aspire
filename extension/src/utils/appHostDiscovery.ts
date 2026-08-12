@@ -514,17 +514,17 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
 
         const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
-        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSamePath(candidate.path, configuredPath)))
+        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSameFileSystemEntry(candidate.path, configuredPath)))
             ?? configuredPaths[0];
         if (!configuredPath) {
             return candidates;
         }
 
-        const matchingCandidate = candidates.find(candidate => isSamePath(candidate.path, configuredPath));
+        const matchingCandidate = candidates.find(candidate => isSameFileSystemEntry(candidate.path, configuredPath));
         if (matchingCandidate) {
             return candidates.map(candidate => ({
                 ...candidate,
-                selected: isSamePath(candidate.path, configuredPath),
+                selected: isSameFileSystemEntry(candidate.path, configuredPath),
             }));
         }
 
@@ -1189,8 +1189,42 @@ function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: st
         && !relativePath.split(path.sep).some(segment => segment.toLowerCase() === 'bin' || segment.toLowerCase() === 'obj');
 }
 
-function isSamePath(left: string, right: string): boolean {
-    const comparison = process.platform === 'win32' || process.platform === 'darwin'
+type FileSystemEntryIdentity = Pick<fs.BigIntStats, 'dev' | 'ino'>;
+type FileSystemEntryIdentityProvider = (filePath: string) => FileSystemEntryIdentity | undefined;
+
+export function isSameFileSystemEntry(
+    left: string,
+    right: string,
+    getIdentity: FileSystemEntryIdentityProvider = tryGetFileSystemEntryIdentity): boolean {
+    const resolvedLeft = path.resolve(left);
+    const resolvedRight = path.resolve(right);
+    if (resolvedLeft === resolvedRight) {
+        return true;
+    }
+
+    const leftIdentity = getIdentity(resolvedLeft);
+    const rightIdentity = getIdentity(resolvedRight);
+    if (leftIdentity && rightIdentity && leftIdentity.ino !== 0n && rightIdentity.ino !== 0n) {
+        // Stable native identities are authoritative: case-sensitive Windows directories can
+        // contain distinct entries such as Foo and foo even though textual comparison ignores case.
+        return leftIdentity.dev === rightIdentity.dev && leftIdentity.ino === rightIdentity.ino;
+    }
+
+    // Missing or unstable identities cannot distinguish entries, so retain the platform fallback.
+    return isSamePath(resolvedLeft, resolvedRight);
+}
+
+function tryGetFileSystemEntryIdentity(filePath: string): FileSystemEntryIdentity | undefined {
+    try {
+        return fs.statSync(filePath, { bigint: true });
+    }
+    catch {
+        return undefined;
+    }
+}
+
+export function isSamePath(left: string, right: string): boolean {
+    const comparison = process.platform === 'win32'
         ? 'case-insensitive'
         : 'case-sensitive';
     const resolvedLeft = path.resolve(left);

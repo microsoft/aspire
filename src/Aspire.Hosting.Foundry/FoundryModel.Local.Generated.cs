@@ -148,6 +148,62 @@ public partial class FoundryModel
         public static readonly FoundryModel DeepseekR17b = new() { Name = "deepseek-r1-7b", Version = "2", Format = "Microsoft" };
 
         /// <summary>
+        ///   <para>This model is an optimized version of Gemma 4 E2B IT for local inference. This optimized model is published here in ONNX format to run on CUDA-capable GPU devices, with the precision best suited to this target.</para>
+        ///   <para>
+        ///     <b>ONNX Models</b>
+        ///   </para>
+        ///   <para>Here are some of the optimized configurations we have added:</para>
+        ///   <list type="number">
+        ///     <item>
+        ///       <description>
+        ///         <para>ONNX model for CUDA GPU using RTN quantization.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Google DeepMind</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of Gemma 4 E2B IT for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/google/gemma-4-e2b-it">Gemma 4 E2B IT</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gemma4E2bIt = new() { Name = "gemma-4-e2b-it", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of gpt-oss-20b to enable local inference. This model uses RTN quantization.</para>
         ///   <para>
         ///     <b>Model Description</b>

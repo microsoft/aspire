@@ -447,12 +447,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ConnectionStringAvailableEventPublishesUpdateWithConnectionStringValue()
+    public async Task ConnectionStringAvailableEventPublishesConnectionStringAndResolvableProperties()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb"));
+        var unresolvedProperty = ReferenceExpression.Create($"{new ThrowingValueProvider()}");
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", "localhost", unresolvedProperty));
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -465,7 +466,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await appOrchestrator.RunApplicationAsync();
 
         string? connectionStringProperty = null;
-        bool? isSensitive = null;
+        IReadOnlyDictionary<string, string?>? connectionProperties = null;
+        bool? isConnectionStringSensitive = null;
+        bool? areConnectionPropertiesSensitive = null;
+        var hasDatabaseNameProperty = false;
         var watchResourceTask = Task.Run(async () =>
         {
             await foreach (var item in resourceNotificationService.WatchAsync())
@@ -476,7 +480,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
                     if (connectionStringProp is not null)
                     {
                         connectionStringProperty = connectionStringProp.Value?.ToString();
-                        isSensitive = connectionStringProp.IsSensitive;
+                        isConnectionStringSensitive = connectionStringProp.IsSensitive;
+                        var connectionPropertiesProp = item.Snapshot.Properties.Single(p => p.Name == KnownProperties.Resource.ConnectionProperties);
+                        connectionProperties = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProp.Value);
+                        areConnectionPropertiesSensitive = connectionPropertiesProp.IsSensitive;
+                        hasDatabaseNameProperty = item.Snapshot.Properties.Any(p => p.Name == "resource.DatabaseName");
                         return;
                     }
                 }
@@ -489,7 +497,16 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await watchResourceTask.DefaultTimeout();
 
         Assert.Equal("Server=localhost:5432;Database=testdb", connectionStringProperty);
-        Assert.True(isSensitive);
+        Assert.True(isConnectionStringSensitive);
+        Assert.Equal(
+            new Dictionary<string, string?>
+            {
+                ["DatabaseName"] = "testdb",
+                ["Host"] = "localhost"
+            },
+            connectionProperties);
+        Assert.True(areConnectionPropertiesSensitive);
+        Assert.False(hasDatabaseNameProperty);
     }
 
     [Fact]
@@ -1249,7 +1266,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public IResource Parent { get; } = parent;
     }
 
-    private sealed class TestResourceWithConnectionString(string name, string connectionString)
+    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
         public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{connectionString}");
@@ -1257,6 +1274,24 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult<string?>(connectionString);
+        }
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            if (databaseName is not null)
+            {
+                yield return new("DatabaseName", ReferenceExpression.Create($"{databaseName}"));
+            }
+
+            if (host is not null)
+            {
+                yield return new("Host", ReferenceExpression.Create($"{host}"));
+            }
+
+            if (unresolvedProperty is not null)
+            {
+                yield return new("Unavailable", unresolvedProperty);
+            }
         }
     }
 
@@ -1515,5 +1550,15 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await watchResourceTask.DefaultTimeout();
 
         Assert.Equal(parentProjectResourceId, childProjectParentResourceId);
+    }
+
+    private sealed class ThrowingValueProvider : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "{throwing.value}";
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("The connection property isn't available.");
+        }
     }
 }

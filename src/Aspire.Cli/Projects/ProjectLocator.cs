@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO.Hashing;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Cli.Configuration;
@@ -11,7 +13,9 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -140,10 +144,13 @@ internal sealed class ProjectLocator(
     ILanguageDiscovery languageDiscovery,
     IDotNetSdkInstaller sdkInstaller,
     IAppHostCandidateFinder appHostCandidateFinder,
-    AspireCliTelemetry telemetry) : IProjectLocator
+    AspireCliTelemetry telemetry,
+    IConfiguration configuration) : IProjectLocator
 {
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
+    private const string ExplicitLaunchConfigurationSelectionOrigin = "explicit-launch-configuration";
+    private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory with language metadata.
@@ -1058,68 +1065,60 @@ internal sealed class ProjectLocator(
         return result.SelectedProjectFile;
     }
 
+    /// <summary>
+    /// Determines whether a persisted AppHost path identifies the selected project on the current platform.
+    /// </summary>
+    internal static bool IsSamePersistedAppHostPath(string persistedPath, string selectedPath, IEnvironment environment)
+    {
+        var pathComparison = environment.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        return string.Equals(persistedPath, selectedPath, pathComparison);
+    }
+
     private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        FileInfo? settingsFile = null;
-        DirectoryInfo? appHostDirForScopedConfig = null;
+        var selectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        var isExplicitLaunchConfiguration = string.Equals(selectionOrigin, ExplicitLaunchConfigurationSelectionOrigin, StringComparison.OrdinalIgnoreCase);
 
-        // Search from the apphost's directory upward for an existing config file.
-        // This handles the case where "aspire new" created a project in a subdirectory
-        // and the user runs "aspire run" from the parent without cd-ing first.
-        if (projectFile.Directory is { } appHostDir)
+        var (settingsFile, appHostDirForScopedConfig) = ResolveWorkspaceConfigTarget(projectFile);
+
+        // Compound launch configurations start multiple CLI processes together. The default check
+        // and the whole-file writes must share one cross-process critical section so only the first
+        // launch can establish a missing workspace default.
+        using var configLock = await TryAcquireWorkspaceConfigLockAsync(settingsFile, cancellationToken);
+
+        var existingConfig = LoadOrMigrateWorkspaceConfig(settingsFile);
+        var fileExisted = settingsFile.Exists;
+
+        if (existingConfig?.AppHost?.Path is { } existingPath &&
+            IsValidConfiguredAppHostPath(existingPath, settingsFile.FullName, AspireConfigAppHostPathKey, silent: true))
         {
-            var nearAppHost = ConfigurationHelper.FindNearestConfigFilePath(appHostDir);
-            if (nearAppHost is not null)
+            var resolvedPath = PathNormalizer.NormalizePathForCurrentPlatform(
+                Path.IsPathRooted(existingPath) ? existingPath : Path.Combine(settingsFile.Directory!.FullName, existingPath));
+
+            if (IsSamePersistedAppHostPath(resolvedPath, projectFile.FullName, environment))
             {
-                var configDir = Path.GetDirectoryName(nearAppHost)!;
-                var targetSettingsFilePath = nearAppHost;
-                AspireConfigFile? existingConfig;
+                logger.LogDebug(
+                    "Config at {Path} already references apphost {AppHost}, skipping creation",
+                    settingsFile.FullName,
+                    projectFile.FullName);
+                return;
+            }
 
-                // For legacy .aspire/settings.json, the config root is the parent of .aspire/
-                var trimmedConfigDir = configDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (string.Equals(Path.GetFileName(trimmedConfigDir), ".aspire", StringComparison.OrdinalIgnoreCase))
-                {
-                    var parentDir = Directory.GetParent(trimmedConfigDir);
-                    if (parentDir is not null)
-                    {
-                        configDir = parentDir.FullName;
-                    }
-
-                    targetSettingsFilePath = Path.Combine(configDir, AspireConfigFile.FileName);
-                    existingConfig = AspireConfigFile.LoadOrCreate(configDir);
-                }
-                else
-                {
-                    existingConfig = AspireConfigFile.Load(configDir);
-                }
-
-                if (existingConfig?.AppHost?.Path is { } existingPath)
-                {
-                    // Resolve the stored path relative to the config file's directory.
-                    var resolvedPath = Path.GetFullPath(
-                        Path.IsPathRooted(existingPath) ? existingPath : Path.Combine(configDir, existingPath));
-
-                    // Only skip creation if the config already points to the discovered apphost.
-                    // If the path is stale/invalid, fall through so the config gets healed.
-                    if (string.Equals(resolvedPath, projectFile.FullName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        logger.LogDebug(
-                            "Config at {Path} already references apphost {AppHost}, skipping creation",
-                            nearAppHost, projectFile.FullName);
-                        return;
-                    }
-                }
-
-                settingsFile = new FileInfo(targetSettingsFilePath);
-                appHostDirForScopedConfig = appHostDir;
+            // A launch configuration or agent-selected target is for this invocation only. Preserve
+            // an existing workspace default, but let the selected AppHost replace a deleted target.
+            if (isExplicitLaunchConfiguration && File.Exists(resolvedPath))
+            {
+                logger.LogDebug(
+                    "Not replacing recorded AppHost default {RecordedAppHost} with {AppHost} because the latter was selected by {SelectionOrigin}.",
+                    resolvedPath,
+                    projectFile.FullName,
+                    selectionOrigin);
+                return;
             }
         }
-
-        // Only use the working-directory config after checking the selected AppHost's tree.
-        // GetOrCreateLocalAspireConfigFile can migrate legacy .aspire/settings.json into
-        // aspire.config.json, so calling it earlier would recreate the split-config bug.
-        settingsFile ??= GetOrCreateLocalAspireConfigFile();
-        var fileExisted = settingsFile.Exists;
 
         logger.LogDebug("Creating settings file at {SettingsFilePath}", settingsFile.FullName);
 
@@ -1153,42 +1152,89 @@ internal sealed class ProjectLocator(
         interactionService.DisplayMessage(KnownEmojis.FloppyDisk, string.Format(CultureInfo.CurrentCulture, message, $"[bold]'{relativeSettingsFilePath.EscapeMarkup()}'[/]"), allowMarkup: true);
     }
 
-    private FileInfo GetOrCreateLocalAspireConfigFile()
+    private (FileInfo SettingsFile, DirectoryInfo? AppHostDirectoryForScopedConfig) ResolveWorkspaceConfigTarget(FileInfo projectFile)
     {
-        var settingsFile = new FileInfo(configurationService.GetSettingsFilePath(isGlobal: false));
-
-        if (string.Equals(settingsFile.Name, AspireConfigFile.FileName, StringComparison.OrdinalIgnoreCase))
+        // Search from the AppHost's directory first so a config beside the AppHost wins over one
+        // associated with the working directory.
+        if (projectFile.Directory is { } appHostDirectory &&
+            ConfigurationHelper.FindNearestConfigFilePath(appHostDirectory) is { } configPath)
         {
-            logger.LogDebug("Using existing config file at {Path}", settingsFile.FullName);
-            return settingsFile;
+            var configDirectoryPath = Path.GetDirectoryName(configPath)!;
+            var targetSettingsFilePath = configPath;
+
+            // For legacy .aspire/settings.json, the config root is the parent of .aspire/.
+            var trimmedConfigDirectoryPath = configDirectoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(Path.GetFileName(trimmedConfigDirectoryPath), ".aspire", StringComparison.OrdinalIgnoreCase) &&
+                Directory.GetParent(trimmedConfigDirectoryPath) is { } parentDirectory)
+            {
+                targetSettingsFilePath = Path.Combine(parentDirectory.FullName, AspireConfigFile.FileName);
+            }
+
+            return (new FileInfo(targetSettingsFilePath), appHostDirectory);
         }
 
-        var legacySettingsRootDirectory = ConfigurationHelper.GetLegacySettingsRootDirectory(settingsFile);
-        if (legacySettingsRootDirectory is null)
+        var configuredSettingsFile = new FileInfo(configurationService.GetSettingsFilePath(isGlobal: false));
+
+        if (string.Equals(configuredSettingsFile.Name, AspireConfigFile.FileName, StringComparison.OrdinalIgnoreCase))
         {
-            var newConfigPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
-            logger.LogDebug("No existing config found, will create new config at {Path}", newConfigPath);
-            return new FileInfo(newConfigPath);
+            logger.LogDebug("Using existing config file at {Path}", configuredSettingsFile.FullName);
+            return (configuredSettingsFile, null);
         }
 
-        var aspireConfigFile = new FileInfo(Path.Combine(legacySettingsRootDirectory.FullName, AspireConfigFile.FileName));
-        if (!aspireConfigFile.Exists)
-        {
-            logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", legacySettingsRootDirectory.FullName, aspireConfigFile.FullName);
-            MigrateLegacySettings(legacySettingsRootDirectory);
-        }
+        var configRoot = ConfigurationHelper.GetLegacySettingsRootDirectory(configuredSettingsFile)
+            ?? executionContext.WorkingDirectory;
+        var newConfigPath = Path.Combine(configRoot.FullName, AspireConfigFile.FileName);
+        logger.LogDebug("Will use workspace config at {Path}", newConfigPath);
 
-        return aspireConfigFile;
+        return (new FileInfo(newConfigPath), null);
     }
 
-    private void MigrateLegacySettings(DirectoryInfo settingsRootDirectory)
+    private AspireConfigFile? LoadOrMigrateWorkspaceConfig(FileInfo settingsFile)
     {
-        var configFilePath = Path.Combine(settingsRootDirectory.FullName, AspireConfigFile.FileName);
-        logger.LogInformation("Migrating legacy settings to {SettingsFilePath}", configFilePath);
+        var configRoot = settingsFile.Directory!;
+        if (settingsFile.Exists)
+        {
+            return AspireConfigFile.Load(configRoot.FullName);
+        }
 
-        // LoadOrCreate handles the legacy fallback and migration internally,
-        // including saving the migrated config to disk.
-        _ = AspireConfigFile.LoadOrCreate(settingsRootDirectory.FullName);
+        var legacySettingsFile = new FileInfo(ConfigurationHelper.BuildPathToSettingsJsonFile(configRoot.FullName));
+        if (!legacySettingsFile.Exists)
+        {
+            return null;
+        }
+
+        logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", configRoot.FullName, settingsFile.FullName);
+        return AspireConfigFile.LoadOrCreate(configRoot.FullName);
+    }
+
+    private async Task<FileLock?> TryAcquireWorkspaceConfigLockAsync(FileInfo settingsFile, CancellationToken cancellationToken)
+    {
+        var lockPath = GetWorkspaceConfigLockPath(settingsFile);
+
+        try
+        {
+            return await FileLock.AcquireAsync(lockPath, cancellationToken, s_workspaceConfigLockTimeout);
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            // Persisting the workspace default is bookkeeping around the requested command. Preserve
+            // the previous best-effort behavior if the cache directory cannot host the lock.
+            logger.LogDebug(ex, "Proceeding without the workspace config lock at {LockPath}.", lockPath);
+            return null;
+        }
+    }
+
+    private string GetWorkspaceConfigLockPath(FileInfo settingsFile)
+    {
+        // Lock files live in the cache so read-only workspaces remain usable. Canonicalizing and
+        // folding the config path makes aliases on symlinked or case-insensitive volumes contend;
+        // on a case-sensitive volume this can only serialize two otherwise independent writes.
+        var normalizedSettingsPath = PathNormalizer.ResolveSymlinks(settingsFile.FullName)
+            .Normalize(NormalizationForm.FormC)
+            .ToUpperInvariant();
+        var lockFileName = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(normalizedSettingsPath))).ToLowerInvariant();
+
+        return Path.Combine(executionContext.CacheDirectory.FullName, "workspace-config-locks", $"{lockFileName}.lock");
     }
 
     private string? GetNuGetPackagesCachePath()
@@ -1235,7 +1281,7 @@ internal static class ProjectLocatorErrorHelper
             ProjectLocatorFailureReason.MultipleProjectFilesFound
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
             ProjectLocatorFailureReason.NoProjectFileFound
-                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoAppHostsFound),
             ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
                 => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
             _ => (CliExitCodes.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))

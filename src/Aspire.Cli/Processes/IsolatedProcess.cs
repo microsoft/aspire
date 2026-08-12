@@ -332,7 +332,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             }
             else
             {
-                startedProcess = StartRedirected(_startInfo, redirectStandardInput: !_startInfo.IsolateConsole);
+                startedProcess = StartRedirected(_startInfo);
             }
 
             InitializeStartedProcess(startedProcess);
@@ -361,14 +361,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// Cross-platform redirected spawn: a thin <see cref="Process.Start(ProcessStartInfo)"/> wrapper.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
-    /// <param name="redirectStandardInput">
-    /// <see langword="true"/> wires stdin to an empty redirected pipe (the non-isolated shape every
-    /// other CLI subprocess uses). <see langword="false"/> lets the child inherit the CLI's stdin
-    /// (the isolated-Unix shape).
-    /// </param>
-    private static StartedProcess StartRedirected(
-        IsolatedProcessStartInfo startInfo,
-        bool redirectStandardInput)
+    private static StartedProcess StartRedirected(IsolatedProcessStartInfo startInfo)
     {
         var psi = new ProcessStartInfo
         {
@@ -378,7 +371,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            RedirectStandardInput = redirectStandardInput,
+            // Guest processes never consume input from the CLI. Redirect and close stdin so tools
+            // such as package-manager lifecycle scripts observe EOF instead of inheriting the TTY
+            // and blocking indefinitely. See https://github.com/microsoft/aspire/issues/16791.
+            RedirectStandardInput = true,
             // Pin encodings so process output decoding is stable regardless of the ambient
             // Console.OutputEncoding (e.g. on container hosts that leave it set to ASCII).
             StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
@@ -398,6 +394,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
 
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
+
+        process.StandardInput.Close();
 
         return new StartedProcess(
             process,

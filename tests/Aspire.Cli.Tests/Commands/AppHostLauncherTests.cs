@@ -684,7 +684,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
         activity.TraceStateString = "state-1";
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
@@ -695,9 +695,27 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DetachedChildEnvironment_ForwardsAppHostSelectionOriginToChildCli()
+    {
+        // The detached child re-resolves the AppHost, so it needs the same selection origin to avoid
+        // clobbering the workspace default in aspire.config.json.
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: "explicit-launch-configuration");
+
+        Assert.Equal("explicit-launch-configuration", environment[KnownConfigNames.CliAppHostSelectionOrigin]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_OmitsAppHostSelectionOriginWhenNoOriginWasRecorded()
+    {
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
+
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliAppHostSelectionOrigin));
+    }
+
+    [Fact]
     public void DetachedChildEnvironment_DoesNotIncludeStartupStatusFile()
     {
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.False(environment.ContainsKey("ASPIRE_CLI_START_READY_FILE"));
     }
@@ -708,7 +726,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         // The detached child's LauncherLivenessMonitor watches this launcher identity (PID + start time)
         // to tear the AppHost down if the foreground launcher dies before readiness. Without it the child
         // cannot detect a dead launcher and the AppHost + dashboard leak as orphaned processes.
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal(
@@ -727,7 +745,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
         Assert.True(activity.IsRunning);
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
@@ -745,7 +763,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
@@ -757,7 +775,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
     {
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null, appHostSelectionOrigin: null);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
         Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
@@ -998,6 +1016,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 fileLoggerProvider,
                 processShutdownService,
                 processFactory,
+                new ConfigurationBuilder().Build(),
                 NullLogger<AppHostLauncher>.Instance,
                 TimeProvider.System);
 

@@ -9,6 +9,7 @@ import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfigurat
 import * as io from '../utils/io';
 import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
+import * as hotReload from '../debugger/hotReload';
 
 class TestDotNetService {
     private _getDotNetTargetPathStub: sinon.SinonStub;
@@ -54,6 +55,22 @@ class TestDotNetService {
 }
 
 suite('Dotnet Debugger Extension Tests', () => {
+    let getHotReloadDiagnostics: sinon.SinonStub;
+    let logHotReloadDiagnostics: sinon.SinonStub;
+    let showHotReloadDisabledAdvisory: sinon.SinonStub;
+
+    setup(() => {
+        getHotReloadDiagnostics = sinon.stub(hotReload, 'getHotReloadDiagnostics').returns({
+            devKitInstalled: true,
+            workspaceTrusted: true,
+            settingContributed: true,
+            settingEnabled: false,
+            reloadOnSaveEnabled: true
+        });
+        logHotReloadDiagnostics = sinon.stub(hotReload, 'logHotReloadDiagnostics');
+        showHotReloadDisabledAdvisory = sinon.stub(hotReload, 'showHotReloadDisabledAdvisoryIfNeeded').resolves();
+    });
+
     teardown(() => sinon.restore());
 
     function createDebuggerExtension(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean, doesOutputFileExist: boolean): { dotNetService: TestDotNetService, extension: ResourceDebuggerExtension, doesFileExistStub: sinon.SinonStub } {
@@ -316,6 +333,92 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(debugConfig.program, outputPath);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+    });
+
+    test('project debug configuration is byte-identical whether or not C# Dev Kit is installed', async () => {
+        getHotReloadDiagnostics.onFirstCall().returns({
+            devKitInstalled: false,
+            workspaceTrusted: true,
+            settingContributed: true,
+            settingEnabled: false,
+            reloadOnSaveEnabled: true
+        });
+        getHotReloadDiagnostics.onSecondCall().returns({
+            devKitInstalled: true,
+            workspaceTrusted: true,
+            settingContributed: true,
+            settingEnabled: true,
+            reloadOnSaveEnabled: true
+        });
+
+        const withoutDevKit = await createProjectDebugConfiguration();
+        const withDevKit = await createProjectDebugConfiguration();
+
+        assert.deepStrictEqual(withDevKit, withoutDevKit);
+    });
+
+    test('ordinary project debug launch logs and offers the Hot Reload advisory with current diagnostics', async () => {
+        const diagnostics = {
+            devKitInstalled: true,
+            workspaceTrusted: true,
+            settingContributed: true,
+            settingEnabled: false,
+            reloadOnSaveEnabled: true
+        };
+        getHotReloadDiagnostics.returns(diagnostics);
+
+        await createProjectDebugConfiguration({ runId: 'resource-42' });
+
+        assert.strictEqual(getHotReloadDiagnostics.calledOnce, true);
+        assert.strictEqual(logHotReloadDiagnostics.calledOnceWithExactly('C:\\temp\\TestProject.csproj (run resource-42)', diagnostics), true);
+        assert.strictEqual(showHotReloadDisabledAdvisory.calledOnceWithExactly(diagnostics), true);
+    });
+
+    async function createProjectDebugConfiguration(options: { debug?: boolean; runId?: string; debugSessionId?: string; debugSession?: AspireDebugSession; isApphost?: boolean } = {}): Promise<AspireResourceExtendedDebugConfiguration> {
+        const outputPath = 'C:\\temp\\bin\\Debug\\net7.0\\TestProject.dll';
+        const { extension, doesFileExistStub } = createDebuggerExtension(outputPath, null, true, true);
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: 'C:\\temp\\TestProject.csproj'
+        };
+
+        const debug = options.debug ?? true;
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: options.runId ?? '1',
+            debugSessionId: options.debugSessionId ?? '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch',
+            noDebug: !debug
+        };
+
+        await extension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            [],
+            [],
+            { debug, runId: debugConfig.runId, debugSessionId: options.debugSessionId ?? '1', isApphost: options.isApphost ?? false, debugSession: options.debugSession ?? sinon.createStubInstance(AspireDebugSession) },
+            debugConfig);
+
+        // Restored so a caller can build a second configuration in the same test; sinon refuses to
+        // wrap an already-wrapped method.
+        doesFileExistStub.restore();
+
+        return debugConfig;
+    }
+
+    test('does not inspect or show Hot Reload for a noDebug launch', async () => {
+        await createProjectDebugConfiguration({ debug: false });
+
+        assert.strictEqual(getHotReloadDiagnostics.called, false);
+        assert.strictEqual(showHotReloadDisabledAdvisory.called, false);
+    });
+
+    test('does not inspect or show Hot Reload for the AppHost', async () => {
+        await createProjectDebugConfiguration({ isApphost: true });
+
+        assert.strictEqual(getHotReloadDiagnostics.called, false);
+        assert.strictEqual(showHotReloadDisabledAdvisory.called, false);
     });
 
     test('advertises the coreclr project debugger and extracts project_path for .csproj and file-based .cs', () => {

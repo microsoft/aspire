@@ -24,6 +24,7 @@ import {
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -610,6 +611,21 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             // variable (see https://github.com/dotnet/sdk/pull/35029), we need to replicate the behavior by setting it ourselves.
             if (launchOptions.isApphost && profileName) {
                 debugConfiguration.env['DOTNET_LAUNCH_PROFILE'] = profileName;
+            }
+
+            if (!launchOptions.isApphost && debugConfiguration.noDebug !== true) {
+                // C# Dev Kit and vsdbg provide Hot Reload for the ordinary coreclr launch. Aspire only
+                // reports their effective settings and points users at the setting when it is disabled.
+                try {
+                    const hotReloadDiagnostics = getHotReloadDiagnostics();
+                    logHotReloadDiagnostics(`${projectPath} (run ${debugConfiguration.runId})`, hotReloadDiagnostics);
+
+                    // A notification stays open until the user answers it, so it must not block launch.
+                    void showHotReloadDisabledAdvisoryIfNeeded(hotReloadDiagnostics);
+                }
+                catch (err) {
+                    extensionLogOutputChannel.warn(`Could not read C# Dev Kit Hot Reload settings; continuing without diagnostics: ${err instanceof Error ? err.message : String(err)}`);
+                }
             }
         }
     };

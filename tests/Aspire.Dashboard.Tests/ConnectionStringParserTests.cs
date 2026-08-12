@@ -119,6 +119,27 @@ public class ConnectionStringParserTests
         }
     }
 
+    [Theory]
+    [InlineData("Host=localhost;Port=5432;Database=catalogdb", true, "catalogdb")]
+    [InlineData("Data Source=localhost;Initial Catalog=Catalog", true, "Catalog")]
+    [InlineData("Server=localhost;Database Name=Catalog", true, "Catalog")]
+    [InlineData("jdbc:sqlserver://localhost:1433;databaseName=Catalog", true, "Catalog")]
+    [InlineData("mongodb://user:password@localhost:27017/catalogdb", true, "catalogdb")]
+    [InlineData("mongodb+srv://cluster0.example.mongodb.net/catalogdb", true, "catalogdb")]
+    [InlineData("mssql://localhost:1433/Catalog", true, "Catalog")]
+    [InlineData("postgresql://localhost:5432/catalog%20db", true, "catalog db")]
+    [InlineData("jdbc:postgresql://localhost:5432/catalogdb", true, "catalogdb")]
+    [InlineData("mongodb://localhost:27017/", false, null)]
+    [InlineData("https://models.github.ai/inference", false, null)]
+    [InlineData("Host=localhost;Port=5432", false, null)]
+    public void TryDetectDatabaseName_VariousFormats_ReturnsExpectedResults(string connectionString, bool expectedResult, string? expectedDatabaseName)
+    {
+        var result = ConnectionStringParser.TryDetectDatabaseName(connectionString, out var databaseName);
+
+        Assert.Equal(expectedResult, result);
+        Assert.Equal(expectedDatabaseName, databaseName);
+    }
+
     [Fact]
     public void TryDetectHostAndPort_IPv6URI_ReturnsCorrectHost()
     {

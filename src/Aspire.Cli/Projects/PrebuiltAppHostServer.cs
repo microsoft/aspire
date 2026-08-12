@@ -1080,6 +1080,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
         }
 
+        startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 

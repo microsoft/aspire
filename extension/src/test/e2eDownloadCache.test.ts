@@ -2130,7 +2130,55 @@ suite('E2E download cache', () => {
         assert.strictEqual(fs.readFileSync(projectedDriver, 'utf8'), 'run-local driver');
     });
 
-    test('accepts the internal Electron symlink that ExTester creates in real macOS bundles', () => {
+    test('accepts the Code executable in VS Code 1.131 macOS bundles when ExTester supports it', () => {
+        const root = createTestRoot('darwin-code-executable');
+        const bundle = 'Visual Studio Code.app';
+        const extesterVersion = '8.24.0';
+
+        const result = cache.ensureDownloadCache({
+            ...getDefaultCacheOptions(path.join(root, 'cache'), {
+                platform: 'darwin',
+                architecture: 'arm64',
+                populate(stagingDirectory) {
+                    writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode 1.131 binary');
+                    writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+                },
+            }),
+            extesterVersion,
+        });
+
+        assert.strictEqual(result.cacheHit, false);
+        assert.strictEqual(result.manifest.vscodeDirectory, bundle);
+
+        const reused = cache.ensureDownloadCache({
+            ...getDefaultCacheOptions(path.join(root, 'cache'), {
+                platform: 'darwin',
+                architecture: 'arm64',
+                populate() {
+                    throw new Error('populate must not run when the cached bundle is valid.');
+                },
+            }),
+            extesterVersion,
+        });
+
+        assert.strictEqual(reused.cacheHit, true);
+    });
+
+    test('rejects Code-only macOS bundles when ExTester still requires Electron', () => {
+        const root = createTestRoot('darwin-code-with-legacy-extester');
+        const bundle = 'Visual Studio Code.app';
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate(stagingDirectory) {
+                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode binary');
+                writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+            },
+        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Electron'/);
+    });
+
+    test('accepts a legacy internal Electron symlink in older macOS bundles', () => {
         const root = createTestRoot('darwin-internal-electron-symlink');
         const bundle = 'Visual Studio Code.app';
 
@@ -2138,8 +2186,8 @@ suite('E2E download cache', () => {
             platform: 'darwin',
             architecture: 'arm64',
             populate(stagingDirectory) {
-                // Mirror the real downloaded layout: ExTester unpacks the bundle with the actual
-                // Mach-O binary named `Code` and then links `Electron -> Code` beside it.
+                // Mirror an older downloaded layout with the actual Mach-O binary named `Code`
+                // and an `Electron -> Code` compatibility link beside it.
                 writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'real vscode binary');
                 fs.symlinkSync('Code', path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Electron'));
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');

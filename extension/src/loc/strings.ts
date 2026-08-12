@@ -184,6 +184,8 @@ export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string,
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
+export const hotReloadDisabledNotice = vscode.l10n.t('C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.');
+export const openSettingsLabel = vscode.l10n.t('Open Settings');
 export const dismissLabel = vscode.l10n.t('Dismiss');
 export const openCliInstallInstructions = vscode.l10n.t('See CLI installation instructions');
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');

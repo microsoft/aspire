@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
+import { appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { startDebuggingDeclined } from '../loc/strings';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
@@ -148,7 +149,8 @@ export class AppHostLaunchService implements vscode.Disposable {
             request: 'launch',
             program: appHostPath,
             command,
-            noDebug
+            noDebug,
+            [appHostSelectionOriginConfigKey]: 'user-selection',
         };
 
         if (doStep) {
