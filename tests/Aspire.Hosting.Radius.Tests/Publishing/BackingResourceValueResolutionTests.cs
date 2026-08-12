@@ -298,6 +298,94 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The failure above exists because a <c>WithEnvironment</c> callback consumer records no
+    /// reference annotation. With no consumer in the model at all there is provably no wrong
+    /// connection string to protect against, so a server whose databases nobody uses keeps
+    /// publishing - it did before this projection existed.
+    /// </summary>
+    [Fact]
+    public void MultipleUnreferencedDatabasesWithNoConsumer_PublishWithAWarning()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            pg.AddDatabase("first");
+            pg.AddDatabase("second");
+        });
+
+        Assert.Contains("database: 'first'", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "pg", "declares 2 databases"));
+    }
+
+    /// <summary>
+    /// A Radius recipe publishes exactly one address, so every endpoint of a backing resource would
+    /// otherwise project to the same host/port. That is right for the primary endpoint and silently
+    /// wrong for a secondary one: the mapped <c>rabbitMQQueues</c> recipe exposes AMQP only and does
+    /// not enable the management plugin, so a consumer of the <c>management</c> endpoint would be
+    /// handed an HTTP URL pointing at the AMQP port.
+    /// </summary>
+    [Fact]
+    public void SecondaryEndpointOfABackingResource_FailsThePublish()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var rabbit = b.AddRabbitMQ("rabbit").WithManagementPlugin();
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MGMT_URL", rabbit.GetEndpoint("management").Property(EndpointProperty.Url));
+        }));
+
+        Assert.Contains("ASPIRERADIUS077", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("management", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The primary endpoint of the same resource is still projected: the guard rejects secondary
+    /// endpoints, not every endpoint of a resource that happens to declare more than one.
+    /// </summary>
+    [Fact]
+    public void PrimaryEndpointOfABackingResourceWithSecondaryEndpoints_IsStillProjected()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var rabbit = b.AddRabbitMQ("rabbit").WithManagementPlugin();
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("AMQP_HOST", rabbit.GetEndpoint("tcp").Property(EndpointProperty.Host));
+        });
+
+        Assert.Contains("value: rabbit.properties.host", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A conditional expression whose condition is a parameter with no configured value used to
+    /// abort the whole publish with a raw <c>MissingParameterValueException</c>, even though the
+    /// same parameter used as a <em>value</em> resolves to a <c>@secure()</c> param reference. The
+    /// branch choice is baked into the emitted document, so the value genuinely cannot be produced -
+    /// but it is one variable's failure, reported as such, not the publish's.
+    /// </summary>
+    [Fact]
+    public void ConditionalWithAnUnresolvableCondition_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var mode = b.AddParameter("mode", secret: false);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")))
+                .WithEnvironment("KEPT", "kept");
+        });
+
+        Assert.DoesNotContain("MODE_URL", bicep, StringComparison.Ordinal);
+        Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "MODE_URL"));
+    }
+
+    /// <summary>
     /// Substitutions are keyed by parameter identity, so a parameter given as both the user name and
     /// the password of a recipe-provisioned resource can only be rewritten to one of the two
     /// recipe-generated values. It used to be silently rewritten to the user name, handing consumers
@@ -352,12 +440,36 @@ public class BackingResourceValueResolutionTests
     {
         var (_, logger) = GenerateBicep(b =>
         {
+            var password = b.AddParameter("rabbitpassword", "hunter2", secret: true);
+            var rabbit = b.AddRabbitMQ("rabbit", password: password);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "rabbitpassword", "is not used when deploying"));
+    }
+
+    /// <summary>
+    /// Redis is the one mapped type whose recipe deploys an <em>unauthenticated</em> server: the
+    /// pinned <c>local-dev/rediscaches</c> recipe starts a bare <c>redis</c> image and publishes only
+    /// <c>host</c>/<c>port</c>, with no secrets block. Emitting <c>listSecrets().password</c> for it
+    /// would fail the deployment on a property the returned object does not have, so the credential
+    /// resolves to the empty value the deployed server actually has - and says so.
+    /// </summary>
+    [Fact]
+    public void RedisPasswordIsNotProjected_BecauseTheRecipeDeploysAnUnauthenticatedServer()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
             var password = b.AddParameter("cachepassword", "hunter2", secret: true);
             var cache = b.AddRedis("cache", password: password);
             b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
         });
 
-        Assert.Single(logger.Matching(LogLevel.Warning, "cachepassword", "is not used when deploying"));
+        Assert.Single(logger.Matching(LogLevel.Warning, "cache", "ASPIRERADIUS075"));
+
+        // Neither the parameter nor a listSecrets() call for a secret the recipe never records.
+        Assert.DoesNotContain("cachepassword", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("cache.listSecrets()", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -483,20 +595,22 @@ public class BackingResourceValueResolutionTests
     {
         var (bicep, _) = GenerateBicep(b =>
         {
-            var cache = b.AddRedis("cache");
+            // MongoDB rather than Redis: Redis maps to a recipe that deploys an unauthenticated
+            // server, so it has no listSecrets() credential to escape.
+            var mongo = b.AddMongoDB("mongo");
             var pgdb = b.AddPostgres("pg").AddDatabase("pgdb");
 
             b.AddContainer("api", "myapp/api", "latest")
-                .WithReference(cache)
+                .WithReference(mongo)
                 .WithReference(pgdb);
         });
 
         // The recipe-generated secret (listSecrets) and the recipe-input parameter both need it.
-        Assert.Contains("uriComponent(cache.listSecrets().password)", bicep, StringComparison.Ordinal);
+        Assert.Contains("uriComponent(mongo.listSecrets().password)", bicep, StringComparison.Ordinal);
         Assert.Contains("uriComponent(pg_password)", bicep, StringComparison.Ordinal);
 
         // Non-URI values are untouched: escaping a connection-string password would corrupt it.
-        Assert.Contains("value: cache.listSecrets().password", bicep, StringComparison.Ordinal);
+        Assert.Contains("value: mongo.listSecrets().password", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>

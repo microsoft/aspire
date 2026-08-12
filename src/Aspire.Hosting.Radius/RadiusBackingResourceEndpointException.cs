@@ -6,9 +6,10 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Radius;
 
 /// <summary>
-/// Thrown when the address of a Radius <em>backing</em> resource — a cache, database, or queue
-/// provisioned by a Radius recipe rather than deployed as a <c>Radius.Compute/containers</c>
-/// workload — cannot be determined.
+/// Thrown when a Radius <em>backing</em> resource — a cache, database, or queue provisioned by a
+/// Radius recipe rather than deployed as a <c>Radius.Compute/containers</c> workload — cannot be
+/// projected to its consumers: its address cannot be determined, or the recipe's own connection
+/// and credential outputs cannot be described.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -34,8 +35,8 @@ namespace Aspire.Hosting.Radius;
 /// </para>
 /// </remarks>
 /// <example>
-/// Deploying the consumer and the backing resource to the same Radius environment resolves it.
-/// An AppHost that publishes several environments can report the offending resource:
+/// Deploying the consumer and the backing resource to the same Radius environment resolves the
+/// address case. An AppHost that publishes several environments can report the offending resource:
 /// <code language="csharp">
 /// try
 /// {
@@ -43,8 +44,8 @@ namespace Aspire.Hosting.Radius;
 /// }
 /// catch (RadiusBackingResourceEndpointException ex)
 /// {
-///     Console.Error.WriteLine($"'{ex.Resource.Name}' is provisioned by a Radius recipe in " +
-///                             "another environment, so its address cannot be resolved here.");
+///     Console.Error.WriteLine($"'{ex.Resource.Name}' is provisioned by a Radius recipe and cannot " +
+///                             $"be projected to its consumers: {ex.Message}");
 /// }
 /// </code>
 /// </example>
@@ -53,10 +54,29 @@ public sealed class RadiusBackingResourceEndpointException : InvalidOperationExc
     /// <summary>
     /// Initializes a new instance of the <see cref="RadiusBackingResourceEndpointException"/> class.
     /// </summary>
-    /// <param name="resource">The backing resource whose address could not be determined.</param>
+    /// <param name="resource">The backing resource that could not be projected.</param>
     /// <param name="message">The message that describes the error.</param>
     public RadiusBackingResourceEndpointException(IResource resource, string message)
-        : base(message)
+        : this(resource, message, innerException: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RadiusBackingResourceEndpointException"/> class
+    /// with a reference to the inner exception that is the cause of this exception.
+    /// </summary>
+    /// <param name="resource">The backing resource that could not be projected.</param>
+    /// <param name="message">The message that describes the error.</param>
+    /// <param name="innerException">The exception that is the cause of this exception, or
+    /// <see langword="null"/> when none.</param>
+    /// <remarks>
+    /// The parameterless and message-only constructors that <see cref="InvalidOperationException"/>
+    /// offers are deliberately not exposed: <see cref="Resource"/> is part of this type's contract —
+    /// a caller catching it does so to report which resource failed — and an instance without one
+    /// could not answer that.
+    /// </remarks>
+    public RadiusBackingResourceEndpointException(IResource resource, string message, Exception? innerException)
+        : base(message, innerException)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
@@ -64,7 +84,7 @@ public sealed class RadiusBackingResourceEndpointException : InvalidOperationExc
     }
 
     /// <summary>
-    /// Gets the backing resource whose address could not be determined.
+    /// Gets the backing resource that could not be projected.
     /// </summary>
     public IResource Resource { get; }
 }
