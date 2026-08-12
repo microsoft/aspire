@@ -113,7 +113,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             : 0;
 
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
-        var (launchArgs, dotnetProjectLaunchArgumentIndex) = BuildLaunchArgs(
+        var (launchArgs, dotnetProjectLaunchArgumentIndex, canReuseArgsForProcessFallback) = BuildLaunchArgs(
             er,
             spec,
             configuration.Arguments,
@@ -137,7 +137,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // Argument and launch-configuration callbacks can change on restart. Derive fallback availability from the
         // final execution type and resolved command line every time instead of carrying a preparation-time guess.
-        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, resolvedLaunchToolArgumentCount, omittedLaunchToolArgumentCount, hasPreparedProjectArguments)
+        spec.FallbackExecutionTypes = ShouldOfferProcessFallback(er.ModelResource, spec, resolvedLaunchToolArgumentCount, omittedLaunchToolArgumentCount, hasPreparedProjectArguments, canReuseArgsForProcessFallback)
             ? [ExecutionType.Process]
             : null;
 
@@ -297,9 +297,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         ExecutableSpec spec,
         int resolvedLaunchToolArgumentCount,
         int omittedLaunchToolArgumentCount,
-        bool hasPreparedProjectArguments)
+        bool hasPreparedProjectArguments,
+        bool canReuseArgsForProcessFallback)
     {
-        if (spec.ExecutionType != ExecutionType.IDE || omittedLaunchToolArgumentCount > 0)
+        if (spec.ExecutionType != ExecutionType.IDE ||
+            omittedLaunchToolArgumentCount > 0 ||
+            !canReuseArgsForProcessFallback)
         {
             return false;
         }
@@ -754,7 +757,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
     }
 
-    private static (List<LaunchArgument> LaunchArgs, int? DotnetProjectLaunchArgumentIndex) BuildLaunchArgs(
+    private static (List<LaunchArgument> LaunchArgs, int? DotnetProjectLaunchArgumentIndex, bool CanReuseArgsForProcessFallback) BuildLaunchArgs(
         RenderedModelResource<Executable> er,
         ExecutableSpec spec,
         IEnumerable<(string Value, bool IsSensitive)> appHostArgs,
@@ -790,6 +793,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             appHostArgList);
         var launchArgs = new List<LaunchArgument>();
         int? dotnetProjectLaunchArgumentIndex = null;
+        var canReuseArgsForProcessFallback = true;
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
         List<string>? projectLaunchProfileArgs = null;
         var includeProfileArgsInSpec = false;
@@ -822,6 +826,23 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     !projectLaunchConfigurationHandlesLaunchProfile;
 
                 projectLaunchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
+                if (includeProfileArgsInSpec &&
+                    projectLaunchProfileArgs.Count > 0 &&
+                    spec.ExecutionType == ExecutionType.IDE &&
+                    IsExecutableAnnotatedDotnetProject(er.ModelResource) &&
+                    executableArgumentStartIndex == 0 &&
+                    launchToolArgumentCount == 0 &&
+                    dotnetProjectLaunchResourceArgumentIndex is null)
+                {
+                    // Custom IDE launches preserve launch-profile application args before ordinary resource args.
+                    // For an explicit dotnet application command, that can produce:
+                    //   dotnet --profile-arg value exec app.dll
+                    // Process execution requires `exec app.dll` before application args. The executable spec has one
+                    // args list, so retain the IDE order and disable fallback instead of parsing every dotnet form.
+                    // See https://learn.microsoft.com/dotnet/core/tools/dotnet#options-for-running-an-application.
+                    canReuseArgsForProcessFallback = false;
+                }
+
                 if (projectLaunchProfileArgs.Count > 0 &&
                     ordinaryAppHostArgumentCount > 0 &&
                     launchToolArgumentCount == 0 &&
@@ -887,16 +908,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             launchArgs.Add(launchArgument);
         }
 
-        return (launchArgs, dotnetProjectLaunchArgumentIndex);
+        return (launchArgs, dotnetProjectLaunchArgumentIndex, canReuseArgsForProcessFallback);
     }
 
     private static int? FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
         IResource resource,
         IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs)
     {
-        if (resource is not ProjectResource ||
-            !resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
-            !string.Equals(Path.GetFileNameWithoutExtension(executableAnnotation.Command), "dotnet", StringComparison.OrdinalIgnoreCase))
+        if (!IsExecutableAnnotatedDotnetProject(resource))
         {
             return null;
         }
@@ -916,6 +935,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         return null;
+    }
+
+    private static bool IsExecutableAnnotatedDotnetProject(IResource resource)
+    {
+        return resource is ProjectResource &&
+            resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) &&
+            string.Equals(Path.GetFileNameWithoutExtension(executableAnnotation.Command), "dotnet", StringComparison.OrdinalIgnoreCase);
     }
 
     private void AddDotnetProjectLaunchArgsForExecutableAnnotatedProject(List<LaunchArgument> launchArgs, int? dotnetProjectLaunchArgumentIndex, int executableArgumentStartIndex)
