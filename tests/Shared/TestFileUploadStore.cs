@@ -13,19 +13,35 @@ internal sealed class TestFileUploadStore : IFileUploadStore
 {
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
 
-    public (string FileId, string FilePath) CreateEntry(string originalFileName)
+    public ConcurrentQueue<int> StartedInteractions { get; } = new();
+    public ConcurrentQueue<(int InteractionId, IReadOnlyList<InteractionFile> Files)> CompletedInteractions { get; } = new();
+    public ConcurrentQueue<int> CanceledInteractions { get; } = new();
+
+    public void StartInteraction(int interactionId)
+    {
+        StartedInteractions.Enqueue(interactionId);
+    }
+
+    public (string FileId, string FilePath) CreateEntry(string originalFileName, int interactionId, string inputName)
     {
         var fileId = Guid.NewGuid().ToString("N");
         // Use a synthetic path that won't conflict with real files.
         var filePath = Path.Combine("memory", fileId);
 
-        _files[fileId] = new FileEntry(filePath, originalFileName);
+        _files[fileId] = new FileEntry(filePath, originalFileName, interactionId, inputName);
         return (fileId, filePath);
     }
 
-    public string? GetFilePath(string fileId)
+    public void CompleteUpload(string fileId)
     {
-        return _files.TryGetValue(fileId, out var entry) ? entry.FilePath : null;
+    }
+
+    public string? GetFilePath(string fileId, string inputName)
+    {
+        return _files.TryGetValue(fileId, out var entry) &&
+            string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
+                ? entry.FilePath
+                : null;
     }
 
     public string? GetFileName(string fileId)
@@ -38,5 +54,23 @@ internal sealed class TestFileUploadStore : IFileUploadStore
         _files.TryRemove(fileId, out _);
     }
 
-    private sealed record FileEntry(string FilePath, string OriginalFileName);
+    public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
+    {
+        CompletedInteractions.Enqueue((interactionId, files));
+    }
+
+    public void CancelInteraction(int interactionId)
+    {
+        CanceledInteractions.Enqueue(interactionId);
+
+        foreach (var (fileId, entry) in _files)
+        {
+            if (entry.InteractionId == interactionId)
+            {
+                _files.TryRemove(fileId, out _);
+            }
+        }
+    }
+
+    private sealed record FileEntry(string FilePath, string OriginalFileName, int InteractionId, string InputName);
 }

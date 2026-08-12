@@ -1158,7 +1158,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             NullLogger<InteractionService>.Instance,
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager

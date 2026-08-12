@@ -519,9 +519,17 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                     {
                         throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include a file name."));
                     }
+                    if (chunk.InteractionId <= 0)
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include an interaction ID."));
+                    }
+                    if (string.IsNullOrEmpty(chunk.InputName))
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include an input name."));
+                    }
 
                     string path;
-                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName);
+                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, chunk.InteractionId, chunk.InputName);
                     fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
                 }
 
@@ -566,6 +574,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 await fileStream.DisposeAsync().ConfigureAwait(false);
             }
         }
+
+        fileUploadStore.CompleteUpload(fileId!);
 
         return new UploadFileResponse { FileId = fileId };
     }

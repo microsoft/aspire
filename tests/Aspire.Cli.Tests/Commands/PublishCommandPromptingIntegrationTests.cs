@@ -268,7 +268,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: true);
+        promptBackchannel.AddPrompt("1", "Artifact", InputTypes.File, "Select artifact:", isRequired: true);
         consoleService.SetupSequentialResponses(
             (relativeMissingFile, ResponseType.String),
             (relativeSelectedFile, ResponseType.String));
@@ -305,7 +305,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: false);
+        promptBackchannel.AddPrompt("1", "Artifact", InputTypes.File, "Select artifact:", isRequired: false);
         consoleService.SetupStringPromptResponse("   ");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -812,7 +812,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Upload", InputTypes.File, "Select file:", isRequired: true, maxFileSize: 10);
+        promptBackchannel.AddPrompt("1", "Upload", InputTypes.File, "Select file:", isRequired: true, maxFileSize: 10);
         consoleService.SetupSequentialResponses(
             (relativeOversized, ResponseType.String),
             (relativeValid, ResponseType.String));
@@ -858,7 +858,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Certificate", InputTypes.File, "Select certificate:", isRequired: true, fileFilter: ".pem,.crt");
+        promptBackchannel.AddPrompt("1", "Certificate", InputTypes.File, "Select certificate:", isRequired: true, fileFilter: ".pem,.crt");
         consoleService.SetupSequentialResponses(
             (relativeWrong, ResponseType.String),
             (relativeCorrect, ResponseType.String));
@@ -900,7 +900,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Package", InputTypes.File, "Select package:", isRequired: true, maxFileSize: 1024, fileFilter: ".zip,.tar.gz");
+        promptBackchannel.AddPrompt("1", "Package", InputTypes.File, "Select package:", isRequired: true, maxFileSize: 1024, fileFilter: ".zip,.tar.gz");
         consoleService.SetupStringPromptResponse(relativePath);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -923,9 +923,11 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var filePromptCall = Assert.Single(consoleService.FilePathPromptCalls);
         Assert.Equal("[bold]Select package:[/]\nPackage: ", filePromptCall.PromptText);
 
-        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        var (uploadedFilePath, uploadedFileName, interactionId, inputName) = Assert.Single(promptBackchannel.UploadedFiles);
         Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
         Assert.Equal("deploy.zip", uploadedFileName);
+        Assert.Equal(1, interactionId);
+        Assert.Equal("1", inputName);
 
         var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
         var answer = Assert.Single(completedPrompt.Answers);
@@ -944,7 +946,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Archive", InputTypes.File, "Select archive:", isRequired: true, fileFilter: ".tar.gz,.zip");
+        promptBackchannel.AddPrompt("1", "Archive", InputTypes.File, "Select archive:", isRequired: true, fileFilter: ".tar.gz,.zip");
         consoleService.SetupStringPromptResponse(relativePath);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -964,9 +966,11 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         Assert.Equal(0, exitCode);
         Assert.Empty(consoleService.ValidationFailures);
 
-        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        var (uploadedFilePath, uploadedFileName, interactionId, inputName) = Assert.Single(promptBackchannel.UploadedFiles);
         Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
         Assert.Equal("archive.tar.gz", uploadedFileName);
+        Assert.Equal(1, interactionId);
+        Assert.Equal("1", inputName);
     }
 
     [Fact]
@@ -1008,7 +1012,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     public List<PromptData> ReceivedPrompts { get; } = [];
     public List<PromptCompletion> CompletedPrompts { get; } = [];
-    public List<(string FilePath, string FileName)> UploadedFiles { get; } = [];
+    public List<(string FilePath, string FileName, int InteractionId, string InputName)> UploadedFiles { get; } = [];
 
     public void AddPrompt(string promptId, string label, string inputType, string message, bool isRequired, IReadOnlyList<KeyValuePair<string, string>>? options = null, string? defaultValue = null, IReadOnlyList<string>? validationErrors = null, long? maxFileSize = null, string? fileFilter = null)
     {
@@ -1116,9 +1120,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 
-    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken)
     {
-        UploadedFiles.Add((filePath, fileName));
+        UploadedFiles.Add((filePath, fileName, interactionId, inputName));
         return Task.FromResult(new UploadFileResponse { FileId = "testfileid0000000000000000000000" });
     }
 }

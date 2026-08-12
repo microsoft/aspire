@@ -1335,6 +1335,6 @@ public class PublishingActivityReporterTests
         var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<InteractionService>>();
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration);
+        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration, new TestFileUploadStore());
     }
 }

@@ -9,14 +9,24 @@ namespace Aspire.Hosting;
 internal interface IFileUploadStore
 {
     /// <summary>
-    /// Creates a new entry for an uploaded file and returns the file ID and path.
+    /// Registers an interaction that can own uploaded files.
     /// </summary>
-    (string FileId, string FilePath) CreateEntry(string originalFileName);
+    void StartInteraction(int interactionId);
 
     /// <summary>
-    /// Gets the file path for a given file ID.
+    /// Creates a new entry for an uploaded file and returns the file ID and path.
     /// </summary>
-    string? GetFilePath(string fileId);
+    (string FileId, string FilePath) CreateEntry(string originalFileName, int interactionId, string inputName);
+
+    /// <summary>
+    /// Marks a file upload as successfully completed.
+    /// </summary>
+    void CompleteUpload(string fileId);
+
+    /// <summary>
+    /// Gets the file path for a given file ID and input name.
+    /// </summary>
+    string? GetFilePath(string fileId, string inputName);
 
     /// <summary>
     /// Gets the original file name for a given file ID.
@@ -24,7 +34,17 @@ internal interface IFileUploadStore
     string? GetFileName(string fileId);
 
     /// <summary>
-    /// Removes a file entry. Used to clean up after failed uploads.
+    /// Removes a file entry and cleans up its uploaded content.
     /// </summary>
     void RemoveEntry(string fileId);
+
+    /// <summary>
+    /// Marks an interaction as completed and starts weak-reference tracking for its uploaded files.
+    /// </summary>
+    void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files);
+
+    /// <summary>
+    /// Cancels an interaction and removes its completed uploads.
+    /// </summary>
+    void CancelInteraction(int interactionId);
 }

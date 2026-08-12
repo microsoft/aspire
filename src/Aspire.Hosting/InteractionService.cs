@@ -27,13 +27,15 @@ internal class InteractionService : IInteractionService
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
+    private readonly IFileUploadStore _fileUploadStore;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IFileUploadStore fileUploadStore)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
+        _fileUploadStore = fileUploadStore;
     }
 
     public bool IsAvailable
@@ -157,6 +159,7 @@ internal class InteractionService : IInteractionService
 
         // Create the collection early to validate names and generate missing ones
         var inputCollection = new InteractionInputCollection(inputs);
+        var hasFileInputs = inputs.Any(input => input.InputType == InputType.File);
 
         // Validate inputs.
         for (var i = 0; i < inputs.Count; i++)
@@ -190,6 +193,10 @@ internal class InteractionService : IInteractionService
             options ??= InputsDialogInteractionOptions.Default;
 
             var newState = new Interaction(title, message, options, new Interaction.InputsInteractionInfo(inputCollection), interactionCts.Token);
+            if (hasFileInputs)
+            {
+                _fileUploadStore.StartInteraction(newState.InteractionId);
+            }
             AddInteractionUpdate(newState);
 
             using var _ = cancellationToken.Register(OnInteractionCancellation, state: newState);
@@ -236,9 +243,24 @@ internal class InteractionService : IInteractionService
             }
 
             var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-            return completion.State is not IReadOnlyList<InteractionInput> inputState
-                ? InteractionResult.Cancel<InteractionInputCollection>()
-                : InteractionResult.Ok(new InteractionInputCollection(inputState));
+            if (completion.State is not IReadOnlyList<InteractionInput> inputState)
+            {
+                if (hasFileInputs)
+                {
+                    _fileUploadStore.CancelInteraction(newState.InteractionId);
+                }
+                return InteractionResult.Cancel<InteractionInputCollection>();
+            }
+
+            if (hasFileInputs)
+            {
+                var interactionFiles = inputState
+                    .SelectMany(input => input.Files ?? [])
+                    .ToArray();
+                _fileUploadStore.CompleteInteraction(newState.InteractionId, interactionFiles);
+            }
+
+            return InteractionResult.Ok(new InteractionInputCollection(inputState));
         }
         finally
         {
