@@ -6166,9 +6166,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(bool useFullDotnetPath)
+    [InlineData("run", false)]
+    [InlineData("run", true)]
+    [InlineData("watch", false)]
+    [InlineData("watch", true)]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(string launchVerb, bool useFullDotnetPath)
     {
         var builder = DistributedApplication.CreateBuilder();
         var dotnetCommand = useFullDotnetPath
@@ -6197,7 +6199,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                     TargetKind = "simulator"
                 },
                 "maui")
-            .WithArgs("run", "-f", "net10.0-ios");
+            .WithArgs(launchVerb, "-f", "net10.0-ios");
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -6217,7 +6219,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(dotnetCommand, exe.Spec.ExecutablePath);
-        var expectedArgs = new List<string> { "run" };
+        var expectedArgs = new List<string> { launchVerb };
         if (GetTestAssemblyConfiguration() is { } configurationName)
         {
             expectedArgs.AddRange(["--configuration", configurationName]);
@@ -6228,13 +6230,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
         Assert.Equal(
-            ["run", "-f", "net10.0-ios", "--", "--profile-arg", "profile value"],
+            [launchVerb, "-f", "net10.0-ios", "--", "--profile-arg", "profile value"],
             displayArgs.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
-    [Fact]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectDoesNotTreatNonLeadingRunAsDotnetRun()
+    [Theory]
+    [InlineData("run")]
+    [InlineData("watch")]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectDoesNotTreatNonLeadingProjectLaunchVerbAsDotnetInvocation(string nonLeadingLaunchVerb)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
@@ -6260,7 +6264,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                     TargetKind = "simulator"
                 },
                 "maui")
-            .WithArgs("exec", "app.dll", "run");
+            .WithArgs("exec", "app.dll", nonLeadingLaunchVerb);
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -6279,13 +6283,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.Equal(["--profile-arg", "profile value", "exec", "app.dll", "run"], exe.Spec.Args);
+        var expectedArgs = new[] { "--profile-arg", "profile value", "exec", "app.dll", nonLeadingLaunchVerb };
+        Assert.Equal(expectedArgs, exe.Spec.Args);
         Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
-        Assert.Equal(
-            ["--profile-arg", "profile value", "exec", "app.dll", "run"],
-            displayArgs.Select(a => a.Argument));
+        Assert.Equal(expectedArgs, displayArgs.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
