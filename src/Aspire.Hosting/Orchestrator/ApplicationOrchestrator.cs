@@ -84,10 +84,17 @@ internal sealed class ApplicationOrchestrator
         if (@event.Resource is IResourceWithConnectionString resourceWithConnectionString)
         {
             var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
+            var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in resourceWithConnectionString.GetConnectionProperties())
+            {
+                connectionProperties[property.Key] = await property.Value.GetValueAsync(token).ConfigureAwait(false);
+            }
 
             await _notificationService.PublishUpdateAsync(resourceWithConnectionString, state => state with
             {
-                Properties = [.. state.Properties, new(CustomResourceKnownProperties.ConnectionString, connectionString) { IsSensitive = true }]
+                Properties = [.. state.Properties,
+                    new(CustomResourceKnownProperties.ConnectionString, connectionString) { IsSensitive = true },
+                    new(CustomResourceKnownProperties.ConnectionProperties, connectionProperties) { IsSensitive = true }]
             })
             .ConfigureAwait(false);
         }

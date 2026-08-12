@@ -60,7 +60,7 @@ public sealed class ResourceViewModel
     /// </summary>
     public ImmutableArray<string> CachedAddresses => (_cachedAddresses ??= new Lazy<ImmutableArray<string>>(ExtractResourceAddresses)).Value;
 
-    /// <summary>Gets the database name parsed from the resource connection string.</summary>
+    /// <summary>Gets the database name from resource metadata or the parsed connection string.</summary>
     internal string? CachedDatabaseName => (_cachedDatabaseName ??= new Lazy<string?>(ExtractDatabaseName)).Value;
 
     private ImmutableArray<string> ExtractResourceAddresses()
@@ -97,9 +97,17 @@ public sealed class ResourceViewModel
 
     private string? ExtractDatabaseName()
     {
+        if (Properties.TryGetValue(KnownProperties.Resource.ConnectionProperties, out var connectionPropertiesProperty) &&
+            connectionPropertiesProperty.Value.StructValue is { } connectionProperties &&
+            connectionProperties.Fields.TryGetValue("DatabaseName", out var databaseNameProperty) &&
+            databaseNameProperty.TryConvertToString(out var databaseName))
+        {
+            return databaseName;
+        }
+
         if (Properties.TryGetValue(KnownProperties.Resource.ConnectionString, out var connectionStringProperty) &&
             connectionStringProperty.Value.TryConvertToString(out var connectionString) &&
-            ConnectionStringParser.TryDetectDatabaseName(connectionString, out var databaseName))
+            ConnectionStringParser.TryDetectDatabaseName(connectionString, out databaseName))
         {
             return databaseName;
         }

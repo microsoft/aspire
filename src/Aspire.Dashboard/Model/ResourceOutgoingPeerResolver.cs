@@ -98,6 +98,11 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             return false;
         }
 
+        if (!ArePropertyValuesEquivalent(resource1, resource2, KnownProperties.Resource.ConnectionProperties))
+        {
+            return false;
+        }
+
         // Check if parameter value properties are equivalent
         if (!ArePropertyValuesEquivalent(resource1, resource2, KnownProperties.Parameter.Value))
         {
@@ -146,11 +151,8 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             return false;
         }
 
-        // Both have the property, compare values
-        var value1 = property1!.Value.TryConvertToString(out var str1) ? str1 : string.Empty;
-        var value2 = property2!.Value.TryConvertToString(out var str2) ? str2 : string.Empty;
-
-        return string.Equals(value1, value2, StringComparison.Ordinal);
+        // Protobuf value equality handles scalar and structured values recursively.
+        return property1!.Value.Equals(property2!.Value);
     }
 
     public bool TryResolvePeer(KeyValuePair<string, string>[] attributes, out string? name, out ResourceViewModel? matchedResource)

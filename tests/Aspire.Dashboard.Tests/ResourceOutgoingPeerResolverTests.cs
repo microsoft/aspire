@@ -9,6 +9,7 @@ using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
 using Xunit;
+using Struct = Google.Protobuf.WellKnownTypes.Struct;
 using Value = Google.Protobuf.WellKnownTypes.Value;
 
 namespace Aspire.Dashboard.Tests;
@@ -229,6 +230,19 @@ public class ResourceOutgoingPeerResolverTests
     }
 
     [Fact]
+    public void DatabaseAttributeMatchesDatabaseNameConnectionProperty()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "jobsdb"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "catalogdb")
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
     public void DatabaseAttributeDoesNotMatchMongoDbUriResource_MatchesContainerResource()
     {
         var resources = new Dictionary<string, ResourceViewModel>
@@ -444,7 +458,7 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("key-vault", value);
     }
 
-    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null)
+    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null, string? databaseName = null)
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -457,6 +471,20 @@ public class ResourceOutgoingPeerResolverTests
                 displayName: null,
                 isHighlighted: false)
         };
+
+        if (databaseName is not null)
+        {
+            var connectionProperties = new Struct();
+            connectionProperties.Fields["DatabaseName"] = Value.ForString(databaseName);
+            properties[KnownProperties.Resource.ConnectionProperties] = new(
+                name: KnownProperties.Resource.ConnectionProperties,
+                value: new Value { StructValue = connectionProperties },
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false);
+        }
 
         return ModelTestHelpers.CreateResource(
             resourceName: name,
