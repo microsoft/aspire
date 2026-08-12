@@ -469,6 +469,144 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RecomputesSecretParameterSetPerCall_ForRestartSafety()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        // The set of secret parameters a resource references is not fixed for the connection lifetime. DCP
+        // clears and re-evaluates a resource's environment/argument callbacks when it restarts (see
+        // DcpExecutor.ForgetCachedCallbackResults), so a restart can make a resource reference a secret it
+        // did not reference before. A redaction set cached from an earlier snapshot would then omit the
+        // newly referenced secret and emit it in plaintext. This test simulates a restart between two
+        // snapshot calls on the same target — flipping the secret the callback references and clearing the
+        // cached callback result exactly as a restart does — and asserts the second call redacts the newly
+        // referenced secret.
+        var secretA = new ParameterResource("secret-a", _ => "value-a", secret: true);
+        secretA.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretA.WaitForValueTcs.SetResult("value-a");
+
+        var secretB = new ParameterResource("secret-b", _ => "value-b", secret: true);
+        secretB.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretB.WaitForValueTcs.SetResult("value-b");
+
+        // The environment callback references whichever secret this local points at when it is evaluated.
+        // The callback is registered once, before the host is built, so the resource's annotation collection
+        // is never mutated on a live host — mutating annotations after StartAsync races with background
+        // annotation evaluation and makes the test flaky. The restart is simulated below by flipping this
+        // local and clearing the callback's cached result, not by adding another annotation.
+        var referencedSecret = secretA;
+        var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(context => context.EnvironmentVariables["SECRET"] = referencedSecret);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-a", true)
+            ]
+        }).DefaultTimeout();
+
+        // The same target instance is reused across both calls so a connection-lifetime cache, if present,
+        // would persist between them; the test only distinguishes the fix because the set is recomputed.
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var firstResult = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+        var firstSnapshot = Assert.Single(firstResult, r => r.Name == "owner");
+        Assert.Null(Assert.Single(firstSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        // Simulate a restart: the resource now references a different secret, and the previously cached
+        // callback result is cleared exactly as DcpExecutor.ForgetCachedCallbackResults does on restart.
+        referencedSecret = secretB;
+        var environmentCallback = owner.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().Single();
+        environmentCallback.AsCallbackAnnotation().ForgetCachedResult();
+
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-b", true)
+            ]
+        }).DefaultTimeout();
+
+        var secondResult = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+        var secondSnapshot = Assert.Single(secondResult, r => r.Name == "owner");
+
+        // After the restart the redaction set must reflect the newly referenced secret. A set cached from the
+        // first call would still contain only secretA and would leak secretB's value in plaintext.
+        Assert.Null(Assert.Single(secondSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_FailsClosed_WhenDependencyDiscoveryThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        // Computing the redaction set is a confidentiality boundary: if a resource's secret dependencies
+        // cannot be determined, the set is incomplete and a snapshot built from it could leak a secret.
+        // Discovery must fail closed (propagate) instead of swallowing the failure and emitting snapshots.
+        // The callback is registered before Build and the host is never started, so the throw originates in
+        // dependency discovery (GetResourceSnapshotsAsync resolves the secret set before reading any
+        // snapshot) rather than during application start. Typed as Action to bind the void-returning overload.
+        Action<EnvironmentCallbackContext> throwingCallback =
+            _ => throw new InvalidOperationException("dependency discovery failure");
+        builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(throwingCallback);
+
+        using var app = builder.Build();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await target.GetResourceSnapshotsAsync().DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_DoesNotSwallowCancellation_DuringDependencyDiscovery()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Simulate a nested operation being cancelled while discovery evaluates the callback. The previous
+        // broad catch treated cancellation like any other failure and continued with an incomplete set; the
+        // fix only excludes OperationCanceledException, so cancellation must surface rather than be swallowed.
+        // As above, the callback is registered before Build and the host is never started so the cancellation
+        // originates in dependency discovery, which runs before any snapshot is read.
+        Action<EnvironmentCallbackContext> cancelingCallback =
+            _ => cts.Token.ThrowIfCancellationRequested();
+        builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(cancelingCallback);
+
+        using var app = builder.Build();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await target.GetResourceSnapshotsAsync().DefaultTimeout());
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_DoesNotBlockOnUnresolvedSecretParameter()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

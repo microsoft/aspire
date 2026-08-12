@@ -33,12 +33,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
-    // The set of secret parameter instances reachable from the model is fixed once the application is
-    // running, so it is discovered once and cached for the lifetime of the connection. Only the
-    // parameters' resolved values change over time, and those are re-read on every snapshot. See
-    // GetSecretParametersAsync.
-    private IReadOnlyList<ParameterResource>? _secretParameters;
-
     #region V2 API Methods
 
     /// <summary>
@@ -1030,11 +1024,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Recompute the resolved secret values for every event. Secrets can be resolved between
-            // events (e.g. interactive parameter entry after the watch starts), so reading the values
-            // once outside the loop would let a value that becomes secret later bypass redaction. Only
-            // the resolved values are re-read here; the set of secret parameter instances is cached by
-            // GetSecretParametersAsync.
+            // Recompute the secret set for every event. Two things can change while a watch is open, and
+            // both must be reflected or a secret can be emitted in plaintext:
+            //   1. A parameter's value can be resolved after the watch starts (e.g. interactive entry).
+            //   2. The set of secret parameters a resource references can change across a restart — DCP
+            //      clears and re-evaluates environment/argument callbacks on restart (see
+            //      DcpExecutor.ForgetCachedCallbackResults), so a value cached for the connection lifetime
+            //      could omit a newly referenced secret.
             var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
@@ -1270,23 +1266,37 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// was redacted for dependent resources (https://github.com/microsoft/aspire/issues/19241). Discovery
     /// mirrors <see cref="ParameterProcessor"/> — the component that actually resolves these
     /// parameters — so the redaction set matches the set of secret values that can flow into a resource.
-    /// The result is cached because the model's topology is fixed once the application is running; only the
-    /// parameters' resolved values change over time and those are re-read by
-    /// <see cref="GetResolvedSecretParameterValuesAsync"/> on every snapshot.
+    /// <para>
+    /// The set is recomputed on every call rather than cached for the connection lifetime. DCP clears and
+    /// re-evaluates a resource's environment and argument callbacks when it restarts (see
+    /// <c>DcpExecutor.ForgetCachedCallbackResults</c>), so a restart can change which secret parameters a
+    /// resource references; a set cached from an earlier snapshot could then omit a newly referenced secret
+    /// and leak it in plaintext. Discovery reads the execution-cached callback results
+    /// (<see cref="ResourceDependencyDiscoveryOptions.CacheAnnotationCallbackResults"/>) so it observes the
+    /// same referenced resources that produced the running resource instead of re-invoking stateful
+    /// callbacks, which also keeps the per-call cost low. Discovery failures fail closed: rather than return
+    /// an incomplete redaction set, the exception propagates so no snapshot is emitted with an
+    /// under-redacted environment.
+    /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
     {
-        if (_secretParameters is { } cached)
-        {
-            return cached;
-        }
-
         if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
         {
-            return _secretParameters = [];
+            return [];
         }
 
         var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        // Read the callback results cached during execution rather than re-invoking the callbacks. This
+        // observes the same referenced resources that produced the running resource, does not re-run
+        // stateful callbacks (which could report a different set of parameters), and reflects the values
+        // DCP re-evaluates on restart. Mirrors ContainerCreator.GetHostDependenciesAsync.
+        var discoveryOptions = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+            CacheAnnotationCallbackResults = true
+        };
 
         // Parameter resources referenced by annotations are not registered in the model, so they are not
         // subject to its unique-name constraint. Collect by reference to preserve distinct same-named secrets.
@@ -1305,15 +1315,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             IReadOnlySet<IResource> dependencies;
             try
             {
-                // Dependency discovery runs environment/argument callbacks to find referenced resources.
-                // A misbehaving callback must not break describe, so failures are logged and skipped; any
-                // top-level secret parameters were already collected above.
-                dependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.Recursive, cancellationToken).ConfigureAwait(false);
+                dependencies = await resource.GetResourceDependenciesAsync(executionContext, discoveryOptions, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Fail closed at this confidentiality boundary. If a resource's secret dependencies cannot
+                // be determined, the redaction set is incomplete and a snapshot built from it could expose a
+                // secret in plaintext, so propagate instead of continuing with a partial set. Cancellation
+                // is intentionally not caught here so it surfaces as cancellation rather than a leak.
                 logger.LogDebug(ex, "Failed to compute dependencies for resource {ResourceName} while collecting secret parameters for redaction.", resource.Name);
-                continue;
+                throw;
             }
 
             foreach (var parameter in dependencies.OfType<ParameterResource>())
@@ -1325,7 +1336,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        return _secretParameters = [.. secretParameters];
+        return [.. secretParameters];
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
