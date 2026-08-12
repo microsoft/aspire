@@ -37,6 +37,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public bool SearchPathForAspireCli { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether invalid explicitly configured paths produce warnings.
+    /// </summary>
+    public bool WarnOnInvalidPaths { get; set; } = true;
+
+    /// <summary>
     /// The Aspire home directory used to find and prepare extracted bundle layouts.
     /// </summary>
     [Output]
@@ -94,7 +99,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
+            if (WarnOnInvalidPaths)
+            {
+                Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
+            }
+
             return true;
         }
 
@@ -106,7 +115,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
+            if (WarnOnInvalidPaths)
+            {
+                Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
+            }
+
             return true;
         }
 

@@ -620,7 +620,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResolveAspireCliBundlePathsUsesSelectedAspireCliWhenLaterPathCandidateHasBundle()
+    public async Task ResolveAspireCliBundlePathsUsesSelectedAspireCliWhenLaterPathCandidateHasBundleWithWarningsAsErrors()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var selectedCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "selected-cli"));
@@ -636,7 +636,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(selectedCliDirectory.FullName, staleCliDirectory.FullName)
         };
 
-        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment);
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
         var selectedBundle = GetFakeCliBundlePaths(selectedCliDirectory.FullName);
 
         Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
@@ -646,6 +646,33 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
         Assert.NotEqual(staleBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
         AssertCliBundleExists(selectedCliDirectory.FullName, JsonSerializer.Serialize(properties));
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsEscapesPercentSignsInNativeAspireCliPathOnWindows()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates native Windows executable setup.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "native%ASPIRE_TEST_LITERAL%"));
+        var aspireCliPath = CreateFakeNativeAspireCli(fakeCliDirectory.FullName);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            ["ASPIRE_TEST_LITERAL"] = "expanded",
+            ["AspireCliPath"] = aspireCliPath
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+        var selectedBundle = GetFakeCliBundlePaths(fakeCliDirectory.FullName);
+
+        Assert.Equal(selectedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(selectedBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
+        AssertCliBundleExists(fakeCliDirectory.FullName, JsonSerializer.Serialize(properties));
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, "nativeexpanded")));
     }
 
     [Fact]
@@ -926,13 +953,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
     private static async Task<Dictionary<string, string>> GetResolveAspireCliBundlePathPropertiesAsync(
         RunHookProject project,
-        IDictionary<string, string> environment)
+        IDictionary<string, string> environment,
+        string[]? extraArguments = null)
     {
         return await GetTargetPropertiesAsync(
             project,
             "ResolveAspireCliBundlePaths",
             "DcpDir,AspireDashboardDir,AspireDashboardPath,_AspireResolvedCliInvocationMode,_AspireResolvedCliPath",
-            extraArguments: null,
+            extraArguments,
             environment: environment);
     }
 
