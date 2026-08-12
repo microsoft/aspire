@@ -257,7 +257,16 @@ internal class AppHostRpcTarget(
             throw new InvalidOperationException($"File '{request.FileName}' exceeds the maximum upload size of {maxUploadSize} bytes.");
         }
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry(request.FileName);
+        if (request.InteractionId <= 0)
+        {
+            throw new InvalidOperationException("An interaction ID is required when uploading a file.");
+        }
+        if (string.IsNullOrEmpty(request.InputName))
+        {
+            throw new InvalidOperationException("An input name is required when uploading a file.");
+        }
+
+        var (fileId, filePath) = fileUploadStore.CreateEntry(request.FileName, request.InteractionId, request.InputName);
 
         try
         {
@@ -272,6 +281,8 @@ internal class AppHostRpcTarget(
             fileUploadStore.RemoveEntry(fileId);
             throw;
         }
+
+        fileUploadStore.CompleteUpload(fileId);
 
         return new UploadFileResponse { FileId = fileId };
     }

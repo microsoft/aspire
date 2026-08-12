@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,13 +12,16 @@ namespace Aspire.Hosting.Tests.Dashboard;
 
 public class FileUploadStoreTests
 {
+    private const int InteractionId = 1;
+    private const string InputName = "File";
+
     [Fact]
     public void CreateEntry_ValidFileName_ReturnsIdAndPath()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry("test.txt");
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
 
         Assert.NotNull(fileId);
         Assert.NotEmpty(fileId);
@@ -31,9 +35,9 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry("test.txt");
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
     }
 
     [Fact]
@@ -42,7 +46,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        Assert.Null(fileUploadStore.GetFilePath("nonexistent"));
+        Assert.Null(fileUploadStore.GetFilePath("nonexistent", InputName));
     }
 
     [Fact]
@@ -51,7 +55,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, _) = fileUploadStore.CreateEntry("cert.pem");
+        var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
 
         Assert.Equal("cert.pem", fileUploadStore.GetFileName(fileId));
     }
@@ -62,12 +66,114 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry("temp.bin");
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         Assert.True(File.Exists(filePath));
 
         fileUploadStore.RemoveEntry(fileId);
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void RemoveUnreferencedFiles_UploadInProgress_KeepsFile()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteInteraction(InteractionId, []);
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.True(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void RemoveUnreferencedFiles_UploadCompleteInteractionInProgress_KeepsFile()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteUpload(fileId);
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.True(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void CancelInteraction_UploadComplete_RemovesFileImmediately()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteUpload(fileId);
+
+        fileUploadStore.CancelInteraction(InteractionId);
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void CancelInteraction_UploadInProgress_RemovesFileAfterUploadCompletes()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+
+        fileUploadStore.CancelInteraction(InteractionId);
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.True(File.Exists(filePath));
+
+        fileUploadStore.CompleteUpload(fileId);
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void RemoveUnreferencedFiles_CompleteInteractionWithLiveReference_KeepsFile()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteUpload(fileId);
+        var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
+        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.True(File.Exists(filePath));
+        GC.KeepAlive(interactionFile);
+    }
+
+    [Fact]
+    public void RemoveUnreferencedFiles_CompleteInteractionWithoutLiveReference_RemovesFile()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteUpload(fileId);
+        var weakReference = CompleteInteractionWithFile(fileUploadStore, fileId, filePath);
+
+        GC.Collect();
+        Assert.False(weakReference.TryGetTarget(out _));
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.False(File.Exists(filePath));
     }
 
     [Theory]
@@ -80,7 +186,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry(maliciousFileName);
+        var (fileId, filePath) = CreateEntry(fileUploadStore, maliciousFileName);
 
         Assert.NotEqual(maliciousFileName, filePath);
         Assert.Equal(expectedLeafName, Path.GetFileName(filePath));
@@ -95,7 +201,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry(emptyFileName);
+        var (fileId, filePath) = CreateEntry(fileUploadStore, emptyFileName);
 
         Assert.NotNull(fileId);
         Assert.NotEmpty(Path.GetFileName(filePath));
@@ -107,7 +213,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = fileUploadStore.CreateEntry("cert.pem");
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "cert.pem", "CertInput");
         File.WriteAllText(filePath, "certificate-content");
 
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
@@ -118,6 +224,20 @@ public class FileUploadStoreTests
         Assert.Equal(fileId, file.Id);
         Assert.Equal("cert.pem", file.Name);
         Assert.Equal(filePath, file.FilePath);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_DifferentInputName_ReturnsNull()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
+        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
+
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "OtherFile", NullLogger.Instance);
+
+        Assert.Null(result);
     }
 
     [Fact]
@@ -161,14 +281,39 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var (_, filePath1) = fileUploadStore.CreateEntry("file1.txt");
-        var (_, filePath2) = fileUploadStore.CreateEntry("file2.txt");
+        var (_, filePath1) = CreateEntry(fileUploadStore, "file1.txt");
+        var (_, filePath2) = CreateEntry(fileUploadStore, "file2.txt");
 
         Assert.True(File.Exists(filePath1));
         Assert.True(File.Exists(filePath2));
 
         fileUploadStore.Dispose();
 
-        Assert.Null(fileUploadStore.GetFilePath("anything"));
+        Assert.Null(fileUploadStore.GetFilePath("anything", InputName));
+    }
+
+    [Fact]
+    public void CreateEntry_UnknownInteraction_Throws()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("temp.bin", InteractionId, InputName));
+
+        Assert.Equal($"Interaction '{InteractionId}' is not accepting file uploads.", exception.Message);
+    }
+
+    private static (string FileId, string FilePath) CreateEntry(FileUploadStore fileUploadStore, string fileName, string inputName = InputName)
+    {
+        fileUploadStore.StartInteraction(InteractionId);
+        return fileUploadStore.CreateEntry(fileName, InteractionId, inputName);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference<InteractionFile> CompleteInteractionWithFile(FileUploadStore fileUploadStore, string fileId, string filePath)
+    {
+        var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
+        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+        return new WeakReference<InteractionFile>(interactionFile);
     }
 }

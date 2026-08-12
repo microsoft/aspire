@@ -470,7 +470,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -540,7 +541,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -587,7 +589,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -646,7 +649,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -683,7 +687,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -829,6 +834,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var data = new byte[1024]; // 1 KB
@@ -836,14 +842,19 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "test.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "test.txt", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var response = await dashboardService.UploadFile(requestStream, context);
 
         Assert.NotNull(response.FileId);
         Assert.NotEmpty(response.FileId);
-        Assert.NotNull(fileUploadStore.GetFilePath(response.FileId));
+        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, "File"));
+
+        fileUploadStore.CancelInteraction(1);
+
+        Assert.Null(fileUploadStore.GetFilePath(response.FileId, "File"));
+        Assert.False(File.Exists(filePath));
     }
 
     [Fact]
@@ -852,6 +863,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -865,7 +877,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
@@ -878,6 +890,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -893,7 +906,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(chunk1) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(chunk1), InteractionId = 1, InputName = "File" });
         requestStream.AddMessage(new UploadFileChunk { Data = ByteString.CopyFrom(chunk2) });
         requestStream.Complete();
 
@@ -907,6 +920,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -920,7 +934,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "medium.bin", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "medium.bin", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var response = await dashboardService.UploadFile(requestStream, context);
@@ -952,13 +966,14 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         // Upload a file
         var data = Encoding.UTF8.GetBytes("certificate-content");
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "cert.pem", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "cert.pem", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "CertInput" });
         requestStream.Complete();
 
         var uploadResponse = await dashboardService.UploadFile(requestStream, context);
@@ -1027,11 +1042,13 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         resourceLoggerService ??= new ResourceLoggerService();
         loggerFactory ??= NullLoggerFactory.Instance;
         resourceNotificationService ??= CreateResourceNotificationService(resourceLoggerService);
+        var fileUploadStore = new TestFileUploadStore();
         interactionService ??= new InteractionService(
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
 
         return new DashboardServiceData(
             resourceNotificationService,
@@ -1039,7 +1056,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
             interactionService,
-            new TestFileUploadStore());
+            fileUploadStore);
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)

@@ -6,6 +6,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Dashboard;
@@ -15,38 +16,99 @@ namespace Aspire.Hosting.Dashboard;
 /// </summary>
 internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 {
-    private readonly ConcurrentDictionary<string, TempFile> _files = new(StringComparer.Ordinal);
+    private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(10);
+
+    private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
+    private readonly ILogger<FileUploadStore> _logger;
+    private readonly CancellationTokenSource _cleanupCts = new();
+    private readonly Task _cleanupTask;
 
     public FileUploadStore(IFileSystemService fileSystemService)
+        : this(fileSystemService, NullLogger<FileUploadStore>.Instance)
+    {
+    }
+
+    public FileUploadStore(IFileSystemService fileSystemService, ILogger<FileUploadStore> logger)
     {
         _tempFileSystem = fileSystemService.TempDirectory;
+        _logger = logger;
+        _cleanupTask = RunCleanupAsync(_cleanupCts.Token);
+    }
+
+    /// <summary>
+    /// Registers an interaction that can own uploaded files.
+    /// </summary>
+    public void StartInteraction(int interactionId)
+    {
+        _interactions.TryAdd(interactionId, new FileInteraction());
     }
 
     /// <summary>
     /// Creates a new temp file path and returns the file ID and path.
     /// </summary>
-    public (string FileId, string FilePath) CreateEntry(string originalFileName)
+    public (string FileId, string FilePath) CreateEntry(string originalFileName, int interactionId, string inputName)
     {
-        // Sanitize the file name to prevent path traversal attacks.
-        // Strip directory components for both Unix (/) and Windows (\) separators
-        // regardless of the current platform, since the name comes from a remote client.
-        var lastSep = originalFileName.AsSpan().LastIndexOfAny('/', '\\');
-        var safeName = lastSep >= 0 ? originalFileName[(lastSep + 1)..] : originalFileName;
+        if (!_interactions.TryGetValue(interactionId, out var interaction))
+        {
+            throw new InvalidOperationException($"Interaction '{interactionId}' is not accepting file uploads.");
+        }
 
-        var tempFile = _tempFileSystem.CreateTempFile(string.IsNullOrEmpty(safeName) ? null : safeName);
-        var fileId = Guid.NewGuid().ToString("N");
+        lock (interaction)
+        {
+            if (interaction.State != FileInteractionState.InProgress)
+            {
+                throw new InvalidOperationException($"Interaction '{interactionId}' is not accepting file uploads.");
+            }
 
-        _files[fileId] = tempFile;
-        return (fileId, tempFile.Path);
+            // Sanitize the file name to prevent path traversal attacks.
+            // Strip directory components for both Unix (/) and Windows (\) separators
+            // regardless of the current platform, since the name comes from a remote client.
+            var lastSep = originalFileName.AsSpan().LastIndexOfAny('/', '\\');
+            var safeName = lastSep >= 0 ? originalFileName[(lastSep + 1)..] : originalFileName;
+
+            var tempFile = _tempFileSystem.CreateTempFile(string.IsNullOrEmpty(safeName) ? null : safeName);
+            var fileId = Guid.NewGuid().ToString("N");
+
+            _files[fileId] = new FileEntry(tempFile, interactionId, inputName);
+            interaction.FileIds.Add(fileId);
+            return (fileId, tempFile.Path);
+        }
     }
 
     /// <summary>
-    /// Gets the file path for a given file ID.
+    /// Marks a file upload as successfully completed.
     /// </summary>
-    public string? GetFilePath(string fileId)
+    public void CompleteUpload(string fileId)
     {
-        return _files.TryGetValue(fileId, out var tempFile) ? tempFile.Path : null;
+        if (!_files.TryGetValue(fileId, out var entry))
+        {
+            return;
+        }
+
+        bool removeEntry;
+        lock (entry)
+        {
+            entry.UploadComplete = true;
+            removeEntry = entry.InteractionState == FileInteractionState.Canceled;
+        }
+
+        if (removeEntry)
+        {
+            RemoveEntry(fileId);
+        }
+    }
+
+    /// <summary>
+    /// Gets the file path for a given file ID and input name.
+    /// </summary>
+    public string? GetFilePath(string fileId, string inputName)
+    {
+        return _files.TryGetValue(fileId, out var entry) &&
+            string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
+                ? entry.TempFile.Path
+                : null;
     }
 
     /// <summary>
@@ -54,25 +116,149 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public string? GetFileName(string fileId)
     {
-        return _files.TryGetValue(fileId, out var tempFile) ? Path.GetFileName(tempFile.Path) : null;
+        return _files.TryGetValue(fileId, out var entry) ? Path.GetFileName(entry.TempFile.Path) : null;
     }
 
     /// <summary>
     /// Removes a file entry and deletes the associated file on disk.
-    /// Used to clean up after failed uploads.
     /// </summary>
     public void RemoveEntry(string fileId)
     {
-        if (_files.TryRemove(fileId, out var tempFile))
+        if (_files.TryRemove(fileId, out var entry))
         {
+            if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
+            {
+                lock (interaction)
+                {
+                    interaction.FileIds.Remove(fileId);
+                }
+            }
+
             try
             {
-                tempFile.Dispose();
+                entry.TempFile.Dispose();
             }
             catch
             {
                 // Best effort cleanup.
             }
+        }
+    }
+
+    /// <summary>
+    /// Marks an interaction as completed and starts weak-reference tracking for its uploaded files.
+    /// </summary>
+    public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
+    {
+        if (!_interactions.TryGetValue(interactionId, out var interaction))
+        {
+            return;
+        }
+
+        var filesById = files.ToLookup(file => file.Id, StringComparer.Ordinal);
+        string[] fileIds;
+
+        lock (interaction)
+        {
+            interaction.State = FileInteractionState.Complete;
+            fileIds = [.. interaction.FileIds];
+        }
+        _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
+
+        foreach (var fileId in fileIds)
+        {
+            if (!_files.TryGetValue(fileId, out var entry))
+            {
+                continue;
+            }
+            lock (entry)
+            {
+                entry.InteractionState = FileInteractionState.Complete;
+                entry.References = filesById[fileId]
+                    .Select(file => new WeakReference<InteractionFile>(file))
+                    .ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cancels an interaction and removes uploads that are no longer in progress.
+    /// </summary>
+    public void CancelInteraction(int interactionId)
+    {
+        if (!_interactions.TryGetValue(interactionId, out var interaction))
+        {
+            return;
+        }
+
+        string[] fileIds;
+        lock (interaction)
+        {
+            interaction.State = FileInteractionState.Canceled;
+            fileIds = [.. interaction.FileIds];
+        }
+        _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
+
+        foreach (var fileId in fileIds)
+        {
+            if (!_files.TryGetValue(fileId, out var entry))
+            {
+                continue;
+            }
+            bool removeEntry;
+            lock (entry)
+            {
+                entry.InteractionState = FileInteractionState.Canceled;
+                removeEntry = entry.UploadComplete;
+            }
+
+            if (removeEntry)
+            {
+                RemoveEntry(fileId);
+            }
+        }
+    }
+
+    internal void RemoveUnreferencedFiles()
+    {
+        foreach (var (fileId, entry) in _files)
+        {
+            bool removeEntry;
+            lock (entry)
+            {
+                removeEntry = entry.UploadComplete &&
+                    (entry.InteractionState == FileInteractionState.Canceled ||
+                     entry.InteractionState == FileInteractionState.Complete &&
+                     (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
+            }
+
+            if (removeEntry)
+            {
+                RemoveEntry(fileId);
+            }
+        }
+    }
+
+    private async Task RunCleanupAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(s_cleanupInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    RemoveUnreferencedFiles();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clean up unreferenced uploaded files. Cleanup will be retried.");
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
     }
 
@@ -107,7 +293,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         for (var idx = 0; idx < fileRefs.Length; idx++)
         {
             var fileRef = fileRefs[idx];
-            var filePath = store.GetFilePath(fileRef.Id);
+            var filePath = store.GetFilePath(fileRef.Id, inputName);
             if (filePath is null)
             {
                 // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
@@ -123,11 +309,15 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 
     public void Dispose()
     {
-        foreach (var tempFile in _files.Values)
+        _cleanupCts.Cancel();
+        _cleanupTask.GetAwaiter().GetResult();
+        _cleanupCts.Dispose();
+
+        foreach (var entry in _files.Values)
         {
             try
             {
-                tempFile.Dispose();
+                entry.TempFile.Dispose();
             }
             catch
             {
@@ -135,6 +325,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
             }
         }
         _files.Clear();
+        _interactions.Clear();
     }
 
     // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
@@ -143,5 +334,28 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
+    }
+
+    private sealed class FileEntry(TempFile tempFile, int interactionId, string inputName)
+    {
+        public TempFile TempFile { get; } = tempFile;
+        public int InteractionId { get; } = interactionId;
+        public string InputName { get; } = inputName;
+        public bool UploadComplete { get; set; }
+        public FileInteractionState InteractionState { get; set; }
+        public IReadOnlyList<WeakReference<InteractionFile>>? References { get; set; }
+    }
+
+    private sealed class FileInteraction
+    {
+        public HashSet<string> FileIds { get; } = new(StringComparer.Ordinal);
+        public FileInteractionState State { get; set; }
+    }
+
+    private enum FileInteractionState
+    {
+        InProgress,
+        Complete,
+        Canceled
     }
 }
