@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
@@ -483,6 +484,90 @@ public class AspireSkillsBundleTests
         finally
         {
             Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("references/file:stream.md")]
+    [InlineData("references/file?.md")]
+    [InlineData("references/file\u0001.md")]
+    public async Task LoadAsync_ThrowsWhenFilePathIsNotPortable(string relativePath)
+    {
+        var bundleDirectory = CreateTempDirectory();
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        var skillPath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(skillPath, CreateSkillFileContent());
+
+        try
+        {
+            var manifest = new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Skills =
+                [
+                    new SkillBundleSkill
+                    {
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
+                        Files =
+                        [
+                            new SkillBundleFile
+                            {
+                                RelativePath = "SKILL.md",
+                                Sha256 = ComputeSha256(skillPath)
+                            },
+                            new SkillBundleFile
+                            {
+                                RelativePath = relativePath,
+                                Sha256 = TestArchiveSha256
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            await WriteManifestAsync(bundleDirectory, manifest);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => LoadBundleAsync(s_bundleProvider, bundleDirectory));
+
+            Assert.Contains("is not safe", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAsync_ThrowsWhenArchiveEntryPathIsNotPortable()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var archivePath = Path.Combine(rootDirectory, "bundle.zip");
+            using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+            {
+                var entry = archive.CreateEntry("bundle/references/file:stream.md");
+                await using var stream = entry.Open();
+                await using var writer = new StreamWriter(stream);
+                await writer.WriteAsync("# Reference");
+            }
+
+            var exception = await Assert.ThrowsAsync<InvalidDataException>(() => s_bundleProvider.CreateAsync(
+                new FileInfo(archivePath),
+                new DirectoryInfo(Path.Combine(rootDirectory, "staged")),
+                ComputeSha256(archivePath),
+                CancellationToken.None));
+
+            Assert.Contains("is not safe", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
         }
     }
 

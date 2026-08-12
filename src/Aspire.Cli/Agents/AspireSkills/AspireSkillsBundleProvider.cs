@@ -410,12 +410,22 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         var segments = normalizedPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || segments.Any(segment => segment is "." or ".."))
+        if (segments.Length == 0 || segments.Any(static segment => !IsPortablePathSegment(segment)))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle path '{0}' is not safe.", relativePath));
         }
 
         return Path.Combine(segments);
+    }
+
+    private static bool IsPortablePathSegment(string segment)
+    {
+        // Bundle paths can be validated on one platform and installed on another. Reject the
+        // Windows-invalid character set everywhere so ':' cannot create an NTFS alternate data
+        // stream and other invalid filenames cannot enter a cached bundle.
+        // See https://learn.microsoft.com/windows/win32/fileio/naming-a-file.
+        return segment is not "." and not ".." &&
+            !segment.Any(static character => char.IsControl(character) || character is '<' or '>' or ':' or '"' or '|' or '?' or '*');
     }
 
     internal static string NormalizeSha256(string sha256)
@@ -531,8 +541,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     private static string GetSafeArchiveDestinationPath(string destinationRoot, string entryName)
     {
         var normalizedEntryName = entryName.Replace('\\', '/');
+        var segments = normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (Path.IsPathRooted(normalizedEntryName) ||
-            normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+            segments.Length == 0 ||
+            segments.Any(static segment => !IsPortablePathSegment(segment)))
         {
             throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' is not safe.", entryName));
         }
