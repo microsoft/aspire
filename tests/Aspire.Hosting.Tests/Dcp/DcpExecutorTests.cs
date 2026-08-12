@@ -5784,7 +5784,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_DebugSessionWithoutInfo_FallsBackToProjectIdeExecution()
+    public async Task ProjectWithNonProjectAnnotation_DebugSessionWithoutInfo_UsesProjectIdeExecutionWithoutProcessFallback()
     {
         // Bug #15378: Simulates the Visual Studio scenario for projects with custom debug types.
         // VS sets DEBUG_SESSION_PORT but does NOT send DEBUG_SESSION_INFO. A project resource
@@ -5816,8 +5816,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
         Assert.Single(launchConfigs);
@@ -6464,8 +6464,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var customExe = GetCreatedExecutableForResource(kubernetesService, "custom-project");
         Assert.Equal(ExecutionType.IDE, customExe.Spec.ExecutionType);
-        Assert.NotNull(customExe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(customExe.Spec.FallbackExecutionTypes));
+        Assert.Null(customExe.Spec.Args);
+        Assert.Null(customExe.Spec.FallbackExecutionTypes);
 
         Assert.True(customExe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
         Assert.Single(launchConfigs);
@@ -6527,10 +6527,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_VSFallback_HasProcessFallbackExecutionType()
+    public async Task ProjectWithNonProjectAnnotation_VSFallback_DoesNotOfferIncompleteProcessFallback()
     {
-        // Verifies the VS else-if branch sets FallbackExecutionTypes to [Process],
-        // ensuring DCP can fall back gracefully if IDE launch fails.
+        // VS falls back to a project launch configuration for custom project types without DEBUG_SESSION_INFO.
+        // Ordinary resource arguments are application arguments, so `dotnet app-arg` is not a runnable fallback.
         var builder = DistributedApplication.CreateBuilder();
 
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -6539,7 +6539,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             projectBuilder.Resource.Annotations.Remove(annotationToRemove);
         }
-        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+        projectBuilder
+            .WithArgs("app-arg")
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
 
         var configDict = new Dictionary<string, string?>
         {
@@ -6557,9 +6559,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Single(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, exe.Spec.FallbackExecutionTypes[0]);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Theory]
