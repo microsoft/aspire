@@ -75,12 +75,12 @@ internal sealed class AspireSkillsInstaller(
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
         var embeddedMetadata = embeddedBundleProvider.Metadata;
 
-        async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle)
+        async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha256)
         {
             await CleanupStaleCacheEntriesAsync(
                 cacheRoot,
                 effectiveVersion,
-                bundle.ArchiveSha256,
+                archiveSha256,
                 cancellationToken).ConfigureAwait(false);
             return AspireSkillsInstallResult.Installed(bundle);
         }
@@ -100,7 +100,7 @@ internal sealed class AspireSkillsInstaller(
             githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
             if (githubResult.Status == AcquisitionStatus.Installed)
             {
-                return await CompleteInstallationAsync(githubResult.Bundle!).ConfigureAwait(false);
+                return await CompleteInstallationAsync(githubResult.Bundle!, githubResult.KnownArchiveSha256!).ConfigureAwait(false);
             }
 
             if (githubResult.Status == AcquisitionStatus.Failed)
@@ -113,7 +113,7 @@ internal sealed class AspireSkillsInstaller(
                 // proven stale is not reconsidered as a generic offline fallback. If release
                 // metadata itself was unavailable, prefer the last bundle verified by the
                 // expected GitHub workflow over the older embedded snapshot.
-                var offlineCachedBundle = await TryLoadCachedBundleAsync(
+                var offlineCachedResult = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     effectiveVersion,
                     githubResult.KnownArchiveSha256,
@@ -121,12 +121,14 @@ internal sealed class AspireSkillsInstaller(
                     skipCompatibilityCheck: false,
                     activity,
                     cancellationToken).ConfigureAwait(false);
-                if (offlineCachedBundle is not null)
+                if (offlineCachedResult is not null)
                 {
                     logger.LogDebug(
                         "Using a previously verified GitHub Aspire skills bundle for version {Version} because GitHub is unavailable.",
                         effectiveVersion);
-                    return await CompleteInstallationAsync(offlineCachedBundle).ConfigureAwait(false);
+                    return await CompleteInstallationAsync(
+                        offlineCachedResult.Bundle!,
+                        offlineCachedResult.KnownArchiveSha256!).ConfigureAwait(false);
                 }
             }
         }
@@ -138,7 +140,7 @@ internal sealed class AspireSkillsInstaller(
         var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, embeddedMetadata, activity, cancellationToken).ConfigureAwait(false);
         if (embeddedResult.Status == AcquisitionStatus.Installed)
         {
-            return await CompleteInstallationAsync(embeddedResult.Bundle!).ConfigureAwait(false);
+            return await CompleteInstallationAsync(embeddedResult.Bundle!, embeddedResult.KnownArchiveSha256!).ConfigureAwait(false);
         }
 
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
@@ -181,7 +183,7 @@ internal sealed class AspireSkillsInstaller(
             knownArchiveSha256 = TryNormalizeArchiveSha256(asset.Digest);
             if (knownArchiveSha256 is not null)
             {
-                var cachedBundle = await TryLoadCachedBundleAsync(
+                var cachedResult = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     version,
                     knownArchiveSha256,
@@ -189,9 +191,9 @@ internal sealed class AspireSkillsInstaller(
                     skipCompatibilityCheck: false,
                     activity,
                     cancellationToken).ConfigureAwait(false);
-                if (cachedBundle is not null)
+                if (cachedResult is not null)
                 {
-                    return AcquisitionResult.Installed(cachedBundle);
+                    return cachedResult;
                 }
             }
 
@@ -237,7 +239,7 @@ internal sealed class AspireSkillsInstaller(
                     cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "github");
                 activity?.SetTag("aspire.skills.cache_hit", false);
-                return AcquisitionResult.Installed(bundle);
+                return AcquisitionResult.Installed(bundle, archiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
@@ -286,7 +288,7 @@ internal sealed class AspireSkillsInstaller(
         }
 
         var expectedArchiveSha256 = AspireSkillsBundleProvider.NormalizeSha256(metadata.Sha256!);
-        var cachedBundle = await TryLoadCachedBundleAsync(
+        var cachedResult = await TryLoadCachedBundleAsync(
             cacheRoot,
             version,
             expectedArchiveSha256,
@@ -294,9 +296,9 @@ internal sealed class AspireSkillsInstaller(
             skipCompatibilityCheck: true,
             activity,
             cancellationToken).ConfigureAwait(false);
-        if (cachedBundle is not null)
+        if (cachedResult is not null)
         {
-            return AcquisitionResult.Installed(cachedBundle);
+            return cachedResult;
         }
 
         using var stageDirectory = CreateTemporaryCacheDirectory(cacheRoot, "stage");
@@ -320,12 +322,13 @@ internal sealed class AspireSkillsInstaller(
                 cacheRoot,
                 stageDirectory,
                 bundle,
+                expectedArchiveSha256,
                 version,
                 BundleArchiveSource.Embedded,
                 cancellationToken).ConfigureAwait(false);
             activity?.SetTag("aspire.skills.source", "embedded");
             activity?.SetTag("aspire.skills.cache_hit", false);
-            return AcquisitionResult.Installed(bundle);
+            return AcquisitionResult.Installed(bundle, expectedArchiveSha256);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
@@ -506,7 +509,7 @@ internal sealed class AspireSkillsInstaller(
         return request;
     }
 
-    private async Task<AspireSkillsBundle?> TryLoadCachedBundleAsync(
+    private async Task<AcquisitionResult?> TryLoadCachedBundleAsync(
         string cacheRoot,
         string version,
         string? expectedArchiveSha256,
@@ -532,7 +535,7 @@ internal sealed class AspireSkillsInstaller(
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<AspireSkillsBundle?> TryLoadCachedBundleCoreAsync(
+    private async Task<AcquisitionResult?> TryLoadCachedBundleCoreAsync(
         string cacheRoot,
         string version,
         string? expectedArchiveSha256,
@@ -583,7 +586,7 @@ internal sealed class AspireSkillsInstaller(
 
         foreach (var candidate in candidates.OrderByDescending(static candidate => candidate.LastUsed))
         {
-            var cachedBundle = await TryLoadCachedBundleDirectoryAsync(
+            var cachedResult = await TryLoadCachedBundleDirectoryAsync(
                 candidate.Directory,
                 version,
                 candidate.ArchiveSha256,
@@ -591,16 +594,16 @@ internal sealed class AspireSkillsInstaller(
                 skipCompatibilityCheck,
                 activity,
                 cancellationToken).ConfigureAwait(false);
-            if (cachedBundle is not null)
+            if (cachedResult is not null)
             {
-                return cachedBundle;
+                return cachedResult;
             }
         }
 
         return null;
     }
 
-    private async Task<AspireSkillsBundle?> TryLoadCachedBundleDirectoryAsync(
+    private async Task<AcquisitionResult?> TryLoadCachedBundleDirectoryAsync(
         string cacheDirectory,
         string version,
         string expectedArchiveSha256,
@@ -640,14 +643,13 @@ internal sealed class AspireSkillsInstaller(
 
             var bundle = await bundleProvider.LoadAsync(
                 new DirectoryInfo(cacheDirectory),
-                cachedArchiveSha256,
                 cancellationToken,
                 skipCompatibilityCheck).ConfigureAwait(false);
             ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
             activity?.SetTag("aspire.skills.cache_hit", true);
             logger.LogDebug("Using cached Aspire skills bundle from {CacheDirectory}.", cacheDirectory);
-            return bundle;
+            return AcquisitionResult.Installed(bundle, cachedArchiveSha256);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -676,6 +678,7 @@ internal sealed class AspireSkillsInstaller(
             cacheRoot,
             stageDirectory,
             stagedBundle,
+            archiveSha256,
             version,
             source,
             cancellationToken).ConfigureAwait(false);
@@ -685,13 +688,13 @@ internal sealed class AspireSkillsInstaller(
         string cacheRoot,
         TemporaryCacheDirectory stageDirectory,
         AspireSkillsBundle stagedBundle,
+        string archiveSha256,
         string version,
         BundleArchiveSource source,
         CancellationToken cancellationToken)
     {
         RemoveInstallerMetadata(stageDirectory.FullName);
         ValidateBundleVersion(stagedBundle, version);
-        var archiveSha256 = stagedBundle.ArchiveSha256;
         // The archive is discarded after extraction. Retain its digest so same-version
         // archives can be distinguished without keeping or downloading the archive again.
         await File.WriteAllTextAsync(
@@ -709,7 +712,7 @@ internal sealed class AspireSkillsInstaller(
         await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
         var versionCacheDirectory = GetVersionCacheDirectory(cacheRoot, version);
         var targetDir = GetBundleCacheDirectory(versionCacheDirectory, archiveSha256);
-        var cachedBundle = await TryLoadCachedBundleCoreAsync(
+        var cachedResult = await TryLoadCachedBundleCoreAsync(
             cacheRoot,
             version,
             archiveSha256,
@@ -717,9 +720,9 @@ internal sealed class AspireSkillsInstaller(
             skipCompatibilityCheck: source == BundleArchiveSource.Embedded,
             activity: null,
             cancellationToken).ConfigureAwait(false);
-        if (cachedBundle is not null)
+        if (cachedResult is not null)
         {
-            return cachedBundle;
+            return cachedResult.Bundle!;
         }
 
         if (Directory.Exists(targetDir))
@@ -1097,9 +1100,9 @@ internal sealed class AspireSkillsInstaller(
         string? Message,
         string? KnownArchiveSha256)
     {
-        public static AcquisitionResult Installed(AspireSkillsBundle bundle)
+        public static AcquisitionResult Installed(AspireSkillsBundle bundle, string archiveSha256)
         {
-            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null, bundle.ArchiveSha256);
+            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null, archiveSha256);
         }
 
         public static AcquisitionResult Unavailable(string? knownArchiveSha256 = null)

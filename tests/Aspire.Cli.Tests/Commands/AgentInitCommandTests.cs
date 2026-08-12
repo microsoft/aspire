@@ -19,8 +19,6 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 {
-    private const string SyntheticBundleArchiveSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-
     [Fact]
     public async Task AgentInitCommand_SummarizesNormalizedDisplayPath_WhenInstallingUserLevelSkill()
     {
@@ -889,7 +887,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(manifestPath, manifestJson);
         return await new AspireSkillsBundleProvider().LoadAsync(
             bundleDirectory,
-            SyntheticBundleArchiveSha256,
             CancellationToken.None);
     }
 

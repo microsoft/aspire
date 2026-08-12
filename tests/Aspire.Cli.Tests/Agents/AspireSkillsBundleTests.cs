@@ -13,7 +13,7 @@ public class AspireSkillsBundleTests
 {
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
     private const string AspireifySkillDescription = "One-time setup: wire up AppHost with discovered projects";
-    private const string TestArchiveSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+    private const string TestSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
 
     private static readonly AspireSkillsBundleProvider s_bundleProvider = new();
 
@@ -42,38 +42,11 @@ public class AspireSkillsBundleTests
 
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
             var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
-
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
-            Assert.Equal(TestArchiveSha256, bundle.ArchiveSha256);
+            Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
             Assert.Contains(files, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
             Assert.DoesNotContain(files, file => file.RelativePath == Path.Combine("evals", "evals.json"));
-        }
-        finally
-        {
-            Directory.Delete(bundleDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task LoadAsync_NormalizesArchiveSha256()
-    {
-        var bundleDirectory = CreateTempDirectory();
-
-        try
-        {
-            await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
-            {
-                ["SKILL.md"] = CreateSkillFileContent()
-            });
-            var uppercaseArchiveSha256 = new string('A', 64);
-
-            var bundle = await s_bundleProvider.LoadAsync(
-                new DirectoryInfo(bundleDirectory),
-                $"sha256:{uppercaseArchiveSha256}",
-                CancellationToken.None);
-
-            Assert.Equal(uppercaseArchiveSha256.ToLowerInvariant(), bundle.ArchiveSha256);
         }
         finally
         {
@@ -521,7 +494,7 @@ public class AspireSkillsBundleTests
                             new SkillBundleFile
                             {
                                 RelativePath = relativePath,
-                                Sha256 = TestArchiveSha256
+                                Sha256 = TestSha256
                             }
                         ]
                     }
@@ -765,7 +738,6 @@ public class AspireSkillsBundleTests
     {
         return bundleProvider.LoadAsync(
             new DirectoryInfo(bundleDirectory),
-            TestArchiveSha256,
             CancellationToken.None,
             skipCompatibilityCheck);
     }

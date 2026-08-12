@@ -49,7 +49,6 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.Equal(embeddedBundleProvider.Metadata.Sha256, result.Bundle.ArchiveSha256);
             Assert.True(Directory.Exists(cachedBundleDirectory));
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
         }
@@ -1285,7 +1284,6 @@ public class AspireSkillsInstallerTests
 
             Assert.NotNull(bundle);
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
-            Assert.Equal(metadata.Sha256, bundle.ArchiveSha256);
             Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
             Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
             Assert.Empty(bundleDirectory.GetFiles(".embedded-*"));

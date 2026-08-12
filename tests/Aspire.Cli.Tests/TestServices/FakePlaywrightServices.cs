@@ -46,8 +46,6 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 /// </summary>
 internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 {
-    private const string SyntheticBundleArchiveSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
-
     internal const string AspireInitSkillName = "aspire-init";
     internal const string AspireMonitoringSkillName = "aspire-monitoring";
     internal const string AspireOrchestrationSkillName = "aspire-orchestration";
@@ -74,7 +72,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         }
 
         await EnsureBundleAsync(cancellationToken);
-        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, SyntheticBundleArchiveSha256, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
