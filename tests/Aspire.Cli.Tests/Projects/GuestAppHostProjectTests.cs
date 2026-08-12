@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
 using System.Net.Sockets;
+using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
@@ -1279,7 +1281,9 @@ public class GuestAppHostProjectTests : IDisposable
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
         IAppHostServerSessionFactory? serverSessionFactory = null,
         bool identityOverridden = false,
-        string languageId = "typescript/nodejs")
+        string languageId = "typescript/nodejs",
+        IEnvironment? environment = null,
+        DirectoryInfo? homeDirectory = null)
     {
         var language = new LanguageInfo(
             LanguageId: languageId,
@@ -1294,7 +1298,8 @@ public class GuestAppHostProjectTests : IDisposable
             new DirectoryInfo(AppContext.BaseDirectory),
             identityChannel: identityChannel,
             logFilePath: logFilePath,
-            identityOverridden: identityOverridden);
+            identityOverridden: identityOverridden,
+            homeDirectory: homeDirectory);
 
         // Construct a real graceful-shutdown window so the contract matches production:
         // GuestAppHostProject requires it even when a test exits the Run path early
@@ -1315,7 +1320,7 @@ public class GuestAppHostProjectTests : IDisposable
             features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
-            environment: new TestEnvironment(),
+            environment: environment ?? new TestEnvironment(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,
@@ -1325,58 +1330,165 @@ public class GuestAppHostProjectTests : IDisposable
             timeProvider: TimeProvider.System);
     }
 
-    [Fact]
-    public void ConfigureNodeCertificateEnvironment_SetsNodeExtraCaCerts_WhenPemPathProvided()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task ConfigureNodeCertificateEnvironmentAsync_SetsNodeExtraCaCerts_WhenExistingValueIsNotUsable(string? existingValue)
     {
         var project = CreateGuestAppHostProject();
         var envVars = new Dictionary<string, string>();
-        var contextEnvVars = new Dictionary<string, string>();
+        if (existingValue is not null)
+        {
+            envVars["NODE_EXTRA_CA_CERTS"] = existingValue;
+        }
 
-        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            "/path/to/cert.pem",
+            TestContext.Current.CancellationToken);
 
         Assert.Equal("/path/to/cert.pem", envVars["NODE_EXTRA_CA_CERTS"]);
     }
 
     [Fact]
-    public void ConfigureNodeCertificateEnvironment_DoesNotSet_WhenPemPathIsNull()
+    public async Task ConfigureNodeCertificateEnvironmentAsync_ReusesDevCertificate_WhenAlreadyConfigured()
+    {
+        var devCertificatePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "aspire-dev-cert.pem");
+        var project = CreateGuestAppHostProject();
+        var envVars = new Dictionary<string, string>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(devCertificatePath)
+        };
+
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(devCertificatePath, envVars["NODE_EXTRA_CA_CERTS"]);
+        Assert.False(Directory.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, "bundles")));
+    }
+
+    [Fact]
+    public async Task ConfigureNodeCertificateEnvironmentAsync_DoesNotSet_WhenPemPathIsNull()
     {
         var project = CreateGuestAppHostProject();
         var envVars = new Dictionary<string, string>();
-        var contextEnvVars = new Dictionary<string, string>();
 
-        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, devCertPemPath: null);
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertPemPath: null,
+            TestContext.Current.CancellationToken);
 
         Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
     }
 
     [Fact]
-    public void ConfigureNodeCertificateEnvironment_DoesNotSet_WhenLanguageIsNotNodeJs()
+    public async Task ConfigureNodeCertificateEnvironmentAsync_DoesNotSet_WhenLanguageIsNotNodeJs()
     {
         var project = CreateGuestAppHostProject(languageId: "python");
         var envVars = new Dictionary<string, string>();
-        var contextEnvVars = new Dictionary<string, string>();
 
-        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            "/path/to/cert.pem",
+            TestContext.Current.CancellationToken);
 
         Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
     }
 
     [Fact]
-    public void ConfigureNodeCertificateEnvironment_WarnsAndSkips_WhenAlreadySetInContext()
+    public async Task ConfigureNodeCertificateEnvironmentAsync_CreatesAndReusesCombinedBundle_WhenAlreadySet()
+    {
+        var homeDirectory = _workspace.CreateDirectory("bundle-home");
+        var existingBundlePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "existing-ca-certs.pem");
+        var inheritedBundlePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-ca-certs.pem");
+        var devCertificateDirectory = Path.Combine(homeDirectory.FullName, ".aspire", "dev-certs");
+        var devCertificatePath = Path.Combine(devCertificateDirectory, "aspire-dev-cert.pem");
+        const string existingBundleContents = "-----BEGIN CERTIFICATE-----\nexisting\n-----END CERTIFICATE-----\n";
+        const string inheritedBundleContents = "-----BEGIN CERTIFICATE-----\ninherited\n-----END CERTIFICATE-----\n";
+        const string devCertificateContents = "-----BEGIN CERTIFICATE-----\ndev\n-----END CERTIFICATE-----";
+        Directory.CreateDirectory(devCertificateDirectory);
+        await File.WriteAllTextAsync(existingBundlePath, existingBundleContents, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(inheritedBundlePath, inheritedBundleContents, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(devCertificatePath, devCertificateContents, TestContext.Current.CancellationToken);
+
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = inheritedBundlePath
+        });
+        var project = CreateGuestAppHostProject(environment: environment, homeDirectory: homeDirectory);
+        var envVars = new Dictionary<string, string>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(existingBundlePath)
+        };
+        var expectedBundleContents = Encoding.UTF8.GetBytes($"{devCertificateContents}\n{existingBundleContents}");
+        var expectedHash = Convert.ToHexString(XxHash128.Hash(expectedBundleContents)).ToLowerInvariant();
+        var expectedBundlePath = Path.Combine(
+            homeDirectory.FullName,
+            ".aspire",
+            "dev-certs",
+            "bundles",
+            $"node-{expectedHash}.pem");
+
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedBundlePath, envVars["NODE_EXTRA_CA_CERTS"]);
+        Assert.Equal(expectedBundleContents, await File.ReadAllBytesAsync(expectedBundlePath, TestContext.Current.CancellationToken));
+
+        var cachedWriteTime = DateTime.UtcNow.AddDays(-1);
+        File.SetLastWriteTimeUtc(expectedBundlePath, cachedWriteTime);
+        cachedWriteTime = File.GetLastWriteTimeUtc(expectedBundlePath);
+        envVars["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(existingBundlePath);
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(cachedWriteTime, File.GetLastWriteTimeUtc(expectedBundlePath));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(Path.GetDirectoryName(expectedBundlePath)!));
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(expectedBundlePath));
+        }
+    }
+
+    [Fact]
+    public async Task ConfigureNodeCertificateEnvironmentAsync_PreservesExistingBundle_WhenCombinationFails()
     {
         var interactionService = new TestInteractionService();
         var project = CreateGuestAppHostProject(interactionService: interactionService);
-        var envVars = new Dictionary<string, string>();
-        var contextEnvVars = new Dictionary<string, string>
+        var devCertificatePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "aspire-dev-cert.pem");
+        await File.WriteAllTextAsync(devCertificatePath, "dev certificate", TestContext.Current.CancellationToken);
+        var envVars = new Dictionary<string, string>
         {
-            ["NODE_EXTRA_CA_CERTS"] = "/existing/ca-certs.pem"
+            ["NODE_EXTRA_CA_CERTS"] = "missing-ca-certs.pem"
         };
 
-        project.ConfigureNodeCertificateEnvironment(envVars, contextEnvVars, "/path/to/cert.pem");
+        await project.ConfigureNodeCertificateEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            TestContext.Current.CancellationToken);
 
-        Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
+        Assert.Equal("missing-ca-certs.pem", envVars["NODE_EXTRA_CA_CERTS"]);
         Assert.Single(interactionService.DisplayedMessages);
-        Assert.Contains("NODE_EXTRA_CA_CERTS is already set", interactionService.DisplayedMessages[0].Message);
+        Assert.Contains("existing certificate bundle will be used unchanged", interactionService.DisplayedMessages[0].Message);
     }
 
     private static async Task InvokeStartBackchannelConnectionAsync(

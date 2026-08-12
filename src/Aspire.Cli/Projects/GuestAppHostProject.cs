@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.IO.Hashing;
 using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -30,6 +31,10 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
+    private const string NodeExtraCaCertsEnvironmentVariable = "NODE_EXTRA_CA_CERTS";
+    private const UnixFileMode CertificateCacheDirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+    private const UnixFileMode CertificateCacheFilePermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -599,7 +604,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 // Set NODE_EXTRA_CA_CERTS for Node.js-based runtimes so the TypeScript app host
                 // trusts the ASP.NET Core development certificate when connecting over HTTPS
-                ConfigureNodeCertificateEnvironment(environmentVariables, context.EnvironmentVariables, devCertPemPath);
+                await ConfigureNodeCertificateEnvironmentAsync(environmentVariables, directory, devCertPemPath, cancellationToken);
 
                 // Pass debug flag to the guest process
                 if (context.Debug)
@@ -1992,30 +1997,154 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
     /// <summary>
     /// Configures NODE_EXTRA_CA_CERTS for Node.js-based runtimes to trust the ASP.NET Core
-    /// development certificate. Skips configuration and warns if the variable is already set.
+    /// development certificate.
     /// </summary>
-    internal void ConfigureNodeCertificateEnvironment(
+    internal async Task ConfigureNodeCertificateEnvironmentAsync(
         IDictionary<string, string> environmentVariables,
-        IDictionary<string, string> contextEnvironmentVariables,
-        string? devCertPemPath)
+        DirectoryInfo workingDirectory,
+        string? devCertPemPath,
+        CancellationToken cancellationToken)
     {
         if (devCertPemPath is null || !LanguageId.Contains("nodejs", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        var existingNodeExtraCaCerts = Environment.GetEnvironmentVariable("NODE_EXTRA_CA_CERTS")
-            ?? (contextEnvironmentVariables.TryGetValue("NODE_EXTRA_CA_CERTS", out var ctxValue) ? ctxValue : null);
+        var existingNodeExtraCaCerts = environmentVariables.TryGetValue(NodeExtraCaCertsEnvironmentVariable, out var configuredValue)
+            ? configuredValue
+            : _environment.GetEnvironmentVariable(NodeExtraCaCertsEnvironmentVariable);
 
-        if (existingNodeExtraCaCerts is not null)
+        if (string.IsNullOrWhiteSpace(existingNodeExtraCaCerts))
         {
+            environmentVariables[NodeExtraCaCertsEnvironmentVariable] = devCertPemPath;
+            return;
+        }
+
+        try
+        {
+            var existingBundlePath = Path.GetFullPath(existingNodeExtraCaCerts, workingDirectory.FullName);
+            var devCertificatePath = Path.GetFullPath(devCertPemPath, workingDirectory.FullName);
+            var pathComparison = _environment.IsWindows() || _environment.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+
+            if (string.Equals(existingBundlePath, devCertificatePath, pathComparison))
+            {
+                environmentVariables[NodeExtraCaCertsEnvironmentVariable] = devCertificatePath;
+                return;
+            }
+
+            var devCertificateContents = await File.ReadAllBytesAsync(devCertificatePath, cancellationToken);
+            var existingBundleContents = await File.ReadAllBytesAsync(existingBundlePath, cancellationToken);
+            var bundleContents = CombineCertificateBundles(devCertificateContents, existingBundleContents);
+            var bundleHash = Convert.ToHexString(XxHash128.Hash(bundleContents)).ToLowerInvariant();
+            var bundleDirectory = Path.Combine(Path.GetDirectoryName(devCertificatePath)!, "bundles");
+            var bundlePath = Path.Combine(bundleDirectory, $"node-{bundleHash}.pem");
+
+            EnsureCertificateBundleDirectory(bundleDirectory);
+            if (!File.Exists(bundlePath))
+            {
+                await WriteCertificateBundleAsync(bundlePath, bundleContents, cancellationToken);
+            }
+
+            EnsureCertificateBundleFilePermissions(bundlePath);
+            environmentVariables[NodeExtraCaCertsEnvironmentVariable] = bundlePath;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _logger.LogWarning(ex, "Failed to combine NODE_EXTRA_CA_CERTS bundle {ExistingBundlePath} with the Aspire development certificate", existingNodeExtraCaCerts);
             _interactionService.DisplayMessage(
                 KnownEmojis.Warning,
-                $"NODE_EXTRA_CA_CERTS is already set to '{existingNodeExtraCaCerts}'. Skipping Aspire dev certificate configuration.");
+                $"Unable to add the Aspire development certificate to NODE_EXTRA_CA_CERTS '{existingNodeExtraCaCerts}'. The existing certificate bundle will be used unchanged.");
         }
-        else
+    }
+
+    private static byte[] CombineCertificateBundles(byte[] devCertificateContents, byte[] existingBundleContents)
+    {
+        var separatorLength = devCertificateContents is [.., (byte)'\n'] ? 0 : 1;
+        var bundleContents = new byte[checked(devCertificateContents.Length + separatorLength + existingBundleContents.Length)];
+        devCertificateContents.CopyTo(bundleContents, 0);
+        if (separatorLength == 1)
         {
-            environmentVariables["NODE_EXTRA_CA_CERTS"] = devCertPemPath;
+            bundleContents[devCertificateContents.Length] = (byte)'\n';
+        }
+
+        existingBundleContents.CopyTo(bundleContents, devCertificateContents.Length + separatorLength);
+        return bundleContents;
+    }
+
+    private static void EnsureCertificateBundleDirectory(string bundleDirectory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(bundleDirectory);
+            return;
+        }
+
+#pragma warning disable CA1416 // Validate platform compatibility
+        Directory.CreateDirectory(bundleDirectory, CertificateCacheDirectoryPermissions);
+        File.SetUnixFileMode(bundleDirectory, CertificateCacheDirectoryPermissions);
+#pragma warning restore CA1416 // Validate platform compatibility
+    }
+
+    private static void EnsureCertificateBundleFilePermissions(string bundlePath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+#pragma warning disable CA1416 // Validate platform compatibility
+            File.SetUnixFileMode(bundlePath, CertificateCacheFilePermissions);
+#pragma warning restore CA1416 // Validate platform compatibility
+        }
+    }
+
+    private async Task WriteCertificateBundleAsync(string bundlePath, byte[] bundleContents, CancellationToken cancellationToken)
+    {
+        var temporaryPath = Path.Combine(
+            Path.GetDirectoryName(bundlePath)!,
+            $".{Path.GetFileName(bundlePath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            var options = new FileStreamOptions
+            {
+                Access = FileAccess.Write,
+                Mode = FileMode.CreateNew,
+                Options = FileOptions.Asynchronous,
+                Share = FileShare.None
+            };
+
+            if (!OperatingSystem.IsWindows())
+            {
+#pragma warning disable CA1416 // Validate platform compatibility
+                options.UnixCreateMode = CertificateCacheFilePermissions;
+#pragma warning restore CA1416 // Validate platform compatibility
+            }
+
+            await using (var stream = new FileStream(temporaryPath, options))
+            {
+                await stream.WriteAsync(bundleContents, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+
+            try
+            {
+                File.Move(temporaryPath, bundlePath);
+            }
+            catch (IOException) when (File.Exists(bundlePath))
+            {
+                // Another AppHost created the same content-addressed bundle first.
+            }
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogDebug(ex, "Failed to delete temporary certificate bundle {TemporaryPath}", temporaryPath);
+            }
         }
     }
 }
