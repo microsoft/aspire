@@ -81,7 +81,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
                 metadata.Sha256,
                 cancellationToken,
                 skipCompatibilityCheck: true).ConfigureAwait(false);
-            File.Delete(archivePath);
+            FileDeleteHelper.TryDeleteFile(archivePath);
             return bundle;
         }
         catch

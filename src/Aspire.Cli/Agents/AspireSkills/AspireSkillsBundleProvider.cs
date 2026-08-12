@@ -98,7 +98,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
             CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
-            Directory.Delete(extractionDirectory, recursive: true);
+            FileDeleteHelper.TryDeleteDirectory(extractionDirectory);
             return bundle;
         }
         catch
