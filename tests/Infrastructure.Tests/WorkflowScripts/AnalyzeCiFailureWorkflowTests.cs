@@ -252,15 +252,19 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(expected, output);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("https://user:pass@example.com/path", "https://[REDACTED]:[REDACTED]@example.com/path")]
+    [InlineData("postgresql://dbuser:dbpass@postgres.example/db", "postgresql://[REDACTED]:[REDACTED]@postgres.example/db")]
+    [InlineData("mongodb+srv://mongo-user:mongo-pass@mongo.example/db", "mongodb+srv://[REDACTED]:[REDACTED]@mongo.example/db")]
+    [InlineData("redis://:redis-pass@redis.example/0", "redis://[REDACTED]:[REDACTED]@redis.example/0")]
     [RequiresTools(["node"])]
-    public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics()
+    public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics(string credentialUri, string redactedUri)
     {
         var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
         var input = new
         {
             standard_output = privateKeyAcrossTruncationBoundary,
-            standard_error = "Host=db;Password=secret-value;Timeout=30\nTOKEN: colon-secret\nhttps://user:pass@example.com/path",
+            standard_error = $"Host=db;Password=secret-value;Timeout=30\nTOKEN: colon-secret\n{credentialUri}",
             truncated_private_key = "Diagnostic prefix\n-----BEGIN RSA PRIVATE KEY-----\nsecret-key-material",
             nested = new[] { "eyJ1234567890.abcdefghijk.ABCDEFGHIJK" }
         };
@@ -271,7 +275,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             $"{new string('x', 3950)}[REDACTED]\nExpected 42 but got 41",
             redacted.GetProperty("standard_output").GetString());
         Assert.Equal(
-            "Host=db;Password=[REDACTED];Timeout=30\nTOKEN: [REDACTED]\nhttps://[REDACTED]:[REDACTED]@example.com/path",
+            $"Host=db;Password=[REDACTED];Timeout=30\nTOKEN: [REDACTED]\n{redactedUri}",
             redacted.GetProperty("standard_error").GetString());
         Assert.Equal("Diagnostic prefix\n[REDACTED]", redacted.GetProperty("truncated_private_key").GetString());
         Assert.Equal("[REDACTED]", redacted.GetProperty("nested")[0].GetString());
