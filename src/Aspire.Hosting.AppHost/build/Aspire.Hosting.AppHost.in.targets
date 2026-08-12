@@ -230,8 +230,15 @@ namespace Projects%3B
   <Target Name="ResolveAspireCliBundlePaths"
           DependsOnTargets="_ResolveAspireCliInvocation"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+    <!-- Bundle discovery must follow the invocation selected above so an unselected PATH CLI
+         cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
+    <PropertyGroup>
+      <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
+    </PropertyGroup>
+
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
-                             AspireCliPath="$(AspireCliPath)">
+                             AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                             SearchPathForAspireCli="false">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
@@ -287,7 +294,8 @@ namespace Projects%3B
     </Exec>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
-                            AspireCliPath="$(AspireCliPath)"
+                            AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            SearchPathForAspireCli="false"
                             Condition="'$(_AspireCliSetupCommand)' != ''">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
@@ -327,7 +335,8 @@ namespace Projects%3B
     </Exec>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
-                            AspireCliPath="$(AspireCliPath)"
+                            AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            SearchPathForAspireCli="false"
                             Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />

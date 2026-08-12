@@ -29,6 +29,14 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public string? AspireCliPath { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether to search <c>PATH</c> for Aspire CLI executables.
+    /// </summary>
+    /// <remarks>
+    /// Explicit paths and the Aspire home directory are still evaluated when this value is <see langword="false"/>.
+    /// </remarks>
+    public bool SearchPathForAspireCli { get; set; } = true;
+
+    /// <summary>
     /// The Aspire home directory used to find and prepare extracted bundle layouts.
     /// </summary>
     [Output]
@@ -102,7 +110,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return true;
         }
 
-        if (TryResolveFromPath(out var pathBundle))
+        if (SearchPathForAspireCli && TryResolveFromPath(out var pathBundle))
         {
             SetOutputs(pathBundle);
             return true;
