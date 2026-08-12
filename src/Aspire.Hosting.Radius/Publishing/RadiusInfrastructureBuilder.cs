@@ -94,6 +94,10 @@ internal sealed class RadiusInfrastructureBuilder
     private readonly HashSet<ParameterResource> _emptyCredentialSubstitutions = [];
     private readonly Dictionary<ParameterResource, (IResource Owner, bool IsProjectionSubstitution)> _recipeCredentialOwners = [];
 
+    // The prefix WithReference gives the connection string it injects: "ConnectionStrings__<connectionName>".
+    // Read (not written) here, to recover the connection name a reference was aliased to.
+    private const string ConnectionStringEnvironmentPrefix = "ConnectionStrings__";
+
     // Tracks (resource, parameter) pairs that have already produced an unrelated-use warning, so a
     // parameter referenced by the same resource in multiple env vars only warns once.
     private readonly HashSet<(IResource Resource, ParameterResource Parameter)> _warnedUnrelatedSubstitutions = [];
@@ -1592,8 +1596,9 @@ internal sealed class RadiusInfrastructureBuilder
     }
 
     /// <summary>
-    /// Returns the resource whose own connection value <paramref name="rawValue"/> is, or
-    /// <paramref name="resource"/> when the value is the consuming resource's own.
+    /// Returns the backing resource whose connection-property injection produced the environment
+    /// variable <paramref name="key"/>, or <paramref name="resource"/> when the value is the
+    /// consuming resource's own.
     /// </summary>
     /// <remarks>
     /// <c>WithReference(cache)</c> splats the referenced resource's connection properties straight
@@ -1604,16 +1609,39 @@ internal sealed class RadiusInfrastructureBuilder
     /// resource's credential parameter and must not be reported as unrelated uses, so they are
     /// matched back to their owner here.
     /// <para>
-    /// The match is structural rather than by reference: <c>GetConnectionProperties()</c> builds a
-    /// fresh <see cref="ReferenceExpression"/> — and fresh endpoint providers inside it — on every
-    /// call, so nothing about the instance is stable. The manifest expression is, and two values
-    /// that render to the same manifest expression are the same value by construction. Matching on
-    /// the value rather than on the environment-variable name keeps this correct for an aliased
-    /// reference name and for a resource that suppresses part of the injection via
-    /// <c>ReferenceEnvironmentInjectionFlags</c>.
+    /// Provenance must come from the injection, not from the value: a value is something the AppHost
+    /// author can construct independently. A user-authored
+    /// <c>ReferenceExpression.Create($"{shared}")</c> renders to the same manifest expression as the
+    /// owner's <c>password</c> connection property whenever <c>shared</c> <em>is</em> that parameter,
+    /// so treating equal expressions as proof of origin would suppress
+    /// <see cref="WarnIfUnrelatedUseOfSubstitutedParameter"/> for exactly the case it exists to
+    /// report — a user's value silently replaced by the recipe credential. The variable's
+    /// <em>name</em> is therefore the primary evidence, because the splat derives it mechanically:
+    /// <c>&lt;ENCODED_CONNECTION_NAME&gt;_&lt;PROPERTY&gt;</c> (see <c>SplatConnectionProperties</c>).
+    /// <paramref name="referencePrefixes"/> carries the prefixes that injection actually used for
+    /// this consumer, recovered by <see cref="BuildReferencePrefixes"/>, so a name the splat could
+    /// not have produced is never attributed to it.
+    /// </para>
+    /// <para>
+    /// The value is still compared, as a second condition rather than the only one: a resource may
+    /// expose a property whose name collides with a variable the author sets for their own purposes,
+    /// and the recipe substitution should only be considered legitimate where the value really is
+    /// the owner's. That comparison stays structural because the instance is not stable —
+    /// <c>GetConnectionProperties()</c> builds a fresh <see cref="ReferenceExpression"/>, and fresh
+    /// endpoint providers inside it, on every call — while the manifest expression is.
+    /// </para>
+    /// <para>
+    /// A value that satisfies both conditions is indistinguishable from the injection by
+    /// construction: the author named the variable exactly as the splat for a reference they
+    /// declared would, and gave it that reference's value. Attributing it to the owner is then
+    /// correct on the available evidence, and the outcome is identical either way.
     /// </para>
     /// </remarks>
-    private IResource ResolveEnvValueProvenance(object? rawValue, IResource resource)
+    private IResource ResolveEnvValueProvenance(
+        object? rawValue,
+        string key,
+        IResource resource,
+        Dictionary<IResource, HashSet<string>> referencePrefixes)
     {
         if ((_recipeSecretSubstitutions.Count == 0 && _emptyCredentialSubstitutions.Count == 0) ||
             rawValue is not ReferenceExpression expression)
@@ -1626,14 +1654,16 @@ internal sealed class RadiusInfrastructureBuilder
         foreach (var (credentialOwner, _) in _recipeCredentialOwners.Values)
         {
             if (ReferenceEquals(credentialOwner, resource) ||
-                credentialOwner is not IResourceWithConnectionString withConnectionString)
+                credentialOwner is not IResourceWithConnectionString withConnectionString ||
+                !referencePrefixes.TryGetValue(credentialOwner, out var prefixes))
             {
                 continue;
             }
 
-            foreach (var (_, connectionProperty) in withConnectionString.GetConnectionProperties())
+            foreach (var (propertyName, connectionProperty) in withConnectionString.GetConnectionProperties())
             {
-                if (string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
+                if (KeyMatchesSplattedProperty(key, propertyName, prefixes) &&
+                    string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
                 {
                     return credentialOwner;
                 }
@@ -1641,6 +1671,86 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         return resource;
+    }
+
+    /// <summary>
+    /// Recovers, for each resource <paramref name="resource"/> references, the environment variable
+    /// prefixes that <c>WithReference</c>'s connection-property splat used for it.
+    /// </summary>
+    /// <remarks>
+    /// The prefix is <c>&lt;ENCODED_CONNECTION_NAME&gt;_</c>, and <c>connectionName</c> defaults to the
+    /// referenced resource's name but can be overridden per reference — an override
+    /// <c>WithReference</c> records nowhere in the model. It is recoverable anyway, because the same
+    /// call emits the connection string under <c>ConnectionStrings__&lt;connectionName&gt;</c> as a
+    /// <see cref="ConnectionStringReference"/> that names the resource, so the consumer's own
+    /// environment carries the alias. Reading it from there keeps an aliased reference
+    /// (<c>WithReference(cache, "admin")</c> → <c>ADMIN_PASSWORD</c>) attributable without having to
+    /// accept an arbitrary prefix, which is what would let an unrelated variable pass.
+    /// <para>
+    /// The resource name is always included as well: a consumer that suppresses the connection
+    /// string via <see cref="ReferenceEnvironmentInjectionFlags"/>, or a resource that overrides
+    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, leaves no
+    /// alias to read, and in both cases the splat used the default.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(
+        IResource resource,
+        Dictionary<string, object> environmentVariables)
+    {
+        var prefixes = new Dictionary<IResource, HashSet<string>>();
+
+        if (resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships))
+        {
+            foreach (var relationship in relationships)
+            {
+                if (!string.Equals(relationship.Type, KnownRelationshipTypes.Reference, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                Add(relationship.Resource, relationship.Resource.Name);
+            }
+        }
+
+        foreach (var (key, value) in environmentVariables)
+        {
+            // ConnectionStrings__<connectionName>, written by the same WithReference call that
+            // splatted the properties. Anything else cannot tell us about an alias.
+            if (value is ConnectionStringReference connectionStringReference &&
+                key.StartsWith(ConnectionStringEnvironmentPrefix, StringComparison.Ordinal))
+            {
+                Add(connectionStringReference.Resource, key[ConnectionStringEnvironmentPrefix.Length..]);
+            }
+        }
+
+        return prefixes;
+
+        void Add(IResource target, string connectionName)
+        {
+            if (!prefixes.TryGetValue(target, out var names))
+            {
+                names = [];
+                prefixes[target] = names;
+            }
+
+            names.Add(connectionName.Length == 0
+                ? string.Empty
+                : $"{EnvironmentVariableNameEncoder.Encode(connectionName).ToUpperInvariant()}_");
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is a name the connection-property splat produced for
+    /// <paramref name="propertyName"/> under one of <paramref name="prefixes"/>.
+    /// </summary>
+    private static bool KeyMatchesSplattedProperty(string key, string propertyName, HashSet<string> prefixes)
+    {
+        var suffix = propertyName.ToUpperInvariant();
+
+        return prefixes.Any(prefix =>
+            key.Length == prefix.Length + suffix.Length &&
+            key.StartsWith(prefix, StringComparison.Ordinal) &&
+            key.EndsWith(suffix, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -2053,13 +2163,15 @@ internal sealed class RadiusInfrastructureBuilder
             context.EnvironmentVariables.Remove(key);
         }
 
+        var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
+
         foreach (var (key, rawValue) in context.EnvironmentVariables)
         {
             var parts = new List<EnvPart>();
 
             try
             {
-                await ResolveEnvPartsAsync(rawValue, resource, parts, ResolveEnvValueProvenance(rawValue, resource)).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(rawValue, resource, parts, ResolveEnvValueProvenance(rawValue, key, resource, referencePrefixes)).ConfigureAwait(false);
             }
             catch (RadiusUnresolvableValueException ex)
             {

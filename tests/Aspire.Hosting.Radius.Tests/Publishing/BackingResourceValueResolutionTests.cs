@@ -539,6 +539,52 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The value of an injected connection property is not proof that the injection produced it: an
+    /// AppHost author can build the identical <see cref="ReferenceExpression"/> themselves, because
+    /// <c>ReferenceExpression.Create($"{shared}")</c> renders to the same manifest expression as the
+    /// owner's <c>password</c> property when <c>shared</c> is that parameter. The variable is the
+    /// author's own, its value is replaced by the recipe credential all the same, and that is
+    /// precisely what ASPIRERADIUS070 exists to report - so provenance is taken from the name the
+    /// splat would have produced for a declared reference, not from the value alone.
+    /// </summary>
+    [Fact]
+    public void UserAuthoredValueMatchingAnInjectedProperty_IsStillReportedAsAnUnrelatedUse()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithReference(cache)
+                .WithEnvironment("ADMIN_PASSWORD", ReferenceExpression.Create($"{shared}"));
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'"));
+    }
+
+    /// <summary>
+    /// The connection name can be aliased, and <c>WithReference</c> records the override nowhere in
+    /// the model - so an aliased reference splats to <c>ADMIN_PASSWORD</c>, a name that would
+    /// otherwise be indistinguishable from the author-owned variable above. The alias is recovered
+    /// from the <c>ConnectionStrings__admin</c> entry the same call injects, so the genuine
+    /// injection stays silent while the author-owned variable of the same name does not.
+    /// </summary>
+    [Fact]
+    public void AliasedReferenceToTheOwningResource_IsNotReportedAsAnUnrelatedUse()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: shared);
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(cache, "admin");
+        });
+
+        Assert.Empty(logger.Matching(LogLevel.Warning, "references parameter"));
+    }
+
+    /// <summary>
     /// A consumer that only takes the backing resource's connection string reaches the very same
     /// substituted parameter, but through the owner's own connection string — which is exactly what
     /// the substitution is for. Pinned so the detection cannot regress into warning on every
