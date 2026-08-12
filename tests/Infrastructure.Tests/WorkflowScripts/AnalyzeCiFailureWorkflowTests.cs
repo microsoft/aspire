@@ -8,7 +8,7 @@ using Xunit;
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Tests for .github/workflows/analyze-ci-failure.js.
+/// Tests for the analyze-ci-failure workflow and its JavaScript helper.
 /// </summary>
 public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 {
@@ -28,6 +28,33 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     public void Dispose() => _workspace.Dispose();
+
+    [Theory]
+    [InlineData("analyze-ci-failure.md")]
+    [InlineData("analyze-ci-failure.lock.yml")]
+    public void PublishAnalysisJobPersistsRequiredEnvironmentVariables(string workflowName)
+    {
+        var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", workflowName);
+        var workflow = File.ReadAllText(workflowPath);
+        var persistIndex = workflow.IndexOf("- name: Persist publish environment", StringComparison.Ordinal);
+        var checkoutIndex = workflow.IndexOf("- name: Checkout issue renderer", persistIndex, StringComparison.Ordinal);
+        var publishIndex = workflow.IndexOf("- name: Publish analysis data and comment on PR", checkoutIndex, StringComparison.Ordinal);
+
+        Assert.True(persistIndex >= 0, $"The environment persistence step was not found in {workflowName}.");
+        Assert.True(checkoutIndex > persistIndex, $"The checkout step must follow environment persistence in {workflowName}.");
+        Assert.True(publishIndex > checkoutIndex, $"The publish step must follow checkout in {workflowName}.");
+
+        var persistStep = workflow[persistIndex..checkoutIndex];
+        Assert.Contains("GH_AW_AGENT_OUTPUT=$GH_AW_AGENT_OUTPUT", persistStep, StringComparison.Ordinal);
+        Assert.Contains("GH_TOKEN=$GH_TOKEN", persistStep, StringComparison.Ordinal);
+        Assert.Contains("$GITHUB_ENV", persistStep, StringComparison.Ordinal);
+
+        if (workflowName.EndsWith(".lock.yml", StringComparison.Ordinal))
+        {
+            Assert.Contains("GH_AW_AGENT_OUTPUT:", persistStep, StringComparison.Ordinal);
+            Assert.Contains("GH_TOKEN:", persistStep, StringComparison.Ordinal);
+        }
+    }
 
     [Fact]
     [RequiresTools(["node"])]

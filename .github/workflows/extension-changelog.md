@@ -118,6 +118,7 @@ safe-outputs:
     repositories: ["aspire"]
 
 tools:
+  bash: ["cat", "ls", "find", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes the commit-comparison and file-content APIs used to gather
     # the extension change set. `pull_requests` and `search` enrich commits with
