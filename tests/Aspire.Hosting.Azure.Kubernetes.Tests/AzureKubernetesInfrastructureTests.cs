@@ -288,8 +288,49 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         Assert.Equal("queried-rg", resourceGroup);
         Assert.Equal(
-            [$"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"deployment-aks\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\""],
+            [$"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"deployment-aks\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\""],
             invocations);
+    }
+
+    [Fact]
+    public async Task GetResourceGroupThrowsWhenClusterNameIsAmbiguous()
+    {
+        const string subscriptionId = "00000000-0000-0000-0000-000000000001";
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.GetResourceGroupAsync(
+                "/usr/bin/az",
+                "deployment-aks",
+                subscriptionId,
+                savedResourceGroup: null,
+                NullLogger.Instance,
+                (path, arguments) => Task.FromResult(
+                    new AzureKubernetesEnvironmentResource.AzCommandResult(0, "first-rg\nsecond-rg\n", ""))));
+
+        Assert.Equal(
+            $"Found 2 AKS clusters named 'deployment-aks' in subscription '{subscriptionId}' " +
+            "(resource groups: first-rg, second-rg). Specify which one to use by calling " +
+            "AsExistingInResourceGroup on the resource.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task GetResourceGroupThrowsWhenClusterIsNotFound()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.GetResourceGroupAsync(
+                "/usr/bin/az",
+                "deployment-aks",
+                "00000000-0000-0000-0000-000000000001",
+                savedResourceGroup: null,
+                NullLogger.Instance,
+                (path, arguments) => Task.FromResult(
+                    new AzureKubernetesEnvironmentResource.AzCommandResult(0, "\n", ""))));
+
+        Assert.Equal(
+            "Could not resolve resource group for AKS cluster 'deployment-aks'. " +
+            "Ensure Azure provisioning has completed.",
+            exception.Message);
     }
 
     [Fact]
@@ -409,7 +450,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         // guard the call site: reverting either call to an unscoped invocation fails here.
         Assert.Equal(
             [
-                $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\"",
+                $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"",
                 $"aks get-credentials --resource-group \"queried-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""
             ],
             invocations);
