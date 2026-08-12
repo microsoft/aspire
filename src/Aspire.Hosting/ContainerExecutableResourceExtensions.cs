@@ -15,6 +15,7 @@ internal static class ContainerExecutableResourceExtensions
     /// </summary>
     /// <param name="model">The distributed application model to retrieve executable resources from.</param>
     /// <returns>An enumerable collection of executable resources.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<ContainerExecutableResource> GetContainerExecutableResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);

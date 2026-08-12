@@ -12,6 +12,16 @@
         <target state="translated">Kanal für Vorlagen (stabil, Staging, täglich)</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
+        <source>Directly in the selected folder</source>
+        <target state="new">Directly in the selected folder</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreateProjectNameSubdirectoryChoice">
+        <source>In a subdirectory named '{0}' in the selected folder</source>
+        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
         <target state="needs-review-translation">Erstellen Sie ein neues Aspire-Projekt.</target>
@@ -33,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the apphost</source>
-        <target state="new">The programming language for the apphost</target>
+        <source>The programming language for the AppHost</source>
+        <target state="new">The programming language for the AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
@@ -42,9 +52,39 @@
         <target state="needs-review-translation">Der Name des zu erstellenden Projekts.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoPackageChannelsAvailable">
+        <source>No package channels are available.</source>
+        <target state="new">No package channels are available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveTemplateRequired">
+        <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
+        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
         <target state="needs-review-translation">Der Ausgabepfad für das Projekt.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
+        <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmptyInteractive">
+        <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputPathContainsInvalidCharacters">
+        <source>The output path '{0}' contains invalid characters.</source>
+        <target state="new">The output path '{0}' contains invalid characters.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -62,9 +102,19 @@
         <target state="translated">Vorlagenversion auswählen:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelectProjectCreationLocation">
+        <source>Where do you want the project to be created?</source>
+        <target state="new">Where do you want the project to be created?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
         <target state="needs-review-translation">Die NuGet-Quelle, die für die Projektvorlagen verwendet werden soll.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceWithCredentialsCannotBePersisted">
+        <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
+        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

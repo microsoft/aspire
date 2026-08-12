@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
@@ -24,9 +26,12 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the annotation from.</param>
     /// <param name="annotation">When this method returns, contains the last annotation of the specified type from the resource, if found; otherwise, the default value for <typeparamref name="T"/>.</param>
     /// <returns><see langword="true"/> if the last annotation of the specified type was found in the resource; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetLastAnnotation<T>(this IResource resource, [NotNullWhen(true)] out T? annotation) where T : IResourceAnnotation
     {
-        if (resource.Annotations.OfType<T>().LastOrDefault() is { } lastAnnotation)
+        var lastAnnotation = resource.Annotations.OfType<T>().LastOrDefault();
+
+        if (lastAnnotation is not null)
         {
             annotation = lastAnnotation;
             return true;
@@ -45,13 +50,14 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <param name="result">When this method returns, contains the annotations of the specified type, if found; otherwise, <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if annotations of the specified type were found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
-        var matchingTypeAnnotations = resource.Annotations.OfType<T>();
+        var matchingTypeAnnotations = resource.Annotations.OfType<T>().ToArray();
 
-        if (matchingTypeAnnotations.Any())
+        if (matchingTypeAnnotations.Length > 0)
         {
-            result = matchingTypeAnnotations.ToArray();
+            result = matchingTypeAnnotations;
             return true;
         }
         else
@@ -67,6 +73,7 @@ public static class ResourceExtensions
     /// <typeparam name="T">The type of annotation to retrieve.</typeparam>
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <returns><see langword="true"/> if an annotation of the specified type was found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool HasAnnotationOfType<T>(this IResource resource) where T : IResourceAnnotation
     {
         return resource.Annotations.Any(a => a is T);
@@ -79,6 +86,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <param name="result">When this method returns, contains the annotations of the specified type, if found; otherwise, <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if annotations of the specified type were found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsIncludingAncestorsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
         if (resource is IResourceWithParent)
@@ -116,6 +124,7 @@ public static class ResourceExtensions
     /// <typeparam name="T">The type of annotation to retrieve.</typeparam>
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <returns><see langword="true"/> if an annotation of the specified type was found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool HasAnnotationIncludingAncestorsOfType<T>(this IResource resource) where T : IResourceAnnotation
     {
         if (resource is IResourceWithParent)
@@ -149,6 +158,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the environment variables from.</param>
     /// <param name="environmentVariables">The environment variables retrieved from the resource, if any.</param>
     /// <returns>True if the environment variables were successfully retrieved, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "Environment callback inspection helper — not part of the ATS surface.")]
     public static bool TryGetEnvironmentVariables(this IResource resource, [NotNullWhen(true)] out IEnumerable<EnvironmentCallbackAnnotation>? environmentVariables)
     {
         return TryGetAnnotationsOfType(resource, out environmentVariables);
@@ -245,16 +255,14 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gather argument values, but do not resolve them. Used to allow multiple callbacks to constructively contribute to
-    /// the argument list before resolving.
+    /// Gathers argument values without resolving them or using cached callback results.
     /// </summary>
     /// <param name="resource">The resource to retrieve argument values for.</param>
     /// <param name="executionContext">The execution context used during the retrieval of argument values.</param>
     /// <param name="logger">The logger used for logging information or errors during the retrieval of argument values.</param>
     /// <param name="cancellationToken">A token for cancelling the operation, if needed.</param>
     /// <returns>A list of unprocessed argument values.</returns>
-    [Obsolete("Use ExecutionConfigurationBuilder instead.")]
-    internal static async ValueTask<List<object>> GatherArgumentValuesAsync(
+    internal static async ValueTask<List<object>> GatherArgumentValuesWithoutCachingAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -275,7 +283,46 @@ public static class ResourceExtensions
             }
         }
 
+        var launchToolArgs = await GatherLaunchToolArgumentValuesAsync(
+            resource,
+            executionContext,
+            logger,
+            cacheAnnotationCallbackResult: false,
+            cancellationToken).ConfigureAwait(false);
+        args.InsertRange(0, launchToolArgs);
+
         return args;
+    }
+
+    private static async ValueTask<IList<object>> GatherLaunchToolArgumentValuesAsync(
+        IResource resource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger logger,
+        bool cacheAnnotationCallbackResult,
+        CancellationToken cancellationToken)
+    {
+        // Launch tool arguments run against an isolated list and do not apply to containers, matching
+        // ArgumentsExecutionConfigurationGatherer's composition of the effective command line.
+        if (resource.IsContainer() ||
+            !resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var annotation))
+        {
+            return [];
+        }
+
+        var context = new CommandLineArgsCallbackContext([], resource, cancellationToken)
+        {
+            Logger = logger,
+            ExecutionContext = executionContext
+        };
+
+        if (cacheAnnotationCallbackResult)
+        {
+            return await annotation.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+        }
+
+        await annotation.Callback(context).ConfigureAwait(false);
+
+        return context.Args;
     }
 
     /// <summary>
@@ -337,7 +384,7 @@ public static class ResourceExtensions
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        var args = await GatherArgumentValuesAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
+        var args = await GatherArgumentValuesWithoutCachingAsync(resource, executionContext, logger, cancellationToken).ConfigureAwait(false);
 
         await ProcessGatheredArgumentValuesAsync(resource, executionContext, args, processValue, logger, cancellationToken).ConfigureAwait(false);
     }
@@ -440,7 +487,10 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to process container build options for.</param>
     /// <param name="serviceProvider">The service provider for dependency injection.</param>
     /// <param name="logger">The logger used to log any information or errors during processing.</param>
-    /// <param name="executionContext">The optional execution context.</param>
+    /// <param name="executionContext">
+    /// The execution context to expose on the callback context. When <see langword="null"/> (the default),
+    /// the execution context is resolved from <paramref name="serviceProvider"/>.
+    /// </param>
     /// <param name="cancellationToken">A cancellation token to observe during the asynchronous operation.</param>
     /// <returns>A context object containing the accumulated container build options from all callbacks.</returns>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -451,12 +501,14 @@ public static class ResourceExtensions
         DistributedApplicationExecutionContext? executionContext = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
         var context = new ContainerBuildOptionsCallbackContext(
             resource,
             serviceProvider,
             logger,
             cancellationToken,
-            executionContext);
+            executionContext ?? serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>());
 
         if (resource.TryGetAnnotationsOfType<ContainerBuildOptionsCallbackAnnotation>(out var annotations))
         {
@@ -476,9 +528,8 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerBuildOptionsCallbackContext> callback)
@@ -497,9 +548,8 @@ public static class ResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">An async callback to configure container build options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerBuildOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerBuildOptionsCallbackContext, Task> callback)
@@ -545,6 +595,7 @@ public static class ResourceExtensions
     /// Gets a value indicating whether the resource is excluded from being published.
     /// </summary>
     /// <param name="resource">The resource to determine if it should be excluded from being published.</param>
+    [AspireExportIgnore(Reason = "Manifest inspection helper — not part of the ATS surface.")]
     public static bool IsExcludedFromPublish(this IResource resource) =>
         resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var lastAnnotation) && lastAnnotation == ManifestPublishingCallbackAnnotation.Ignore;
 
@@ -655,6 +706,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the volume mounts for.</param>
     /// <param name="volumeMounts">When this method returns, contains the volume mounts for the specified resource, if found; otherwise, <c>null</c>.</param>
     /// <returns><c>true</c> if the volume mounts were successfully retrieved; otherwise, <c>false</c>.</returns>
+    [AspireExportIgnore(Reason = "Container mount inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerMounts(this IResource resource, [NotNullWhen(true)] out IEnumerable<ContainerMountAnnotation>? volumeMounts)
     {
         return TryGetAnnotationsOfType<ContainerMountAnnotation>(resource, out volumeMounts);
@@ -666,6 +718,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve the endpoints for.</param>
     /// <param name="endpoints">The endpoints for the given resource, if found.</param>
     /// <returns>True if the endpoints were found, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "Endpoint annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetEndpoints(this IResource resource, [NotNullWhen(true)] out IEnumerable<EndpointAnnotation>? endpoints)
     {
         return TryGetAnnotationsOfType(resource, out endpoints);
@@ -677,6 +730,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve the URLs for.</param>
     /// <param name="urls">The URLs for the given resource, if found.</param>
     /// <returns>True if the URLs were found, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "URL annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetUrls(this IResource resource, [NotNullWhen(true)] out IEnumerable<ResourceUrlAnnotation>? urls)
     {
         return TryGetAnnotationsOfType(resource, out urls);
@@ -687,6 +741,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <returns>An enumeration of <see cref="EndpointReference"/> based on the <see cref="EndpointAnnotation"/> annotations from the resources' <see cref="IResource.Annotations"/> collection.</returns>
+    [AspireExportIgnore(Reason = "Resource handle endpoint enumeration is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource)
     {
         if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
@@ -701,13 +756,14 @@ public static class ResourceExtensions
     /// Gets references to all endpoints for the specified resource.
     /// </summary>
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
-    /// <param name="contextNetworkID">The ID of the network that serves as the context context for the endpoint references.</param>
+    /// <param name="contextNetworkId">The ID of the network that serves as the context context for the endpoint references.</param>
     /// <returns>An enumeration of <see cref="EndpointReference"/> based on the <see cref="EndpointAnnotation"/> annotations from the resources' <see cref="IResource.Annotations"/> collection.</returns>
-    public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkID)
+    [AspireExportIgnore(Reason = "Network-specific endpoint enumeration is not part of the ATS surface.")]
+    public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkId)
     {
         if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
         {
-            return endpoints.Select(e => new EndpointReference(resource, e, contextNetworkID));
+            return endpoints.Select(e => new EndpointReference(resource, e, contextNetworkId));
         }
 
         return [];
@@ -719,6 +775,7 @@ public static class ResourceExtensions
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <param name="endpointName">The name of the endpoint.</param>
     /// <returns>An <see cref="EndpointReference"/>object providing resolvable reference for the specified endpoint.</returns>
+    [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
@@ -739,9 +796,10 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <param name="endpointName">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The network ID of the network that provides the context for the returned <see cref="EndpointReference"/></param>
+    /// <param name="contextNetworkId">The network ID of the network that provides the context for the returned <see cref="EndpointReference"/></param>
     /// <returns>An <see cref="EndpointReference"/>object providing resolvable reference for the specified endpoint.</returns>
-    public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkID)
+    [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
+    public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkId)
     {
 
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
@@ -749,11 +807,11 @@ public static class ResourceExtensions
             null;
         if (endpoint is null)
         {
-            return new EndpointReference(resource, endpointName, contextNetworkID);
+            return new EndpointReference(resource, endpointName, contextNetworkId);
         }
         else
         {
-            return new EndpointReference(resource, endpoint, contextNetworkID);
+            return new EndpointReference(resource, endpoint, contextNetworkId);
         }
     }
 
@@ -765,6 +823,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource containing endpoints to resolve.</param>
     /// <param name="portAllocator">Optional port allocator. If null, uses default allocation starting from port 8000.</param>
     /// <returns>A read-only list of resolved endpoints with computed port values.</returns>
+    [AspireExportIgnore(Reason = "Endpoint resolution exposes infrastructure-specific types that are not part of the ATS surface.")]
     public static IReadOnlyList<ResolvedEndpoint> ResolveEndpoints(this IResource resource, IPortAllocator? portAllocator = null)
     {
         if (!resource.TryGetEndpoints(out var endpoints))
@@ -778,8 +837,11 @@ public static class ResourceExtensions
 
         foreach (var endpoint in endpoints)
         {
+            var publicPort = EndpointAnnotation.NormalizePort(endpoint.Port);
+            var configuredTargetPort = EndpointAnnotation.NormalizePort(endpoint.TargetPort);
+
             // Compute target port based on resource type and endpoint configuration
-            ResolvedPort targetPort = (resource, endpoint.UriScheme, endpoint.TargetPort, endpoint.Port) switch
+            ResolvedPort targetPort = (resource, endpoint.UriScheme, configuredTargetPort, publicPort) switch
             {
                 // The port was explicitly specified so use it
                 (_, _, int target, _) => ResolvedPort.Explicit(target),
@@ -802,7 +864,7 @@ public static class ResourceExtensions
             }
 
             // Compute exposed port (host port)
-            ResolvedPort exposedPort = (endpoint.UriScheme, endpoint.Port, targetPort.Value) switch
+            ResolvedPort exposedPort = (endpoint.UriScheme, publicPort, targetPort.Value) switch
             {
                 // Port set explicitly, use it
                 (_, int port, _) => ResolvedPort.Explicit(port),
@@ -848,6 +910,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the container image name from.</param>
     /// <param name="imageName">The container image name if found, otherwise null.</param>
     /// <returns>True if the container image name was found, otherwise false.</returns>
+    [AspireExportIgnore(Reason = "Container image inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerImageName(this IResource resource, [NotNullWhen(true)] out string? imageName)
     {
         return TryGetContainerImageName(resource, useBuiltImage: true, out imageName);
@@ -860,6 +923,7 @@ public static class ResourceExtensions
     /// <param name="useBuiltImage">When true, uses the image name from DockerfileBuildAnnotation if present. When false, uses only ContainerImageAnnotation.</param>
     /// <param name="imageName">The container image name if found, otherwise null.</param>
     /// <returns>True if the container image name was found, otherwise false.</returns>
+    [AspireExportIgnore(Reason = "Container image inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerImageName(this IResource resource, bool useBuiltImage, [NotNullWhen(true)] out string? imageName)
     {
         // First check if there's a DockerfileBuildAnnotation with an image name/tag
@@ -901,6 +965,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to get the replica count for.</param>
     /// <returns>The number of replicas for the specified resource.</returns>
+    [AspireExportIgnore(Reason = "Replica inspection helper — not part of the ATS surface.")]
     public static int GetReplicaCount(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicaAnnotation))
@@ -922,6 +987,7 @@ public static class ResourceExtensions
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
         if (resource.IsExcludedFromPublish())
@@ -942,6 +1008,7 @@ public static class ResourceExtensions
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image push requirements.</param>
     /// <returns>True if the resource requires image building and pushing; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuildAndPush(this IResource resource)
     {
         return resource.RequiresImageBuild() && !resource.IsBuildOnlyContainer();
@@ -958,6 +1025,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to get the compute environment for.</param>
     /// <returns>The compute environment the resource is bound to, or <c>null</c> if the resource is not bound to any specific compute environment.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
     public static IComputeEnvironmentResource? GetComputeEnvironment(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
@@ -971,13 +1039,14 @@ public static class ResourceExtensions
     /// Gets the deployment target for the specified resource, if any. Throws an exception if
     /// there are multiple compute environments and a compute environment is not explicitly specified.
     /// </summary>
+    [AspireExportIgnore(Reason = "Deployment target inspection helper — not part of the ATS surface.")]
     public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null)
     {
         IComputeEnvironmentResource? selectedComputeEnvironment = null;
         if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
         {
             // If you have a ComputeEnvironmentAnnotation, it means the resource is bound to a specific compute environment.
-            // Skip the annotation if it doesn't match the specified computeEnvironmentResource.
+            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
             if (targetComputeEnvironment is not null && targetComputeEnvironment != computeEnvironmentAnnotation.ComputeEnvironment)
             {
                 return null;
@@ -1002,28 +1071,126 @@ public static class ResourceExtensions
                 throw new InvalidOperationException($"Resource '{resource.Name}' has multiple compute environments - '{computeEnvironmentNames}'. Please specify a single compute environment using 'WithComputeEnvironment'.");
             }
 
-            return annotations[0];
+            var deploymentTargetAnnotation = annotations[0];
+
+            // If you have a DeploymentTargetAnnotation, it means the resource is bound to a specific compute environment.
+            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
+            if (targetComputeEnvironment is not null && targetComputeEnvironment != deploymentTargetAnnotation.ComputeEnvironment)
+            {
+                return null;
+            }
+
+            return deploymentTargetAnnotation;
         }
         return null;
     }
 
     /// <summary>
-    /// Gets the lifetime type of the container for the specified resource.
-    /// Defaults to <see cref="ContainerLifetime.Session"/> if no <see cref="ContainerLifetimeAnnotation"/> is found.
+    /// Gets the lifetime type for the specified resource.
+    /// Defaults to <see cref="Lifetime.Session"/> if no lifetime annotation is found.
     /// </summary>
-    /// <param name="resource">The resource to get the ContainerLifetimeType for.</param>
+    /// <param name="resource">The resource to get the lifetime type for.</param>
     /// <returns>
-    /// The <see cref="ContainerLifetime"/> from the <see cref="ContainerLifetimeAnnotation"/> for the resource (if the annotation exists).
-    /// Defaults to <see cref="ContainerLifetime.Session"/> if the annotation is not set.
+    /// The <see cref="Lifetime"/> from the <see cref="PersistenceAnnotation"/> for the resource (if the annotation exists).
+    /// Defaults to <see cref="Lifetime.Session"/> if the annotation is not set.
     /// </returns>
-    internal static ContainerLifetime GetContainerLifetimeType(this IResource resource)
+    internal static Lifetime GetLifetimeType(this IResource resource)
     {
-        if (resource.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var lifetimeAnnotation))
+        return GetLifetimeType(resource, []);
+    }
+
+    private static Lifetime GetLifetimeType(IResource resource, HashSet<IResource> visitedResources)
+    {
+        if (!visitedResources.Add(resource))
         {
-            return lifetimeAnnotation.Lifetime;
+            throw new InvalidOperationException($"A circular lifetime reference was detected for resource '{resource.Name}'.");
         }
 
-        return ContainerLifetime.Session;
+        if (resource.TryGetLastAnnotation<PersistenceAnnotation>(out var persistenceAnnotation))
+        {
+            return persistenceAnnotation.Mode switch
+            {
+                PersistenceMode.Session => Lifetime.Session,
+                PersistenceMode.Persistent => Lifetime.Persistent,
+                PersistenceMode.Resource => persistenceAnnotation.SourceResource is { } sourceResource
+                    ? GetLifetimeType(sourceResource, visitedResources)
+                    : throw new InvalidOperationException($"Resource '{resource.Name}' has a resource persistence mode but no source resource."),
+                PersistenceMode.ParentProcess => Lifetime.Persistent,
+                _ => throw new InvalidOperationException($"Unknown persistence mode '{Enum.GetName(typeof(PersistenceMode), persistenceAnnotation.Mode)}'.")
+            };
+        }
+
+        if (resource.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var containerLifetimeAnnotation))
+        {
+            return containerLifetimeAnnotation.Lifetime switch
+            {
+                ContainerLifetime.Session => Lifetime.Session,
+                ContainerLifetime.Persistent => Lifetime.Persistent,
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), containerLifetimeAnnotation.Lifetime)}'.")
+            };
+        }
+
+        return Lifetime.Session;
+    }
+
+    /// <summary>
+    /// Determines whether the specified resource has a persistent lifetime.
+    /// </summary>
+    /// <param name="resource">The resource to get persistent lifetime behavior for.</param>
+    /// <returns><see langword="true"/> if the resource has a persistent container or executable lifetime, otherwise <see langword="false"/>.</returns>
+    internal static bool HasPersistentLifetime(this IResource resource)
+    {
+        return resource.GetLifetimeType() == Lifetime.Persistent;
+    }
+
+    internal static string GetOtelServiceInstanceId(this IResource resource, DcpInstance instance)
+    {
+        return resource.GetLifetimeType() == Lifetime.Persistent ? instance.Name : instance.Suffix;
+    }
+
+    /// <summary>
+    /// Determines whether the specified resource has a parent process lifetime.
+    /// </summary>
+    /// <param name="resource">The resource to get parent process lifetime behavior for.</param>
+    /// <param name="parentProcessId">The parent process ID if one exists.</param>
+    /// <param name="parentProcessTimestamp">The parent process identity timestamp if one exists.</param>
+    /// <returns><see langword="true"/> if the resource has a parent process lifetime, otherwise <see langword="false"/>.</returns>
+    internal static bool TryGetParentProcessLifetime(this IResource resource, out int parentProcessId, out DateTime parentProcessTimestamp)
+    {
+        return TryGetParentProcessLifetime(resource, [], out parentProcessId, out parentProcessTimestamp);
+    }
+
+    private static bool TryGetParentProcessLifetime(IResource resource, HashSet<IResource> visitedResources, out int parentProcessId, out DateTime parentProcessTimestamp)
+    {
+        if (!visitedResources.Add(resource))
+        {
+            throw new InvalidOperationException($"A circular lifetime reference was detected for resource '{resource.Name}'.");
+        }
+
+        if (resource.TryGetLastAnnotation<PersistenceAnnotation>(out var persistenceAnnotation))
+        {
+            switch (persistenceAnnotation.Mode)
+            {
+                case PersistenceMode.ParentProcess when persistenceAnnotation.ParentProcessId is { } id && persistenceAnnotation.ParentProcessTimestamp is { } timestamp:
+                    parentProcessId = id;
+                    parentProcessTimestamp = timestamp;
+                    return true;
+                case PersistenceMode.ParentProcess:
+                    throw new InvalidOperationException($"Resource '{resource.Name}' has a parent process persistence mode but no parent process identity.");
+                case PersistenceMode.Resource:
+                    return persistenceAnnotation.SourceResource is { } sourceResource
+                        ? TryGetParentProcessLifetime(sourceResource, visitedResources, out parentProcessId, out parentProcessTimestamp)
+                        : throw new InvalidOperationException($"Resource '{resource.Name}' has a resource persistence mode but no source resource.");
+                case PersistenceMode.Session or PersistenceMode.Persistent:
+                    parentProcessId = 0;
+                    parentProcessTimestamp = default;
+                    return false;
+            }
+        }
+
+        parentProcessId = 0;
+        parentProcessTimestamp = default;
+        return false;
     }
 
     /// <summary>
@@ -1045,7 +1212,7 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Determines whether a resource has proxy support enabled or not. Container resources may have a <see cref="ProxySupportAnnotation"/> setting that disables proxying for their
+    /// Determines whether a resource has proxy support enabled or not. Resources may have a <see cref="ProxySupportAnnotation"/> setting that disables proxying for their
     /// endpoints regardless of the endpoint proxy configuration.
     /// </summary>
     /// <param name="resource">The resource to get proxy support for.</param>
@@ -1084,6 +1251,16 @@ public static class ResourceExtensions
         }
 
         return names[0];
+    }
+
+    /// <summary>
+    /// Returns the display name for the specified resource.
+    /// For resources with replicas, returns the full <paramref name="resourceId"/> to identify the instance.
+    /// For single-instance resources, returns the resource's display name without the DCP suffix.
+    /// </summary>
+    internal static string GetResolvedDisplayResourceName(this IResource resource, string resourceId)
+    {
+        return resource.GetReplicaCount() > 1 ? resourceId : resource.Name;
     }
 
     /// <summary>
@@ -1225,19 +1402,33 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Gets the archive file path for a container image.
+    /// Gets the archive file path for a container image. This is the single calculation shared by the
+    /// container runtimes that write the archive and by <see cref="ContainerImageReference"/>, which hands
+    /// the path to consumers.
     /// </summary>
     /// <param name="outputPath">The output directory path.</param>
-    /// <param name="imageName">The image name.</param>
-    /// <param name="imageTag">The image tag (optional, defaults to "latest" if provided).</param>
+    /// <param name="imageName">The image name. May be registry-qualified and may include the tag.</param>
+    /// <param name="imageTag">The image tag, when it is not already part of <paramref name="imageName"/>.</param>
     /// <returns>The full path to the archive file with .tar extension.</returns>
+    /// <remarks>
+    /// Producers and consumers must agree on this path, otherwise the archive is written to one location
+    /// and looked up at another. Callers supply the image name in one of two shapes — combined
+    /// (<c>myapp:latest</c>) or split (<c>myapp</c> + <c>latest</c>) — and both must resolve identically,
+    /// which they do because <c>:</c> flattens to the same separator the split form joins with.
+    /// </remarks>
     internal static string GetContainerImageArchivePath(string outputPath, string imageName, string? imageTag = null)
     {
         var fileName = string.IsNullOrEmpty(imageTag)
-            ? $"{imageName}.tar"
-            : $"{imageName}-{imageTag}.tar";
+            ? $"{FlattenContainerImageName(imageName)}.tar"
+            : $"{FlattenContainerImageName(imageName)}-{FlattenContainerImageName(imageTag)}.tar";
         return Path.Combine(outputPath, fileName);
     }
+
+    /// <summary>
+    /// Flattens a <c>&lt;registry&gt;/&lt;repository&gt;:&lt;tag&gt;</c> image name into a single
+    /// file-name-safe segment, so that neither a repository segment nor the tag turns into a directory.
+    /// </summary>
+    internal static string FlattenContainerImageName(string imageName) => imageName.Replace('/', '-').Replace(':', '-');
 
     /// <summary>
     /// Gets a logger for the specified resource using the provided service provider.
@@ -1256,7 +1447,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to compute dependencies for.</param>
     /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
-    /// <param name="mode">Specifies whether to discover only direct dependencies or the full transitive closure.</param>
+    /// <param name="mode">Specifies dependency discovery mode.</param>
     /// <param name="cancellationToken">A cancellation token to observe while computing dependencies.</param>
     /// <returns>A set of all resources that the specified resource depends on.</returns>
     /// <remarks>
@@ -1278,21 +1469,22 @@ public static class ResourceExtensions
     /// This method invokes environment variable and command-line argument callbacks to discover all references. The context resource (<paramref name="resource"/>) is not considered a dependency (even if it is transitively referenced).
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Dependency discovery helper depends on execution context and is not part of the ATS surface.")]
     public static Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ResourceDependencyDiscoveryMode mode = ResourceDependencyDiscoveryMode.Recursive,
         CancellationToken cancellationToken = default)
     {
-        return GetDependenciesAsync([resource], executionContext, mode, cancellationToken);
+        return GetDependenciesAsync([resource], executionContext, new ResourceDependencyDiscoveryOptions { DiscoveryMode = mode }, cancellationToken);
     }
 
     /// <summary>
-    /// Efficiently computes the set of resources that the specified source set of resources depends on.
+    /// Computes the set of resources that the specified <paramref name="resource"/> depends on.
     /// </summary>
-    /// <param name="resources">The source set of resources to compute dependencies for.</param>
+    /// <param name="resource">The resource to compute dependencies for.</param>
     /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
-    /// <param name="mode">Specifies whether to discover only direct dependencies or the full transitive closure.</param>
+    /// <param name="options">Changes details of dependency discovery process. See <see cref="ResourceDependencyDiscoveryOptions"/> enumeration for more information.</param>
     /// <param name="cancellationToken">A cancellation token to observe while computing dependencies.</param>
     /// <returns>A set of all resources that the specified resource depends on.</returns>
     /// <remarks>
@@ -1306,9 +1498,36 @@ public static class ResourceExtensions
     /// </list>
     /// </para>
     /// <para>
-    /// When <paramref name="mode"/> is <see cref="ResourceDependencyDiscoveryMode.DirectOnly"/>, only the immediate
-    /// dependencies are returned. When <paramref name="mode"/> is <see cref="ResourceDependencyDiscoveryMode.Recursive"/>,
-    /// all transitive dependencies are included.
+    /// This method invokes environment variable and command-line argument callbacks to discover all references. The context resource (<paramref name="resource"/>) is not considered a dependency (even if it is transitively referenced).
+    /// </para>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Parameters and return type are not ATS-compatible — internal dependency discovery helper.")]
+    public static Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
+        this IResource resource,
+        DistributedApplicationExecutionContext executionContext,
+        ResourceDependencyDiscoveryOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return GetDependenciesAsync([resource], executionContext, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Efficiently computes the set of resources that the specified source set of resources depends on.
+    /// </summary>
+    /// <param name="resources">The source set of resources to compute dependencies for.</param>
+    /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
+    /// <param name="options">Changes details of dependency discovery process. See <see cref="ResourceDependencyDiscoveryOptions"/> enumeration for more information.</param>
+    /// <param name="cancellationToken">A cancellation token to observe while computing dependencies.</param>
+    /// <returns>A set of all resources that the specified resource depends on.</returns>
+    /// <remarks>
+    /// <para>
+    /// Dependencies are computed from multiple sources:
+    /// <list type="bullet">
+    /// <item>Parent resources via <see cref="IResourceWithParent"/></item>
+    /// <item>Wait dependencies via <see cref="WaitAnnotation"/></item>
+    /// <item>Connection string redirects via <see cref="ConnectionStringRedirectAnnotation"/></item>
+    /// <item>References to endpoints in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
+    /// </list>
     /// </para>
     /// <para>
     /// This method invokes environment variable and command-line argument callbacks to discover all references.
@@ -1317,23 +1536,24 @@ public static class ResourceExtensions
     internal static async Task<IReadOnlySet<IResource>> GetDependenciesAsync(
         IEnumerable<IResource> resources,
         DistributedApplicationExecutionContext executionContext,
-        ResourceDependencyDiscoveryMode mode = ResourceDependencyDiscoveryMode.Recursive,
+        ResourceDependencyDiscoveryOptions? options = default,
         CancellationToken cancellationToken = default)
     {
         var dependencies = new HashSet<IResource>();
         var newDependencies = new HashSet<IResource>();
         var toProcess = new Queue<IResource>();
+        options ??= new ResourceDependencyDiscoveryOptions { DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive };
 
         foreach (var resource in resources)
         {
             newDependencies.Clear();
-            await GatherDirectDependenciesAsync(resource, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
+            await GatherDirectDependenciesAsync(resource, dependencies, newDependencies, executionContext, options, cancellationToken).ConfigureAwait(false);
 
-            if (mode == ResourceDependencyDiscoveryMode.Recursive)
+            if (options.DiscoveryMode == ResourceDependencyDiscoveryMode.Recursive)
             {
                 // Compute transitive closure by recursively processing dependencies
 
-                foreach(var nd in newDependencies)
+                foreach (var nd in newDependencies)
                 {
                     toProcess.Enqueue(nd);
                 }
@@ -1343,7 +1563,7 @@ public static class ResourceExtensions
                     var dep = toProcess.Dequeue();
                     newDependencies.Clear();
 
-                    await GatherDirectDependenciesAsync(dep, dependencies, newDependencies, executionContext, cancellationToken).ConfigureAwait(false);
+                    await GatherDirectDependenciesAsync(dep, dependencies, newDependencies, executionContext, options, cancellationToken).ConfigureAwait(false);
 
                     foreach (var newDep in newDependencies)
                     {
@@ -1372,12 +1592,14 @@ public static class ResourceExtensions
     /// <param name="dependencies">The set of dependencies (where dependency resources will be placed).</param>
     /// <param name="newDependencies">The set of newly discovered dependencies in this invocation (not present in <paramref name="dependencies"/> at the moment of invocation).</param>
     /// <param name="executionContext">The execution context for resolving environment variables and arguments.</param>
+    /// <param name="options">Changes details of dependency discovery process.</param>
     /// <param name="cancellationToken">A cancellation token to observe while gathering dependencies.</param>
     private static async Task GatherDirectDependenciesAsync(
         IResource resource,
         HashSet<IResource> dependencies,
         HashSet<IResource> newDependencies,
         DistributedApplicationExecutionContext executionContext,
+        ResourceDependencyDiscoveryOptions options,
         CancellationToken cancellationToken)
     {
         var visited = new HashSet<object>();
@@ -1386,11 +1608,11 @@ public static class ResourceExtensions
         CollectAnnotationDependencies(resource, dependencies, newDependencies);
 
         // Collect raw (unresolved) environment variable and argument values
-        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, cancellationToken).ConfigureAwait(false);
+        var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, options, cancellationToken).ConfigureAwait(false);
 
         foreach (var value in rawValues)
         {
-            CollectDependenciesFromValue(value, dependencies, newDependencies, visited);
+            CollectDependenciesFromValue(value, dependencies, newDependencies, visited, executionContext);
         }
     }
 
@@ -1400,26 +1622,38 @@ public static class ResourceExtensions
     private static async Task<List<object>> GatherRawEnvironmentAndArgumentValuesAsync(
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
+        ResourceDependencyDiscoveryOptions options,
         CancellationToken cancellationToken)
     {
         var rawValues = new List<object>();
 
         // Gather environment variable values
-        if (resource.TryGetEnvironmentVariables(out var environmentCallbacks))
+        if (resource.TryGetEnvironmentVariables(out var envAnnotations))
         {
             var envVars = new Dictionary<string, object>();
-            var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken);
-
-            foreach (var callback in environmentCallbacks)
+            var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken);
+            
+            if (options.CacheAnnotationCallbackResults)
             {
-                await callback.Callback(context).ConfigureAwait(false);
+                foreach (var ann in envAnnotations)
+                {
+                    var resultingVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                    rawValues.AddRange(resultingVars.Values);
+                }
+                
             }
-
-            rawValues.AddRange(envVars.Values);
+            else
+            {
+                foreach (var ann in envAnnotations)
+                {
+                    await ann.Callback(context).ConfigureAwait(false);
+                }
+                rawValues.AddRange(envVars.Values);
+            }
         }
 
         // Gather command-line argument values
-        if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argsCallbacks))
+        if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argAnnotations))
         {
             var args = new List<object>();
             var context = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
@@ -1427,13 +1661,31 @@ public static class ResourceExtensions
                 ExecutionContext = executionContext
             };
 
-            foreach (var callback in argsCallbacks)
+            if (options.CacheAnnotationCallbackResults)
             {
-                await callback.Callback(context).ConfigureAwait(false);
+                foreach (var ann in argAnnotations)
+                {
+                    var resultingArgs = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                    rawValues.AddRange(resultingArgs);
+                }
             }
-
-            rawValues.AddRange(args);
+            else
+            {
+                foreach (var ann in argAnnotations)
+                {
+                    await ann.Callback(context).ConfigureAwait(false);
+                }
+                rawValues.AddRange(args);
+            }
         }
+
+        var launchToolArgs = await GatherLaunchToolArgumentValuesAsync(
+            resource,
+            executionContext,
+            NullLogger.Instance,
+            options.CacheAnnotationCallbackResults,
+            cancellationToken).ConfigureAwait(false);
+        rawValues.AddRange(launchToolArgs);
 
         return rawValues;
     }
@@ -1478,11 +1730,21 @@ public static class ResourceExtensions
     /// <summary>
     /// Recursively collects resource dependencies from a value using <see cref="IValueWithReferences"/>.
     /// </summary>
-    private static void CollectDependenciesFromValue(object? value, HashSet<IResource> dependencies, HashSet<IResource> newDependencies, HashSet<object> visitedValues)
+    private static void CollectDependenciesFromValue(
+        object? value,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies,
+        HashSet<object> visitedValues,
+        DistributedApplicationExecutionContext executionContext)
     {
         if (value is null || !visitedValues.Add(value))
         {
             return;
+        }
+
+        if (value is HostUrl hostUrl)
+        {
+            CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
         }
 
         // Direct resource references
@@ -1509,7 +1771,42 @@ public static class ResourceExtensions
         {
             foreach (var reference in valueWithReferences.References)
             {
-                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues);
+                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues, executionContext);
+            }
+        }
+    }
+
+    private static void CollectHostUrlDependencies(
+        HostUrl hostUrl,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies,
+        DistributedApplicationExecutionContext executionContext)
+    {
+        if (!HostUrl.TryGetLocalHostPort(hostUrl.Url, out var port))
+        {
+            return;
+        }
+
+        DistributedApplicationModel? model;
+        try
+        {
+            model = executionContext.Services.GetService<DistributedApplicationModel>();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        if (model is null)
+        {
+            return;
+        }
+
+        foreach (var resource in model.Resources.Where(r => !r.IsContainer()).OfType<IResourceWithEndpoints>())
+        {
+            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)) && dependencies.Add(resource))
+            {
+                newDependencies.Add(resource);
             }
         }
     }
@@ -1524,6 +1821,7 @@ public static class ResourceExtensions
         ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,
         DotnetToolResource => KnownResourceTypes.Tool,
+        ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,
         ExecutableResource => KnownResourceTypes.Executable,
         ParameterResource => KnownResourceTypes.Parameter,
         ConnectionStringResource => KnownResourceTypes.ConnectionString,

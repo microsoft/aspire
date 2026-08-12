@@ -42,6 +42,24 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("var TestConfigs = struct {", aspireGo);
+        Assert.Contains("Default *TestConfigDto", aspireGo);
+        Assert.Contains("Profiles struct {", aspireGo);
+        Assert.Contains("Development *TestConfigDto", aspireGo);
+        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure \*TestConfigDto", aspireGo);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange
@@ -249,15 +267,112 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CreateBuilderDefaultsAppHostFilePathFromEnvironment()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("if appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
+        Assert.Contains("os.Getenv(\"ASPIRE_APPHOST_FILEPATH\")", aspireGo);
+        Assert.Contains("resolved[\"AppHostFilePath\"] = appHostFilePath", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CreateBuilderOmitsEmptyDashboardApplicationName()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("if dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
+        Assert.Contains("delete(resolved, \"DashboardApplicationName\")", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_DtoCallbacksReturnMutatedArguments()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)", aspireGo);
+        Assert.Contains("cb(arg0)", aspireGo);
+        Assert.Contains("\"p0\": serializeValue(arg0)", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CallbackArgsSkipUndecodableStructFields()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var baseGo = files["base.go"];
+
+        Assert.Contains("func decodeStructFields[T any](raw any) (T, bool)", baseGo);
+        Assert.Contains("fieldInfo.Tag.Get(\"json\")", baseGo);
+    }
+
+    [Fact]
     public void GeneratedCode_HasGoModFile()
     {
         // Verify that go.mod file is generated
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        
+
         Assert.Contains("go.mod", files.Keys);
         Assert.Contains("module apphost/modules/aspire", files["go.mod"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_HostingAssembly_SanitizesGoKeywordParameters()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Matches(@"func \(s \*[^\)]*\) WithRelationship\([^)]*type_ string\)", aspireGo);
+        Assert.DoesNotMatch(@"func \(s \*[^\)]*\) WithRelationship\([^)]*\btype string\)", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_FlattensSingleOptionalDtoOptionsParameter()
+    {
+        // WithHttpCommand has a single optional "options" DTO, so it flattens: the DTO is threaded
+        // directly instead of through a wrapper struct (issue #17664), matching the TypeScript output.
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        // Signature threads the DTO directly; no wrapper struct is emitted.
+        Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
+
+        // The merged DTO is sent under the original "options" arg, but only when a non-nil option
+        // was merged, so an all-nil variadic omits the key (matching the old wrapper's ToMap()).
+        Assert.Contains("applied := false", aspireGo);
+        Assert.Contains("if applied { reqArgs[\"options\"] = serializeValue(merged) }", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithCancellationToken()
+    {
+        // PromptInput's only non-cancellation-token optional is the "options" DTO, but Go models a
+        // trailing cancellation token as another variadic element, so its single-variadic rule keeps
+        // the wrapper. TypeScript threads the token separately and would flatten this capability.
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions)", aspireGo);
+        Assert.Contains("type PromptInputOptions struct", aspireGo);
+        Assert.Contains("Options *InteractionInputsDialogOptions `json:\"options,omitempty\"`", aspireGo);
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
@@ -315,4 +430,5 @@ public class AtsGoCodeGeneratorTests
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         return (testAssembly, hostingAssembly);
     }
+
 }

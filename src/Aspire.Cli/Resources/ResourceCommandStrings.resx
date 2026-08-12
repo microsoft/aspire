@@ -70,4 +70,31 @@
   <data name="CommandNameArgumentDescription" xml:space="preserve">
     <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
+  <data name="ArgumentRequired" xml:space="preserve">
+    <value>The '{0}' argument is required.</value>
+  </data>
+  <data name="AvailableResourceCommands" xml:space="preserve">
+    <value>Available resource commands:</value>
+  </data>
+  <data name="CommandSpecificHelpUsageSyntax" xml:space="preserve">
+    <value>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</value>
+  </data>
+  <data name="CommandSpecificHelpCommandOptions" xml:space="preserve">
+    <value>Command options:</value>
+  </data>
+  <data name="CommandSpecificHelpValuePlaceholder" xml:space="preserve">
+    <value>value</value>
+  </data>
+  <data name="CommandSpecificHelpDelimiterHint" xml:space="preserve">
+    <value>Use `-- --{0}{1}` to pass this command option.</value>
+  </data>
+  <data name="CommandSpecificHelpRequired" xml:space="preserve">
+    <value>Required.</value>
+  </data>
+  <data name="CommandSpecificHelpAllowedValues" xml:space="preserve">
+    <value>Allowed values: {0}.</value>
+  </data>
+  <data name="CommandSpecificHelpDefaultValue" xml:space="preserve">
+    <value>Default: {0}.</value>
+  </data>
 </root>

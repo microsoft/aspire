@@ -15,3 +15,5 @@ resource customregistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
 output name string = customregistry.name
 
 output loginServer string = customregistry.properties.loginServer
+
+output id string = customregistry.id

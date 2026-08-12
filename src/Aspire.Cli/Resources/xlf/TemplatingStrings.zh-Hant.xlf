@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
-        <source>Starter App (ASP.NET Core/React)</source>
-        <target state="translated">入門應用程式 (ASP.NET Core/React)</target>
+        <source>Starter App (ASP.NET Core/React, C# AppHost)</source>
+        <target state="needs-review-translation">入門應用程式 (ASP.NET Core/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireMSTest_Description">
@@ -35,11 +35,6 @@
       <trans-unit id="AspireNUnit_Description">
         <source>NUnit</source>
         <target state="translated">NUnit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspirePyStarter_Description">
-        <source>Starter App (FastAPI/React)</source>
-        <target state="translated">入門應用程式 (FastAPI/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireServiceDefaults_Description">
@@ -122,6 +117,16 @@
         <target state="translated">已為所選的套件通道建立 NuGet.config。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigCreatedOrUpdatedConfirmationMessage">
+        <source>Created or updated NuGet.config in the project directory with required package sources.</source>
+        <target state="new">Created or updated NuGet.config in the project directory with required package sources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NuGetConfigUpdatedConfirmationMessage">
+        <source>Updated NuGet.config with required package sources.</source>
+        <target state="new">Updated NuGet.config with required package sources.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectAlreadyExists">
         <source>The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location.</source>
         <target state="translated">無法建立新專案，因為它會覆寫輸出資料夾中的現有檔案。請移除或移動衝突的檔案，或選擇不同的位置。</target>
@@ -133,9 +138,9 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="ProjectCreationFailed">
-        <source>Project creation failed with exit code {0}. See logs at {1}</source>
-        <target state="translated">專案建立失敗，結束代碼為 {0}。請參閱 {1} 中的記錄</target>
-        <note>{0} is a number, {1} is the log file path</note>
+        <source>Project creation failed with exit code {0}.</source>
+        <target state="new">Project creation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
         <source>Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.</source>
@@ -162,14 +167,24 @@
         <target state="translated">正在搜尋可用的專案範本版本...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceOverrideNotPersistedWarning">
+        <source>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</source>
+        <target state="new">[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</target>
+        <note>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</note>
+      </trans-unit>
       <trans-unit id="TemplateInstallationFailed">
-        <source>The template installation failed with exit code {0}. See logs at {1}</source>
-        <target state="translated">範本安裝失敗，結束代碼為 {0}。請參閱 {1} 中的記錄</target>
-        <note>{0} is a number, {1} is the log file path</note>
+        <source>The template installation failed with exit code {0}.</source>
+        <target state="new">The template installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>
         <target state="translated">不明</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateNuGetConfigConfirmation">
+        <source>Update NuGet.config to add missing package sources for the selected channel?</source>
+        <target state="new">Update NuGet.config to add missing package sources for the selected channel?</target>
         <note />
       </trans-unit>
       <trans-unit id="UseLocalhostTld_Description">
@@ -223,13 +238,13 @@
         <note />
       </trans-unit>
       <trans-unit id="RunAspireRun">
-        <source>Run 'aspire run' to start your apphost.</source>
-        <target state="new">Run 'aspire run' to start your apphost.</target>
+        <source>Run 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'aspire run' to start your AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="RunCdThenAspireRun">
-        <source>Run 'cd "{0}"' and then 'aspire run' to start your apphost.</source>
-        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your apphost.</target>
+        <source>Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</source>
+        <target state="new">Run 'cd "{0}"' and then 'aspire run' to start your AppHost.</target>
         <note>{0} is the relative path to the project directory</note>
       </trans-unit>
     </body>

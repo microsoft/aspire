@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using System.Xml.Linq;
 using System.Xml;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.NuGet;
-using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -26,32 +26,12 @@ public class NuGetConfigMergerTests
         return new FileInfo(path);
     }
 
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = packageId; _ = filter; _ = prerelease; _ = nugetConfigFile; _ = useCache; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-    }
-
-    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -75,7 +55,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_GeneratesConfigFromMappings_WhenChannelProvided()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -103,7 +83,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_AddsMissingSources_WhenUpdatingExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with one source only
@@ -143,7 +123,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_RemapsPatternsAndRemovesEmptySources()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config: pattern Lib.* mapped to old source only
@@ -184,9 +164,53 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+        const string stagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/aspire-staging/nuget/v3/index.json";
+        const string stableSource = "https://api.nuget.org/v3/index.json";
+
+        await WriteConfigAsync(root,
+            $$"""
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="aspire-staging" value="{{stagingSource}}" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="aspire-staging">
+                        <package pattern="Aspire.*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire.*", stableSource)
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+        Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stagingSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stableSource);
+
+        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(packageSourceMapping.Elements("packageSource"), e => (string?)e.Attribute("key") == "aspire-staging");
+
+        var stableMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
+        Assert.Equal(stableSource, (string?)stableMapping.Attribute("key"));
+        Assert.Equal("Aspire.*", (string?)stableMapping.Element("package")!.Attribute("pattern"));
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_CreatesPackageSourceMapping_WhenAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config without packageSourceMapping
@@ -219,7 +243,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public void HasMissingSources_ReturnsTrue_WhenConfigAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
     var mappings = new[] { new PackageMapping("Aspire.*", "https://feed.example") };
     var channel = CreateChannel(mappings);
@@ -229,7 +253,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task HasMissingSources_ReturnsTrue_WhenPatternMappedToWrongSource()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         await WriteConfigAsync(root,
@@ -260,7 +284,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task HasMissingSources_ReturnsFalse_WhenAllSourcesAndMappingsPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         await WriteConfigAsync(root,
@@ -295,7 +319,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_ReusesExistingSourceKeys_WhenMappingToExistingSourcesByUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with custom key names (like "nuget" instead of URL)
@@ -344,7 +368,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_PreservesAllExistingSources_WhenCreatingPackageSourceMappingForFirstTime()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Scenario from @mitchdenny: config has multiple sources but NO packageSourceMapping
@@ -407,7 +431,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_AddsSpecificMappings_WhenExistingWildcardMappingPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Scenario: existing config already has a wildcard mapping on nuget.org
@@ -468,9 +492,63 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_DoesNotAddWildcardToPrivateSourceWithExistingPatterns()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        // User has nuget.org with wildcard and a private source with specific patterns
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                    <add key="github" value="https://nuget.pkg.github.com/myorg/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="nuget.org">
+                        <package pattern="*" />
+                    </packageSource>
+                    <packageSource key="github">
+                        <package pattern="myorg.*" />
+                        <package pattern="other" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        // Stable channel: maps everything to nuget.org
+        var mappings = new[]
+        {
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var psm = xml.Root!.Element("packageSourceMapping")!;
+
+        // nuget.org should retain the wildcard
+        var nugetMapping = psm.Elements("packageSource")
+            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget.org");
+        Assert.NotNull(nugetMapping);
+        Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+
+        // The private source should keep its original patterns without a wildcard being added
+        var githubMapping = psm.Elements("packageSource")
+            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "github");
+        Assert.NotNull(githubMapping);
+        Assert.Contains(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "myorg.*");
+        Assert.Contains(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "other");
+        Assert.DoesNotContain(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_RemovesUnrequiredSources_InsteadOfAddingWildcardPattern()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with a PR hive source that should be removed and a user-defined source that should be preserved
@@ -526,11 +604,12 @@ public class NuGetConfigMergerTests
         Assert.DoesNotContain(psm.Elements("packageSource"), 
             ps => (string?)ps.Attribute("key") == "C:\\Users\\user\\.aspire\\hives\\invalid-pr");
         
-        // The user-defined source should get a wildcard pattern to remain functional
+        // The user-defined source should keep its original patterns without a wildcard being added
         var validExampleMapping = psm.Elements("packageSource")
             .FirstOrDefault(ps => (string?)ps.Attribute("key") == "https://valid.example");
         Assert.NotNull(validExampleMapping);
-        Assert.Contains(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+        Assert.Contains(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "ValidPkg*");
+        Assert.DoesNotContain(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
         
         // NuGet.org should have all the patterns
         var nugetMapping = psm.Elements("packageSource")
@@ -545,9 +624,108 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenSwitchingBetweenPrHives()
+    {
+        // Reproduces the scenario reported on `aspire update --channel pr-<new>` when the
+        // previous channel was also a PR hive: switching between two `~/.aspire/hives/pr-*/packages`
+        // sources must remove the old source from <packageSources>, not just from
+        // <packageSourceMapping>. If the stale path lingers, subsequent `dotnet restore`
+        // fails with NU1301 when that hive directory has since been deleted/cleaned.
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="{oldHive}">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
+        Assert.Contains(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), newHive, StringComparison.Ordinal));
+
+        var psm = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(psm.Elements("packageSource"),
+            ps => string.Equals((string?)ps.Attribute("key"), oldHive, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenItHasNoMappingElement()
+    {
+        // This is the *real* shape of the regression reported on pr-17192 follow-up:
+        // the AppHost-level nuget.config had pr-17182 listed in <packageSources> but the
+        // <packageSourceMapping> contained no entry for that source at all. Because
+        // RemoveEmptyPackageSourceElements only cleans up entries whose mapping element
+        // became empty *during the merge*, a source that never had a mapping element
+        // survives the merge and breaks subsequent `dotnet restore` once the hive
+        // directory is deleted.
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                </packageSources>
+                <packageSourceMapping>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_CallbackInvokedForNewConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -586,7 +764,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackCanPreventNewConfigCreation()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -615,7 +793,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackInvokedForExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Create an existing config
@@ -666,7 +844,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackCanPreventExistingConfigUpdate()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Create an existing config
@@ -709,7 +887,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_WorksWithoutCallback()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]

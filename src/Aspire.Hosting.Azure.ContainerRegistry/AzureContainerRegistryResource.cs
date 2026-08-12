@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -14,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure Container Registry resource.
 /// </summary>
-public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureContainerRegistryResource
+public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureContainerRegistryResource, IAzurePrivateEndpointTarget
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerRegistryResource"/> class.
@@ -56,6 +57,11 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
     /// </summary>
     public BicepOutputReference RegistryEndpoint => new("loginServer", this);
 
+    /// <summary>
+    /// Gets the "id" output reference for the Azure Container Registry resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
+
     /// <inheritdoc/>
     ReferenceExpression IContainerRegistry.Name => ReferenceExpression.Create($"{NameOutputReference}");
 
@@ -90,4 +96,8 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
         infra.Add(store);
         return store;
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["registry"];
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.azurecr.io"];
 }

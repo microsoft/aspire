@@ -51,11 +51,11 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
-    <PackageReference Include="Microsoft.Extensions.AI" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
-    <PackageReference Include="OpenAI" />
     <PackageReference Include="Markdig" />
+    <PackageReference Include="Semver" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
@@ -63,18 +63,14 @@
     <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 
-  <!-- The following package references need to be lifted because MEAI depends on older versions -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" VersionOverride="$(MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
     <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Primitives" VersionOverride="$(MicrosoftExtensionsPrimitivesPreviewVersion)" />
   </ItemGroup>
-
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
+    <InternalsVisibleTo Include="Aspire.Dashboard.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>
@@ -84,11 +80,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources\AIPrompts.Designer.cs">
-      <DependentUpon>AIPrompts.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-    </Compile>
     <Compile Update="Resources\Columns.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -108,11 +99,6 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>Dialogs.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\AIAssistant.Designer.cs">
-      <DependentUpon>AIAssistant.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
     </Compile>
     <Compile Update="Resources\Layout.Designer.cs">
       <DesignTime>True</DesignTime>
@@ -164,14 +150,14 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>KnownUrlsDisplay.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\Reconnect.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Reconnect.resx</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Update="Resources\AIPrompts.resx">
-      <SubType>Designer</SubType>
-      <LastGenOutput>AIPrompts.Designer.cs</LastGenOutput>
-      <Generator>PublicResXFileCodeGenerator</Generator>
-    </EmbeddedResource>
     <EmbeddedResource Update="Resources\ControlsStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>
@@ -192,13 +178,6 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Dialogs.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\AIAssistant.resx">
-      <XlfSourceFormat>Resx</XlfSourceFormat>
-      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType>Designer</SubType>
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>AIAssistant.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\Layout.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
@@ -274,9 +253,17 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>KnownUrlsDisplay.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <EmbeddedResource Update="Resources\Reconnect.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Reconnect.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Extensions\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
@@ -286,10 +273,12 @@
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)CompareHelpers.cs" Link="Utils\CompareHelpers.cs" />
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
+    <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)SearchTextParser.cs" Link="Utils\SearchTextParser.cs" />
     <Compile Include="$(SharedDir)KnownUnsupportedUrlSchemes.cs" Link="Utils\KnownUnsupportedUrlSchemes.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Utils\KnownProperties.cs" />
@@ -298,6 +287,7 @@
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.shared.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Otlp\Storage\CircularBuffer.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)DurationFormatter.cs" Link="Utils\DurationFormatter.cs" />
     <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)LoggingHelpers.cs" Link="Utils\LoggingHelpers.cs" />
@@ -307,8 +297,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="Utils\ConsoleLogs\LogEntry.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogParser.cs" Link="Utils\ConsoleLogs\LogParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
-    <Compile Include="$(SharedDir)ConsoleLogs\PromptContext.cs" Link="Utils\ConsoleLogs\PromptContext.cs" />
-    <Compile Include="$(SharedDir)ConsoleLogs\SharedAIHelpers.cs" Link="Utils\ConsoleLogs\SharedAIHelpers.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="Utils\ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)KnownUrls.cs" Link="Utils\KnownUrls.cs" />
@@ -325,6 +313,7 @@
     <Compile Include="$(SharedDir)Otlp\Serialization\OtlpJsonSerializerContext.cs" Link="Otlp\Model\Serialization\OtlpJsonSerializerContext.Shared.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\TelemetryApiResponse.cs" Link="Otlp\Model\Serialization\TelemetryApiResponse.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\ResourceInfoJson.cs" Link="Otlp\Model\Serialization\ResourceInfoJson.cs" />
+    <Compile Include="$(SharedDir)Model\Serialization\TelemetryValidateTokenJson.cs" Link="Otlp\Model\Serialization\TelemetryValidateTokenJson.cs" />
     <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntrySerializer.cs" Link="ConsoleLogs\LogEntrySerializer.cs" />
   </ItemGroup>
@@ -332,5 +321,10 @@
   <ItemGroup>
     <Content Remove="wwwroot\js\README.md" />
     <None Include="wwwroot\js\README.md" />
+    <Content Remove="wwwroot\fonts\cascadia-mono-nf\README.md" />
+    <None Include="wwwroot\fonts\cascadia-mono-nf\README.md" />
   </ItemGroup>
+
+  <Import Project="BlazorAssets.targets" />
+
 </Project>

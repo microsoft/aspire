@@ -297,22 +297,12 @@ secure_curl() {
 # Build a compact display string for download messages without exposing the full URL.
 get_download_descriptor() {
     local url="$1"
-    local file_name source
-
-    if [[ "$url" =~ ^https://aka\.ms/dotnet/[^/]+/aspire/(.+)/([^/]+)$ ]]; then
-        source="${BASH_REMATCH[1]}"
-        file_name="${BASH_REMATCH[2]}"
-    elif [[ "$url" =~ ^https://ci\.dot\.net/public(-checksums)?/aspire/+([^/]+)/([^/]+)$ ]]; then
-        source="version/${BASH_REMATCH[2]}"
-        file_name="${BASH_REMATCH[3]}"
-    else
-        file_name="${url##*/}"
-        source="${url#https://}"
-        source="${source%%/*}"
-    fi
+    local source="${2:-}"
+    local url_without_query="${url%%[\?#]*}"
+    local file_name="${url_without_query##*/}"
 
     if [[ -n "$file_name" && -n "$source" ]]; then
-        printf "%s from '%s'" "$file_name" "$source"
+        printf "%s from %s" "$file_name" "$source"
     else
         printf "%s" "$file_name"
     fi
@@ -327,8 +317,31 @@ validate_content_type() {
     # Get headers via HEAD request
     local headers
     if headers=$(secure_curl "$url" /dev/null 60 "$USER_AGENT" 3 "HEAD" 2>&1); then
+        # curl --location --head returns a header block for each redirect, for example:
+        #   HTTP/2 302
+        #   content-type: text/html; charset=utf-8
+        #
+        #   HTTP/2 200
+        #   content-type: application/octet-stream
+        # GitHub documents release asset downloads as either 200 OK or 302 Found.
+        # The 302 is an HTML redirect page, but the final 200 response is the
+        # archive/checksum, so validate only that block.
+        # See: https://docs.github.com/rest/releases/assets#get-a-release-asset
+        local final_headers
+        final_headers=$(printf "%s\n" "$headers" | awk '
+            /^HTTP(\/| )[0-9]/ {
+                block = $0 "\n"
+                next
+            }
+            {
+                block = block $0 "\n"
+            }
+            END {
+                printf "%s", block
+            }')
+
         # Check if response suggests HTML content (error page)
-        if echo "$headers" | grep -qi "content-type:.*text/html"; then
+        if echo "$final_headers" | grep -qi "content-type:.*text/html"; then
             say_error "Server returned HTML content instead of expected file. Make sure the URL is correct: $url"
             return 1
         fi
@@ -348,9 +361,10 @@ download_file() {
     local max_retries="${4:-5}"
     local validate_content_type="${5:-true}"
     local use_temp_file="${6:-true}"
+    local descriptor_source="${7:-}"
     local download_descriptor
 
-    download_descriptor=$(get_download_descriptor "$url")
+    download_descriptor=$(get_download_descriptor "$url" "$descriptor_source")
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would download $download_descriptor"
@@ -505,70 +519,6 @@ map_quality_to_channel() {
     esac
 }
 
-# Function to save the global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Parameters:
-#   $1 - cli_path: Path to the aspire CLI executable
-#   $2 - key: The configuration key to set
-#   $3 - value: The value to set
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-save_global_settings() {
-    local cli_path="$1"
-    local key="$2"
-    local value="$3"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
-        return 0
-    fi
-    
-    say_verbose "Setting global config: $key = $value"
-    
-    local output
-    output=$("$cli_path" config set -g "$key" "$value" 2>&1)
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        say_warn "Failed to set global config via aspire CLI: $output"
-        return 1
-    fi
-    if [[ -n "$output" ]]; then
-        say_verbose "$output"
-    fi
-    
-    say_verbose "Global config saved: $key = $value"
-}
-
-# Function to remove a global setting using the aspire CLI
-# Uses 'aspire config delete -g' to remove global configuration values
-# This is used when installing the release/stable channel to avoid forcing nuget.config creation
-# Parameters:
-#   $1 - cli_path: Path to the aspire CLI executable
-#   $2 - key: The configuration key to remove
-remove_global_settings() {
-    local cli_path="$1"
-    local key="$2"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would run: $cli_path config delete -g $key"
-        return 0
-    fi
-    
-    say_verbose "Removing global config: $key"
-    
-    local output
-    output=$("$cli_path" config delete -g "$key" 2>&1)
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]]; then
-        say_verbose "Failed to delete global config via aspire CLI: $output"
-        return 1
-    fi
-    
-    say_verbose "Global config removed: $key"
-}
-
 # Function to add PATH to shell configuration file
 # Parameters:
 #   $1 - config_file: Path to the shell configuration file
@@ -653,7 +603,7 @@ add_to_shell_profile() {
     esac
 
     # Get the appropriate shell config file
-    local config_file
+    local config_file=""
 
     # Check for existing config files
     for file in $config_files; do
@@ -807,6 +757,18 @@ construct_aspire_extension_url() {
     fi
 }
 
+is_stable_version() {
+    local version="$1"
+
+    [[ "$version" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+normalize_stable_version() {
+    local version="$1"
+
+    printf "%s" "${version#[vV]}"
+}
+
 # Function to construct the base URL for the Aspire CLI download
 construct_aspire_cli_url() {
     local version="$1"
@@ -842,13 +804,19 @@ construct_aspire_cli_url() {
 
         printf "${base_url}/aspire-cli-${rid}.${extension}"
     else
-        # When version is set, use ci.dot.net URL
+        if is_stable_version "$version"; then
+            local normalized_version
+            normalized_version=$(normalize_stable_version "$version")
+            base_url="https://github.com/microsoft/aspire/releases/download/v${normalized_version}"
+            printf "${base_url}/aspire-cli-${rid}-${normalized_version}.${extension}"
+            return 0
+        fi
 
         if [[ "$checksum" == "true" ]]; then
             # For checksum URLs, use the public-checksums URL
             base_url="https://ci.dot.net/public-checksums/aspire"
         else
-            base_url="https://ci.dot.net/public/aspire/"
+            base_url="https://ci.dot.net/public/aspire"
         fi
 
         printf "${base_url}/${version}/aspire-cli-${rid}-${version}.${extension}"
@@ -861,6 +829,7 @@ download_aspire_extension() {
     local version="$2"
     local quality="$3"
     local url extension_archive
+    local download_source=""
 
     say_info "Downloading Aspire VS Code extension"
 
@@ -869,8 +838,11 @@ download_aspire_extension() {
     fi
 
     extension_archive="${temp_dir}/${EXTENSION_ARTIFACT_NAME}"
+    if [[ -z "$version" && -n "$quality" ]]; then
+        download_source="the $(map_quality_to_channel "$quality") channel"
+    fi
 
-    if ! download_file "$url" "$extension_archive" $ARCHIVE_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$url" "$extension_archive" "$ARCHIVE_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 
@@ -948,6 +920,7 @@ download_and_install_archive() {
     local temp_dir="$1"
     local os arch runtimeIdentifier url filename checksum_url checksum_filename extension
     local cli_exe cli_path
+    local download_source=""
 
     # Detect OS and architecture if not provided
     if [[ -z "$OS" ]]; then
@@ -989,14 +962,17 @@ download_and_install_archive() {
 
     filename="${temp_dir}/aspire-cli-${runtimeIdentifier}.${extension}"
     checksum_filename="${temp_dir}/aspire-cli-${runtimeIdentifier}.${extension}.sha512"
+    if [[ -z "$VERSION" && -n "$QUALITY" ]]; then
+        download_source="the $(map_quality_to_channel "$QUALITY") channel"
+    fi
 
     # Download the Aspire CLI archive
-    if ! download_file "$url" "$filename" $ARCHIVE_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$url" "$filename" "$ARCHIVE_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 
     # Download and test the checksum
-    if ! download_file "$checksum_url" "$checksum_filename" $CHECKSUM_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$checksum_url" "$checksum_filename" "$CHECKSUM_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 
@@ -1022,19 +998,6 @@ download_and_install_archive() {
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
-    # Save the global channel setting if using quality-based download (not version-specific)
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    # For release/stable channel, remove the setting to avoid forcing nuget.config creation
-    if [[ -z "$VERSION" ]]; then
-        local channel
-        channel=$(map_quality_to_channel "$QUALITY")
-        if [[ "$channel" == "stable" ]]; then
-            remove_global_settings "$cli_path" "channel"
-        else
-            save_global_settings "$cli_path" "channel" "$channel"
-        fi
-    fi
-
     # Download and install VS Code extension if requested
     if [[ "$INSTALL_EXTENSION" == true ]]; then
         printf "\n"
@@ -1057,101 +1020,124 @@ download_and_install_archive() {
     fi
 }
 
-# Parse command line arguments
-parse_args "$@"
+# Main entry point — wraps everything after function definitions.
+# Guarded so that `source get-aspire-cli.sh` loads functions without
+# executing the main flow (enables Tier-1 unit tests).
+main() {
+    # Parse command line arguments
+    parse_args "$@"
 
-if [[ "$SHOW_HELP" == true ]]; then
-    show_help
-    exit 0
-fi
-
-# Validate that both --version and --quality are not provided together
-if [[ -n "$VERSION" && -n "$QUALITY" ]]; then
-    say_error "Cannot specify both --version and --quality. Use --version for a specific version or --quality for a quality level."
-    say_info "Use --help for usage information."
-    exit 1
-fi
-
-# Initialize default values after parsing arguments
-if [[ -z "$QUALITY" ]]; then
-    # Default quality if not provided
-    QUALITY="${DEFAULT_QUALITY}"
-fi
-
-# Validate extension installation is only allowed with dev quality
-if [[ "$INSTALL_EXTENSION" == true && "$QUALITY" != "dev" ]]; then
-    say_error "Extension installation is only supported with --quality dev. Current quality: $QUALITY"
-    say_info "Use --help for usage information."
-    exit 1
-fi
-
-# Set default install path if not provided
-if [[ -z "$INSTALL_PATH" ]]; then
-    INSTALL_PATH="$HOME/.aspire/bin"
-    INSTALL_PATH_UNEXPANDED="\$HOME/.aspire/bin"
-else
-    INSTALL_PATH_UNEXPANDED="$INSTALL_PATH"
-fi
-
-# Create a temporary directory for downloads
-if [[ "$DRY_RUN" == true ]]; then
-    temp_dir="/tmp/aspire-cli-dry-run"
-else
-    temp_dir=$(mktemp -d -t aspire-cli-download-XXXXXXXX)
-    say_verbose "Creating temporary directory: $temp_dir"
-fi
-
-# Cleanup function for temporary directory
-cleanup() {
-    # shellcheck disable=SC2317  # Function is called via trap
-    if [[ "$DRY_RUN" == true ]]; then
-        # No cleanup needed in dry-run mode
-        return 0
+    if [[ "$SHOW_HELP" == true ]]; then
+        show_help
+        exit 0
     fi
 
-    if [[ -n "${temp_dir:-}" ]] && [[ -d "$temp_dir" ]]; then
-        if [[ "$KEEP_ARCHIVE" != true ]]; then
-            say_verbose "Cleaning up temporary files..."
-            rm -rf "$temp_dir" || say_warn "Failed to clean up temporary directory: $temp_dir"
-        else
-            printf "Archive files kept in: %s\n" "$temp_dir"
+    # Validate that both --version and --quality are not provided together
+    if [[ -n "$VERSION" && -n "$QUALITY" ]]; then
+        say_error "Cannot specify both --version and --quality. Use --version for a specific version or --quality for a quality level."
+        say_info "Use --help for usage information."
+        exit 1
+    fi
+
+    # Initialize default values after parsing arguments
+    if [[ -z "$QUALITY" ]]; then
+        # Default quality if not provided
+        QUALITY="${DEFAULT_QUALITY}"
+    fi
+
+    # Validate extension installation is only allowed with dev quality
+    if [[ "$INSTALL_EXTENSION" == true && "$QUALITY" != "dev" ]]; then
+        say_error "Extension installation is only supported with --quality dev. Current quality: $QUALITY"
+        say_info "Use --help for usage information."
+        exit 1
+    fi
+
+    # Set default install path if not provided
+    if [[ -z "$INSTALL_PATH" ]]; then
+        INSTALL_PATH="$HOME/.aspire/bin"
+        INSTALL_PATH_UNEXPANDED="\$HOME/.aspire/bin"
+    else
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PATH"
+    fi
+
+    # Create a temporary directory for downloads
+    if [[ "$DRY_RUN" == true ]]; then
+        temp_dir="/tmp/aspire-cli-dry-run"
+    else
+        temp_dir=$(mktemp -d -t aspire-cli-download-XXXXXXXX)
+        say_verbose "Creating temporary directory: $temp_dir"
+    fi
+
+    # Cleanup function for temporary directory
+    cleanup() {
+        # shellcheck disable=SC2317  # Function is called via trap
+        if [[ "$DRY_RUN" == true ]]; then
+            # No cleanup needed in dry-run mode
+            return 0
         fi
+
+        if [[ -n "${temp_dir:-}" ]] && [[ -d "$temp_dir" ]]; then
+            if [[ "$KEEP_ARCHIVE" != true ]]; then
+                say_verbose "Cleaning up temporary files..."
+                rm -rf "$temp_dir" || say_warn "Failed to clean up temporary directory: $temp_dir"
+            else
+                printf "Archive files kept in: %s\n" "$temp_dir"
+            fi
+        fi
+    }
+
+    # Set trap for cleanup on exit
+    trap cleanup EXIT
+
+    # Download and install the archive
+    if ! download_and_install_archive "$temp_dir"; then
+        exit 1
+    fi
+
+    # Write the script-route install-source sidecar next to the binary.
+    # Under --dry-run, print the target path and skip the write.
+    # Authorship contract: docs/specs/install-routes.md.
+    local sidecar_path
+    sidecar_path="$INSTALL_PATH/.aspire-install.json"
+    if [[ "$DRY_RUN" == true ]]; then
+        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+    else
+        mkdir -p "$INSTALL_PATH"
+        printf '{"source":"script"}\n' > "$sidecar_path"
+    fi
+
+    # Skip PATH configuration if --skip-path is set
+    if [[ "$SKIP_PATH" != true ]]; then
+        # Handle GitHub Actions environment
+        if [[ -n "${GITHUB_ACTIONS:-}" ]] && [[ "${GITHUB_ACTIONS}" == "true" ]]; then
+            if [[ -n "${GITHUB_PATH:-}" ]]; then
+                if [[ "$DRY_RUN" == true ]]; then
+                    say_info "[DRY RUN] Would add $INSTALL_PATH to \$GITHUB_PATH"
+                else
+                    echo "$INSTALL_PATH" >> "$GITHUB_PATH"
+                    say_verbose "Added $INSTALL_PATH to \$GITHUB_PATH"
+                fi
+            fi
+        fi
+
+        # Add to shell profile for persistent PATH
+        add_to_shell_profile "$INSTALL_PATH" "$INSTALL_PATH_UNEXPANDED"
+
+        # Add to current session PATH, if the path is not already in PATH
+        if [[ ":$PATH:" != *":$INSTALL_PATH:"* ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                say_info "[DRY RUN] Would add $INSTALL_PATH to PATH"
+            else
+                export PATH="$INSTALL_PATH:$PATH"
+            fi
+        fi
+    else
+        say_info "Skipping PATH configuration due to --skip-path flag"
     fi
 }
 
-# Set trap for cleanup on exit
-trap cleanup EXIT
-
-# Download and install the archive
-if ! download_and_install_archive "$temp_dir"; then
-    exit 1
-fi
-
-# Skip PATH configuration if --skip-path is set
-if [[ "$SKIP_PATH" != true ]]; then
-    # Handle GitHub Actions environment
-    if [[ -n "${GITHUB_ACTIONS:-}" ]] && [[ "${GITHUB_ACTIONS}" == "true" ]]; then
-        if [[ -n "${GITHUB_PATH:-}" ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                say_info "[DRY RUN] Would add $INSTALL_PATH to \$GITHUB_PATH"
-            else
-                echo "$INSTALL_PATH" >> "$GITHUB_PATH"
-                say_verbose "Added $INSTALL_PATH to \$GITHUB_PATH"
-            fi
-        fi
-    fi
-
-    # Add to shell profile for persistent PATH
-    add_to_shell_profile "$INSTALL_PATH" "$INSTALL_PATH_UNEXPANDED"
-
-    # Add to current session PATH, if the path is not already in PATH
-    if [[ ":$PATH:" != *":$INSTALL_PATH:"* ]]; then
-        if [[ "$DRY_RUN" == true ]]; then
-            say_info "[DRY RUN] Would add $INSTALL_PATH to PATH"
-        else
-            export PATH="$INSTALL_PATH:$PATH"
-        fi
-    fi
-else
-    say_info "Skipping PATH configuration due to --skip-path flag"
+# Only run main when executed directly (not when sourced for unit tests).
+# Use ${BASH_SOURCE[0]:-$0} so the guard works under `curl | bash -s` where BASH_SOURCE is unset.
+if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+    main "$@"
 fi

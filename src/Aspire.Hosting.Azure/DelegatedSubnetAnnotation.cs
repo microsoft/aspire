@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// Annotation that stores a reference to a subnet for an Azure resource that implements <see cref="IAzureDelegatedSubnetResource"/>.
 /// </summary>
 /// <param name="subnetId">The subnet ID reference expression.</param>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class DelegatedSubnetAnnotation(ReferenceExpression subnetId) : IResourceAnnotation
 {
     /// <summary>

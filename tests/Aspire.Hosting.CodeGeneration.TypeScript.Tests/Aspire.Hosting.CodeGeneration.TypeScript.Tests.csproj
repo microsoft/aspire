@@ -5,8 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.TypeScript\Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Browsers\Aspire.Hosting.Browsers.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppService\Aspire.Hosting.Azure.AppService.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
@@ -15,9 +22,9 @@
   <ItemGroup>
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
 </Project>

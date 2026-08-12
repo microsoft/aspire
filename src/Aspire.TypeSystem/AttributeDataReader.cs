@@ -15,7 +15,9 @@ public static class AttributeDataReader
     private const string AspireExportAttributeFullName = HostingTypeNames.AspireExportAttribute;
     private const string AspireExportIgnoreAttributeFullName = HostingTypeNames.AspireExportIgnoreAttribute;
     private const string AspireDtoAttributeFullName = HostingTypeNames.AspireDtoAttribute;
+    private const string AspireValueAttributeFullName = HostingTypeNames.AspireValueAttribute;
     private const string AspireUnionAttributeFullName = HostingTypeNames.AspireUnionAttribute;
+    private const string ObsoleteAttributeFullName = "System.ObsoleteAttribute";
 
     // --- AspireExport lookup ---
 
@@ -46,6 +48,12 @@ public static class AttributeDataReader
     // --- AspireExportIgnore lookup ---
 
     /// <summary>
+    /// Determines whether the specified <paramref name="type"/> has the AspireExportIgnore attribute.
+    /// </summary>
+    public static bool HasAspireExportIgnoreData(Type type)
+        => HasAttribute(type.GetCustomAttributesData(), AspireExportIgnoreAttributeFullName);
+
+    /// <summary>
     /// Determines whether the specified <paramref name="property"/> has the AspireExportIgnore attribute.
     /// </summary>
     public static bool HasAspireExportIgnoreData(PropertyInfo property)
@@ -65,6 +73,20 @@ public static class AttributeDataReader
     public static bool HasAspireDtoData(Type type)
         => HasAttribute(type.GetCustomAttributesData(), AspireDtoAttributeFullName);
 
+    // --- AspireValue lookup ---
+
+    /// <summary>
+    /// Gets <see cref="AspireValueData"/> from the specified <paramref name="field"/>, if present.
+    /// </summary>
+    public static AspireValueData? GetAspireValueData(FieldInfo field)
+        => FindSingleAttribute<AspireValueData>(field.GetCustomAttributesData(), AspireValueAttributeFullName, ParseAspireValueData);
+
+    /// <summary>
+    /// Gets <see cref="AspireValueData"/> from the specified <paramref name="property"/>, if present.
+    /// </summary>
+    public static AspireValueData? GetAspireValueData(PropertyInfo property)
+        => FindSingleAttribute<AspireValueData>(property.GetCustomAttributesData(), AspireValueAttributeFullName, ParseAspireValueData);
+
     // --- AspireUnion lookup ---
 
     /// <summary>
@@ -78,6 +100,26 @@ public static class AttributeDataReader
     /// </summary>
     public static AspireUnionData? GetAspireUnionData(PropertyInfo property)
         => FindSingleAttribute<AspireUnionData>(property.GetCustomAttributesData(), AspireUnionAttributeFullName, ParseAspireUnionData);
+
+    // --- Obsolete lookup ---
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="method"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(MethodInfo method)
+        => FindSingleAttribute<ObsoleteData>(method.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="property"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(PropertyInfo property)
+        => FindSingleAttribute<ObsoleteData>(property.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="type"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(Type type)
+        => FindSingleAttribute<ObsoleteData>(type.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
 
     // --- Generic helpers ---
 
@@ -243,6 +285,62 @@ public static class AttributeDataReader
             Types = [.. types]
         };
     }
+
+    private static AspireValueData ParseAspireValueData(CustomAttributeData data)
+    {
+        string? catalogName = null;
+        string? name = null;
+
+        if (data.ConstructorArguments.Count == 1 &&
+            data.ConstructorArguments[0].Value is string catalogNameValue)
+        {
+            catalogName = catalogNameValue;
+        }
+
+        for (var i = 0; i < data.NamedArguments.Count; i++)
+        {
+            var named = data.NamedArguments[i];
+            switch (named.MemberName)
+            {
+                case nameof(AspireValueData.Name):
+                    name = named.TypedValue.Value as string;
+                    break;
+                case nameof(AspireValueData.CatalogName):
+                    catalogName = named.TypedValue.Value as string;
+                    break;
+            }
+        }
+
+        return new AspireValueData
+        {
+            CatalogName = catalogName ?? throw new InvalidOperationException("AspireValueAttribute requires a catalog name."),
+            Name = name
+        };
+    }
+
+    private static ObsoleteData ParseObsoleteData(CustomAttributeData data)
+    {
+        string? message = null;
+        var isError = false;
+
+        if (data.ConstructorArguments.Count > 0 &&
+            data.ConstructorArguments[0].Value is string messageValue)
+        {
+            message = messageValue;
+        }
+
+        if (data.ConstructorArguments.Count > 1 &&
+            data.ConstructorArguments[1].Value is bool isErrorValue)
+        {
+            isError = isErrorValue;
+        }
+
+        return new ObsoleteData
+        {
+            Message = message,
+            IsError = isError
+        };
+    }
 }
 
 /// <summary>
@@ -281,7 +379,7 @@ public sealed class AspireExportData
     public bool ExposeMethods { get; init; }
 
     /// <summary>
-    /// Gets whether synchronous exported methods should be invoked on a background thread by the ATS dispatcher.
+    /// Gets whether exported method invocations should run on a background thread by the ATS dispatcher.
     /// </summary>
     public bool RunSyncOnBackgroundThread { get; init; }
 }
@@ -295,4 +393,36 @@ public sealed class AspireUnionData
     /// Gets the CLR types that form the union.
     /// </summary>
     public required Type[] Types { get; init; }
+}
+
+/// <summary>
+/// Name-based adapter for [AspireValue] attribute data, parsed from <see cref="CustomAttributeData"/>.
+/// </summary>
+public sealed class AspireValueData
+{
+    /// <summary>
+    /// Gets the root name of the generated value catalog.
+    /// </summary>
+    public required string CatalogName { get; init; }
+
+    /// <summary>
+    /// Gets an optional override for the exported value name.
+    /// </summary>
+    public string? Name { get; init; }
+}
+
+/// <summary>
+/// Name-based adapter for <see cref="ObsoleteAttribute"/> data, parsed from <see cref="CustomAttributeData"/>.
+/// </summary>
+public sealed class ObsoleteData
+{
+    /// <summary>
+    /// Gets the obsolete message, if any.
+    /// </summary>
+    public string? Message { get; init; }
+
+    /// <summary>
+    /// Gets whether use of the obsolete API is an error.
+    /// </summary>
+    public bool IsError { get; init; }
 }

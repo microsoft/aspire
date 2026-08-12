@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "hex1b": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": [
+        "Hex1b.McpServer@0.133.0",
+        "--yes"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  },
+  "inputs": []
+}

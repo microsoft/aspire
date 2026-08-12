@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "目标 net8.0",
   "symbols/Framework/choices/net9.0/description": "目标 net9.0",
   "symbols/Framework/choices/net10.0/description": "目标 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "使用 Redis 进行缓存(需要受支持的容器运行时)(_U)",
   "symbols/UseRedisCache/description": "配置是否将应用程序设置为使用 Redis 进行缓存。需要支持的容器运行时才能在本地运行，有关详细信息，请访问 https://aka.ms/aspire/containers for more details。",
   "symbols/TestFx/displayName": "创建测试项目(_T)",
@@ -37,6 +38,7 @@
   "symbols/LocalhostTld/displayName": "在应用程序 URL 中使用 .dev.localhost TLD",
   "symbols/LocalhostTld/description": "是否在应用程序 URL 中将项目名称与 .dev.localhost TLD 合并以用于本地开发，例如 https://myapp.dev.localhost:12345。在 .NET 10 及更高版本中受支持。",
   "postActions/set-startup-project/description": "在解决方案中设置启动项目",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "还原此项目所需的 NuGet 包。",
   "postActions/restore/manualInstructions/default/text": "运行 \"dotnet restore\""
 }

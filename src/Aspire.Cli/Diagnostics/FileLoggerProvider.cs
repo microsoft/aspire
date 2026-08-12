@@ -183,21 +183,11 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         WriteLog(logMessage);
     }
 
-    internal static string GetLogLevelString(LogLevel logLevel) => logLevel switch
-    {
-        LogLevel.Trace => "TRCE",
-        LogLevel.Debug => "DBUG",
-        LogLevel.Information => "INFO",
-        LogLevel.Warning => "WARN",
-        LogLevel.Error => "FAIL",
-        LogLevel.Critical => "CRIT",
-        _ => logLevel.ToString().ToUpperInvariant()
-    };
+    internal static string GetLogLevelString(LogLevel logLevel) => CliLogFormat.GetFileLevelToken(logLevel);
 
     internal static string GetShortCategoryName(string categoryName)
     {
-        var lastDotIndex = categoryName.LastIndexOf('.');
-        return lastDotIndex >= 0 ? categoryName.Substring(lastDotIndex + 1) : categoryName;
+        return CliLogFormat.GetShortCategoryName(categoryName);
     }
 
     public void Dispose()

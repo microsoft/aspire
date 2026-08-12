@@ -1,0 +1,131 @@
+name: Prepare installer artifacts
+
+on:
+  workflow_call:
+    inputs:
+      installer:
+        required: true
+        type: string
+
+jobs:
+  prepare_installer_artifacts:
+    name: Prepare ${{ inputs.installer == 'winget' && 'WinGet manifests' || 'Homebrew cask' }}
+    runs-on: ${{ inputs.installer == 'winget' && 'windows-latest' || 'macos-latest' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Download CLI archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ inputs.installer == 'winget' && 'cli-native-archives-win-*' || 'cli-native-archives-osx-*' }}
+          path: ${{ github.workspace }}/native-archives
+          merge-multiple: false
+
+      - name: Prepare WinGet manifest artifact
+        if: ${{ inputs.installer == 'winget' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & "$env:GITHUB_WORKSPACE/eng/winget/prepare-manifest-artifact.ps1" `
+            -Channel prerelease `
+            -ArchiveRoot "$env:GITHUB_WORKSPACE/native-archives" `
+            -OutputPath "$env:GITHUB_WORKSPACE/artifacts/installers/winget-manifests" `
+            -ValidationMode Offline
+
+      - name: Prepare Homebrew cask artifact
+        if: ${{ inputs.installer == 'homebrew' }}
+        shell: bash
+        run: >
+          eng/homebrew/prepare-cask-artifact.sh
+          --channel prerelease
+          --archive-root "${GITHUB_WORKSPACE}/native-archives"
+          --output-dir "${GITHUB_WORKSPACE}/artifacts/installers/homebrew-cask"
+
+      - name: Dogfood install (real winget install)
+        if: ${{ inputs.installer == 'winget' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & "$env:GITHUB_WORKSPACE/eng/winget/dogfood.ps1" `
+            -ManifestPath "$env:GITHUB_WORKSPACE/artifacts/installers/winget-manifests" `
+            -ArchiveRoot  "$env:GITHUB_WORKSPACE/native-archives" `
+            -Force
+
+      - name: Dogfood install (real brew install)
+        if: ${{ inputs.installer == 'homebrew' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          eng/homebrew/dogfood.sh \
+            --archive-root "${GITHUB_WORKSPACE}/native-archives" \
+            "${GITHUB_WORKSPACE}/artifacts/installers/homebrew-cask/aspire.rb"
+
+      - name: Smoke test installed CLI (aspire new + restore)
+        if: ${{ inputs.installer == 'winget' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # winget added the shim under %LOCALAPPDATA%\Microsoft\WinGet\Links during the
+          # preceding step in this job. The runner shell that started before the install
+          # does not yet have that directory on PATH, so prepend it here.
+          $env:PATH = "$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + $env:PATH
+          & "$env:GITHUB_WORKSPACE/eng/scripts/smoke-installed-cli.ps1"
+
+      - name: Smoke test installed CLI (aspire new + restore)
+        if: ${{ inputs.installer == 'homebrew' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # brew linked the binary into /opt/homebrew/bin which is already on PATH.
+          eng/scripts/smoke-installed-cli.sh
+
+      - name: Collect Aspire CLI logs (Windows)
+        if: ${{ always() && inputs.installer == 'winget' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $HOME ".aspire\logs"
+          $destination = Join-Path $env:RUNNER_TEMP "aspire-cli-logs"
+          if (Test-Path $source) {
+            New-Item -ItemType Directory -Path $destination -Force | Out-Null
+            Copy-Item -Path $source -Destination $destination -Recurse -Force
+          } else {
+            Write-Host "No Aspire CLI logs found at $source"
+          }
+
+      - name: Collect Aspire CLI logs (macOS)
+        if: ${{ always() && inputs.installer == 'homebrew' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="${HOME}/.aspire/logs"
+          destination="${RUNNER_TEMP}/aspire-cli-logs"
+          if [[ -d "$source" ]]; then
+            mkdir -p "$destination"
+            cp -R "$source" "$destination/"
+          else
+            echo "No Aspire CLI logs found at $source"
+          fi
+
+      - name: Upload Aspire CLI logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ inputs.installer == 'winget' && 'winget-aspire-cli-logs' || 'homebrew-aspire-cli-logs' }}
+          path: ${{ runner.temp }}/aspire-cli-logs
+          if-no-files-found: ignore
+          retention-days: 15
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ inputs.installer == 'winget' && 'winget-manifests-prerelease' || 'homebrew-cask-prerelease' }}
+          path: ${{ github.workspace }}/${{ inputs.installer == 'winget' && 'artifacts/installers/winget-manifests' || 'artifacts/installers/homebrew-cask' }}
+          if-no-files-found: error
+          retention-days: 15

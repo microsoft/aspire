@@ -3,16 +3,37 @@
 
 using System.Runtime.InteropServices;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Acquisition;
+using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Npm;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class NpmRunnerTests
 {
     [Fact]
+    public void PackageRegistry_UsesCanonicalInternalFeed()
+    {
+        var registryConstants = typeof(NpmRunner)
+            .GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .Where(field => field.IsLiteral && field.FieldType == typeof(string) && field.Name.Contains("Registry", StringComparison.Ordinal))
+            .Select(field => (string?)field.GetRawConstantValue())
+            .ToArray();
+
+        Assert.Contains("https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", registryConstants);
+        Assert.DoesNotContain(registryConstants, value => value?.Contains("npmjs", StringComparison.OrdinalIgnoreCase) is true);
+    }
+
+    [Fact]
     public void CreateNpmProcessStartInfo_SetsCommonProperties()
     {
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment());
 
+        Assert.True(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
         Assert.False(startInfo.UseShellExecute);
@@ -27,8 +48,8 @@ public class NpmRunnerTests
 
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
-            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
-            @"C:\temp\workdir");
+            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"],
+            @"C:\temp\workdir", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -49,7 +70,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
             ["view", "express", "version"],
-            @"C:\temp");
+            @"C:\temp", new TestEnvironment());
 
         // cmd.exe /c requires outer quotes wrapping the entire command:
         // /c ""C:\Program Files\nodejs\npm.cmd" "view" "express" "version""
@@ -66,7 +87,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.exe",
             ["view", "express", "version"],
-            @"C:\temp");
+            @"C:\temp", new TestEnvironment());
 
         Assert.Equal(@"C:\Program Files\nodejs\npm.exe", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -81,7 +102,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm",
             ["view", "@playwright/cli@0.1.1", "version"],
-            "/tmp/workdir");
+            "/tmp/workdir", new TestEnvironment());
 
         Assert.Equal("/usr/local/bin/npm", startInfo.FileName);
         Assert.Equal(["view", "@playwright/cli@0.1.1", "version"], startInfo.ArgumentList);
@@ -97,7 +118,7 @@ public class NpmRunnerTests
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm.cmd",
             ["view", "express", "version"],
-            "/tmp");
+            "/tmp", new TestEnvironment());
 
         Assert.Equal("/usr/local/bin/npm.cmd", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -109,7 +130,7 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp", new TestEnvironment());
 
         Assert.Equal("/usr/bin/npm", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -120,10 +141,138 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp");
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Contains("npm.cmd", startInfo.Arguments);
         Assert.Equal(@"C:\temp", startInfo.WorkingDirectory);
+    }
+
+    [Fact]
+    public async Task InstallGlobalAsync_UsesInternalRegistryForDependencies()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-runner-test-");
+
+        try
+        {
+            WriteFakeNpm(tempDirectory);
+            var argumentsPath = Path.Combine(tempDirectory.FullName, "arguments.txt");
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            using var pathOverride = new EnvVarOverride("PATH", $"{tempDirectory.FullName}{Path.PathSeparator}{existingPath}");
+            using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD") : null;
+            using var argumentsPathOverride = new EnvVarOverride("NPM_ARGS_FILE", argumentsPath);
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+            var tarballPath = Path.Combine(tempDirectory.FullName, "playwright-cli.tgz");
+
+            var result = await runner.InstallGlobalAsync(tarballPath, TestContext.Current.CancellationToken);
+
+            Assert.True(result);
+            Assert.Equal(
+                [
+                    "install",
+                    "-g",
+                    tarballPath,
+                    "--ignore-scripts",
+                    "--registry",
+                    "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"
+                ],
+                await File.ReadAllLinesAsync(argumentsPath, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_SingleVersion_ReturnsTrimmedVersion()
+    {
+        var result = NpmRunner.TryExtractLastVersion("0.1.1\n", out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.1", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersions_ReturnsLastVersion()
+    {
+        var output = "@playwright/cli@0.1.1 '0.1.1'\n@playwright/cli@0.1.2 '0.1.2'\n@playwright/cli@0.1.3 '0.1.3'\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersions_WindowsLineEndings_ReturnsLastVersion()
+    {
+        var output = "@playwright/cli@0.1.1 '0.1.1'\r\n@playwright/cli@0.1.2 '0.1.2'\r\n@playwright/cli@0.1.3 '0.1.3'\r\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("0.1.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_EmptyString_ReturnsFalse()
+    {
+        var result = NpmRunner.TryExtractLastVersion("", out var version);
+        Assert.False(result);
+        Assert.Null(version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_WhitespaceOnly_ReturnsFalse()
+    {
+        var result = NpmRunner.TryExtractLastVersion("  \n  \n  ", out var version);
+        Assert.False(result);
+        Assert.Null(version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_SingleVersionNoNewline_ReturnsTrimmedVersion()
+    {
+        var result = NpmRunner.TryExtractLastVersion("1.2.3", out var version);
+        Assert.True(result);
+        Assert.Equal("1.2.3", version);
+    }
+
+    [Fact]
+    public void TryExtractLastVersion_MultipleVersionsWithPrerelease_ReturnsLastVersion()
+    {
+        var output = "@scope/pkg@1.0.0-alpha '1.0.0-alpha'\n@scope/pkg@1.0.0 '1.0.0'\n";
+        var result = NpmRunner.TryExtractLastVersion(output, out var version);
+        Assert.True(result);
+        Assert.Equal("1.0.0", version);
+    }
+
+    private static void WriteFakeNpm(DirectoryInfo directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "npm.cmd"),
+                """
+                @echo off
+                type nul > "%NPM_ARGS_FILE%"
+                :loop
+                if "%~1"=="" exit /b 0
+                >> "%NPM_ARGS_FILE%" echo %~1
+                shift
+                goto loop
+                """);
+            return;
+        }
+
+        var npmPath = Path.Combine(directory.FullName, "npm");
+        File.WriteAllText(
+            npmPath,
+            """
+            #!/bin/sh
+            printf '%s\n' "$@" > "$NPM_ARGS_FILE"
+            """);
+        File.SetUnixFileMode(
+            npmPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 }

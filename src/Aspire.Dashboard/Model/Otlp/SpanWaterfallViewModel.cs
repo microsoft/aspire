@@ -48,9 +48,45 @@ public sealed class SpanWaterfallViewModel
         return tooltip;
     }
 
-    public bool MatchesFilter(string filter, TelemetryFilter? typeFilter, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
+    public bool MatchesFilter(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter>? structuredFilters, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
     {
-        if (Filter(this))
+        var enabledStructuredFilters = GetEnabledStructuredFilters(structuredFilters);
+        return MatchesFilterCore(filter, typeFilter, enabledStructuredFilters, getResourceName, out matchedDescendents);
+    }
+
+    internal bool MatchesFilterDirect(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter> enabledStructuredFilters, Func<OtlpResourceView, string> getResourceName)
+    {
+        if (typeFilter != null)
+        {
+            if (!typeFilter.Apply(Span))
+            {
+                return false;
+            }
+        }
+
+        // A span matches when it satisfies all enabled structured filters,
+        // mirroring TelemetryRepository.GetTraces which checks "a trace matches when
+        // one of its spans matches all filters."
+        if (enabledStructuredFilters is { Count: > 0 } &&
+            !enabledStructuredFilters.All(f => f.Apply(Span)))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        return Span.SpanId.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
+               || getResourceName(Span.Source).Contains(filter, StringComparison.CurrentCultureIgnoreCase)
+               || Span.GetDisplaySummary().Contains(filter, StringComparison.CurrentCultureIgnoreCase)
+               || UninstrumentedPeer?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) is true;
+    }
+
+    private bool MatchesFilterCore(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter> enabledStructuredFilters, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
+    {
+        if (MatchesFilterDirect(filter, typeFilter, enabledStructuredFilters, getResourceName))
         {
             matchedDescendents = Children.SelectMany(GetWithDescendents);
             return true;
@@ -58,7 +94,7 @@ public sealed class SpanWaterfallViewModel
 
         foreach (var child in Children)
         {
-            if (child.MatchesFilter(filter, typeFilter, getResourceName, out var matchedChildDescendents))
+            if (child.MatchesFilterCore(filter, typeFilter, enabledStructuredFilters, getResourceName, out var matchedChildDescendents))
             {
                 matchedDescendents = [child, ..matchedChildDescendents];
                 return true;
@@ -67,42 +103,41 @@ public sealed class SpanWaterfallViewModel
 
         matchedDescendents = null;
         return false;
+    }
 
-        bool Filter(SpanWaterfallViewModel viewModel)
+    private static IReadOnlyList<FieldTelemetryFilter> GetEnabledStructuredFilters(IReadOnlyList<FieldTelemetryFilter>? structuredFilters)
+    {
+        if (structuredFilters is null)
         {
-            if (typeFilter != null)
-            {
-                if (!typeFilter.Apply(viewModel.Span))
-                {
-                    return false;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(filter))
-            {
-                return true;
-            }
-
-            return viewModel.Span.SpanId.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-                   || getResourceName(viewModel.Span.Source).Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-                   || viewModel.Span.GetDisplaySummary().Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-                   || viewModel.UninstrumentedPeer?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) is true;
+            return [];
         }
 
-        static IEnumerable<SpanWaterfallViewModel> GetWithDescendents(SpanWaterfallViewModel s)
+        List<FieldTelemetryFilter>? enabledFilters = null;
+        foreach (var filter in structuredFilters)
         {
-            var stack = new Stack<SpanWaterfallViewModel>();
-            stack.Push(s);
-
-            while (stack.Count > 0)
+            if (filter.Enabled)
             {
-                var current = stack.Pop();
-                yield return current;
+                enabledFilters ??= [];
+                enabledFilters.Add(filter);
+            }
+        }
 
-                foreach (var child in current.Children)
-                {
-                    stack.Push(child);
-                }
+        return enabledFilters ?? [];
+    }
+
+    private static IEnumerable<SpanWaterfallViewModel> GetWithDescendents(SpanWaterfallViewModel s)
+    {
+        var stack = new Stack<SpanWaterfallViewModel>();
+        stack.Push(s);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            yield return current;
+
+            foreach (var child in current.Children)
+            {
+                stack.Push(child);
             }
         }
     }

@@ -133,6 +133,60 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Successfully deleted parameter &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceDeletedParameter {
+            get {
+                return ResourceManager.GetString("ResourceDeletedParameter", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully rebuilt &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceRebuilt {
+            get {
+                return ResourceManager.GetString("ResourceRebuilt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully restarted &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceRestarted {
+            get {
+                return ResourceManager.GetString("ResourceRestarted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully set parameter &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceSetParameter {
+            get {
+                return ResourceManager.GetString("ResourceSetParameter", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully started &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceStarted {
+            get {
+                return ResourceManager.GetString("ResourceStarted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully stopped &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceStopped {
+            get {
+                return ResourceManager.GetString("ResourceStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Set parameter value.
         /// </summary>
         internal static string SetParameterDescription {

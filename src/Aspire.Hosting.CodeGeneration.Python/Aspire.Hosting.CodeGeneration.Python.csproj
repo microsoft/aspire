@@ -7,6 +7,9 @@
     <RootNamespace>Aspire.Hosting.CodeGeneration.Python</RootNamespace>
     <!-- Required for Python AppHost support -->
     <IsPackable>true</IsPackable>
+    <!-- Code-generation infrastructure, not a discoverable polyglot integration, so opt out of the
+         default 'polyglot' NuGet tag that `aspire add` uses to surface integrations to non-C# AppHosts. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
     <!-- No baseline exists since this package was previously not published -->
     <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <IsAotCompatible>true</IsAotCompatible>
@@ -20,6 +23,10 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\pyproject.toml" LogicalName="Aspire.Hosting.CodeGeneration.Python.Resources.pyproject.toml" />
     <EmbeddedResource Include="Resources\microvenv.py" LogicalName="Aspire.Hosting.CodeGeneration.Python.Resources.microvenv.py" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
   </ItemGroup>
 
   <ItemGroup>

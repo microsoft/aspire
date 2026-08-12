@@ -641,28 +641,53 @@
       "additionalProperties": false
     },
     "resource.azure.bicep.v1": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/resource.azure.bicep.v0"
+      "type": "object",
+      "description": "Represents a resource that is deployed using Azure Bicep.",
+      "required": [ "path" ],
+      "properties": {
+        "type": {
+          "const": "azure.bicep.v1"
         },
-        {
+        "path": {
+          "type": "string",
+          "description": "Path to the Bicep file to be used for deployment."
+        },
+        "connectionString": {
+          "$ref": "#/definitions/connectionString"
+        },
+        "params": {
+          "type": "object",
+          "description": "A list of parameters which are passed to Azure deployment.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "array" },
+              { "type": "boolean" },
+              { "type": "number" },
+              { "type": "object" },
+              { "type": "string" }
+            ]
+          }
+        },
+        "scope": {
           "type": "object",
           "properties": {
-            "type": {
-              "const": "azure.bicep.v1"
+            "resourceGroup": {
+              "type": "string",
+              "description": "The name of the resource group to deploy the resource to."
             },
-            "scope": {
-              "type": "object",
-              "properties": {
-                "resourceGroup": {
-                  "type": "string",
-                  "description": "The name of the resource group to deploy the resource to."
-                }
-              }
+            "subscription": {
+              "type": "string",
+              "description": "The subscription identifier to deploy the resource to."
+            },
+            "tenant": {
+              "type": "string",
+              "const": "current",
+              "description": "The current tenant scope to deploy the resource to. Only \"current\" is supported."
             }
           }
         }
-      ]
+      },
+      "additionalProperties": false
     },
     "connectionString": {
       "type": "string",

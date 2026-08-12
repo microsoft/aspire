@@ -4,16 +4,54 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Acquisition;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
+/// Well-known categories for environment check results.
+/// </summary>
+internal static class EnvironmentCheckCategories
+{
+    /// <summary>
+    /// Checks that report Aspire CLI state.
+    /// </summary>
+    internal const string Aspire = "aspire";
+
+    /// <summary>
+    /// Checks that report AppHost state.
+    /// </summary>
+    internal const string AppHost = "apphost";
+
+    /// <summary>
+    /// Checks that report container runtime state.
+    /// </summary>
+    internal const string Container = "container";
+
+    /// <summary>
+    /// Checks that report local machine environment state.
+    /// </summary>
+    internal const string Environment = "environment";
+
+    /// <summary>
+    /// Checks that report SDK state.
+    /// </summary>
+    internal const string Sdk = "sdk";
+
+    /// <summary>
+    /// Checks that report development tooling state (for example, editor extensions).
+    /// </summary>
+    internal const string DevelopmentTools = "devtools";
+}
+
+/// <summary>
 /// Represents the result of a prerequisite check.
 /// </summary>
+// `aspire doctor --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class EnvironmentCheckResult
 {
     /// <summary>
-    /// Gets the category of the check (e.g., "sdk", "container", "environment").
+    /// Gets the category of the check.
     /// </summary>
     [JsonPropertyName("category")]
     public string Category { get; init; } = string.Empty;
@@ -117,6 +155,7 @@ internal sealed class LowercaseEnumConverter : JsonConverter<EnvironmentCheckSta
 /// <summary>
 /// Represents the JSON output for the doctor command.
 /// </summary>
+// `aspire doctor --format json` uses this wrapper; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DoctorCheckResponse
 {
     /// <summary>
@@ -130,11 +169,18 @@ internal sealed class DoctorCheckResponse
     /// </summary>
     [JsonPropertyName("summary")]
     public required DoctorCheckSummary Summary { get; set; }
+
+    /// <summary>
+    /// Gets or sets the discovered Aspire CLI installations.
+    /// </summary>
+    [JsonPropertyName("installations")]
+    public List<InstallationInfo>? Installations { get; set; }
 }
 
 /// <summary>
 /// Represents the summary of doctor check results.
 /// </summary>
+// `aspire doctor --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DoctorCheckSummary
 {
     /// <summary>

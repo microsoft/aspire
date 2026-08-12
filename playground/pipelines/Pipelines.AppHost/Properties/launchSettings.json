@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17266;http://localhost:17390",
+      "applicationUrl": "https://pipelines.dev.localhost:17266;http://pipelines.dev.localhost:17390",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21055",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22065"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:17390",
+      "applicationUrl": "http://pipelines.dev.localhost:17390",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19201",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20169"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "deploy": {

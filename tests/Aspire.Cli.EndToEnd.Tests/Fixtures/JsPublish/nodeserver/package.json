@@ -1,0 +1,9 @@
+{
+  "name": "nodeserver",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "build": "mkdir -p build && cp server.js build/server.js"
+  }
+}

@@ -34,7 +34,8 @@ public static class QdrantBuilderExtensions
     /// <param name="grpcPort">The host port of gRPC endpoint of Qdrant database.</param>
     /// <param name="httpPort">The host port of HTTP endpoint of Qdrant database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{QdrantServerResource}"/>.</returns>
-    [AspireExport("addQdrant", Description = "Adds a Qdrant resource to the application. A container is used for local development.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> AddQdrant(this IDistributedApplicationBuilder builder,
         string name,
         IResourceBuilder<ParameterResource>? apiKey = null,
@@ -70,6 +71,7 @@ public static class QdrantBuilderExtensions
         return builder.AddResource(qdrant)
             .WithImage(QdrantContainerImageTags.Image, QdrantContainerImageTags.Tag)
             .WithImageRegistry(QdrantContainerImageTags.Registry)
+            .WithIconName("DatabaseSearch")
             .WithHttpEndpoint(port: grpcPort, targetPort: QdrantPortGrpc, name: QdrantServerResource.PrimaryEndpointName)
             .WithEndpoint(QdrantServerResource.PrimaryEndpointName, endpoint =>
             {
@@ -105,7 +107,8 @@ public static class QdrantBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the resource name.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a named volume for the data folder to a Qdrant container resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> WithDataVolume(this IResourceBuilder<QdrantServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -121,7 +124,8 @@ public static class QdrantBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Adds a bind mount for the data folder to a Qdrant container resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> WithDataBindMount(this IResourceBuilder<QdrantServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -139,7 +143,7 @@ public static class QdrantBuilderExtensions
     /// <param name="builder">The resource builder for the destination resource.</param>
     /// <param name="qdrantResource">The Qdrant server resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot AppHosts.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource)
          where TDestination : IResourceWithEnvironment
     {
@@ -153,7 +157,7 @@ public static class QdrantBuilderExtensions
     /// <param name="qdrantResource">The Qdrant server resource.</param>
     /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource, string? connectionName = null)
          where TDestination : IResourceWithEnvironment
     {

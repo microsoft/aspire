@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>NATS Aspire Playground</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: 0.5rem; }
+        section { border: 1px solid #ccc; border-radius: 4px; padding: 1rem; margin: 1rem 0; }
+        .consumer-box { border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; background: #fafafa; }
+        .consumer-box header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .consumer-box h3 { margin: 0; font-size: 1rem; }
+        label { display: block; margin: 0.25rem 0; }
+        input { width: 100%; box-sizing: border-box; padding: 0.25rem; }
+        .row { display: flex; gap: 0.5rem; align-items: end; }
+        .row > * { flex: 1; }
+        .row > button { flex: 0; }
+        button { padding: 0.4rem 0.8rem; margin-top: 0.5rem; }
+        pre { background: #f4f4f4; padding: 0.5rem; overflow: auto; max-height: 15rem; margin: 0.5rem 0 0; }
+    </style>
+</head>
+<body>
+    <h1>NATS Aspire Playground</h1>
+    <p>
+        This <code>api</code> service exposes HTTP endpoints that drive a NATS server (with JetStream) running in a container.
+        The <code>events</code> stream (subject <code>events.&gt;</code>) is created at startup.
+        A separate <code>backend</code> service subscribes directly to <code>events.&gt;</code> and logs each message.
+    </p>
+    <p>
+        Try it: start a consumer below, then publish events and watch them arrive over Server-Sent Events.
+        You can also open the <code>backend</code> resource in the Aspire dashboard's <strong>Console</strong> tab
+        to see the same events being processed there.
+    </p>
+    <p>
+        Docs:
+        <a href="https://docs.nats.io/" target="_blank" rel="noopener noreferrer">NATS</a>,
+        <a href="https://nats-io.github.io/nats.net/" target="_blank" rel="noopener noreferrer">NATS .NET client</a>.
+    </p>
+
+    <section>
+        <h2>Ping</h2>
+        <form id="pingForm">
+            <button type="submit">GET /ping</button>
+        </form>
+        <pre id="pingOut"></pre>
+    </section>
+
+    <section>
+        <h2>Publish event</h2>
+        <form id="publishForm">
+            <label>Subject <input name="subject" value="events.example" required /></label>
+            <label>Name <input name="name" value="hello" required /></label>
+            <label>Description <input name="description" value="from the form" /></label>
+            <label>Priority <input name="priority" type="number" step="0.1" value="1.0" required /></label>
+            <button type="submit">POST /publish/</button>
+        </form>
+        <pre id="publishOut"></pre>
+    </section>
+
+    <section>
+        <h2>Ordered consumer</h2>
+        <p>Ephemeral. Replays all messages from the start every time you reconnect.</p>
+        <div id="orderedBox"></div>
+    </section>
+
+    <section>
+        <h2>Named (durable) consumers</h2>
+        <p>
+            Server tracks position per name. Add multiple boxes:
+            different names each get every message; same name shares messages (queue-style).
+            Try adding, removing and adding again using the same name,
+            where it should pick up after the last message it read before.
+        </p>
+        <div class="row">
+            <label>Consumer name <input id="newConsumerName" value="worker-1" /></label>
+            <button id="addConsumerBtn" type="button">Add</button>
+        </div>
+        <div id="namedConsumers"></div>
+    </section>
+
+    <script>
+        function formData(form) {
+            const out = {};
+            new FormData(form).forEach((v, k) => out[k] = v);
+            return out;
+        }
+
+        async function show(el, res) {
+            const text = await res.text();
+            try { el.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+            catch { el.textContent = `${res.status} ${res.statusText}\n${text}`; }
+        }
+
+        document.getElementById('pingForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await show(document.getElementById('pingOut'), await fetch('/ping'));
+        });
+
+        document.getElementById('publishForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const d = formData(e.target);
+            const body = {
+                subject: d.subject,
+                name: d.name,
+                description: d.description,
+                priority: Number(d.priority),
+            };
+            const res = await fetch('/publish/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            await show(document.getElementById('publishOut'), res);
+        });
+
+        function createConsumerBox({ title, url, removable }) {
+            const box = document.createElement('div');
+            box.className = 'consumer-box';
+
+            const header = document.createElement('header');
+            const h3 = document.createElement('h3');
+            h3.textContent = title;
+            header.appendChild(h3);
+
+            const controls = document.createElement('div');
+            const startBtn = document.createElement('button');
+            startBtn.textContent = 'Start';
+            const stopBtn = document.createElement('button');
+            stopBtn.textContent = 'Stop';
+            stopBtn.disabled = true;
+            controls.append(startBtn, stopBtn);
+            if (removable) {
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', () => {
+                    if (stream) { stream.close(); stream = null; }
+                    box.remove();
+                });
+                controls.append(removeBtn);
+            }
+            header.appendChild(controls);
+            box.appendChild(header);
+
+            const out = document.createElement('pre');
+            box.appendChild(out);
+
+            let stream = null;
+            startBtn.addEventListener('click', () => {
+                if (stream) return;
+                out.textContent = '';
+                stream = new EventSource(url);
+                stream.onmessage = e => {
+                    out.textContent += e.data + '\n';
+                    out.scrollTop = out.scrollHeight;
+                };
+                stream.onerror = () => {
+                    out.textContent += '[stream closed]\n';
+                };
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            });
+            stopBtn.addEventListener('click', () => {
+                if (stream) { stream.close(); stream = null; }
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            });
+
+            return box;
+        }
+
+        document.getElementById('orderedBox').appendChild(
+            createConsumerBox({ title: 'ordered', url: '/consume', removable: false })
+        );
+
+        document.getElementById('addConsumerBtn').addEventListener('click', () => {
+            const name = document.getElementById('newConsumerName').value.trim();
+            if (!name) return;
+            document.getElementById('namedConsumers').appendChild(
+                createConsumerBox({
+                    title: name,
+                    url: `/consume/${encodeURIComponent(name)}`,
+                    removable: true,
+                })
+            );
+        });
+    </script>
+</body>
+</html>

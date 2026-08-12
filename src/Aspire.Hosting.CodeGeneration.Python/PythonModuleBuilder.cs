@@ -23,6 +23,11 @@ internal sealed class PythonModuleBuilder
     public StringBuilder DtoClasses { get; } = new();
 
     /// <summary>
+    /// Gets the exported value definitions.
+    /// </summary>
+    public StringBuilder ExportedValues { get; } = new();
+
+    /// <summary>
     /// Gets the type class definitions (context types, wrapper types).
     /// </summary>
     public Dictionary<string, StringBuilder> TypeClasses { get; } = new();
@@ -117,6 +122,16 @@ internal sealed class PythonModuleBuilder
             output.AppendLine("# ============================================================================");
             output.AppendLine();
             output.Append(DtoClasses);
+        }
+
+        if (ExportedValues.Length > 0)
+        {
+            output.AppendLine();
+            output.AppendLine("# ============================================================================");
+            output.AppendLine("# Exported Values");
+            output.AppendLine("# ============================================================================");
+            output.AppendLine();
+            output.Append(ExportedValues);
         }
 
         // Type Classes
@@ -235,6 +250,7 @@ internal sealed class PythonModuleBuilder
         import time
         import abc
         import datetime
+        import types
         import typing
         from functools import cached_property as _cached_property
         from contextlib import AbstractContextManager
@@ -1095,6 +1111,11 @@ internal sealed class PythonModuleBuilder
                 self._check_connection()
                 return self._send_request("ping")
 
+            def authenticate(self, token: str) -> None:
+                '''Authenticate to the AppHost server with a session token.'''
+                if not bool(self._send_request("authenticate", token)):
+                    raise RuntimeError("Failed to authenticate to the AppHost server.")
+
             def invoke_capability(
                 self,
                 capability_id: str,
@@ -1108,7 +1129,7 @@ internal sealed class PythonModuleBuilder
                 Results are automatically wrapped in Handle objects when applicable.
                 '''
                 self._check_connection()
-                result = self._send_request("invokeCapability", capability_id, args or {})
+                result = self._send_request("invokeCapability", capability_id, self._marshal_transport_value(args or {}))
 
                 # Check for structured error response
                 if _is_ats_error(result):
@@ -1118,6 +1139,15 @@ internal sealed class PythonModuleBuilder
 
                 # Wrap handles automatically
                 return _wrap_if_handle(result, self, kwargs)
+
+            def _marshal_transport_value(self, value: typing.Any) -> typing.Any:
+                if callable(value):
+                    return self.register_callback(value)
+                if isinstance(value, dict):
+                    return {key: self._marshal_transport_value(nested_value) for key, nested_value in value.items()}
+                if isinstance(value, (list, tuple)):
+                    return [self._marshal_transport_value(item) for item in value]
+                return value
 
             def _send_request(self, method: str, *params: typing.Any) -> typing.Any:
                 '''Send a JSON-RPC request and wait for response'''
@@ -1726,10 +1756,9 @@ internal sealed class PythonModuleBuilder
                 return self._handle
 
             def __enter__(self) -> DistributedApplicationBuilder:
-                self._client.connect()
                 self._handle = self._client.invoke_capability(
-                    'Aspire.Hosting/createBuilderWithOptions',
-                    {'options': self._options}
+                    'Aspire.Hosting/createBuilder',
+                    {'argsOrOptions': self._options}
                 )
                 return self
 
@@ -1760,6 +1789,14 @@ internal sealed class PythonModuleBuilder
                 )
 
             client = AspireClient(socket_path, debug=debug, heartbeat_interval=heartbeat_interval)
+            client.connect()
+            auth_token = os.environ.get('ASPIRE_REMOTE_APPHOST_TOKEN')
+            if not auth_token:
+                raise ValueError(
+                    'ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. '
+                    'Run this application using `aspire run`.'
+                )
+            client.authenticate(auth_token)
             return client
 
 
@@ -1767,6 +1804,7 @@ internal sealed class PythonModuleBuilder
             *,
             args: typing.Iterable[str] | None = None,
             project_directory: str | None = None,
+            app_host_file_path: str | None = None,
             container_registry_override: str | None = None,
             disable_dashboard: bool | None = None,
             dashboard_application_name: str | None = None,
@@ -1785,6 +1823,8 @@ internal sealed class PythonModuleBuilder
                     passed to the Aspire command line (arguments specified after '--'). Specifying them here will override that default.
                 project_directory (str): The directory containing the AppHost project file. By default, this will  use the ASPIRE_PROJECT_DIRECTORY
                     environment variable if set, otherwise it will use the current working directory.
+                app_host_file_path (str): The path to the AppHost source file. By default, this will use the ASPIRE_APPHOST_FILEPATH
+                    environment variable if set.
                 container_registry_override (str): When containers are used, use this value to override the container registry.
                 disable_dashboard (bool): Determines whether the dashboard is disabled.
                 dashboard_application_name (str): The application name to display in the dashboard.
@@ -1814,6 +1854,12 @@ internal sealed class PythonModuleBuilder
                 effective_options['ProjectDirectory'] = project_directory
             elif not effective_options.get('ProjectDirectory'):
                 effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+            if app_host_file_path is not None:
+                effective_options['AppHostFilePath'] = app_host_file_path
+            elif not effective_options.get('AppHostFilePath'):
+                app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
+                if app_host_file_path:
+                    effective_options['AppHostFilePath'] = app_host_file_path
             if container_registry_override is not None:
                 effective_options['ContainerRegistryOverride'] = container_registry_override
             if disable_dashboard is not None:

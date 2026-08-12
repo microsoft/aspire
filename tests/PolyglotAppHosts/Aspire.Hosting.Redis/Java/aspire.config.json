@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "features": {
+    "experimentalPolyglot:java": true
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": ""
+  }
+}

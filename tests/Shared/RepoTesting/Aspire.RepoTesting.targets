@@ -33,7 +33,15 @@
     `AspireProjectOrPackageReference` - maps to projects in `src/` or `src/Components/`
   -->
 
-  <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="$(PackageVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
+  <!--
+    $(AspireAppHostSdkVersion) is defined in the generated Directory.Packages.Versions.props
+    (produced by the _GeneratePackagesVersionsProps target below) and reaches this file via:
+      Directory.Packages.props -> Directory.Packages.Helix.props -> Directory.Packages.Versions.props
+    It is only set in the out-of-repo (Helix) consumer build — the same scope this Import is gated on
+    by Condition="...TestsRunningOutsideOfRepo == 'true'". For in-repo builds the SDK is resolved
+    through the in-repo ImportGroup further below, not this Import.
+  -->
+  <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
   <PropertyGroup>
     <!-- copy by default only when archiving tests, and for test projects that support running out of repo -->
@@ -66,7 +74,7 @@
     <!-- in-repo-builds use Arcade which adds these package references for test projects implicitly.
          But when they are built without Arcade outside the repo, these need to be added
          explicitly. -->
-    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.Testing.Platform" />
     <PackageReference Include="Microsoft.Testing.Platform.MSBuild" />
@@ -107,7 +115,40 @@
 
   <!-- Generate before the build so the projects can use this in a <None ..> item -->
   <Target Name="_GeneratePackagesVersionsProps" BeforeTargets="BeforeBuild" Condition="'$(DeployOutsideOfRepoSupportFiles)' == 'true' and '$(IsTestUtilityProject)' != 'true'">
-    <!-- Duplicate all the @(PackageVersion) items with the evaluated versions -->
+    <!-- Enumerate all src projects to get their per-package versions (respects SuppressFinalPackageVersion, etc.) -->
+    <ItemGroup>
+      <_SrcProjectsForVersions Include="$(RepoRoot)src\**\*.csproj"
+                               Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
+    </ItemGroup>
+
+    <MSBuild Projects="@(_SrcProjectsForVersions)"
+             Targets="GetPackageName"
+             BuildInParallel="true">
+      <Output TaskParameter="TargetOutputs" ItemName="_AspirePackageVersions" />
+    </MSBuild>
+
+    <!-- Format Aspire package versions as XML PackageVersion entries -->
+    <ItemGroup>
+      <_AspirePackageVersionXml Include="@(_AspirePackageVersions -> '&lt;PackageVersion Include=&quot;%(Identity)&quot; Version=&quot;%(WithPackageVersion)&quot; /&gt;')" />
+    </ItemGroup>
+
+    <!-- Extract the Aspire.AppHost.Sdk version for SDK imports in Aspire.RepoTesting.targets -->
+    <FindInList List="@(_AspirePackageVersions)" ItemSpecToFind="Aspire.AppHost.Sdk">
+      <Output TaskParameter="ItemFound" ItemName="_AppHostSdkItem" />
+    </FindInList>
+
+    <PropertyGroup>
+      <_AspireAppHostSdkVersion>%(_AppHostSdkItem.WithPackageVersion)</_AspireAppHostSdkVersion>
+    </PropertyGroup>
+
+    <!-- Hard-fail if Aspire.AppHost.Sdk wasn't enumerated. Without this check the generated
+         Directory.Packages.Versions.props would emit <AspireAppHostSdkVersion></AspireAppHostSdkVersion>
+         and the Helix consumer's <Import Sdk="Aspire.AppHost.Sdk" Version="" /> would later fail
+         with an opaque NuGet SDK-resolution error instead of pointing here. -->
+    <Error Condition="'$(_AspireAppHostSdkVersion)' == ''"
+           Text="GetPackageName did not yield Aspire.AppHost.Sdk in @(_AspirePackageVersions). Did src/Aspire.AppHost.Sdk/Aspire.AppHost.Sdk.csproj rename/un-pack, or was the project excluded from _SrcProjectsForVersions?" />
+
+    <!-- Duplicate all the @(PackageVersion) items (3rd-party packages) with the evaluated versions -->
     <ItemGroup>
       <_PackageVersionEvaluated Include="@(PackageVersion -> '&lt;PackageVersion Include=&quot;%(Identity)&quot; Version=&quot;%(Version)&quot; /&gt;')" />
 
@@ -126,12 +167,18 @@
       <Project>
         <PropertyGroup>
           <PackageVersion>$(PackageVersion)</PackageVersion>
+          <AspireAppHostSdkVersion>$(_AspireAppHostSdkVersion)</AspireAppHostSdkVersion>
 
           <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         </PropertyGroup>
 
-        <ItemGroup>
+        <ItemGroup Label="3rd-party packages">
             @(_PackageVersionEvaluated, '
+            ')
+        </ItemGroup>
+
+        <ItemGroup Label="Aspire packages (dynamically computed)">
+            @(_AspirePackageVersionXml, '
             ')
         </ItemGroup>
 
@@ -165,6 +212,7 @@
     <AspireHostingSDKVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</AspireHostingSDKVersion>
   </PropertyGroup>
 
-  <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="$(PackageVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
+  <!-- See note on the matching Sdk.props Import at the top of this file for where $(AspireAppHostSdkVersion) comes from. -->
+  <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
 </Project>

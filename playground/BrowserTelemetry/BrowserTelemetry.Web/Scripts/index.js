@@ -37,14 +37,104 @@ export function initializeTelemetry(otlpUrl, headers, resourceAttributes) {
     });
 }
 
-function parseDelimitedValues(s) {
-    const headers = s.split(','); // Split by comma
-    const o = {};
+document.addEventListener('DOMContentLoaded', () => {
+    wireButton('emit-console-log', () => {
+        setStatus('Emitted console.log.');
+        console.log('BrowserTelemetry demo: console.log fired from the tracked browser.');
+    });
 
-    headers.forEach(header => {
-        const [key, value] = header.split('='); // Split by equal sign
-        o[key.trim()] = value.trim(); // Add to the object, trimming spaces
+    wireButton('emit-console-warn', () => {
+        setStatus('Emitted console.warn.');
+        console.warn('BrowserTelemetry demo: console.warn fired from the tracked browser.');
+    });
+
+    wireButton('emit-console-error', () => {
+        setStatus('Emitted console.error.');
+        console.error('BrowserTelemetry demo: console.error fired from the tracked browser.');
+    });
+
+    wireButton('emit-unhandled-exception', () => {
+        setStatus('Scheduling an unhandled exception.');
+        window.setTimeout(() => {
+            throw new Error('BrowserTelemetry demo: unhandled exception from tracked browser.');
+        }, 50);
+    });
+
+    wireButton('emit-unhandled-rejection', () => {
+        setStatus('Scheduling an unhandled promise rejection.');
+        Promise.reject(new Error('BrowserTelemetry demo: unhandled promise rejection from tracked browser.'));
+    });
+
+    wireButton('emit-successful-fetch', async () => {
+        setStatus('Issuing a successful fetch request.');
+        const response = await fetch(`${window.location.pathname}?browserNetworkSuccess=${Date.now()}`, {
+            cache: 'no-store',
+            headers: {
+                'x-browser-telemetry-demo': 'success'
+            }
+        });
+
+        setStatus(`Successful fetch completed with status ${response.status}.`);
+        console.info(`BrowserTelemetry demo: successful fetch completed with status ${response.status}.`);
+    });
+
+    wireButton('emit-failing-fetch', async () => {
+        setStatus('Issuing a failing fetch request.');
+
+        try {
+            await fetch(`https://127.0.0.1:1/browser-network-failure?ts=${Date.now()}`, {
+                cache: 'no-store'
+            });
+        } catch (error) {
+            setStatus('Failing fetch triggered.');
+            console.warn('BrowserTelemetry demo: failing fetch triggered for tracked browser network capture.', error);
+        }
+    });
+
+    window.setTimeout(() => {
+        setStatus('Tracked browser demo ready.');
+        console.info('BrowserTelemetry demo: page loaded and ready for tracked browser logging.');
+    }, 250);
+});
+
+function parseDelimitedValues(s) {
+    const o = {};
+    if (!s || !s.trim()) {
+        return o;
+    }
+
+    s.split(',').forEach(header => {
+        const separatorIndex = header.indexOf('=');
+        if (separatorIndex === -1) {
+            return;
+        }
+
+        const key = header.slice(0, separatorIndex).trim();
+        if (!key) {
+            return;
+        }
+
+        const value = header.slice(separatorIndex + 1).trim();
+        o[key] = value;
     });
 
     return o;
+}
+
+function wireButton(id, callback) {
+    const button = document.getElementById(id);
+    if (!button) {
+        return;
+    }
+
+    button.addEventListener('click', callback);
+}
+
+function setStatus(message) {
+    const status = document.getElementById('browser-log-status');
+    if (!status) {
+        return;
+    }
+
+    status.textContent = message;
 }

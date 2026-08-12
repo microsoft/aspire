@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "Целевая среда net8.0",
   "symbols/Framework/choices/net9.0/description": "Целевая среда net9.0",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",
@@ -17,6 +18,7 @@
   "symbols/LocalhostTld/displayName": "Используйте домен верхнего уровня .dev.localhost в URL-адресе приложения",
   "symbols/LocalhostTld/description": "Следует ли объединять имя проекта с доменом верхнего уровня .dev.localhost в URL-адресе приложения для локальной разработки, например, https://myapp.dev.localhost:12345. Поддерживается в .NET 10 и более поздних версий.",
   "postActions/set-startup-project/description": "Устанавливает проект запуска в решении",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Восстановление пакетов NuGet, необходимых для этого проекта.",
   "postActions/restore/manualInstructions/default/text": "Выполнить команду \"dotnet restore\""
 }

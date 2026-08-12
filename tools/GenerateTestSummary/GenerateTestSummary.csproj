@@ -11,4 +11,8 @@
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TestTools\Aspire.TestTools.csproj" />
+  </ItemGroup>
+
 </Project>

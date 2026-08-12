@@ -4,7 +4,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;

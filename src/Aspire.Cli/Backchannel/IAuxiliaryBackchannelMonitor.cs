@@ -49,4 +49,11 @@ internal interface IAuxiliaryBackchannelMonitor
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A task representing the scan operation.</returns>
     Task ScanAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Watches for AppHost connection changes and yields the full active connection set after each change.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The active connections after the initial scan and after each observed change.</returns>
+    IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync(CancellationToken cancellationToken = default);
 }

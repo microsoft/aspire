@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
@@ -26,7 +27,7 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
 
         var resources = new ResourceCollection();
         var container = new ContainerResource("my-container");
-        container.Annotations.Add(new ContainerLifetimeAnnotation { Lifetime = ContainerLifetime.Persistent });
+        container.Annotations.Add(new PersistenceAnnotation { Mode = PersistenceMode.Persistent });
         resources.Add(container);
 
         var model = new DistributedApplicationModel(resources);
@@ -50,7 +51,7 @@ public class PersistentContainerWarningTests(ITestOutputHelper testOutputHelper)
 
         var resources = new ResourceCollection();
         var container = new ContainerResource("my-container");
-        container.Annotations.Add(new ContainerLifetimeAnnotation { Lifetime = ContainerLifetime.Persistent });
+        container.Annotations.Add(new PersistenceAnnotation { Mode = PersistenceMode.Persistent });
         resources.Add(container);
 
         var model = new DistributedApplicationModel(resources);

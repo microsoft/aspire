@@ -237,6 +237,8 @@ internal static class TelemetryTestHelpers
         int? maxAttributeLength = null,
         int? maxSpanEventCount = null,
         int? maxTraceCount = null,
+        int? maxLogCount = null,
+        int? maxResourceCount = null,
         TimeSpan? subscriptionMinExecuteInterval = null,
         ILoggerFactory? loggerFactory = null,
         PauseManager? pauseManager = null,
@@ -262,6 +264,14 @@ internal static class TelemetryTestHelpers
         if (maxTraceCount != null)
         {
             options.MaxTraceCount = maxTraceCount.Value;
+        }
+        if (maxLogCount != null)
+        {
+            options.MaxLogCount = maxLogCount.Value;
+        }
+        if (maxResourceCount != null)
+        {
+            options.MaxResourceCount = maxResourceCount.Value;
         }
 
         var repository = new TelemetryRepository(

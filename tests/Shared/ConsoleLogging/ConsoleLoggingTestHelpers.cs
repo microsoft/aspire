@@ -5,6 +5,31 @@ namespace Aspire.Hosting.Tests.Utils;
 
 internal static class ConsoleLoggingTestHelpers
 {
+    private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromSeconds(30);
+
+    public static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService service, string resourceName, int targetLogCount, Action writeLogs)
+    {
+        var subscribedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchTask = WatchForLogsAsync(service.WatchAsync(resourceName), targetLogCount);
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var subscriber in service.WatchAnySubscribersAsync())
+            {
+                if (subscriber.Name == resourceName && subscriber.AnySubscribers)
+                {
+                    subscribedTcs.TrySetResult();
+                    return;
+                }
+            }
+        });
+
+        await subscribedTcs.Task.WaitAsync(s_defaultTimeout);
+        writeLogs();
+
+        return await watchTask.WaitAsync(s_defaultTimeout);
+    }
+
     public static Task<IReadOnlyList<LogLine>> WatchForLogsAsync(ResourceLoggerService service, int targetLogCount, IResource resource)
     {
         var watchEnumerable = service.WatchAsync(resource);

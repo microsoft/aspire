@@ -1,6 +1,6 @@
 # Welcome to Aspire
 
-Aspire streamlines building, running, debugging, and deploying distributed apps. Define your services, databases, and frontends in code — then launch and debug everything with a single command.
+Aspire streamlines building, running, debugging, and deploying distributed apps. Define your services, databases, and front ends in code — then launch and debug everything with a single command.
 
 ### Key benefits
 
@@ -12,7 +12,7 @@ Aspire streamlines building, running, debugging, and deploying distributed apps.
 
 ### How it works
 
-1. Define your services and their connections in an **apphost** project
+1. Define your services and their connections in an **AppHost**
 2. Run everything locally with a single command
 3. Monitor it all through the **Aspire Dashboard**
 4. Deploy the same architecture definition to production

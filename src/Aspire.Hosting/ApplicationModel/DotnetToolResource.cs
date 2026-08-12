@@ -3,6 +3,8 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Model;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -36,5 +38,28 @@ public class DotnetToolResource : ExecutableResource
             this.TryGetLastAnnotation<DotnetToolAnnotation>(out var toolConfig);
             return toolConfig;
         }
+    }
+
+    internal IEnumerable<ResourcePropertySnapshot> CreateSnapshotProperties()
+    {
+        var toolConfig = ToolConfiguration;
+        if (toolConfig is null)
+        {
+            yield break;
+        }
+
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Package, toolConfig.PackageId, ResourcePropertyToolPackageDisplayName, sortOrder: 0);
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Version, toolConfig.Version, ResourcePropertyToolVersionDisplayName, sortOrder: 1);
+        yield return new(KnownProperties.Resource.Source, toolConfig.PackageId);
+    }
+
+    private static ResourcePropertySnapshot CreateHighlightedProperty(string name, object? value, string displayName, int sortOrder)
+    {
+        return new(name, value)
+        {
+            DisplayName = displayName,
+            IsHighlighted = true,
+            SortOrder = sortOrder
+        };
     }
 }

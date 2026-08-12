@@ -1,0 +1,6 @@
+<!-- Opt out of the repo-level central package management for eval data projects -->
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

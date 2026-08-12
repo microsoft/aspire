@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../InitCommandStrings.resx">
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
-        <source>Adding apphost project to solution...</source>
+        <source>Adding AppHost project to solution...</source>
         <target state="needs-review-translation">Добавление проекта AppHost в решение...</target>
         <note />
       </trans-unit>
@@ -17,13 +17,33 @@
         <target state="translated">Добавление проекта ServiceDefaults в решение...</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostCreatedRunOne">
+        <source>Aspire AppHost created! To complete setup, run:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostCreatedRunOneOf">
+        <source>Aspire AppHost created! To complete setup, run one of:</source>
+        <target state="new">Aspire AppHost created! To complete setup, run one of:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireInitializationComplete">
         <source>Aspire initialization complete!</source>
         <target state="translated">Инициализация Aspire завершена!</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreatedFile">
+        <source>Created {0}</source>
+        <target state="new">Created {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreatingAppHostFromTemplate">
+        <source>Creating AppHost from template...</source>
+        <target state="new">Creating AppHost from template...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreatingAppHostProject">
-        <source>Creating apphost project...</source>
+        <source>Creating AppHost project...</source>
         <target state="needs-review-translation">Создание проекта AppHost...</target>
         <note />
       </trans-unit>
@@ -32,14 +52,44 @@
         <target state="translated">Создание проекта ServiceDefaults...</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeprecatedOptionWarning">
+        <source>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</source>
+        <target state="new">`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Initialize Aspire in an existing codebase</source>
         <target state="needs-review-translation">Инициализируйте поддержку Aspire в существующем решении или создайте однофайловый AppHost.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedToCreateAppHostFromTemplate">
+        <source>Failed to create AppHost from template (exit code {0}).</source>
+        <target state="new">Failed to create AppHost from template (exit code {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToParseExistingConfig">
+        <source>Failed to parse existing {0} at '{1}': {2}</source>
+        <target state="new">Failed to parse existing {0} at '{1}': {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FileAlreadyExistsSkipping">
+        <source>{0} already exists — skipping.</source>
+        <target state="new">{0} already exists — skipping.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FixOrRemoveConfigAndRerun">
+        <source>Fix or remove {0} and re-run `aspire init`.</source>
+        <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallingAspireProjectTemplates">
+        <source>Installing Aspire project templates...</source>
+        <target state="new">Installing Aspire project templates...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the apphost (csharp, typescript)</source>
-        <target state="new">The programming language for the apphost (csharp, typescript)</target>
+        <source>The programming language for the AppHost (csharp, typescript)</source>
+        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -48,7 +98,7 @@
         <note />
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
-        <source>No solution file found. Creating single-file apphost...</source>
+        <source>No solution file found. Creating single-file AppHost...</source>
         <target state="needs-review-translation">Файл решения не найден. Создание однофайлового AppHost...</target>
         <note />
       </trans-unit>
@@ -68,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SolutionAndProjectInSameDirectory">
-        <source>The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
-        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
+        <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
+        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
         <note />
       </trans-unit>
     </body>

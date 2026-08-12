@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -82,4 +82,3 @@ internal sealed class TestDocsIndexService : IDocsIndexService
         return ValueTask.FromResult<IReadOnlyList<DocsSearchResult>>(results);
     }
 }
-

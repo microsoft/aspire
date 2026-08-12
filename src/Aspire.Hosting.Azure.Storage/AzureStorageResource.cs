@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Storage;
@@ -13,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
 public class AzureStorageResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
 {
     internal const string BlobsConnectionKeyPrefix = "Aspire__Azure__Storage__Blobs";
     internal const string QueuesConnectionKeyPrefix = "Aspire__Azure__Storage__Queues";
@@ -28,6 +30,16 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal IResourceBuilder<AzureQueueStorageResource>? QueueStorageBuilder { get; set; }
     internal IResourceBuilder<AzureTableStorageResource>? TableStorageBuilder { get; set; }
     internal IResourceBuilder<AzureDataLakeStorageResource>? DataLakeStorageBuilder { get; set; }
+
+    // Implicit parent selection for child resources (containers, queues, file systems)
+    // added without an explicit parent service. Set to the first blob/queue/data-lake
+    // service created via AddBlobs/AddQueues/AddDataLake, regardless of whether the
+    // user chose a custom name or the default. Used so that AddBlobContainer /
+    // AddQueue / AddDataLakeFileSystem don't auto-create a duplicate default-named
+    // service when the user has already added their own.
+    internal IResourceBuilder<AzureBlobStorageResource>? ImplicitBlobService { get; set; }
+    internal IResourceBuilder<AzureQueueStorageResource>? ImplicitQueueService { get; set; }
+    internal IResourceBuilder<AzureDataLakeStorageResource>? ImplicitDataLakeService { get; set; }
 
     internal List<AzureBlobStorageContainerResource> BlobContainers { get; } = [];
 

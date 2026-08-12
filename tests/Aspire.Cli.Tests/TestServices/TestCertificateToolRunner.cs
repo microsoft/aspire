@@ -13,12 +13,14 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestCertificateToolRunner : ICertificateToolRunner
 {
     public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
+    public Func<EnsureCertificateResult>? EnsureHttpCertificateExistsCallback { get; set; }
     public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
     public Func<CertificateCleanResult>? CleanHttpCertificateCallback { get; set; }
     public Func<string, string?>? ExportDevCertificatePublicPemCallback { get; set; }
 
-    public CertificateTrustResult CheckHttpCertificate()
+    public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (CheckHttpCertificateCallback is not null)
         {
             return CheckHttpCertificateCallback();
@@ -31,6 +33,13 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
             TrustLevel = CertificateManager.TrustLevel.Full,
             Certificates = []
         };
+    }
+
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        return EnsureHttpCertificateExistsCallback is not null
+            ? EnsureHttpCertificateExistsCallback()
+            : EnsureCertificateResult.Succeeded;
     }
 
     public EnsureCertificateResult TrustHttpCertificate()

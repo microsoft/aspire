@@ -8,11 +8,15 @@ namespace Aspire.Cli.Tests.Utils;
 public class CommandPathResolverTests
 {
     [Theory]
-    [InlineData("npm")]
-    [InlineData("npm.cmd")]
-    [InlineData("npx")]
-    [InlineData("npx.cmd")]
-    public void TryResolveCommand_WhenNodeCommandIsMissing_ReturnsNodeInstallMessage(string command)
+    [InlineData("npm", "npm is not installed or not found in PATH. Please install Node.js and try again.")]
+    [InlineData("npm.cmd", "npm is not installed or not found in PATH. Please install Node.js and try again.")]
+    [InlineData("npx", "npx is not installed or not found in PATH. Please install Node.js and try again.")]
+    [InlineData("npx.cmd", "npx is not installed or not found in PATH. Please install Node.js and try again.")]
+    [InlineData("bun", "bun is not installed or not found in PATH. Please install Bun and try again.")]
+    [InlineData("bun.cmd", "bun is not installed or not found in PATH. Please install Bun and try again.")]
+    [InlineData("yarn", "yarn is not installed or not found in PATH. Please install Yarn and try again.")]
+    [InlineData("pnpm", "pnpm is not installed or not found in PATH. Please install pnpm and try again.")]
+    public void TryResolveCommand_WhenJavaScriptCommandIsMissing_ReturnsToolSpecificInstallMessage(string command, string expectedMessage)
     {
         static string? MissingCommandResolver(string _) => null;
 
@@ -20,7 +24,7 @@ public class CommandPathResolverTests
 
         Assert.False(success);
         Assert.Null(resolvedCommand);
-        Assert.Equal($"{Path.GetFileNameWithoutExtension(command)} is not installed or not found in PATH. Please install Node.js and try again.", errorMessage);
+        Assert.Equal(expectedMessage, errorMessage);
     }
 
     [Fact]
@@ -45,5 +49,16 @@ public class CommandPathResolverTests
         Assert.True(success);
         Assert.Equal("/test/bin/npm", resolvedCommand);
         Assert.Null(errorMessage);
+    }
+
+    [Theory]
+    [InlineData("npm", "https://nodejs.org/en/download")]
+    [InlineData("npx", "https://nodejs.org/en/download")]
+    [InlineData("bun", "https://bun.sh/docs/installation")]
+    [InlineData("yarn", "https://yarnpkg.com/getting-started/install")]
+    [InlineData("pnpm", "https://pnpm.io/installation")]
+    public void GetInstallationLink_WhenJavaScriptCommandKnown_ReturnsExpectedLink(string command, string expectedLink)
+    {
+        Assert.Equal(expectedLink, CommandPathResolver.GetInstallationLink(command));
     }
 }

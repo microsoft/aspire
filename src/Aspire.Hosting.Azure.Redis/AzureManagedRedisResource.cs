@@ -46,15 +46,11 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the "id" output reference for the resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public BicepOutputReference Id => new("id", this);
 
     /// <summary>
@@ -255,9 +251,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["redisEnterprise"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.redis.azure.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.redis.azure.net"];
 }

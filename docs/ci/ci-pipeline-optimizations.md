@@ -141,6 +141,10 @@ Each CLI archive job:
 
 This makes the archive job self-sufficient for the RID-specific artifacts it needs.
 
+### Native CLI packaging
+
+The CLI archive jobs also produce RID-specific native CLI artifacts used by tests and downstream packaging. For details about native CLI archive signing, dotnet-tool package construction, and why signed builds consume the signed archive payload, see [Native CLI Packaging](native-cli-packaging.md).
+
 ### `run-tests.yml`
 
 When a test lane sets `requiresNugets: true`, `run-tests.yml`:

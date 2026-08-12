@@ -26,7 +26,7 @@ public sealed class OracleContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             _diagnosticMessageSink.OnMessage(new DiagnosticMessage("Oracle container initialization starting..."));
             Container = new OracleBuilder()

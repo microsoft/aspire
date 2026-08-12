@@ -7,61 +7,53 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") --version VERSION --channel CHANNEL [OPTIONS]
+Usage: $(basename "$0") --version VERSION [OPTIONS]
 
 Required:
-  --version VERSION         Package version (e.g. 9.2.0 or 13.2.0-preview.1.26123.7)
-  --channel CHANNEL         Release channel: stable or prerelease
+  --version VERSION         Installer version in the cask and archive filename (e.g. 9.2.0)
 
 Optional:
-  --output PATH             Output file path (default: ./aspire.rb or ./aspire@prerelease.rb)
-  --validate-urls           Verify all tarball URLs are accessible before downloading
+  --output PATH             Output file path (default: ./aspire.rb)
+  --archive-root PATH       Root directory containing locally built CLI archives to hash
+  --skip-url-validation     Skip URL validation and downloading; use placeholder SHA256 hashes
   --help                    Show this help message
 EOF
   exit 1
 }
 
 VERSION=""
-CHANNEL=""
 OUTPUT=""
-VALIDATE_URLS=false
+ARCHIVE_ROOT=""
+SKIP_URL_VALIDATION=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version)        VERSION="$2";  shift 2 ;;
-    --channel)        CHANNEL="$2";  shift 2 ;;
-    --output)         OUTPUT="$2";   shift 2 ;;
-    --validate-urls)  VALIDATE_URLS=true; shift ;;
-    --help)           usage ;;
-    *)                echo "Unknown option: $1"; usage ;;
+    --version)              VERSION="$2";  shift 2 ;;
+    --output)               OUTPUT="$2";   shift 2 ;;
+    --archive-root)         ARCHIVE_ROOT="$2"; shift 2 ;;
+    --skip-url-validation)  SKIP_URL_VALIDATION=true; shift ;;
+    --help)                 usage ;;
+    *)                      echo "Unknown option: $1"; usage ;;
   esac
 done
 
-if [[ -z "$VERSION" || -z "$CHANNEL" ]]; then
-  echo "Error: --version and --channel are required."
+if [[ -z "$VERSION" ]]; then
+  echo "Error: --version is required."
   usage
 fi
 
-if [[ "$CHANNEL" != "stable" && "$CHANNEL" != "prerelease" ]]; then
-  echo "Error: --channel must be 'stable' or 'prerelease'."
-  exit 1
-fi
-
-# Select template and default output based on channel
-if [[ "$CHANNEL" == "prerelease" ]]; then
-  TEMPLATE="$SCRIPT_DIR/aspire@prerelease.rb.template"
-  [[ -z "$OUTPUT" ]] && OUTPUT="./aspire@prerelease.rb"
-else
-  TEMPLATE="$SCRIPT_DIR/aspire.rb.template"
-  [[ -z "$OUTPUT" ]] && OUTPUT="./aspire.rb"
-fi
+TEMPLATE="$SCRIPT_DIR/aspire.rb.template"
+[[ -z "$OUTPUT" ]] && OUTPUT="./aspire.rb"
 
 if [[ ! -f "$TEMPLATE" ]]; then
   echo "Error: Template not found: $TEMPLATE"
   exit 1
 fi
 
-BASE_URL="https://ci.dot.net/public/aspire/$VERSION"
+# BASE_URL must match the URL embedded in aspire.rb.template so the SHA256
+# computed below verifies the same bytes that `brew install` will fetch at
+# install time. The template's URL is parameterized only on #{version}.
+BASE_URL="https://github.com/microsoft/aspire/releases/download/v$VERSION"
 
 # Compute SHA256 for a URL by downloading to a temp file
 compute_sha256() {
@@ -82,20 +74,77 @@ compute_sha256() {
   echo "$hash"
 }
 
+compute_sha256_from_file() {
+  local file_path="$1"
+  local description="$2"
+
+  echo "Computing SHA256 for $description from local file..." >&2
+  echo "  Path: $file_path" >&2
+
+  local hash
+  hash="$(shasum -a 256 "$file_path" | awk '{print $1}')"
+  echo "  SHA256: $hash" >&2
+  echo "$hash"
+}
+
+find_local_archive() {
+  local archive_name="$1"
+  local archive_path
+  local matches=()
+  local match
+
+  while IFS= read -r archive_path; do
+    matches+=("$archive_path")
+  done < <(find "$ARCHIVE_ROOT" -type f -name "$archive_name" -print | LC_ALL=C sort)
+
+  if [[ "${#matches[@]}" -eq 0 ]]; then
+    echo "Error: Could not find local archive '$archive_name' under '$ARCHIVE_ROOT'" >&2
+    exit 1
+  fi
+
+  if [[ "${#matches[@]}" -gt 1 ]]; then
+    echo "Error: Found multiple local archives named '$archive_name' under '$ARCHIVE_ROOT':" >&2
+    for match in "${matches[@]}"; do
+      echo "  $match" >&2
+    done
+    exit 1
+  fi
+
+  echo "${matches[0]}"
+}
+
 # Check if a URL is accessible (HEAD request)
 url_exists() {
   curl -o /dev/null -s --head --fail "$1"
 }
 
-echo "Generating Homebrew cask for Aspire version $VERSION (channel: $CHANNEL)"
+echo "Generating Homebrew cask for Aspire version $VERSION"
 echo ""
 
 # macOS tarballs are required
 OSX_ARM64_URL="$BASE_URL/aspire-cli-osx-arm64-$VERSION.tar.gz"
 OSX_X64_URL="$BASE_URL/aspire-cli-osx-x64-$VERSION.tar.gz"
 
-# Validate URLs are accessible before downloading (fast-fail)
-if [[ "$VALIDATE_URLS" == true ]]; then
+if [[ -n "$ARCHIVE_ROOT" && ! -d "$ARCHIVE_ROOT" ]]; then
+  echo "Error: --archive-root directory does not exist: $ARCHIVE_ROOT"
+  exit 1
+fi
+
+if [[ -n "$ARCHIVE_ROOT" ]]; then
+  echo "Computing SHA256 hashes from local archives in $ARCHIVE_ROOT..."
+  OSX_ARM64_ARCHIVE="$(find_local_archive "aspire-cli-osx-arm64-$VERSION.tar.gz")"
+  OSX_X64_ARCHIVE="$(find_local_archive "aspire-cli-osx-x64-$VERSION.tar.gz")"
+
+  SHA256_OSX_ARM64="$(compute_sha256_from_file "$OSX_ARM64_ARCHIVE" "macOS ARM64 tarball")"
+  SHA256_OSX_X64="$(compute_sha256_from_file "$OSX_X64_ARCHIVE" "macOS x64 tarball")"
+elif [[ "$SKIP_URL_VALIDATION" == true ]]; then
+  echo "SkipUrlValidation specified — using placeholder SHA256 hashes (tarball URLs will not be validated or downloaded)"
+  SHA256_OSX_ARM64="$(printf '0%.0s' {1..64})"
+  SHA256_OSX_X64="$(printf '0%.0s' {1..64})"
+  echo "  osx-arm64: URL=$OSX_ARM64_URL, SHA256=$SHA256_OSX_ARM64 (placeholder)"
+  echo "  osx-x64: URL=$OSX_X64_URL, SHA256=$SHA256_OSX_X64 (placeholder)"
+else
+  # Validate URLs are accessible before downloading (fast-fail)
   echo "Validating tarball URLs..."
   failed=false
   for url in "$OSX_ARM64_URL" "$OSX_X64_URL"; do
@@ -113,10 +162,10 @@ if [[ "$VALIDATE_URLS" == true ]]; then
     exit 1
   fi
   echo ""
-fi
 
-SHA256_OSX_ARM64="$(compute_sha256 "$OSX_ARM64_URL" "macOS ARM64 tarball")"
-SHA256_OSX_X64="$(compute_sha256 "$OSX_X64_URL" "macOS x64 tarball")"
+  SHA256_OSX_ARM64="$(compute_sha256 "$OSX_ARM64_URL" "macOS ARM64 tarball")"
+  SHA256_OSX_X64="$(compute_sha256 "$OSX_X64_URL" "macOS x64 tarball")"
+fi
 
 echo ""
 echo "Generating cask from template..."

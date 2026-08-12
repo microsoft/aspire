@@ -32,4 +32,9 @@ public class PipelineOptions
     /// Gets or sets the minimum log level for pipeline execution.
     /// </summary>
     public string? LogLevel { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to skip confirmation prompts for destructive operations.
+    /// </summary>
+    public bool SkipConfirmation { get; set; }
 }

@@ -21,6 +21,8 @@ internal sealed class DotNetSdkCheck(
     CliExecutionContext executionContext,
     ILogger<DotNetSdkCheck> logger) : IEnvironmentCheck
 {
+    internal const string CheckName = "dotnet-sdk";
+
     public int Order => 30; // File system check - slightly more expensive
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
@@ -46,8 +48,8 @@ internal sealed class DotNetSdkCheck(
 
                 return [new EnvironmentCheckResult
                 {
-                    Category = "sdk",
-                    Name = "dotnet-sdk",
+                    Category = EnvironmentCheckCategories.Sdk,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = highestVersion is null
                         ? ".NET SDK not found"
@@ -61,8 +63,8 @@ internal sealed class DotNetSdkCheck(
 
             return [new EnvironmentCheckResult
             {
-                Category = "sdk",
-                Name = "dotnet-sdk",
+                Category = EnvironmentCheckCategories.Sdk,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = $".NET {highestVersion} installed ({architecture})"
             }];
@@ -72,8 +74,8 @@ internal sealed class DotNetSdkCheck(
             logger.LogDebug(ex, "Error checking .NET SDK");
             return [new EnvironmentCheckResult
             {
-                Category = "sdk",
-                Name = "dotnet-sdk",
+                Category = EnvironmentCheckCategories.Sdk,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
                 Message = "Error checking .NET SDK",
                 Details = ex.Message
@@ -99,19 +101,11 @@ internal sealed class DotNetSdkCheck(
                 return language.LanguageId.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase);
             }
 
-            // No apphost configured in settings. Look for possible .NET app hosts on file system (projects or apphost.cs)
-            // This doesn't guarantee the apphost is .NET, but it's a signal that it might be and worth checking for .NET SDK.
-            var csharp = languageDiscovery.GetLanguageById(KnownLanguageId.CSharp);
-            if (csharp is null)
-            {
-                return false;
-            }
-
-            // Scan file system directly instead of using ProjectLocator for performance.
-            // Limit recursive scan to avoid expensive file system operations in large workspaces.
-            // We don't want a complete list of all possible project files, just a quick signal that a .NET apphost is probably present.
-            var match = FileSystemHelper.FindFirstFile(executionContext.WorkingDirectory.FullName, recurseLimit: 5, csharp.DetectionPatterns);
-            return match is not null;
+            // No apphost configured in settings — fall back to the same recursive
+            // detection that DetectLanguageAsync uses.
+            var detectedLanguage = await languageDiscovery.DetectLanguageRecursiveAsync(executionContext.WorkingDirectory, cancellationToken);
+            return detectedLanguage is not null &&
+                   detectedLanguage.Value.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

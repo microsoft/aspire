@@ -1,0 +1,18 @@
+﻿FROM node:22-slim AS build
+WORKDIR /app
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.cache/yarn yarn install --immutable
+COPY . .
+RUN yarn run do --build
+
+FROM node:22-slim AS prod-deps
+WORKDIR /app
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.cache/yarn yarn install --immutable --production
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+ENV NODE_ENV=production
+ENTRYPOINT ["sh","-c","exec yarn run start -- --port $PORT"]

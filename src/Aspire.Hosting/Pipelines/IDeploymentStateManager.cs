@@ -42,4 +42,10 @@ public interface IDeploymentStateManager
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <exception cref="InvalidOperationException">Thrown when a version conflict is detected, indicating the section was modified after it was acquired.</exception>
     Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears all deployment state, removing all sections and the underlying storage.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task ClearAllStateAsync(CancellationToken cancellationToken = default);
 }

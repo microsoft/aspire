@@ -123,6 +123,7 @@ public static class AzureRedisExtensions
 
         var resource = new AzureRedisCacheResource(name, ConfigureRedisInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Database")
             .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
     }
 
@@ -206,7 +207,7 @@ public static class AzureRedisExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, token) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, token) =>
             {
                 if (builder.Resource.IsContainer())
                 {

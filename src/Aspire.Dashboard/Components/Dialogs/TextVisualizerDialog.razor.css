@@ -34,3 +34,10 @@
     max-height: 60vh;
     margin-bottom: 16px;
 }
+
+.markdown-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    margin-bottom: 16px;
+}

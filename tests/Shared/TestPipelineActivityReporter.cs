@@ -31,6 +31,11 @@ internal sealed class TestPipelineActivityReporter : IPipelineActivityReporter
     public List<string> CreatedSteps { get; } = [];
 
     /// <summary>
+    /// Gets the hierarchy metadata passed when steps are created.
+    /// </summary>
+    public List<(string StepTitle, string? ParentStepId, int HierarchyLevel)> CreatedStepHierarchy { get; } = [];
+
+    /// <summary>
     /// Gets a list of all tasks that have been created.
     /// </summary>
     public List<(string StepTitle, string TaskStatusText)> CreatedTasks { get; } = [];
@@ -94,6 +99,10 @@ internal sealed class TestPipelineActivityReporter : IPipelineActivityReporter
         {
             CreatedSteps.Clear();
         }
+        lock (CreatedStepHierarchy)
+        {
+            CreatedStepHierarchy.Clear();
+        }
         lock (CreatedTasks)
         {
             CreatedTasks.Clear();
@@ -146,12 +155,21 @@ internal sealed class TestPipelineActivityReporter : IPipelineActivityReporter
 
     /// <inheritdoc />
     public Task<IReportingStep> CreateStepAsync(string title, CancellationToken cancellationToken = default)
+        => CreateStepAsync(title, parentStepId: null, hierarchyLevel: 0, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
     {
         lock (CreatedSteps)
         {
             CreatedSteps.Add(title);
             OnStepCreated?.Invoke(title);
             _testOutputHelper.WriteLine($"[CreateStep] {title}");
+        }
+
+        lock (CreatedStepHierarchy)
+        {
+            CreatedStepHierarchy.Add((title, parentStepId, hierarchyLevel));
         }
 
         return Task.FromResult<IReportingStep>(new TestReportingStep(this, title, _testOutputHelper));

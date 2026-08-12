@@ -47,14 +47,12 @@ internal class NuGetConfigPrompter
 
         if (!hasConfigInTargetDir)
         {
-            // Ask for confirmation before creating the file
-            var choice = await _interactionService.PromptForSelectionAsync(
+            var shouldCreate = await _interactionService.PromptConfirmAsync(
                 TemplatingStrings.CreateNugetConfigConfirmation,
-                [TemplatingStrings.Yes, TemplatingStrings.No],
-                c => c,
-                cancellationToken);
+                binding: PromptBinding.CreateDefault(true),
+                cancellationToken: cancellationToken);
 
-            if (string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+            if (shouldCreate)
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
                 _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
@@ -62,16 +60,15 @@ internal class NuGetConfigPrompter
         }
         else if (hasMissingSources)
         {
-            var updateChoice = await _interactionService.PromptForSelectionAsync(
-                "Update NuGet.config to add missing package sources for the selected channel?",
-                [TemplatingStrings.Yes, TemplatingStrings.No],
-                c => c,
-                cancellationToken);
+            var shouldUpdate = await _interactionService.PromptConfirmAsync(
+                TemplatingStrings.UpdateNuGetConfigConfirmation,
+                binding: PromptBinding.CreateDefault(true),
+                cancellationToken: cancellationToken);
 
-            if (string.Equals(updateChoice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+            if (shouldUpdate)
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
-                _interactionService.DisplayMessage(KnownEmojis.Package, "Updated NuGet.config with required package sources.");
+                _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigUpdatedConfirmationMessage);
             }
         }
     }
@@ -100,6 +97,6 @@ internal class NuGetConfigPrompter
         }
 
         await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
-        _interactionService.DisplayMessage(KnownEmojis.Package, "Created or updated NuGet.config in the project directory with required package sources.");
+        _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
     }
 }

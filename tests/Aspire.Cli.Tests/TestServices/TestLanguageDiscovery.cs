@@ -41,28 +41,33 @@ internal sealed class TestLanguageDiscovery : ILanguageDiscovery
 
     public Task<LanguageId?> DetectLanguageAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
     {
+        // Flat scan — immediate directory only, using EnumerateFiles for glob support
         foreach (var language in _allLanguages)
         {
-            foreach (var pattern in language.DetectionPatterns)
+            var match = Aspire.Cli.Utils.FileSystemHelper.FindFirstFile(
+                directory.FullName,
+                recurseLimit: 0,
+                language.DetectionPatterns);
+
+            if (match is not null)
             {
-                if (pattern.StartsWith("*.", StringComparison.Ordinal))
-                {
-                    var extension = pattern[1..];
-                    if (directory.EnumerateFiles().Any(f => f.Name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        return Task.FromResult<LanguageId?>(language.LanguageId);
-                    }
-                }
-                else
-                {
-                    var filePath = Path.Combine(directory.FullName, pattern);
-                    if (File.Exists(filePath))
-                    {
-                        return Task.FromResult<LanguageId?>(language.LanguageId);
-                    }
-                }
+                return Task.FromResult<LanguageId?>(language.LanguageId);
             }
         }
+
+        return Task.FromResult<LanguageId?>(null);
+    }
+
+    public Task<LanguageId?> DetectLanguageRecursiveAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
+    {
+        foreach (var language in _allLanguages)
+        {
+            if (language.FindInDirectory(directory.FullName) is not null)
+            {
+                return Task.FromResult<LanguageId?>(language.LanguageId);
+            }
+        }
+
         return Task.FromResult<LanguageId?>(null);
     }
 
@@ -74,17 +79,6 @@ internal sealed class TestLanguageDiscovery : ILanguageDiscovery
 
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
-        return _allLanguages.FirstOrDefault(l =>
-            l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
-    }
-
-    private static bool MatchesPattern(string fileName, string pattern)
-    {
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
-        {
-            var extension = pattern[1..];
-            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-        }
-        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+        return _allLanguages.FirstOrDefault(l => l.MatchesFile(file.Name));
     }
 }

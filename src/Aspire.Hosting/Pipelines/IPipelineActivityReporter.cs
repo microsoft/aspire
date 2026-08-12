@@ -20,6 +20,17 @@ public interface IPipelineActivityReporter
     Task<IReportingStep> CreateStepAsync(string title, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a new publishing step with optional hierarchy metadata.
+    /// </summary>
+    /// <param name="title">The title of the publishing step.</param>
+    /// <param name="parentStepId">An optional identifier for the parent step.</param>
+    /// <param name="hierarchyLevel">The hierarchy level for display.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The publishing step.</returns>
+    Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
+        => CreateStepAsync(title, cancellationToken);
+
+    /// <summary>
     /// Signals that the entire publishing process has completed.
     /// </summary>
     /// <param name="options">The options for completing the publishing process.</param>

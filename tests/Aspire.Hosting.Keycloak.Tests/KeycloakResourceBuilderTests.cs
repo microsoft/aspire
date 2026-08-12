@@ -1,10 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Utils;
+#pragma warning disable ASPIRECERTIFICATES001
+
 using System.Net.Sockets;
-using Microsoft.Extensions.DependencyInjection;
+using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Keycloak.Tests;
 
@@ -51,6 +55,42 @@ public class KeycloakResourceBuilderTests
         Assert.Equal(KeycloakContainerImageTags.Tag, containerAnnotation.Tag);
         Assert.Equal(KeycloakContainerImageTags.Image, containerAnnotation.Image);
         Assert.Equal(KeycloakContainerImageTags.Registry, containerAnnotation.Registry);
+    }
+
+    [Fact]
+    public async Task AddKeycloakSwitchesPrimaryEndpointToHttpsWhenCertificateAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            new List<X509Certificate2>(),
+            supportsContainerTrust: true,
+            trustCertificate: true,
+            tlsTerminate: false));
+
+        var keycloak = builder.AddKeycloak("keycloak", port: 8080);
+        keycloak.WithAnnotation(new HttpsCertificateAnnotation
+        {
+            UseDeveloperCertificate = true
+        }, ResourceAnnotationMutationBehavior.Replace);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var beforeStartEvent = new BeforeStartEvent(app.Services, model);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        var endpoints = keycloak.Resource.Annotations.OfType<EndpointAnnotation>().ToArray();
+
+        var primaryEndpoint = Assert.Single(endpoints, e => e.Name == "http");
+        Assert.Equal("https", primaryEndpoint.UriScheme);
+        Assert.True(primaryEndpoint.TlsEnabled);
+        Assert.Equal(8443, primaryEndpoint.TargetPort);
+        Assert.Equal(8080, primaryEndpoint.Port);
+        Assert.DoesNotContain(endpoints, e => e.Name == "https");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(keycloak.Resource, serviceProvider: app.Services);
+        Assert.Equal("8443", env["KC_HTTPS_PORT"]);
     }
 
     [Fact]

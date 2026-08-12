@@ -59,6 +59,6 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Start an apphost in the background</value>
+    <value>Start an AppHost in the background</value>
   </data>
 </root>

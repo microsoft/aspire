@@ -31,7 +31,7 @@ internal static class DcpPipelineBuilder
         return execution;
     }
 
-    public static ResiliencePipeline BuildCreateServiceRetryPipeline(DcpOptions dcpOptions, ILogger logger, TimeSpan? timeout = null)
+    public static ResiliencePipeline BuildObjectWatchRetryPipeline(DcpOptions dcpOptions, ILogger logger, TimeSpan? timeout = null)
     {
         var withTimeout = new TimeoutStrategyOptions()
         {

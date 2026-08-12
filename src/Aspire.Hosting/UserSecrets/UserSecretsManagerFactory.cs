@@ -7,7 +7,6 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Shared.UserSecrets;
@@ -79,8 +78,6 @@ internal sealed class UserSecretsManagerFactory
 
     private sealed class UserSecretsManager : IUserSecretsManager
     {
-        private static readonly JsonSerializerOptions s_jsonSerializerOptions = new() { WriteIndented = true };
-
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private readonly IFileSystemService _fileSystemService;
 
@@ -102,6 +99,27 @@ internal sealed class UserSecretsManagerFactory
                 try
                 {
                     SetSecretCore(name, value);
+                    return true;
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public bool TryDeleteSecret(string name)
+        {
+            try
+            {
+                _semaphore.Wait();
+                try
+                {
+                    DeleteSecretCore(name);
                     return true;
                 }
                 finally
@@ -146,7 +164,7 @@ internal sealed class UserSecretsManagerFactory
                 var flattenedState = JsonFlattener.FlattenJsonObject(state);
                 EnsureUserSecretsDirectory();
 
-                var json = flattenedState.ToJsonString(s_jsonSerializerOptions);
+                var json = flattenedState.ToJsonString(UserSecretsJsonOptions.s_instance);
                 await File.WriteAllTextAsync(FilePath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
             }
             finally
@@ -163,6 +181,16 @@ internal sealed class UserSecretsManagerFactory
             var secrets = Load();
             secrets[name] = value;
             Save(secrets);
+        }
+
+        private void DeleteSecretCore(string name)
+        {
+            var secrets = Load();
+            if (secrets.Remove(name))
+            {
+                EnsureUserSecretsDirectory();
+                Save(secrets);
+            }
         }
 
         private Dictionary<string, string?> Load()
@@ -183,7 +211,7 @@ internal sealed class UserSecretsManagerFactory
                 contents[secret.Key] = secret.Value;
             }
 
-            var json = contents.ToJsonString(s_jsonSerializerOptions);
+            var json = contents.ToJsonString(UserSecretsJsonOptions.s_instance);
 
             // Create a temp file with the correct Unix file mode before moving it to the expected path.
             if (!OperatingSystem.IsWindows())

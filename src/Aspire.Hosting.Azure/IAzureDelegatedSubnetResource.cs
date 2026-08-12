@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure resource that supports subnet delegation.
 /// </summary>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public interface IAzureDelegatedSubnetResource : IResource
 {
     /// <summary>

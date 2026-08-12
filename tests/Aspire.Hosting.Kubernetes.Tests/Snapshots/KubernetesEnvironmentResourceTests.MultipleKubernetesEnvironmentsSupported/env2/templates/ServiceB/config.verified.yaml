@@ -4,10 +4,13 @@ kind: "ConfigMap"
 metadata:
   name: "serviceb-config"
   labels:
-    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "ServiceB"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.ServiceB.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.ServiceB.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
-  HTTP_PORTS: "{{ .Values.parameters.ServiceB.port_http }}"
+  HTTP_PORTS: "{{ .Values.parameters.ServiceB.port_http | int | toString }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.ServiceB.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.ServiceB.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.ServiceB.OTEL_SERVICE_NAME }}"

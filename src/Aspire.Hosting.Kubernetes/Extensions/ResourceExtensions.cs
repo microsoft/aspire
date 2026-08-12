@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Resources;
 
 namespace Aspire.Hosting.Kubernetes.Extensions;
@@ -79,10 +82,12 @@ internal static class ResourceExtensions
         {
             // If the value itself contains Helm expressions, use it directly in the template
             // Otherwise use the expression to reference values.yaml
-            secret.StringData[kvp.Key] = kvp.Value.ValueContainsHelmExpression
-                                       ? kvp.Value.ValueString! // If it contains an expression, its not null
-                                       : kvp.Value.Expression   // All secret values are strings
-                                         ?? string.Empty;
+            var expression = kvp.Value.ValueContainsHelmExpression
+                ? kvp.Value.ValueString! // If it contains an expression, its not null
+                : kvp.Value.Expression   // All secret values are strings
+                  ?? string.Empty;
+
+            secret.StringData[kvp.Key] = expression.EnsureStringOutput();
             processedKeys.Add(kvp.Key);
         }
 
@@ -109,10 +114,12 @@ internal static class ResourceExtensions
 
         foreach (var kvp in context.EnvironmentVariables.Where(kvp => !processedKeys.Contains(kvp.Key)))
         {
-            configMap.Data[kvp.Key] = kvp.Value.ValueContainsHelmExpression
-                                     ? kvp.Value.ValueString! // If it contains an expression, its not null
-                                     : kvp.Value.Expression   // All configmap values are strings
-                                       ?? string.Empty;
+            var expression = kvp.Value.ValueContainsHelmExpression
+                             ? kvp.Value.ValueString! // If it contains an expression, its not null
+                             : kvp.Value.Expression   // All configmap values are strings
+                               ?? string.Empty;
+
+            configMap.Data[kvp.Key] = expression.EnsureStringOutput();
             processedKeys.Add(kvp.Key);
         }
 
@@ -149,6 +156,13 @@ internal static class ResourceExtensions
         var addedPorts = new HashSet<(string Port, string Protocol)>();
         foreach (var (_, mapping) in context.EndpointMappings)
         {
+            // De-duplication keys on the container target port (mapping.Port), not the exposed
+            // Service port (mapping.ServicePort). This assumes a container target port uniquely
+            // identifies a Service port, which holds because endpoint allocation does not let two
+            // endpoints on the same resource share a target port. If that assumption ever changes,
+            // two endpoints with the same target port but different Service ports would collapse to
+            // a single Service port entry here, and a by-name Ingress backend referencing the dropped
+            // endpoint would dangle.
             var portValue = mapping.Port.ValueString ?? mapping.Port.ToScalar();
             var portKey = (portValue, mapping.Protocol);
             if (!addedPorts.Add(portKey))
@@ -160,7 +174,7 @@ internal static class ResourceExtensions
                 new()
                 {
                     Name = mapping.Name,
-                    Port = new(mapping.Port.ToScalar()),
+                    Port = new((mapping.ServicePort ?? mapping.Port).ToScalar()),
                     TargetPort = new(mapping.Port.ToScalar()),
                     Protocol = mapping.Protocol,
                 });
@@ -196,12 +210,47 @@ internal static class ResourceExtensions
             return podTemplateSpec;
         }
 
+        // Look up first-class persistent volume bindings on the workload. When a
+        // ContainerMountAnnotation matches a binding by name, the publisher routes the
+        // pod's volumes[] entry through the binding's generated PVC instead of the
+        // environment's default storage type.
+        Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>? bindingsByVolumeName = null;
+        if (context.TargetResource.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var volumeBindings))
+        {
+            bindingsByVolumeName = new Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>(StringComparer.Ordinal);
+            foreach (var binding in volumeBindings)
+            {
+                bindingsByVolumeName[binding.Volume.Name] = binding;
+            }
+        }
+
         foreach (var volume in context.Volumes)
         {
             var podVolume = new VolumeV1
             {
                 Name = volume.Name,
             };
+
+            if (bindingsByVolumeName is not null && bindingsByVolumeName.TryGetValue(volume.Name, out var binding))
+            {
+                // Route the pod's volumes[] entry through the PV resource's canonical
+                // PVC name. We call GetClaimName() rather than reading GeneratedClaim
+                // because this method runs during the workload-compose loop, while
+                // GeneratedClaim is only populated later by ProcessPersistentVolumeResources.
+                // Centralizing name derivation on the resource keeps this claimName
+                // in lockstep with BuildPersistentVolumeClaim's metadata.name.
+                podVolume.PersistentVolumeClaim = new()
+                {
+                    ClaimName = binding.Volume.GetClaimName(),
+                    // Propagate the mount's read-only flag to the pod's volume source so
+                    // Kubernetes rejects writes at the mount layer even if some other
+                    // container in the pod forgets to set volumeMounts[i].readOnly.
+                    // See https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#PersistentVolumeClaimVolumeSource.
+                    ReadOnly = volume.ReadOnly == true ? true : null,
+                };
+                podTemplateSpec.Spec.Volumes.Add(podVolume);
+                continue;
+            }
 
             switch (context.Parent.DefaultStorageType.ToLowerInvariant())
             {
@@ -218,7 +267,14 @@ internal static class ResourceExtensions
                     break;
 
                 case "pvc":
-                    _ = CreatePersistentVolume(context, volume);
+                    // Only emit a PersistentVolumeClaim — the cluster's StorageClass
+                    // (named by DefaultStorageClassName or the cluster default) drives
+                    // dynamic provisioning of the backing PersistentVolume. Statically
+                    // pre-provisioned PVs are only emitted by the first-class
+                    // KubernetesPersistentVolumeResource path above; emitting a bare PV
+                    // here would be missing a PersistentVolumeSource (csi/hostPath/local
+                    // /nfs/...) and would be rejected by `kubectl apply`. See
+                    // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
                     var pvc = CreatePersistentVolumeClaim(context, volume);
                     podVolume.PersistentVolumeClaim = new()
                     {
@@ -269,6 +325,10 @@ internal static class ResourceExtensions
                 {
                     Name = volume.Name,
                     MountPath = volume.MountPath,
+                    // Only serialize readOnly when true; the K8s default is false and
+                    // emitting `readOnly: false` on every mount would churn every
+                    // published manifest that did not previously set it.
+                    ReadOnly = volume.ReadOnly == true ? true : null,
                 });
         }
 
@@ -400,50 +460,6 @@ internal static class ResourceExtensions
         return container;
     }
 #pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
-    private static PersistentVolume CreatePersistentVolume(KubernetesResource context, VolumeMountV1 volume)
-    {
-        var pvName = context.TargetResource.Name.ToPvName(volume.Name);
-
-        if (context.PersistentVolumes.FirstOrDefault(pv => pv.Metadata.Name == pvName) is { } existingVolume)
-        {
-            return existingVolume;
-        }
-
-        var newPv = new PersistentVolume
-        {
-            Metadata =
-            {
-                Name = pvName,
-                Labels = context.Labels.ToDictionary(),
-            },
-            Spec = new()
-            {
-                Capacity = new()
-                {
-                    ["storage"] = context.Parent.DefaultStorageSize,
-                },
-                AccessModes = { context.Parent.DefaultStorageReadWritePolicy },
-            },
-        };
-
-        if (!string.IsNullOrEmpty(context.Parent.DefaultStorageClassName))
-        {
-            newPv.Spec.StorageClassName = context.Parent.DefaultStorageClassName;
-        }
-
-        if (context.Parent.DefaultStorageType.Equals("hostpath", StringComparison.OrdinalIgnoreCase))
-        {
-            newPv.Spec.HostPath = new()
-            {
-                Path = volume.Name,
-            };
-        }
-
-        context.PersistentVolumes.Add(newPv);
-
-        return newPv;
-    }
 
     private static PersistentVolumeClaim CreatePersistentVolumeClaim(KubernetesResource context, VolumeMountV1 volume)
     {

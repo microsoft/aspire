@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Go;
 /// Provides language support for Go AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class GoLanguageSupport : ILanguageSupport
+internal sealed class GoLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Go.
@@ -45,21 +45,24 @@ public sealed class GoLanguageSupport : ILanguageSupport
             )
 
             func main() {
-            	builder, err := aspire.CreateBuilder(nil)
+            	builder, err := aspire.CreateBuilder()
             	if err != nil {
-            		log.Fatalf("Failed to create builder: %v", err)
+            		log.Fatal(aspire.FormatError(err))
             	}
 
             	// Add your resources here, for example:
-            	// redis, _ := builder.AddRedis("cache")
-            	// postgres, _ := builder.AddPostgres("db")
+            	// cache := builder.AddRedis("cache")
+            	// db := builder.AddPostgres("db")
+            	// if err := builder.Err(); err != nil {
+            	// 	log.Fatal(aspire.FormatError(err))
+            	// }
 
             	app, err := builder.Build()
             	if err != nil {
-            		log.Fatalf("Failed to build: %v", err)
+            		log.Fatal(aspire.FormatError(err))
             	}
-            	if err := app.Run(nil); err != nil {
-            		log.Fatalf("Failed to run: %v", err)
+            	if err := app.Run(); err != nil {
+            		log.Fatal(aspire.FormatError(err))
             	}
             }
             """;
@@ -69,11 +72,11 @@ public sealed class GoLanguageSupport : ILanguageSupport
         files["go.mod"] = """
             module apphost
 
-            go 1.23
+            go 1.26
 
             require apphost/modules/aspire v0.0.0
 
-            replace apphost/modules/aspire => ./.modules
+            replace apphost/modules/aspire => ./.aspire/modules
             """;
 
         // Create apphost.run.json with random ports
@@ -126,7 +129,7 @@ public sealed class GoLanguageSupport : ILanguageSupport
     {
         // Note: InstallDependencies is null because "go run ." handles module
         // resolution automatically, and InstallDependencies runs BEFORE code
-        // generation which means the .modules directory doesn't exist yet.
+        // generation which means the .aspire/modules directory doesn't exist yet.
         return new RuntimeSpec
         {
             Language = LanguageId,

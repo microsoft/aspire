@@ -79,4 +79,7 @@
   <data name="DashboardNotAvailable" xml:space="preserve">
     <value>Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export.</value>
   </data>
+  <data name="IncludeHiddenOptionDescription" xml:space="preserve">
+    <value>Include hidden resources in the output</value>
+  </data>
 </root>

@@ -14,6 +14,7 @@ public static class DistributedApplicationModelExtensions
     /// </summary>
     /// <param name="model">The distributed application model to extract compute resources from.</param>
     /// <returns>An enumerable of compute <see cref="IResource"/> in the model.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetComputeResources(this DistributedApplicationModel model)
     {
         foreach (var r in model.Resources)
@@ -43,6 +44,7 @@ public static class DistributedApplicationModelExtensions
     /// </summary>
     /// <param name="model">The distributed application model to extract build resources from.</param>
     /// <returns>An enumerable of build <see cref="IResource"/> in the model.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildResources(this DistributedApplicationModel model)
     {
         foreach (var r in model.Resources)
@@ -60,6 +62,7 @@ public static class DistributedApplicationModelExtensions
     /// </summary>
     /// <param name="model">The distributed application model to extract build and push resources from.</param>
     /// <returns>An enumerable of build and push <see cref="IResource"/> in the model.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetBuildAndPushResources(this DistributedApplicationModel model)
     {
         foreach (var r in model.Resources)

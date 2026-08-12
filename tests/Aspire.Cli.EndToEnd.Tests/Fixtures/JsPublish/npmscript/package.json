@@ -1,0 +1,16 @@
+{
+  "name": "npmscript",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'build complete'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2"
+  },
+  "overrides": {
+    "body-parser": "1.20.6"
+  }
+}

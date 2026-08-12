@@ -115,15 +115,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to React (Vite) &amp; FastAPI starter.
-        /// </summary>
-        public static string AspirePyStarter_Description {
-            get {
-                return ResourceManager.GetString("AspirePyStarter_Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Service defaults.
         /// </summary>
         public static string AspireServiceDefaults_Description {
@@ -277,6 +268,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Created or updated NuGet.config in the project directory with required package sources..
+        /// </summary>
+        public static string NuGetConfigCreatedOrUpdatedConfirmationMessage {
+            get {
+                return ResourceManager.GetString("NuGetConfigCreatedOrUpdatedConfirmationMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Updated NuGet.config with required package sources..
+        /// </summary>
+        public static string NuGetConfigUpdatedConfirmationMessage {
+            get {
+                return ResourceManager.GetString("NuGetConfigUpdatedConfirmationMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update NuGet.config to add missing package sources for the selected channel?.
+        /// </summary>
+        public static string UpdateNuGetConfigConfirmation {
+            get {
+                return ResourceManager.GetString("UpdateNuGetConfigConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location..
         /// </summary>
         public static string ProjectAlreadyExists {
@@ -295,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project creation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to Project creation failed with exit code {0}.
         /// </summary>
         public static string ProjectCreationFailed {
             get {
@@ -349,7 +367,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The template installation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to The template installation failed with exit code {0}.
         /// </summary>
         public static string TemplateInstallationFailed {
             get {
@@ -462,6 +480,15 @@ namespace Aspire.Cli.Resources {
         public static string RunAspireRun {
             get {
                 return ResourceManager.GetString("RunAspireRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/].
+        /// </summary>
+        public static string SourceOverrideNotPersistedWarning {
+            get {
+                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
             }
         }
 

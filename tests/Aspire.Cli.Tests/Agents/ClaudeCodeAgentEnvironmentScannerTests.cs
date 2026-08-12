@@ -18,7 +18,7 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory(".claude");
 
         // Create a malformed .mcp.json at the workspace root
@@ -46,7 +46,7 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_WithEmptyMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory(".claude");
 
         // Create an empty .mcp.json
@@ -71,7 +71,7 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_DoesNotOverwriteFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory(".claude");
 
         // Create a malformed .mcp.json with content the user may want to preserve
@@ -109,15 +109,9 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
-            environmentVariables: new Dictionary<string, string?>(),
             homeDirectory: workingDirectory);
     }
 

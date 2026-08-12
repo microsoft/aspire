@@ -1,9 +1,0 @@
-{
-  "appHost": {
-    "path": "ValidationAppHost/apphost.py",
-    "language": "python"
-  },
-  "packages": {
-    "Aspire.Hosting.OpenAI": ""
-  }
-}

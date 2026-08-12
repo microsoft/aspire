@@ -669,6 +669,38 @@ public class CircularBufferTests
     }
 
     [Fact]
+    public void AddWhenFull_WithDuplicateOldestValue_KeepsRemainingDuplicate()
+    {
+        var b = CreateBuffer(3);
+
+        b.Add("0");
+        b.Add("0");
+        b.Add("1");
+        b.Add("2");
+
+        Assert.Collection(b,
+            i => Assert.Equal("0", i),
+            i => Assert.Equal("1", i),
+            i => Assert.Equal("2", i));
+    }
+
+    [Fact]
+    public void InsertWhenFull_WithDuplicateOldestValue_KeepsRemainingDuplicate()
+    {
+        var b = CreateBuffer(3);
+
+        b.Add("0");
+        b.Add("0");
+        b.Add("1");
+        b.Insert(1, "x");
+
+        Assert.Collection(b,
+            i => Assert.Equal("x", i),
+            i => Assert.Equal("0", i),
+            i => Assert.Equal("1", i));
+    }
+
+    [Fact]
     public void Clear_EmptiesBuffer_ResetsIndex()
     {
         var b = CreateBuffer(5);

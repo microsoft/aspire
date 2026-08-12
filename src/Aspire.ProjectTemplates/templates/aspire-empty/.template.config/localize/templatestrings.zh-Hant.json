@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "目標 net8.0",
   "symbols/Framework/choices/net9.0/description": "目標 net9.0",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/AspireVersion/description": "要使用的 Aspire 版本。",
   "symbols/AspireVersion/displayName": "Aspire 版本",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
@@ -21,6 +22,7 @@
   "symbols/LocalhostTld/displayName": "在應用程式 URL 中使用 .dev.localhost TLD",
   "symbols/LocalhostTld/description": "是否要在用於本機開發的應用程式 URL 中將專案名稱結合 .dev.localhost TLD，例如 https://myapp.dev.localhost:12345。在 .NET 10 及更新版本上支援。",
   "postActions/set-startup-project/description": "設定解決方案中的啟動專案",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "還原此專案所需的 NuGet 套件。",
   "postActions/restore/manualInstructions/default/text": "執行 'dotnet restore'"
 }

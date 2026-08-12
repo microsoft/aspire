@@ -11,6 +11,8 @@ namespace Aspire.Shared;
 /// <remarks>
 /// This is a deny list because custom schemes could hand off the link to an app registered with the OS.
 /// For example, vscode://.
+/// These values are mirrored in the VS Code extension at extension/src/utils/urlSchemes.ts.
+/// Both files must be kept in sync.
 /// </remarks>
 internal static class KnownUnsupportedUrlSchemes
 {

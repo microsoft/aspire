@@ -16,7 +16,7 @@ namespace Aspire.Hosting.CodeGeneration.Python;
 /// the runtime to create a virtual environment and install dependencies. When <c>uv</c> is available
 /// on PATH it is preferred; otherwise the standard <c>python -m venv</c> / <c>pip</c> toolchain is used.
 /// </remarks>
-public sealed class PythonLanguageSupport : ILanguageSupport
+internal sealed class PythonLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Python.
@@ -90,14 +90,14 @@ public sealed class PythonLanguageSupport : ILanguageSupport
             editable = true
 
             [packages.directory]
-            path = ".modules"
+            path = ".aspire/modules"
             """;
 
         // Create requirements.txt as a fallback for pip (which doesn't support pylock.toml)
         files["apphost_requirements.txt"] = """
             # Aspire Python AppHost requirements
             # This file is used when uv is not available and pip is used instead.
-            -e .modules
+            -e .aspire/modules
             """;
 
         // Create apphost.run.json with random ports

@@ -30,14 +30,6 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     }
 
     /// <summary>
-    /// JSON serializer options used for writing deployment state files.
-    /// </summary>
-    protected static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
-    {
-        WriteIndented = true
-    };
-
-    /// <summary>
     /// Logger instance for the derived class.
     /// </summary>
     protected readonly ILogger<T> logger = logger;
@@ -305,6 +297,31 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         else
         {
             current[segments[^1]] = value;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task ClearAllStateAsync(CancellationToken cancellationToken = default)
+    {
+        if (StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+        {
+            File.Delete(stateFilePath);
+            logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
+        }
+
+        await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            lock (_sectionsLock)
+            {
+                _sections.Clear();
+            }
+            _state = null;
+            _isStateLoaded = false;
+        }
+        finally
+        {
+            _stateLock.Release();
         }
     }
 }

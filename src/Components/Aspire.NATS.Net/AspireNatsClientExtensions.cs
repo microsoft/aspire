@@ -10,6 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
+using NATS.Net;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -137,6 +138,7 @@ public static class AspireNatsClientExtensions
             var options = NatsOpts.Default with
             {
                 LoggerFactory = provider.GetRequiredService<ILoggerFactory>(),
+                SerializerRegistry = NatsClientDefaultSerializerRegistry.Default,
             };
 
             if (configureOptions != null)
@@ -158,11 +160,13 @@ public static class AspireNatsClientExtensions
         {
             builder.Services.TryAddSingleton(Factory);
             builder.Services.TryAddSingleton<INatsConnection>(static provider => provider.GetRequiredService<NatsConnection>());
+            builder.Services.TryAddSingleton<INatsClient>(static provider => provider.GetRequiredService<NatsConnection>());
         }
         else
         {
             builder.Services.TryAddKeyedSingleton<NatsConnection>(serviceKey, (provider, _) => Factory(provider));
             builder.Services.TryAddKeyedSingleton<INatsConnection>(serviceKey, static (provider, key) => provider.GetRequiredKeyedService<NatsConnection>(key));
+            builder.Services.TryAddKeyedSingleton<INatsClient>(serviceKey, static (provider, key) => provider.GetRequiredKeyedService<NatsConnection>(key));
         }
 
         if (!settings.DisableHealthChecks)

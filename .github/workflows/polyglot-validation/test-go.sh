@@ -21,6 +21,17 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
+# TODO: once go is not an experiment feature, remove 
+cat << 'EOF' > aspire.config.json
+{
+  "appHost": {},
+  "features": {
+    "experimentalPolyglot:go": true
+  },
+  "packages": {}
+}
+EOF
+
 aspire init --language go --non-interactive -d
 
 # Add Redis integration
@@ -40,7 +51,15 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
 # Insert Redis code into apphost.go
 echo "Configuring apphost.go with Redis..."
 if grep -q "builder.Build()" apphost.go; then
-    sed -i '/builder.Build()/i\// Add Redis cache resource\n\tredisPort := 0.0\n\tredis, err := builder.AddRedis("cache", \&redisPort, nil)\n\tif err != nil {\n\t\tlog.Fatalf("Failed to add Redis: %v", err)\n\t}\n\t_, err = redis.WithImageRegistry("netaspireci.azurecr.io")\n\tif err != nil {\n\t\tlog.Fatalf("Failed to set image registry: %v", err)\n\t}' apphost.go
+    # Use awk for portable multi-line insertion (works on both GNU/Linux and BSD/macOS)
+    awk '/builder\.Build\(\)/{
+        print "\t// Add Redis cache resource"
+        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tif err := redis.Err(); err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
+        print "\t}"
+        print ""
+    }1' apphost.go > apphost.go.tmp && mv apphost.go.tmp apphost.go
     echo "✅ Redis configuration added to apphost.go"
 fi
 

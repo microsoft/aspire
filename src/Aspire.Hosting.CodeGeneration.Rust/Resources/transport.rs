@@ -307,6 +307,16 @@ impl AspireClient {
         Ok(wrap_if_handle(result, None))
     }
 
+    /// Authenticates the client session with the AppHost server.
+    pub fn authenticate(&self, token: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let result = self.send_request("authenticate", json!([token]))?;
+        if result.as_bool().unwrap_or(false) {
+            return Ok(());
+        }
+
+        Err("Failed to authenticate to the AppHost server.".into())
+    }
+
     /// Cancels a cancellation token on the server.
     pub fn cancel_token(&self, token_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let result = self.send_request("cancelToken", json!([token_id]))?;

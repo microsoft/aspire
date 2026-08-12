@@ -3,13 +3,18 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <source>Execute a specific pipeline step and its dependencies</source>
         <target state="needs-review-translation">특정 파이프라인 단계와 그에 필요한 종속 항목을 실행하세요. (미리 보기)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
         <source>Executing pipeline...</source>
         <target state="translated">파이프라인을 실행하는 중...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListStepsRequiresStep">
+        <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -35,6 +40,11 @@
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
         <target state="needs-review-translation">실행할 단계의 이름입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StepArgumentRequired">
+        <source>The 'step' argument is required.</source>
+        <target state="new">The 'step' argument is required.</target>
         <note />
       </trans-unit>
     </body>

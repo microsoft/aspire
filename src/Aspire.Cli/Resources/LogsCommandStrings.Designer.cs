@@ -105,6 +105,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
         public static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
@@ -114,6 +120,18 @@ namespace Aspire.Cli.Resources {
         public static string GettingLogs {
             get {
                 return ResourceManager.GetString("GettingLogs", resourceCulture);
+            }
+        }
+
+        public static string SearchOptionDescription {
+            get {
+                return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string NoLogsFound {
+            get {
+                return ResourceManager.GetString("NoLogsFound", resourceCulture);
             }
         }
     }

@@ -4,11 +4,8 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Certificates;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Commands;
@@ -18,37 +15,41 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class CertificatesTrustCommand : BaseCommand
 {
-    private readonly ICertificateToolRunner _certificateToolRunner;
+    private readonly ICertificateService _certificateService;
 
-    public CertificatesTrustCommand(ICertificateToolRunner certificateToolRunner, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("trust", CertificatesCommandStrings.TrustDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CertificatesTrustCommand(ICertificateService certificateService,
+        CommonCommandServices services)
+        : base("trust", CertificatesCommandStrings.TrustDescription, services)
     {
-        _certificateToolRunner = certificateToolRunner;
+        _certificateService = certificateService;
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);
 
-        var result = _certificateToolRunner.TrustHttpCertificate();
+        var result = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-        if (CertificateHelpers.IsSuccessfulTrustResult(result))
+        if (result.Success)
         {
-            InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
-            return Task.FromResult(ExitCodeConstants.Success);
+            if (result.ResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustPartialSuccess);
+            }
+            else
+            {
+                InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
+            }
+
+            return CommandResult.Success();
         }
 
-        if (result == EnsureCertificateResult.UserCancelledTrustStep)
+        if (result.WasCancelled)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
-            return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates);
         }
 
-        var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result);
-        InteractionService.DisplayError(details);
-        InteractionService.DisplayError(CertificatesCommandStrings.TrustFailure);
-        return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+        var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result.ResultCode);
+        return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, $"{CertificatesCommandStrings.TrustFailure} {details}");
     }
 }

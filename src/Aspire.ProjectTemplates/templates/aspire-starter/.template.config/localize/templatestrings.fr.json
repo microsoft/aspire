@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "Cible net8.0",
   "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "_Use Redis pour la mise en cache (nécessite un runtime de conteneur pris en charge)",
   "symbols/UseRedisCache/description": "Permet la configuration s’il faut configurer l’application afin qu’elle utilise Redis pour la mise en cache. Nécessite un runtime du conteneur pris en charge pour fonctionner localement, voir https://aka.ms/aspire/containers pour obtenir plus d’informations.",
   "symbols/TestFx/displayName": "Créer un _projet de test",
@@ -37,6 +38,7 @@
   "symbols/LocalhostTld/displayName": "Utilisez le TLD .dev.localhost dans l’URL de l’application",
   "symbols/LocalhostTld/description": "Indique s’il faut combiner le nom du projet avec le fichier TLD .dev.localhost dans l’URL de l’application pour le développement local, par exemple https://myapp.dev.localhost:12345. Pris en charge sur .NET 10 et versions ultérieures.",
   "postActions/set-startup-project/description": "Définit le projet de démarrage dans la solution",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Restaurez les packages NuGet requis par ce projet.",
   "postActions/restore/manualInstructions/default/text": "Exécutez 'dotnet restore'"
 }

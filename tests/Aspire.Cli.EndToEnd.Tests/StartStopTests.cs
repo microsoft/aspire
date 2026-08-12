@@ -3,7 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -16,107 +16,190 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class StartStopTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16191")]
     public async Task CreateStartAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"StarterApp_{projectSuffix}";
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
 
         // Install the Aspire CLI
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
-        await auto.AspireNewAsync("AspireStarterApp", counter);
+        await auto.AspireNewAsync(projectName, counter);
 
         // Navigate to the AppHost directory
-        await auto.TypeAsync("cd AspireStarterApp/AspireStarterApp.AppHost");
+        await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
+        await auto.ClearScreenAsync(counter);
 
-        await pendingRun;
+        // Docker network cleanup can lag behind aspire stop on contended CI runners.
+        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
     }
 
     [Fact]
     public async Task StopWithNoRunningAppHostExitsSuccessfully()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         // Install the Aspire CLI
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Run aspire stop with no running AppHost - should exit with code 0
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
+    }
 
-        // Exit the shell
-        await auto.TypeAsync("exit");
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task StartLaunchesDetachedCliAndAppHostOutsideLauncherProcessGroupAndSession()
+    {
+        // This validates that `aspire start` detaches both the background CLI and AppHost from the
+        // invoking shell's process group and session. The Python script reads the JSON emitted by
+        // `aspire start`, compares each started process with the launcher PGID/SID captured below,
+        // and prints a success marker only after both processes are verified.
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"DetachedProcessGroup_{projectSuffix}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        // The Python script prints this marker only after it verifies both started processes are
+        // outside the launcher's process group and session. Waiting for this marker makes the
+        // success condition explicit instead of relying only on the script's zero exit code.
+        const string assertionSuccessMarker = "detached process group and session assertions passed";
+        var assertionScript = Path.Combine(workspace.WorkspaceRoot.FullName, "assert-detached-process-group.py");
+        File.WriteAllText(assertionScript, $$"""
+import json
+import os
+import subprocess
+import sys
+
+with open("/tmp/aspire-start.json", encoding="utf-8") as start_file:
+    start_info = json.load(start_file)
+
+launcher_pgid = os.environ["ASPIRE_E2E_LAUNCHER_PGID"]
+launcher_sid = os.environ["ASPIRE_E2E_LAUNCHER_SID"]
+
+def get_process_group_and_session(pid):
+    output = subprocess.check_output(
+        ["ps", "-o", "pgid=", "-o", "sid=", "-p", str(pid)],
+        text=True)
+    fields = output.split()
+    if len(fields) != 2:
+        raise SystemExit(f"Unexpected ps output for PID {pid}: {output!r}")
+    return fields[0], fields[1]
+
+for name, pid in (("detached CLI", start_info["cliPid"]), ("AppHost", start_info["appHostPid"])):
+    pgid, sid = get_process_group_and_session(pid)
+    print(f"{name} PID {pid}: PGID={pgid} SID={sid}; launcher PGID={launcher_pgid} SID={launcher_sid}")
+    if pgid == launcher_pgid:
+        raise SystemExit(f"{name} PID {pid} is still in the launcher's process group {launcher_pgid}")
+    if sid == launcher_sid:
+        raise SystemExit(f"{name} PID {pid} is still in the launcher's session {launcher_sid}")
+
+print("{{assertionSuccessMarker}}")
+""");
+
+        var containerAssertionScript = CliE2ETestHelpers.ToContainerPath(assertionScript, workspace);
+
+        // Capture the invoking shell's process group and session. The detached CLI and AppHost must
+        // not share either value or Ctrl+C/terminal teardown can still affect the started app.
+        await auto.RunCommandAsync("export ASPIRE_E2E_LAUNCHER_PGID=$(ps -o pgid= -p $$ | tr -d ' ') ASPIRE_E2E_LAUNCHER_SID=$(ps -o sid= -p $$ | tr -d ' ')", counter);
+        await auto.RunCommandAsync("aspire start --format json > /tmp/aspire-start.json", counter, TimeSpan.FromMinutes(2));
+        await auto.TypeAsync($"python3 {AspireCliShellCommandHelpers.QuoteBashArg(containerAssertionScript)}");
         await auto.EnterAsync();
 
-        await pendingRun;
+        var assertionSuccessSearcher = new CellPatternSearcher()
+            .Find(assertionSuccessMarker);
+        var assertionErrorSearcher = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" ERR:");
+        await auto.WaitUntilAsync(
+            snapshot => assertionSuccessSearcher.Search(snapshot).Count > 0 ||
+                assertionErrorSearcher.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            description: "detached process group assertion success marker or failure prompt");
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
+
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
     public async Task AddPackageWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         // Install the Aspire CLI
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireAddTestApp", counter);
@@ -129,7 +212,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Add a package while the AppHost is running - this should auto-stop the
@@ -141,42 +223,32 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running (the add command may have stopped it)
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-            s.ContainsText(SharedCommandStrings.AppHostNotRunning) || s.ContainsText(StopCommandStrings.AppHostStoppedSuccessfully),
-            timeout: TimeSpan.FromMinutes(1), description: "AppHost stopped or no running AppHost");
-        await auto.WaitForAnyPromptAsync(counter);
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 
     [Fact]
     public async Task AddPackageInteractiveWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         // Install the Aspire CLI
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireAddInteractiveApp", counter);
@@ -189,7 +261,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire add interactively (no integration argument) while AppHost is running.
@@ -200,25 +271,26 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
         await auto.TypeAsync("mongodb"); // type to filter the list
         await auto.EnterAsync(); // select the filtered result
-        await auto.WaitUntilTextAsync("Select a version of", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync(); // Accept the default version
+        var waitingForVersionSelection = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            waitingForVersionSelection = snapshot.ContainsText("Select a version of");
+            return waitingForVersionSelection || snapshot.ContainsText("was added successfully.");
+        }, timeout: TimeSpan.FromSeconds(30), description: "version prompt or add success");
+
+        if (waitingForVersionSelection)
+        {
+            await auto.EnterAsync(); // Accept the default version
+        }
+
         await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-            s.ContainsText(SharedCommandStrings.AppHostNotRunning) || s.ContainsText(StopCommandStrings.AppHostStoppedSuccessfully),
-            timeout: TimeSpan.FromMinutes(1), description: "AppHost stopped or no running AppHost");
-        await auto.WaitForAnyPromptAsync(counter);
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 }

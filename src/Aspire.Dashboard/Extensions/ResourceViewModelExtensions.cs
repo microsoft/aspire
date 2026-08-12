@@ -27,6 +27,11 @@ internal static class ResourceViewModelExtensions
         return resource.KnownState is KnownResourceState.Exited or KnownResourceState.Finished or KnownResourceState.FailedToStart;
     }
 
+    public static bool IsFailedToStart(this ResourceViewModel resource)
+    {
+        return resource.KnownState is KnownResourceState.FailedToStart;
+    }
+
     public static bool IsUnusableTransitoryState(this ResourceViewModel resource)
     {
         return resource.KnownState is KnownResourceState.Starting or KnownResourceState.Building or KnownResourceState.Waiting or KnownResourceState.Stopping;
@@ -45,6 +50,11 @@ internal static class ResourceViewModelExtensions
     public static bool IsWaiting(this ResourceViewModel resource)
     {
         return resource.KnownState is KnownResourceState.Waiting;
+    }
+
+    public static bool HasMissingParameterValueState(this ResourceViewModel resource)
+    {
+        return resource.IsParameter && resource.KnownState is KnownResourceState.ValueMissing;
     }
 
     public static bool IsUnknownState(this ResourceViewModel resource) => resource.KnownState is KnownResourceState.Unknown;

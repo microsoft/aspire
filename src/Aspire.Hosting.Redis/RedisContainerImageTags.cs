@@ -15,10 +15,10 @@ internal static class RedisContainerImageTags
     public const string Tag = "8.6";
 
     /// <remarks>RedisCommanderRegistry</remarks>
-    public const string RedisCommanderRegistry = "docker.io";
+    public const string RedisCommanderRegistry = "ghcr.io";
 
-    /// <remarks>rediscommander/redis-commander</remarks>
-    public const string RedisCommanderImage = "rediscommander/redis-commander";
+    /// <remarks>joeferner/redis-commander</remarks>
+    public const string RedisCommanderImage = "joeferner/redis-commander";
 
     /// <remarks>latest</remarks>
     public const string RedisCommanderTag = "latest"; // There isn't a better tag than 'latest' which is 3 years old.
@@ -29,6 +29,6 @@ internal static class RedisContainerImageTags
     /// <remarks>redis/redisinsight</remarks>
     public const string RedisInsightImage = "redis/redisinsight";
 
-    /// <remarks>3.0</remarks>
-    public const string RedisInsightTag = "3.0";
+    /// <remarks>3.4</remarks>
+    public const string RedisInsightTag = "3.4";
 }

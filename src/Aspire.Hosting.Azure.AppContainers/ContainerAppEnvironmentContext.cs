@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Microsoft.Extensions.Logging;
@@ -21,7 +19,7 @@ internal sealed class ContainerAppEnvironmentContext(
 
     public AzureContainerAppEnvironmentResource Environment => environment;
 
-    public IServiceProvider ServiceProvider => serviceProvider;
+    public IServiceProvider Services => serviceProvider;
 
     private readonly Dictionary<IResource, BaseContainerAppContext> _containerApps = new(new ResourceNameComparer());
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];

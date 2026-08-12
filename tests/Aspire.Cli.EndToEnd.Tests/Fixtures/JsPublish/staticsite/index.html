@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Static Site</title></head>
+<body>
+  <h1>Weather</h1>
+  <div id="weather">Loading...</div>
+  <script>
+    fetch('/api/weather')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('weather').innerHTML =
+          data.map(d => `<p>${d.date}: ${d.temperatureC}°C - ${d.summary}</p>`).join('');
+      })
+      .catch(() => { document.getElementById('weather').textContent = 'API unavailable'; });
+  </script>
+</body>
+</html>

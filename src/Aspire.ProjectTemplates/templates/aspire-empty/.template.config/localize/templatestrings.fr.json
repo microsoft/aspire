@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "Cible net8.0",
   "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/AspireVersion/description": "La version d’Aspire à utiliser.",
   "symbols/AspireVersion/displayName": "Version Aspire",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
@@ -21,6 +22,7 @@
   "symbols/LocalhostTld/displayName": "Utilisez le TLD .dev.localhost dans l’URL de l’application",
   "symbols/LocalhostTld/description": "Indique s’il faut combiner le nom du projet avec le fichier TLD .dev.localhost dans l’URL de l’application pour le développement local, par exemple https://myapp.dev.localhost:12345. Pris en charge sur .NET 10 et versions ultérieures.",
   "postActions/set-startup-project/description": "Définit le projet de démarrage dans la solution",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Restaurez les packages NuGet requis par ce projet.",
   "postActions/restore/manualInstructions/default/text": "Exécutez 'dotnet restore'"
 }

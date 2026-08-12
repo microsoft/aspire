@@ -40,3 +40,5 @@ resource purgeOldImages_0 'Microsoft.ContainerRegistry/registries/tasks@2019-04-
 output name string = acr.name
 
 output loginServer string = acr.properties.loginServer
+
+output id string = acr.id

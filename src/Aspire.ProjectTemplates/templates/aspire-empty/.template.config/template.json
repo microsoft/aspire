@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -20,7 +21,7 @@
     "language": "C#",
     "type": "solution",
     "editorTreatAs": "solution",
-    "aspire-!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!-tfms": "net8.0;net9.0;net10.0"
+    "aspire-!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!-tfms": "net8.0;net9.0;net10.0;net11.0"
   },
   "precedence": "9000",
   "identity": "Aspire.Empty.CSharp.!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
@@ -64,6 +65,10 @@
         {
           "choice": "net10.0",
           "description": "Target net10.0"
+        },
+        {
+          "choice": "net11.0",
+          "description": "Target net11.0"
         }
       ],
       "replaces": "net8.0",
@@ -238,7 +243,7 @@
     "LocalhostTld": {
       "type": "parameter",
       "datatype": "bool",
-      "isEnabled": "Framework == net10.0",
+      "isEnabled": "(Framework == net10.0 || Framework == net11.0)",
       "defaultValue": "false",
       "displayName": "Use the .dev.localhost TLD in the application URL",
       "description": "Whether to combine the project name with the .dev.localhost TLD in the application URL for local development, e.g. https://myapp.dev.localhost:12345. Supported on .NET 10 and later."
@@ -298,7 +303,7 @@
     {
       "id": "set-startup-project",
       "description": "Sets the startup project in the solution",
-      "manualInstructions": [],
+      "manualInstructions": [{ "text": "" }],
       "actionId": "5BECCC32-4D5A-4476-A0F9-BD2E81AF0689",
       "condition": "(hostIdentifier == \"vs\")",
       "args": {

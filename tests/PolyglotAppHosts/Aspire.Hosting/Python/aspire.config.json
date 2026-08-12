@@ -1,0 +1,15 @@
+{
+  "appHost": {
+    "path": "apphost.py",
+    "language": "python"
+  },
+  "features": {
+    "experimentalPolyglot:python": true
+  },
+  "packages": {
+    "Aspire.Hosting": "",
+    "Aspire.Hosting.Azure.Kubernetes": "",
+    "Aspire.Hosting.Azure.Network": "",
+    "Aspire.Hosting.Redis": ""
+  }
+}

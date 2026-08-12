@@ -92,4 +92,13 @@ public class DashboardUIHelpersTests
         // Assert
         Assert.Equal(int.MinValue, result);
     }
+
+    [Fact]
+    public void GetMaskingText_ReturnsClassedMarkupAndPlainText()
+    {
+        var mask = DashboardUIHelpers.GetMaskingText(3);
+
+        Assert.Equal("<span class=\"masked-content\">&#x25cf;&#x25cf;&#x25cf;</span>", mask.MarkupString.Value);
+        Assert.Equal("●●●", mask.Text);
+    }
 }

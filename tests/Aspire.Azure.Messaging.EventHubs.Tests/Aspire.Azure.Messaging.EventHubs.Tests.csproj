@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
@@ -12,9 +12,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
-
   <ItemGroup>
-
     <ProjectReference Include="..\..\src\Components\Aspire.Azure.Messaging.EventHubs\Aspire.Azure.Messaging.EventHubs.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Azure.Storage.Blobs\Aspire.Azure.Storage.Blobs.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

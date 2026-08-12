@@ -1,0 +1,6 @@
+{
+  "appHost": {
+    "path": "apphost.cs",
+    "language": "csharp"
+  }
+}

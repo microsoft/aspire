@@ -166,7 +166,7 @@ function App() {
             Learn more about Aspire<span className="visually-hidden"> (opens in new tab)</span>
           </a>
           <a 
-            href="https://github.com/dotnet/aspire" 
+            href="https://github.com/microsoft/aspire" 
             target="_blank" 
             rel="noopener noreferrer"
             className="github-link"

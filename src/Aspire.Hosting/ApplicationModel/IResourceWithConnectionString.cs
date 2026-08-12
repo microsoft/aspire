@@ -6,7 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a resource that has a connection string associated with it.
 /// </summary>
-public interface IResourceWithConnectionString : IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public interface IResourceWithConnectionString : IResource, IExpressionValue, IValueWithReferences
 {
     /// <summary>
     /// Gets the connection string associated with the resource.

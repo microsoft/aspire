@@ -69,5 +69,59 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string ArgumentRequired {
+            get {
+                return ResourceManager.GetString("ArgumentRequired", resourceCulture);
+            }
+        }
+
+        internal static string AvailableResourceCommands {
+            get {
+                return ResourceManager.GetString("AvailableResourceCommands", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpAllowedValues {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpAllowedValues", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpCommandOptions {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpCommandOptions", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpDefaultValue {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpDefaultValue", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpDelimiterHint {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpDelimiterHint", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpRequired {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpRequired", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpUsageSyntax {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpUsageSyntax", resourceCulture);
+            }
+        }
+
+        internal static string CommandSpecificHelpValuePlaceholder {
+            get {
+                return ResourceManager.GetString("CommandSpecificHelpValuePlaceholder", resourceCulture);
+            }
+        }
+
     }
 }

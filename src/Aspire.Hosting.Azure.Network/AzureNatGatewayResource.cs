@@ -27,7 +27,7 @@ public class AzureNatGatewayResource(string name, Action<AzureResourceInfrastruc
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the list of explicit Public IP Address resources associated with this NAT Gateway.
@@ -51,7 +51,7 @@ public class AzureNatGatewayResource(string name, Action<AzureResourceInfrastruc
 
         if (!TryApplyExistingResourceAnnotation(this, infra, natGw))
         {
-            natGw.Name = NameOutput.AsProvisioningParameter(infra);
+            natGw.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(natGw);

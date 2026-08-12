@@ -14,14 +14,14 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestoreCommand_WithDotNetAppHost_RunsDotNetRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
         var restoreCalled = false;
         string? capturedProjectFilePath = null;
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, (Action<CliServiceCollectionTestOptions>?)(options =>
         {
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
@@ -29,18 +29,18 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
                 {
                     restoreCalled = true;
                     capturedProjectFilePath = projectFilePath.FullName;
-                    return Aspire.Cli.ExitCodeConstants.Success;
+                    return (int)Aspire.Cli.CliExitCodes.Success;
                 }
             };
-        });
-        var provider = services.BuildServiceProvider();
+        }));
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"restore --apphost {appHostFile.FullName}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(Aspire.Cli.ExitCodeConstants.Success, exitCode);
+        Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
         Assert.True(restoreCalled);
         Assert.Equal(appHostFile.FullName, capturedProjectFilePath);
     }
@@ -48,34 +48,34 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestoreCommand_WithDotNetAppHostAndMissingSdk_ReturnsSdkNotInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
         var restoreCalled = false;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, (Action<CliServiceCollectionTestOptions>?)(options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
-                CheckAsyncCallback = _ => (false, null, "9.0.302")
+                CheckAsyncCallback = _ => ((bool Success, string? HighestDetectedVersion, string MinimumRequiredVersion))(false, null, "9.0.302")
             };
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 RestoreAsyncCallback = (_, _, _) =>
                 {
                     restoreCalled = true;
-                    return Aspire.Cli.ExitCodeConstants.Success;
+                    return (int)Aspire.Cli.CliExitCodes.Success;
                 }
             };
-        });
-        var provider = services.BuildServiceProvider();
+        }));
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"restore --apphost {appHostFile.FullName}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(Aspire.Cli.ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(Aspire.Cli.CliExitCodes.SdkNotInstalled, exitCode);
         Assert.False(restoreCalled);
     }
 }

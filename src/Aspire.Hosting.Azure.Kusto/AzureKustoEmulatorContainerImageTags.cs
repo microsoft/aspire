@@ -23,6 +23,6 @@ internal static class AzureKustoEmulatorContainerImageTags
     /// <summary>
     /// The tag for the Kusto emulator container image.
     /// </summary>
-    /// <remarks>latest</remarks>
-    public static string Tag { get; } = "latest";
+    /// <remarks>2026.03.16.1116-2611-994a3c9-master</remarks>
+    public static string Tag { get; } = "2026.03.16.1116-2611-994a3c9-master";
 }

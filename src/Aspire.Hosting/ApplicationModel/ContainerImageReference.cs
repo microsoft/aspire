@@ -32,6 +32,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     public string ValueExpression => $"{{{Resource.Name}.containerImage}}";
 
     /// <inheritdoc/>
+    [global::Aspire.Hosting.AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container image provenance.")]
     public IEnumerable<object> References => [Resource];
 
     /// <inheritdoc/>
@@ -44,7 +45,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
         // Check if this resource is configured to save as an archive instead of pushing to a registry
-        if (context.ExecutionContext?.ServiceProvider is { } serviceProvider)
+        if (context.ExecutionContext?.Services is { } serviceProvider)
         {
             var logger = Resource.GetLogger(serviceProvider);
             var buildOptionsContext = await Resource.ProcessContainerBuildOptionsCallbackAsync(

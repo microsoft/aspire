@@ -27,7 +27,6 @@ jobs:
           ASPIRE_REPO_ROOT: ${{ github.workspace }}
         run: |
           ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
-          FAILURES=0
 
           # Dump core Aspire.Hosting capabilities (no integration argument)
           echo "::group::Aspire.Hosting (core)"
@@ -37,12 +36,13 @@ jobs:
           fi
           echo "::endgroup::"
 
-          # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes
-          # Find project directories by resolving matched files to their nearest .csproj
-          # Exclude infrastructure projects that define/analyze the attribute rather than use it
-          PROJECTS=$(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' \
+          # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes.
+          # Find project directories by resolving matched files to their nearest .csproj.
+          # Exclude infrastructure projects that define/analyze the attribute rather than use it.
+          PROJECTS=$(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' \
                       | grep -v '/obj/' | grep -v '/bin/' \
                       | grep -v 'Aspire.Hosting.Analyzers' \
+                      | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
                       | while read -r file; do
@@ -57,19 +57,57 @@ jobs:
                           done
                         done | sort -u)
 
+          if [ -z "$PROJECTS" ]; then
+            echo "No integration projects found with [AspireExport] attributes"
+            exit 0
+          fi
+
+          # Build an array of .csproj paths for all discovered projects,
+          # skipping any that don't have a matching csproj file.
+          CSPROJ_ARGS=()
           for proj in $PROJECTS; do
             proj_name=$(basename "$proj")
             csproj="$proj/$proj_name.csproj"
             if [ -f "$csproj" ]; then
-              echo "::group::$proj_name"
-              mkdir -p "$proj/api"
-              if ! $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$proj/api/$proj_name.ats.txt"; then
-                echo "::error::Failed to dump ATS capabilities for $proj_name"
-                FAILURES=$((FAILURES + 1))
-              fi
-              echo "::endgroup::"
+              CSPROJ_ARGS+=("$csproj")
             fi
           done
+
+          # Dump all integrations in a single pass using --output-directory.
+          # This builds ONE AppHost with all integrations instead of a separate AppHost per
+          # integration, dramatically reducing disk space usage and execution time.
+          ATS_OUTPUT_DIR=$(mktemp -d)
+
+          echo "::group::All integrations (batched)"
+          if ! $ASPIRE_CLI sdk dump --format ci --output-directory "$ATS_OUTPUT_DIR" "${CSPROJ_ARGS[@]}"; then
+            echo "::error::Failed to dump ATS capabilities for integrations"
+            rm -rf "$ATS_OUTPUT_DIR"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          # Move each output file from the temp output directory to the correct project api/ directory.
+          # The CLI names each output file after the integration's assembly name, which for
+          # Aspire.Hosting.* projects equals the project directory/csproj name.
+          FAILURES=0
+          for proj in $PROJECTS; do
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            # Guard against the csproj having been removed between discovery and here.
+            if [ ! -f "$csproj" ]; then
+              continue
+            fi
+            ats_file="$ATS_OUTPUT_DIR/$proj_name.ats.txt"
+            if [ -f "$ats_file" ]; then
+              mkdir -p "$proj/api"
+              mv "$ats_file" "$proj/api/$proj_name.ats.txt"
+            else
+              echo "::error::ATS output file not found for $proj_name"
+              FAILURES=$((FAILURES + 1))
+            fi
+          done
+
+          rm -rf "$ATS_OUTPUT_DIR"
 
           if [ "$FAILURES" -gt 0 ]; then
             echo "::error::$FAILURES project(s) failed ATS capability dump"
@@ -78,13 +116,13 @@ jobs:
 
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
       - name: Create or update pull request
-        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1
+        uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
           branch: update-ats-diffs

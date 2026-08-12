@@ -378,29 +378,55 @@ public class AddDotnetToolTests
         Assert.Equal(expectedManifest, manifest.ToString());
     }
 
-    [Theory]
-    [InlineData("11.1.0", true)]
-    [InlineData("10.0.0", true)]
-    [InlineData("9.0.999", false)]
-    public void ValidateDotnetSdkVersion_ValidatesVersionCorrectly(string versionString, bool isAllowed)
+    [Fact]
+    public async Task CustomLaunchToolArgsReplaceBuiltInInvocationInArgumentsAndManifest()
     {
-        var version = Version.Parse(versionString);
+        var builder = DistributedApplication.CreateBuilder();
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
+        var tool = builder.AddDotnetTool("ef-tool", "dotnet-ef")
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static context =>
+            {
+                context.Args.Add("custom");
+                context.Args.Add("exec");
+                context.Args.Add("--");
+            });
+#pragma warning restore ASPIREEXTENSION001
 
-        if (isAllowed)
+        using var app = builder.Build();
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(tool.Resource).DefaultTimeout();
+        Assert.Equal(new[] { "custom", "exec", "--", "app-arg" }, args);
+
+        var manifest = await ManifestUtils.GetManifest(tool.Resource).DefaultTimeout();
+        var expectedManifest =
+        """
         {
-            DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, "");
+          "type": "executable.v0",
+          "workingDirectory": ".",
+          "command": "dotnet",
+          "args": [
+            "custom",
+            "exec",
+            "--",
+            "app-arg"
+          ]
         }
-        else
-        {
-            Assert.Throws<DistributedApplicationException>(() =>
-                DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, ""));
-        }
+        """;
+
+        Assert.Equal(expectedManifest, manifest.ToString());
     }
 
     [Fact]
-    public void ValidateDotnetSdkVersion_WithNullVersion_DoesNotThrow()
+    public void AddDotnetTool_IncludesRequiredCommandAnnotation()
     {
-        // Should not throw - null is treated as "unable to determine version"
-        DotnetToolResourceExtensions.ValidateDotnetSdkVersion(null, "");
+        var builder = DistributedApplication.CreateBuilder();
+        var tool = builder.AddDotnetTool("mytool", "dotnet-ef");
+
+#pragma warning disable ASPIRECOMMAND001
+        var annotation = Assert.Single(tool.Resource.Annotations.OfType<RequiredCommandAnnotation>());
+#pragma warning restore ASPIRECOMMAND001
+        Assert.Equal("dotnet", annotation.Command);
+        Assert.NotNull(annotation.ValidationCallback);
     }
 }

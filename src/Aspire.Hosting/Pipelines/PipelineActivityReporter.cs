@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -17,14 +16,17 @@ namespace Aspire.Hosting.Pipelines;
 internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
+    private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
+    private readonly IFileUploadStore _fileUploadStore;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _interactionServiceSubscriber;
 
-    public PipelineActivityReporter(InteractionService interactionService, ILogger<PipelineActivityReporter> logger)
+    public PipelineActivityReporter(InteractionService interactionService, IFileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
     {
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
         _logger = logger;
         _interactionServiceSubscriber = Task.Run(() => SubscribeToInteractionsAsync(_cancellationTokenSource.Token));
     }
@@ -38,21 +40,39 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         _ => CompletionStates.InProgress
     };
 
+    private static PublishingActivityData CreateStepActivityData(ReportingStep step, string statusText, CompletionState completionState, bool enableMarkdown)
+    {
+        return new PublishingActivityData
+        {
+            Id = step.Id,
+            StatusText = statusText,
+            CompletionState = ToBackchannelCompletionState(completionState),
+            StepId = null,
+            ParentStepId = step.ParentStepId,
+            HierarchyLevel = step.HierarchyLevel,
+            EnableMarkdown = enableMarkdown
+        };
+    }
+
     public async Task<IReportingStep> CreateStepAsync(string title, CancellationToken cancellationToken = default)
     {
-        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title);
+        return await CreateStepAsync(title, parentStepId: null, hierarchyLevel: 0, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReportingStep> CreateStepAsync(string title, string? parentStepId, int hierarchyLevel, CancellationToken cancellationToken = default)
+    {
+        var resolvedParentStepId = parentStepId is not null && _stepIdsByTitle.TryGetValue(parentStepId, out var resolvedStepId)
+            ? resolvedStepId
+            : parentStepId;
+
+        var step = new ReportingStep(this, Guid.NewGuid().ToString(), title, resolvedParentStepId, hierarchyLevel);
         _steps.TryAdd(step.Id, step);
+        _stepIdsByTitle[title] = step.Id;
 
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = step.Title,
-                CompletionState = ToBackchannelCompletionState(CompletionState.InProgress),
-                StepId = null
-            }
+            Data = CreateStepActivityData(step, step.Title, CompletionState.InProgress, enableMarkdown: false)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
@@ -113,14 +133,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
         var state = new PublishingActivity
         {
             Type = PublishingActivityTypes.Step,
-            Data = new PublishingActivityData
-            {
-                Id = step.Id,
-                StatusText = completionText,
-                CompletionState = ToBackchannelCompletionState(completionState),
-                StepId = null,
-                EnableMarkdown = enableMarkdown
-            }
+            Data = CreateStepActivityData(step, completionText, completionState, enableMarkdown)
         };
 
         await ActivityItemUpdated.Writer.WriteAsync(state, cancellationToken).ConfigureAwait(false);
@@ -335,7 +348,10 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     AllowCustomChoice = input.AllowCustomChoice,
                     UpdateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)),
                     Loading = input.DynamicLoadingState?.Loading ?? false,
-                    Disabled = input.Disabled
+                    Disabled = input.Disabled,
+                    AllowMultipleFiles = input.AllowMultipleFiles,
+                    FileFilter = input.FileFilter,
+                    MaxFileSize = input.MaxFileSize
                 }).ToList();
 
                 var activity = new PublishingActivity
@@ -419,7 +435,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType));
+                                dtos.Add(CreateInputDto(matchingInput, responseAnswer));
                             }
 
                             DashboardServiceData.ProcessInputs(
@@ -462,6 +478,26 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 },
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Creates an InputDto, resolving file references from the FileUploadStore for File inputs.
+    /// The CLI sends Value as JSON [{"Id":"...","Name":"..."}] matching the dashboard format.
+    /// </summary>
+    private InputDto CreateInputDto(InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
+    {
+        var value = responseAnswer.Value ?? "";
+
+        if (matchingInput.InputType == InputType.File)
+        {
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, value, matchingInput.Name, _logger);
+            if (files is not null)
+            {
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);
+            }
+        }
+
+        return new InputDto(matchingInput.Name, value, matchingInput.InputType);
     }
 
     public async ValueTask DisposeAsync()

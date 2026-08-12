@@ -24,7 +24,8 @@ public static class DotnetToolResourceExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="packageId">The package id of the tool.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addDotnetTool", Description = "Adds a .NET tool resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<DotnetToolResource> AddDotnetTool(this IDistributedApplicationBuilder builder, [ResourceName] string name, string packageId)
         => builder.AddDotnetTool(new DotnetToolResource(name, packageId));
 
@@ -41,6 +42,7 @@ public static class DotnetToolResourceExtensions
     public static IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
         where T : DotnetToolResource
     {
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
         return builder.AddResource(resource)
             .WithInitialState(new CustomResourceSnapshot
             {
@@ -49,8 +51,10 @@ public static class DotnetToolResourceExtensions
             })
             .WithIconName("Toolbox")
             .WithCommand("dotnet")
-            .WithArgs(BuildToolExecArguments)
+            .WithLaunchToolArgs(BuildToolExecArguments, showInCommandLine: false)
+            .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
             .OnBeforeResourceStarted(BeforeResourceStarted);
+#pragma warning restore ASPIREEXTENSION001
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
         {
@@ -96,23 +100,16 @@ public static class DotnetToolResourceExtensions
         async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
         {
             var rns = evt.Services.GetRequiredService<ResourceNotificationService>();
-            var toolConfig = resource.ToolConfiguration;
-            if (toolConfig == null)
+            var properties = resource.CreateSnapshotProperties().ToArray();
+            if (properties.Length == 0)
             {
                 return;
             }
 
             await rns.PublishUpdateAsync(resource, x => x with
             {
-                Properties = x.Properties.SetResourcePropertyRange([
-                    new (KnownProperties.Tool.Package, toolConfig.PackageId),
-                    new (KnownProperties.Tool.Version, toolConfig.Version),
-                    new (KnownProperties.Resource.Source, resource.ToolConfiguration?.PackageId)
-                    ])
+                Properties = x.Properties.SetResourcePropertyRange(properties)
             }).ConfigureAwait(false);
-
-            var version = await DotnetSdkUtils.TryGetVersionAsync(resource.WorkingDirectory).ConfigureAwait(false);
-            ValidateDotnetSdkVersion(version, resource.WorkingDirectory);
         }
 
     }
@@ -124,7 +121,8 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="packageId">The package identifier to assign to the tool configuration. Cannot be null.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolPackage", Description = "Sets the tool package ID")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolPackage<T>(this IResourceBuilder<T> builder, string packageId)
         where T : DotnetToolResource
     {
@@ -139,7 +137,8 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="version">The package version to use</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolVersion", Description = "Sets the tool version")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolVersion<T>(this IResourceBuilder<T> builder, string version)
         where T : DotnetToolResource
     {
@@ -153,7 +152,8 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The type of resource being built. Must inherit from DotnetToolResource.</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolPrerelease", Description = "Allows prerelease tool versions")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -168,7 +168,8 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="source">The source to add.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolSource", Description = "Adds a NuGet source for the tool")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolSource<T>(this IResourceBuilder<T> builder, string source)
         where T : DotnetToolResource
     {
@@ -182,7 +183,8 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The Dotnet Tool resource type</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolIgnoreExistingFeeds", Description = "Ignores existing NuGet feeds")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -196,7 +198,8 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The Dotnet Tool resource type</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withToolIgnoreFailedSources", Description = "Ignores failed NuGet sources")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -204,18 +207,15 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
-    internal static void ValidateDotnetSdkVersion(Version? version, string workingDirectory)
+    internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext _, string workingDirectory)
     {
-        if (version is null)
+        var version = await DotnetSdkUtils.TryGetVersionAsync(workingDirectory).ConfigureAwait(false);
+
+        if (version?.Major < 10)
         {
-            // This most likely means something is majorly wrong with the dotnet sdk
-            // Which will show up as an error once dcp runs `dotnet tool exec`
-            return;
+            return RequiredCommandValidationResult.Failure($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version}");
         }
 
-        if (version.Major < 10)
-        {
-            throw new DistributedApplicationException($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version} for working directory {workingDirectory}");
-        }
+        return RequiredCommandValidationResult.Success();
     }
 }

@@ -255,12 +255,24 @@ internal sealed record ContainerNetworkTunnelProxyStatus : V1Status
     /// </summary>
     [JsonPropertyName("serverProxyControlPort")]
     public int ServerProxyControlPort { get; set; }
+
+    // Note: the ContainerNetworkTunnelProxyStatus has "Message" property that represents a human-readable information 
+    // about ContainerNetworkTunnelProxy state. It is provided by V1Status base class.
 }
 
 internal sealed class ContainerNetworkTunnelProxy : CustomResource<ContainerNetworkTunnelProxySpec, ContainerNetworkTunnelProxyStatus>, IKubernetesStaticMetadata
 {
+    /// <summary>
+    /// Contains updated tunnel configurations that have not yet been applied to the proxy pair.
+    /// </summary>
+    [JsonIgnore]
+    public List<TunnelConfiguration> UpdatedTunnels { get; private set; }
+
     [JsonConstructor]
-    public ContainerNetworkTunnelProxy(ContainerNetworkTunnelProxySpec spec) : base(spec) { }
+    public ContainerNetworkTunnelProxy(ContainerNetworkTunnelProxySpec spec) : base(spec)
+    {
+        UpdatedTunnels = spec.Tunnels ?? new List<TunnelConfiguration>();
+    }
 
     public static ContainerNetworkTunnelProxy Create(string name)
     {

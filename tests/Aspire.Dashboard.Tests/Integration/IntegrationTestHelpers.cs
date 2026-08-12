@@ -64,6 +64,7 @@ public static class IntegrationTestHelpers
             [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
             [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
             [DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = "true",
+            [DashboardConfigNames.DashboardApiAuthModeName.ConfigKey] = nameof(ApiAuthMode.Unsecured),
             // Allow the requirement of HTTPS communication with the OpenIdConnect authority to be relaxed during tests.
             ["Authentication:Schemes:OpenIdConnect:RequireHttpsMetadata"] = "false"
         };

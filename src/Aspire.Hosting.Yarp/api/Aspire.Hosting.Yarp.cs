@@ -8,47 +8,68 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
+    [AspireExport(ExposeMethods = true)]
     public partial interface IYarpConfigurationBuilder
     {
+        [AspireExportIgnore(Reason = "Use the addClusterFromEndpoint method instead.")]
         Yarp.YarpCluster AddCluster(ApplicationModel.EndpointReference endpoint);
+        [AspireExportIgnore(Reason = "Use the addClusterFromExternalService method instead.")]
         Yarp.YarpCluster AddCluster(ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService);
+        [AspireExportIgnore(Reason = "Use the addClusterFromResource method instead.")]
         Yarp.YarpCluster AddCluster(ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> resource);
+        [AspireExportIgnore(Reason = "Use the addClusterWithDestination method instead.")]
         Yarp.YarpCluster AddCluster(string clusterName, object destination);
+        [AspireExportIgnore(Reason = "Use the addClusterWithDestinations method instead.")]
         Yarp.YarpCluster AddCluster(string clusterName, object[] destinations);
+        [AspireExportIgnore(Reason = "Use the exported addRoute helper instead.")]
         Yarp.YarpRoute AddRoute(string path, Yarp.YarpCluster cluster);
     }
 
     public static partial class YarpConfigurationBuilderExtensions
     {
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.EndpointReference endpoint) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> resource) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the exported addCatchAllRoute helper instead.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, Yarp.YarpCluster cluster) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.EndpointReference endpoint) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
         public static Yarp.YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, ApplicationModel.IResourceBuilder<IResourceWithServiceDiscovery> resource) { throw null; }
     }
 
     public static partial class YarpResourceExtensions
     {
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> AddYarp(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> PublishWithStaticFiles(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder, ApplicationModel.IResourceBuilder<IResourceWithContainerFiles> resourceWithFiles) { throw null; }
 
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> WithConfiguration(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder, System.Action<IYarpConfigurationBuilder> configurationBuilder) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> WithHostHttpsPort(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder, int? port) { throw null; }
 
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> WithHostPort(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder, int? port) { throw null; }
 
+        [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> WithStaticFiles(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder, string sourcePath) { throw null; }
 
+        [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
         public static ApplicationModel.IResourceBuilder<Yarp.YarpResource> WithStaticFiles(this ApplicationModel.IResourceBuilder<Yarp.YarpResource> builder) { throw null; }
     }
 }
@@ -62,6 +83,7 @@ namespace Aspire.Hosting.Yarp
         IYarpJsonConfigGeneratorBuilder WithConfigFile(string configFilePath);
     }
 
+    [AspireExport]
     public partial class YarpCluster
     {
         internal YarpCluster() { }
@@ -69,16 +91,22 @@ namespace Aspire.Hosting.Yarp
 
     public static partial class YarpClusterExtensions
     {
+        [AspireExportIgnore(Reason = "ForwarderRequestConfig is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, global::Yarp.ReverseProxy.Forwarder.ForwarderRequestConfig config) { throw null; }
 
+        [AspireExportIgnore(Reason = "HealthCheckConfig is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, global::Yarp.ReverseProxy.Configuration.HealthCheckConfig config) { throw null; }
 
+        [AspireExportIgnore(Reason = "HttpClientConfig is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpCluster WithHttpClientConfig(this YarpCluster cluster, global::Yarp.ReverseProxy.Configuration.HttpClientConfig config) { throw null; }
 
+        [AspireExport]
         public static YarpCluster WithLoadBalancingPolicy(this YarpCluster cluster, string policy) { throw null; }
 
+        [AspireExport("withClusterMetadata", MethodName = "withMetadata")]
         public static YarpCluster WithMetadata(this YarpCluster cluster, System.Collections.Generic.IReadOnlyDictionary<string, string> metadata) { throw null; }
 
+        [AspireExportIgnore(Reason = "SessionAffinityConfig is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, global::Yarp.ReverseProxy.Configuration.SessionAffinityConfig config) { throw null; }
     }
 
@@ -87,6 +115,7 @@ namespace Aspire.Hosting.Yarp
         public YarpResource(string name) : base(default!, default) { }
     }
 
+    [AspireExport]
     public partial class YarpRoute
     {
         internal YarpRoute() { }
@@ -94,26 +123,37 @@ namespace Aspire.Hosting.Yarp
 
     public static partial class YarpRouteExtensions
     {
+        [AspireExportIgnore(Reason = "RouteMatch is not ATS-compatible. Use the DTO-based overload or the specific match helper methods instead.")]
         public static YarpRoute WithMatch(this YarpRoute route, global::Yarp.ReverseProxy.Configuration.RouteMatch match) { throw null; }
 
+        [AspireExportIgnore(Reason = "RouteHeader is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpRoute WithMatchHeaders(this YarpRoute route, params global::Yarp.ReverseProxy.Configuration.RouteHeader[] headers) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithMatchHosts(this YarpRoute route, params string[] hosts) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithMatchMethods(this YarpRoute route, params string[] methods) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithMatchPath(this YarpRoute route, string path) { throw null; }
 
+        [AspireExportIgnore(Reason = "RouteQueryParameter is not ATS-compatible. Use the DTO-based overload instead.")]
         public static YarpRoute WithMatchRouteQueryParameter(this YarpRoute route, params global::Yarp.ReverseProxy.Configuration.RouteQueryParameter[] queryParameters) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithMaxRequestBodySize(this YarpRoute route, long maxRequestBodySize) { throw null; }
 
+        [AspireExport("withRouteMetadata", MethodName = "withMetadata")]
         public static YarpRoute WithMetadata(this YarpRoute route, System.Collections.Generic.IReadOnlyDictionary<string, string>? metadata) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithOrder(this YarpRoute route, int? order) { throw null; }
 
+        [AspireExportIgnore(Reason = "Action<IDictionary<string, string>> callbacks are not ATS-compatible.")]
         public static YarpRoute WithTransform(this YarpRoute route, System.Action<System.Collections.Generic.IDictionary<string, string>> createTransform) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransforms(this YarpRoute route, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyDictionary<string, string>>? transforms) { throw null; }
     }
 }
@@ -122,69 +162,94 @@ namespace Aspire.Hosting.Yarp.Transforms
 {
     public static partial class ForwardedTransformExtensions
     {
+        [AspireExport]
         public static YarpRoute WithTransformClientCertHeader(this YarpRoute route, string headerName) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformForwarded(this YarpRoute route, bool useHost = true, bool useProto = true, global::Yarp.ReverseProxy.Transforms.NodeFormat forFormat = global::Yarp.ReverseProxy.Transforms.NodeFormat.Random, global::Yarp.ReverseProxy.Transforms.NodeFormat byFormat = global::Yarp.ReverseProxy.Transforms.NodeFormat.Random, global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions action = global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions.Set) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformXForwarded(this YarpRoute route, string headerPrefix = "X-Forwarded-", global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions xDefault = global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions.Set, global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions? xFor = null, global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions? xHost = null, global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions? xProto = null, global::Yarp.ReverseProxy.Transforms.ForwardedTransformActions? xPrefix = null) { throw null; }
     }
 
     public static partial class HttpMethodTransformExtensions
     {
+        [AspireExport]
         public static YarpRoute WithTransformHttpMethodChange(this YarpRoute route, string fromHttpMethod, string toHttpMethod) { throw null; }
     }
 
     public static partial class PathTransformExtensions
     {
+        [AspireExportIgnore(Reason = "PathString is not ATS-compatible. Use the string-based overload instead.")]
         public static YarpRoute WithTransformPathPrefix(this YarpRoute route, Microsoft.AspNetCore.Http.PathString prefix) { throw null; }
 
+        [AspireExportIgnore(Reason = "PathString is not ATS-compatible. Use the string-based overload instead.")]
         public static YarpRoute WithTransformPathRemovePrefix(this YarpRoute route, Microsoft.AspNetCore.Http.PathString prefix) { throw null; }
 
+        [AspireExportIgnore(Reason = "PathString is not ATS-compatible. Use the string-based overload instead.")]
         public static YarpRoute WithTransformPathRouteValues(this YarpRoute route, Microsoft.AspNetCore.Http.PathString pattern) { throw null; }
 
+        [AspireExportIgnore(Reason = "PathString is not ATS-compatible. Use the string-based overload instead.")]
         public static YarpRoute WithTransformPathSet(this YarpRoute route, Microsoft.AspNetCore.Http.PathString path) { throw null; }
     }
 
     public static partial class QueryTransformExtensions
     {
+        [AspireExport]
         public static YarpRoute WithTransformQueryRemoveKey(this YarpRoute route, string queryKey) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformQueryRouteValue(this YarpRoute route, string queryKey, string routeValueKey, bool append = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformQueryValue(this YarpRoute route, string queryKey, string value, bool append = true) { throw null; }
     }
 
     public static partial class RequestHeadersTransformExtensions
     {
+        [AspireExport]
         public static YarpRoute WithTransformCopyRequestHeaders(this YarpRoute route, bool copy = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformRequestHeader(this YarpRoute route, string headerName, string value, bool append = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformRequestHeaderRemove(this YarpRoute route, string headerName) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformRequestHeaderRouteValue(this YarpRoute route, string headerName, string routeValueKey, bool append = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformRequestHeadersAllowed(this YarpRoute route, params string[] allowedHeaders) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformUseOriginalHostHeader(this YarpRoute route, bool useOriginal = true) { throw null; }
     }
 
     public static partial class ResponseTransformExtensions
     {
+        [AspireExport]
         public static YarpRoute WithTransformCopyResponseHeaders(this YarpRoute route, bool copy = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformCopyResponseTrailers(this YarpRoute route, bool copy = true) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseHeader(this YarpRoute route, string headerName, string value, bool append = true, global::Yarp.ReverseProxy.Transforms.ResponseCondition condition = global::Yarp.ReverseProxy.Transforms.ResponseCondition.Success) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseHeaderRemove(this YarpRoute route, string headerName, global::Yarp.ReverseProxy.Transforms.ResponseCondition condition = global::Yarp.ReverseProxy.Transforms.ResponseCondition.Success) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseHeadersAllowed(this YarpRoute route, params string[] allowedHeaders) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseTrailer(this YarpRoute route, string headerName, string value, bool append = true, global::Yarp.ReverseProxy.Transforms.ResponseCondition condition = global::Yarp.ReverseProxy.Transforms.ResponseCondition.Success) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseTrailerRemove(this YarpRoute route, string headerName, global::Yarp.ReverseProxy.Transforms.ResponseCondition condition = global::Yarp.ReverseProxy.Transforms.ResponseCondition.Success) { throw null; }
 
+        [AspireExport]
         public static YarpRoute WithTransformResponseTrailersAllowed(this YarpRoute route, params string[] allowedHeaders) { throw null; }
     }
 }
