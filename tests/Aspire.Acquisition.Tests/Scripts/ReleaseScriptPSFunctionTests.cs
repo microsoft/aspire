@@ -439,6 +439,30 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
         Assert.Contains("23", result.Output);
     }
 
+    [Fact]
+    public async Task InvokeAspireCliBundleSetup_UnsupportedHostArchitecture_SkipsSetup()
+    {
+        using var env = new TestEnvironment();
+        var cliPath = Path.Combine(env.TempDirectory, "setup-invoked.txt");
+        var escapedCliPath = cliPath.Replace("'", "''");
+        var expression = $$"""
+            function Get-MachineArchitecture { 'mips' }
+            Invoke-AspireCliBundleSetup -CliPath '{{escapedCliPath}}' -TargetOS (Get-OperatingSystem) -TargetArchitecture 'x64'
+            """;
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            expression,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping Aspire CLI bundle setup because the current platform could not be detected", result.Output);
+        Assert.Contains("not supported", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(cliPath));
+    }
+
     #endregion
 
     #region Get-AspireExtensionUrl

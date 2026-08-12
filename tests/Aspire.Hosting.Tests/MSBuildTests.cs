@@ -466,7 +466,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleOptInPreparesMissingAspireHomeBundle()
+    public async Task CliBundleOptInPreparesMissingBundleBesidePathCli()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -485,12 +485,13 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         });
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
-        var bundleRoot = Path.Combine(aspireHome, "bundle");
+        var bundleRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleDiscovery.BundleDirectoryName);
         var expectedDcpDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "dcp"));
         var expectedManagedDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "managed"));
         Assert.Equal(expectedDcpDir, resolvedPaths[0]);
         Assert.Equal(expectedManagedDir, resolvedPaths[1]);
         Assert.Equal(Path.Combine(expectedManagedDir, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), resolvedPaths[2]);
+        Assert.False(Directory.Exists(Path.Combine(aspireHome, BundleDiscovery.BundleDirectoryName)));
     }
 
     [Fact]
@@ -519,6 +520,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.True(result.ExitCode == 0, $"Design-time build failed: {Environment.NewLine}{result.Output}");
         Assert.False(Directory.Exists(Path.Combine(aspireHome, BundleDiscovery.BundleDirectoryName)));
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, BundleDiscovery.BundleDirectoryName)));
     }
 
     [Fact]
@@ -548,6 +550,35 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("ASPIRE009", result.Output);
         Assert.Contains("failed with exit code 42", result.Output);
+        Assert.Contains($"Run '\"{fakeCliPath}\" setup'", result.Output);
+    }
+
+    [Fact]
+    public void CliBundleSetupTimeoutReportsAspire009()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home");
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "fake-cli"));
+        var fakeCliPath = CreateFakeAspireCliThatTimesOutSetup(fakeCliDirectory.FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(
+            workspace.WorkspaceRoot.FullName,
+            repoRoot,
+            $"""
+              <AspireCliPath>{fakeCliPath}</AspireCliPath>
+              <_AspireCliBundleSetupTimeout>100</_AspireCliBundleSetupTimeout>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProjectWithFailure(
+            appHostDirectory,
+            new Dictionary<string, string> { ["ASPIRE_HOME"] = aspireHome });
+
+        Assert.Contains("MSB5002", output);
+        Assert.Contains("ASPIRE009", output);
+        Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
     }
 
     [Fact]
@@ -578,9 +609,40 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         });
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
-        var bundleRoot = Path.Combine(aspireHome, BundleDiscovery.BundleDirectoryName);
+        var bundleRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleDiscovery.BundleDirectoryName);
         Assert.Equal(EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.DcpDirectoryName)), resolvedPaths[0]);
         Assert.Equal(EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.ManagedDirectoryName)), resolvedPaths[1]);
+    }
+
+    [Fact]
+    public void CliBundleSetupFailureDiagnosticPreservesLiteralPercentCharacters()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows command-shim escaping is required.");
+
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var literalSegment = "%ASPIRE_LITERAL_SEGMENT%";
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, literalSegment));
+        var fakeCliPath = CreateFakeAspireCliThatFailsSetup(fakeCliDirectory.FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(
+            workspace.WorkspaceRoot.FullName,
+            repoRoot,
+            $"""
+              <AspireCliPath>{fakeCliPath}</AspireCliPath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
+            ["ASPIRE_LITERAL_SEGMENT"] = "expanded-segment"
+        });
+
+        Assert.Contains($"Run '\"{fakeCliPath}\" setup'", output);
+        Assert.DoesNotContain("^^%%", output);
+        Assert.DoesNotContain("cmd /D /V:OFF", output);
     }
 
     [Fact]
@@ -734,11 +796,16 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
         {
             ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
-            ["PATH"] = $"{fakeCliDirectory.FullName}{Path.PathSeparator}{GetDotNetOnlyPath()}"
+            ["PATH"] = GetPathWithoutAspire(fakeCliDirectory.FullName)
         });
 
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
+        Assert.Contains("failed with exit code", output);
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Contains("failed with exit code 42", output);
+        }
     }
 
     [Fact]
@@ -955,19 +1022,46 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             ? $$"""
                 @echo off
                 if not "%~1"=="setup" exit /b 2
-                mkdir "%ASPIRE_HOME%\bundle\dcp"
-                mkdir "%ASPIRE_HOME%\bundle\managed"
-                type nul > "%ASPIRE_HOME%\bundle\dcp\{{dcpExecutable}}"
-                type nul > "%ASPIRE_HOME%\bundle\managed\{{managedExecutable}}"
+                mkdir "%~dp0..\bundle\dcp"
+                mkdir "%~dp0..\bundle\managed"
+                type nul > "%~dp0..\bundle\dcp\{{dcpExecutable}}"
+                type nul > "%~dp0..\bundle\managed\{{managedExecutable}}"
                 """
             : $$"""
                 #!/bin/sh
                 if [ "$1" != "setup" ]; then
                     exit 2
                 fi
-                mkdir -p "$ASPIRE_HOME/bundle/dcp" "$ASPIRE_HOME/bundle/managed"
-                : > "$ASPIRE_HOME/bundle/dcp/{{dcpExecutable}}"
-                : > "$ASPIRE_HOME/bundle/managed/{{managedExecutable}}"
+                install_path="$(dirname "$0")/.."
+                mkdir -p "$install_path/bundle/dcp" "$install_path/bundle/managed"
+                : > "$install_path/bundle/dcp/{{dcpExecutable}}"
+                : > "$install_path/bundle/managed/{{managedExecutable}}"
+                """;
+
+        File.WriteAllText(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return cliPath;
+    }
+
+    private static string CreateFakeAspireCliThatTimesOutSetup(string directory)
+    {
+        var cliPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        var contents = OperatingSystem.IsWindows()
+            ? """
+                @echo off
+                if not "%~1"=="setup" exit /b 2
+                ping -n 6 127.0.0.1 > nul
+                """
+            : """
+                #!/bin/sh
+                if [ "$1" != "setup" ]; then
+                    exit 2
+                fi
+                sleep 5
                 """;
 
         File.WriteAllText(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));

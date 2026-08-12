@@ -1144,8 +1144,15 @@ function Invoke-AspireCliBundleSetup {
         [string]$TargetArchitecture
     )
 
-    $hostOS = Get-OperatingSystem
-    $hostArch = Get-CLIArchitectureFromArchitecture "<auto>"
+    try {
+        $hostOS = Get-OperatingSystem
+        $hostArch = Get-CLIArchitectureFromArchitecture "<auto>"
+    }
+    catch {
+        Write-Message "Skipping Aspire CLI bundle setup because the current platform could not be detected: $($_.Exception.Message)" -Level Warning
+        return
+    }
+
     if ($TargetOS -ne $hostOS -or $TargetArchitecture -ne $hostArch) {
         Write-Message "Skipping Aspire CLI bundle setup for $TargetOS-$TargetArchitecture on $hostOS-$hostArch." -Level Info
         return
@@ -1260,8 +1267,6 @@ function Install-AspireCli {
             Write-Host "What if: Route sidecar would be written to: $sidecarPath"
         }
 
-        Invoke-AspireCliBundleSetup -CliPath $cliPath -TargetOS $targetOS -TargetArchitecture $targetArch
-
         # Download and install VS Code extension if requested
         if ($InstallExtension) {
             Write-Message "" -Level Info
@@ -1282,6 +1287,8 @@ function Install-AspireCli {
                 Write-Message "Please ensure VS Code is installed and available in PATH" -Level Info
             }
         }
+
+        Invoke-AspireCliBundleSetup -CliPath $cliPath -TargetOS $targetOS -TargetArchitecture $targetArch
 
         # Return the target OS for the caller to use
         return $targetOS

@@ -261,16 +261,20 @@ namespace Projects%3B
       <_AspireCliSetupPathForCommandShim Condition="'$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPathWithEscapedMetacharacters), '%', '^^%%'))</_AspireCliSetupPathForCommandShim>
       <_AspireCliSetupHome Condition="'$(ASPIRE_HOME)' != ''">$(ASPIRE_HOME)</_AspireCliSetupHome>
       <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
+      <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
 
       <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' != 'true'">"$(_AspireCliSetupPath)" setup</_AspireCliSetupCommand>
       <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">cmd /D /V:OFF /C $(_AspireCliSetupPathForCommandShim) setup</_AspireCliSetupCommand>
       <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupCommand>
+      <!-- The escaped command-shim string is valid only inside Exec's temporary batch file. -->
+      <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupCommand)' != '' and '$(_AspireCliSetupPath)' != ''">"$(_AspireCliSetupPath)" setup</_AspireCliSetupDiagnosticCommand>
+      <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupCommand)' != '' and '$(_AspireCliSetupPath)' == ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupDiagnosticCommand>
     </PropertyGroup>
 
     <!-- Script installs normally extract during installation. This fallback also covers older
          installers and DNX-only machines, and runs during real builds so IDE and command-line
          builds stamp concrete DCP and dashboard assembly metadata. -->
-    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupCommand)' to prepare it." Importance="Low"
+    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)' to prepare it." Importance="Low"
             Condition="'$(_AspireCliSetupCommand)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
     <Exec Command="$(_AspireCliSetupCommand)"
           Condition="'$(_AspireCliSetupCommand)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))"
@@ -278,7 +282,8 @@ namespace Projects%3B
           IgnoreExitCode="true"
           StandardOutputImportance="Low"
           StandardErrorImportance="Low"
-          Timeout="120000">
+          Timeout="$(_AspireCliBundleSetupTimeout)"
+          ContinueOnError="ErrorAndContinue">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
     </Exec>
 
@@ -306,9 +311,10 @@ namespace Projects%3B
       <!-- An unusable PATH CLI must not shadow the paired CLI package when DNX is available.
            Explicit AspireCliPath remains authoritative and never falls back. -->
       <_AspireCliFallbackDnxSetupCommand Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and Exists('$(_AspireResolvedDnxHostPath)')">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliFallbackDnxSetupCommand>
+      <_AspireCliFallbackDnxSetupDiagnosticCommand Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliFallbackDnxSetupDiagnosticCommand>
     </PropertyGroup>
 
-    <Message Text="The PATH Aspire CLI did not prepare a usable bundle. Running '$(_AspireCliFallbackDnxSetupCommand)' through DNX." Importance="Low"
+    <Message Text="The PATH Aspire CLI did not prepare a usable bundle. Running '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' through DNX." Importance="Low"
              Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''" />
     <Exec Command="$(_AspireCliFallbackDnxSetupCommand)"
           Condition="'$(_AspireCliFallbackDnxSetupCommand)' != ''"
@@ -316,7 +322,8 @@ namespace Projects%3B
           IgnoreExitCode="true"
           StandardOutputImportance="Low"
           StandardErrorImportance="Low"
-          Timeout="120000">
+          Timeout="$(_AspireCliBundleSetupTimeout)"
+          ContinueOnError="ErrorAndContinue">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
     </Exec>
 
@@ -351,11 +358,11 @@ namespace Projects%3B
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExitCode)' != '' and '$(_AspireCliSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
-        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupCommand)' to diagnose the failure.
+        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
-        Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupCommand)' to diagnose the failure.
+        Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
       </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 

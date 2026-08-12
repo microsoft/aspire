@@ -224,6 +224,21 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task WhatIfWithExtension_PlansExtensionBeforeBundleSetup()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-InstallExtension", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var extensionIndex = result.Output.IndexOf("Installing VS Code extension", StringComparison.Ordinal);
+        var setupIndex = result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal);
+        Assert.True(extensionIndex >= 0, "VS Code extension installation should be planned.");
+        Assert.True(setupIndex > extensionIndex, "Bundle setup should be planned after VS Code extension installation.");
+    }
+
     [Theory]
     [InlineData("dev")]
     [InlineData("staging")]
