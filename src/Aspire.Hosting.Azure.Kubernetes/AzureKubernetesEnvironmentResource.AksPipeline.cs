@@ -334,37 +334,72 @@ public partial class AzureKubernetesEnvironmentResource
     private async Task GetAksCredentialsForDestroyAsync(PipelineStepContext context)
     {
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
-        var stateSection = await deploymentStateManager
-            .AcquireSectionAsync("Azure", context.CancellationToken)
-            .ConfigureAwait(false);
-
-        // Azure state remains until the entire destroy pipeline succeeds. Use it rather than the
-        // main Helm release state, which may already be gone when retrying a partial teardown that
-        // still needs to uninstall an external chart or delete another cluster-scoped resource.
-        var resourceGroupName = stateSection.Data["ResourceGroup"]?.ToString();
-        var subscriptionId = stateSection.Data["SubscriptionId"]?.ToString();
         var deploymentStateSection = await deploymentStateManager
             .AcquireSectionAsync($"Azure:Deployments:{Name}", context.CancellationToken)
             .ConfigureAwait(false);
+
+        if (deploymentStateSection.Data.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No Azure deployment state was found for AKS environment '{Name}'. " +
+                "Cluster cleanup cannot run without an isolated kubeconfig.");
+        }
 
         // Azure deployment outputs are persisted as a JSON string with the ARM output shape:
         //   { "name": { "type": "String", "value": "aks-abc123" } }
         // Read it directly because the provisioning step that normally populates Outputs is not
         // part of a fresh destroy process.
-        var outputsJson = deploymentStateSection.Data["Outputs"]?.GetValue<string>();
-        var clusterName = string.IsNullOrEmpty(outputsJson)
-            ? null
-            : JsonNode.Parse(outputsJson)?["name"]?["value"]?.GetValue<string>();
-
-        if (string.IsNullOrEmpty(resourceGroupName) ||
-            string.IsNullOrEmpty(subscriptionId) ||
-            string.IsNullOrEmpty(clusterName))
+        string? clusterName;
+        try
         {
-            context.Logger.LogInformation(
-                "No complete Azure deployment state found for AKS environment '{EnvironmentName}'. Skipping credential acquisition.",
-                Name);
-            return;
+            var outputsJson = deploymentStateSection.Data["Outputs"]?.GetValue<string>();
+            clusterName = string.IsNullOrEmpty(outputsJson)
+                ? null
+                : JsonNode.Parse(outputsJson)?["name"]?["value"]?.GetValue<string>();
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException(
+                $"The Azure deployment state for AKS environment '{Name}' contains invalid outputs.",
+                ex);
+        }
+
+        if (string.IsNullOrEmpty(clusterName))
+        {
+            throw new InvalidOperationException(
+                $"The Azure deployment state for AKS environment '{Name}' does not contain the deployed cluster name.");
+        }
+
+        // Scope is persisted as a JSON string using the same shape produced by
+        // BicepUtilities.SetScopeAsync:
+        //   { "resourceGroup": "shared-rg", "subscription": "00000000-..." }
+        // A missing property means the resource did not pin that scope value, so only that value
+        // falls back to global Azure deployment state. Older state without Scope falls back to the
+        // resource's current explicit scope before consulting global state.
+        var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
+        if (deploymentStateSection.Data["Scope"] is not null)
+        {
+            try
+            {
+                var scopeJson = deploymentStateSection.Data["Scope"]!.GetValue<string>();
+                var scope = JsonNode.Parse(scopeJson)?.AsObject()
+                    ?? throw new InvalidOperationException("The persisted scope is not a JSON object.");
+                scopedSubscription = scope["subscription"]?.GetValue<string>();
+                scopedResourceGroup = scope["resourceGroup"]?.GetValue<string>();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw new InvalidOperationException(
+                    $"The Azure deployment state for AKS environment '{Name}' contains an invalid scope.",
+                    ex);
+            }
+        }
+
+        var (subscriptionId, resourceGroupName) = await ResolveDeploymentScopeAsync(
+            scopedSubscription,
+            scopedResourceGroup,
+            context.Services,
+            context.CancellationToken).ConfigureAwait(false);
 
         await GetAksCredentialsAsync(context, clusterName, resourceGroupName, subscriptionId).ConfigureAwait(false);
     }

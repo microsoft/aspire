@@ -289,13 +289,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DestroyPipelineUsesPersistedAksOutputWithoutProvisioning()
+    public async Task DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var stateManager = new InMemoryDeploymentStateManager();
         stateManager.SetSection("Azure", new JsonObject
         {
-            ["ResourceGroup"] = "persisted-resource-group",
+            ["ResourceGroup"] = "app-resource-group",
             ["SubscriptionId"] = "00000000-1111-2222-3333-444444444444"
         });
         stateManager.SetSection("Azure:Deployments:aks", new JsonObject
@@ -307,6 +307,11 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
                     ["type"] = "String",
                     ["value"] = "aks-physical-name"
                 }
+            }.ToJsonString(),
+            ["Scope"] = new JsonObject
+            {
+                ["resourceGroup"] = "cluster-resource-group",
+                ["subscription"] = "00000000-5555-6666-7777-888888888888"
             }.ToJsonString()
         });
         string? azArguments = null;
@@ -347,10 +352,95 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         Assert.Equal(1, azCommandCount);
         Assert.Equal(
-            "aks get-credentials --resource-group \"persisted-resource-group\" --name \"aks-physical-name\" --file - " +
-            "--subscription \"00000000-1111-2222-3333-444444444444\"",
+            "aks get-credentials --resource-group \"cluster-resource-group\" --name \"aks-physical-name\" --file - " +
+            "--subscription \"00000000-5555-6666-7777-888888888888\"",
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
+    }
+
+    [Fact]
+    public async Task DestroyPipelineFailsBeforeClusterCleanupWhenAksDeploymentStateIsIncomplete()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "app-resource-group",
+            ["SubscriptionId"] = "00000000-1111-2222-3333-444444444444"
+        });
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Outputs"] = "{}"
+        });
+        stateManager.SetSection("Helm:aks", new JsonObject
+        {
+            ["ReleaseName"] = "same-name-as-ambient-release",
+            ["Namespace"] = "default"
+        });
+
+        var reporter = new TestPipelineActivityReporter(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.Resource.AzCliPathResolverForTesting = () =>
+            throw new InvalidOperationException("The Azure CLI must not run for incomplete deployment state.");
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Equal(
+            "Step 'aks-get-credentials-for-destroy-aks' failed: " +
+            "The Azure deployment state for AKS environment 'aks' does not contain the deployed cluster name.",
+            reporter.CompletionMessage);
+        Assert.Equal(
+            ["aks-get-credentials-for-destroy-aks", "destroy-prereq"],
+            reporter.CreatedSteps
+                .Where(step => step.Contains("destroy", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal));
+        Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+    }
+
+    [Fact]
+    public async Task DestroyPipelineSkipsClusterCleanupForNeverDeployedAksEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var reporter = new TestPipelineActivityReporter(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Sentinel", new JsonObject { ["Value"] = "cleared-by-destroy" });
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            ["destroy", "destroy-azure-azure-environment", "destroy-prereq"],
+            reporter.CreatedSteps
+                .Where(step => step.Contains("destroy", StringComparison.Ordinal) ||
+                    step.StartsWith("helm-uninstall-", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal));
+        var sentinelState = await stateManager.AcquireSectionAsync(
+            "Sentinel",
+            TestContext.Current.CancellationToken);
+        Assert.Empty(sentinelState.Data);
+        Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
     }
 
     private static string GetDirectDependencies(List<string> diagnosticLines, string stepName)

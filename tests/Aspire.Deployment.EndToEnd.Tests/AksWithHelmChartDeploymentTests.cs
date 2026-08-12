@@ -151,7 +151,7 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
 
             // Step 9: Deploy to AKS
             output.WriteLine("Step 9: Starting AKS deployment with external Helm chart...");
-            await auto.TypeAsync("aspire deploy --clear-cache");
+            await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));

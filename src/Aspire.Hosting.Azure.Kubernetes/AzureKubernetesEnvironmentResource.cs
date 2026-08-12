@@ -3,10 +3,13 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREAZURE001
 
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
 
@@ -82,7 +85,7 @@ public partial class AzureKubernetesEnvironmentResource :
             return Task.FromResult<IEnumerable<PipelineStep>>([prepareStep, getCredentialsStep, getDestroyCredentialsStep]);
         }));
 
-        Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        Annotations.Add(new PipelineConfigurationAnnotation(async context =>
         {
             var k8sEnv = KubernetesEnvironment;
             var getDestroyCredentialsStep = context.GetSteps(this)
@@ -90,6 +93,28 @@ public partial class AzureKubernetesEnvironmentResource :
             var kubernetesDestroySteps = context
                 .GetSteps(HelmDeploymentEngine.GetKubernetesDestroyTag(k8sEnv.Name))
                 .ToList();
+
+            var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+            var deploymentStateSection = await deploymentStateManager
+                .AcquireSectionAsync($"Azure:Deployments:{Name}")
+                .ConfigureAwait(false);
+
+            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Remove all of
+            // its tagged cluster cleanup from the aggregate destroy target rather than allowing those
+            // commands to fall back to the caller's ambient Kubernetes context. Explicitly targeting
+            // one of those cleanup steps still runs through the credential prerequisite and fails.
+            var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
+            if (deploymentStateSection.Data.Count == 0 &&
+                string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
+            {
+                foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
+                {
+                    kubernetesDestroyStep.RequiredBySteps.RemoveAll(
+                        static stepName => string.Equals(stepName, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal));
+                }
+
+                return;
+            }
 
             var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().Single();
             var destroyAzureStep = context.GetSteps(azureEnvironment)
@@ -100,8 +125,6 @@ public partial class AzureKubernetesEnvironmentResource :
                 kubernetesDestroyStep.DependsOn(getDestroyCredentialsStep);
                 destroyAzureStep.DependsOn(kubernetesDestroyStep);
             }
-
-            return Task.CompletedTask;
         }));
     }
 
