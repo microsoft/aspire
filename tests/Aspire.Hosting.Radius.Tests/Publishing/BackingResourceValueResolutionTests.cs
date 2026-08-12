@@ -539,6 +539,48 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A TLS-enabled endpoint describes the container Aspire would have run locally; the recipe decides
+    /// what the deployed workload speaks, and <c>local-dev/rediscaches</c> starts plain Redis. So
+    /// the scheme-bearing values would tell the consumer <c>rediss://</c> and <c>ssl=true</c> about
+    /// a plaintext server - a run-time handshake failure pointing at neither side. There is no value
+    /// here that becomes right at deploy time, so it fails the publish instead.
+    /// </summary>
+    [Fact]
+    public void TlsEnabledBackingEndpoint_FailsThePublish()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var cache = b.AddRedis("cache").WithEndpoint("tcp", e => e.TlsEnabled = true);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("CACHE_URL", cache.GetEndpoint("tcp").Property(EndpointProperty.Url));
+        }));
+
+        Assert.Contains("ASPIRERADIUS081", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Only the properties carrying the transport decision are rejected. The address is correct
+    /// whatever the transport, so a consumer reading host and port still connects to the right
+    /// place - pinned so the check above cannot widen into rejecting every TLS-enabled model.
+    /// </summary>
+    [Fact]
+    public void AddressPropertiesOfATlsEnabledBackingEndpoint_AreStillProjected()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var cache = b.AddRedis("cache").WithEndpoint("tcp", e => e.TlsEnabled = true);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("CACHE_HOST", cache.GetEndpoint("tcp").Property(EndpointProperty.Host))
+                .WithEnvironment("CACHE_PORT", cache.GetEndpoint("tcp").Property(EndpointProperty.Port));
+        });
+
+        Assert.Contains("cache.properties.host", bicep, StringComparison.Ordinal);
+        Assert.Contains("cache.properties.port", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The value of an injected connection property is not proof that the injection produced it: an
     /// AppHost author can build the identical <see cref="ReferenceExpression"/> themselves, because
     /// <c>ReferenceExpression.Create($"{shared}")</c> renders to the same manifest expression as the
