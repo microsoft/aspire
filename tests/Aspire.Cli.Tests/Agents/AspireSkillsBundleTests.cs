@@ -43,7 +43,6 @@ public class AspireSkillsBundleTests
             var bundle = await LoadBundleAsync(s_bundleProvider, bundleDirectory);
             var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
-            Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
             Assert.Contains(files, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
             Assert.DoesNotContain(files, file => file.RelativePath == Path.Combine("evals", "evals.json"));
