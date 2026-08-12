@@ -20,7 +20,7 @@ function escapeHtml(value) {
 
 function redactSensitiveData(value) {
     return String(value ?? '')
-        .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED]')
+        .replace(/-----BEGIN ([A-Z ]*PRIVATE KEY)-----[\s\S]*?(?:-----END \1-----|$)/g, '[REDACTED]')
         .replace(/\b(authorization|proxy-authorization)(\s*:\s*)(basic|bearer)\s+[^\s,;]+/gi, '$1$2$3 [REDACTED]')
         .replace(/\b(x-api-key|api-key|access-token|client-secret)(\s*:\s*)[^\s,;]+/gi, '$1$2[REDACTED]')
         .replace(/\b(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi, '$1[REDACTED]:[REDACTED]@')
@@ -60,6 +60,39 @@ function toInlineCode(value) {
     const pad = normalized.startsWith('`') || normalized.endsWith('`') ? ' ' : '';
 
     return `${fence}${pad}${normalized}${pad}${fence}`;
+}
+
+function toCodeBlock(value) {
+    const content = String(value ?? '');
+    const longestRun = (content.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
+    const fence = '`'.repeat(Math.max(3, longestRun + 1));
+
+    return `${fence}\n${content}${content.endsWith('\n') ? '' : '\n'}${fence}`;
+}
+
+function formatTestFailures(failures) {
+    const output = failures.map(failure => {
+        const sections = [
+            `### ${toInlineCode(failure.test)}`,
+            '',
+            '**Error:**',
+            toCodeBlock(failure.error),
+        ];
+
+        for (const [label, value] of [
+            ['Stack Trace', failure.stack_trace],
+            ['Standard Output (sensitive values redacted)', failure.standard_output],
+            ['Standard Error (sensitive values redacted)', failure.standard_error],
+        ]) {
+            if (value) {
+                sections.push(`**${label}:**`, toCodeBlock(value));
+            }
+        }
+
+        return sections.join('\n');
+    }).join('\n');
+
+    return output ? `${output}\n` : '';
 }
 
 function getCauseJobName(analysis, cause) {
@@ -179,6 +212,11 @@ function main(args) {
         return;
     }
 
+    if (operation === 'format-test-failures') {
+        process.stdout.write(formatTestFailures(readJson(analysisPath)));
+        return;
+    }
+
     const analysis = readJson(analysisPath);
     const cause = readJson(causePath);
 
@@ -210,8 +248,10 @@ module.exports = {
     buildOccurrence,
     buildOccurrenceRow,
     escapeHtml,
+    formatTestFailures,
     getCauseJobName,
     redactJson,
     redactSensitiveData,
+    toCodeBlock,
     toInlineCode,
 };

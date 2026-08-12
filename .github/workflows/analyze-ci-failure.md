@@ -356,7 +356,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end) + (if .standard_output != "" then "**Standard Output (sensitive values redacted):**\n```\n\(.standard_output)\n```\n" else "" end) + (if .standard_error != "" then "**Standard Error (sensitive values redacted):**\n```\n\(.standard_error)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                node .github/workflows/analyze-ci-failure.js format-test-failures ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
