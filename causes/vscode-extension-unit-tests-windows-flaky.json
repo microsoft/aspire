@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-unit-tests-windows-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension unit tests job fails intermittently on Windows with generic exit code 1 and no retrievable logs",
+  "error_pattern": "Process completed with exit code 1. (Job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on the 'Run VS Code extension unit tests (Windows)' job unrelated to PR changes touching only Aspire.Cli DotNet path resolution code.",
+  "occurrences": [
+    {
+      "run_id": 31556011348,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31556011348",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19232,
+      "observed_at": "2026-08-12T02:50:48Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19270"
+}

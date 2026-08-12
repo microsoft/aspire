@@ -1,0 +1,29 @@
+{
+  "run_id": 31556011348,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31556011348",
+  "analyzed_at": "2026-08-12T02:50:48Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19232,
+    "title": "Resolve dotnet paths in doctor checks",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/resolve-dotnet-paths-doctor",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19232"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 93989887512,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31556011348/job/93989887512",
+      "classification": "flaky-test",
+      "reason": "The PR only modifies Aspire.Cli DotNetSdkInstaller.cs, DeprecatedWorkloadCheck.cs and their tests; it does not touch any VS Code extension source (extension/). Job logs could not be fetched, and no TRX test failures were extracted, only a generic 'Process completed with exit code 1' annotation. This matches the pattern of a known intermittent failure in the Windows VS Code extension unit test job unrelated to PR changes.",
+      "failed_steps": ["Run tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-extension-unit-tests-windows-flaky"]
+}
