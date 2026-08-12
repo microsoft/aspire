@@ -47,6 +47,7 @@ internal sealed class AspireSkillsInstaller(
     private const int CacheLockMaxAttempts = 4;
 
     private static readonly TimeSpan s_cacheLockInitialRetryDelay = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan s_cacheLockMaxRetryDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
     public Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
@@ -777,10 +778,22 @@ internal sealed class AspireSkillsInstaller(
         return $"{directory}.lock";
     }
 
-    private async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
+    private Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
     {
-        // Cache reads and writes require serialization. Retry briefly for competing CLIs,
-        // but surface persistent I/O failures rather than waiting indefinitely.
+        return AcquireCacheLockCoreAsync(cacheRoot, version, maxAttempts: null, cancellationToken);
+    }
+
+    private Task<FileStream> AcquireCacheLockForCleanupAsync(string cacheRoot, string version, CancellationToken cancellationToken)
+    {
+        return AcquireCacheLockCoreAsync(cacheRoot, version, CacheLockMaxAttempts, cancellationToken);
+    }
+
+    private async Task<FileStream> AcquireCacheLockCoreAsync(
+        string cacheRoot,
+        string version,
+        int? maxAttempts,
+        CancellationToken cancellationToken)
+    {
         var lockPath = Path.Combine(cacheRoot, $".{GetSafeFileName(version)}.lock");
         var retryDelay = s_cacheLockInitialRetryDelay;
         for (var attempt = 1; ; attempt++)
@@ -798,17 +811,32 @@ internal sealed class AspireSkillsInstaller(
                     bufferSize: 1,
                     FileOptions.Asynchronous);
             }
-            catch (IOException ex) when (attempt < CacheLockMaxAttempts)
+            catch (IOException ex) when (maxAttempts is null || attempt < maxAttempts.Value)
             {
-                logger.LogDebug(
-                    "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
-                    version,
-                    ex.HResult,
-                    retryDelay.TotalMilliseconds,
-                    attempt,
-                    CacheLockMaxAttempts - 1);
+                if (maxAttempts is { } boundedAttempts)
+                {
+                    logger.LogDebug(
+                        "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
+                        version,
+                        ex.HResult,
+                        retryDelay.TotalMilliseconds,
+                        attempt,
+                        boundedAttempts - 1);
+                }
+                else
+                {
+                    logger.LogDebug(
+                        "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms.",
+                        version,
+                        ex.HResult,
+                        retryDelay.TotalMilliseconds);
+                }
+
                 await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
-                retryDelay *= 2;
+                if (retryDelay < s_cacheLockMaxRetryDelay)
+                {
+                    retryDelay *= 2;
+                }
             }
         }
     }
@@ -900,7 +928,7 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                await using var cacheLock = await AcquireCacheLockAsync(
+                await using var cacheLock = await AcquireCacheLockForCleanupAsync(
                     cacheRoot,
                     version,
                     cancellationToken).ConfigureAwait(false);

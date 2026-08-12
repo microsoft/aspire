@@ -60,7 +60,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenRequiredCacheLockExceedsRetryBudget_ThrowsIOException()
+    public async Task InstallAsync_WhenRequiredCacheLockExceedsCleanupRetryBudget_WaitsForRelease()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -71,7 +71,17 @@ public class AspireSkillsInstallerTests
             Directory.CreateDirectory(cacheRoot);
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var cleanupRetryBudgetExceeded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var retryCount = 0;
             var sink = new TestSink();
+            sink.MessageLogged += context =>
+            {
+                if (context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true &&
+                    Interlocked.Increment(ref retryCount) == 4)
+                {
+                    cleanupRetryBudgetExceeded.TrySetResult();
+                }
+            };
             var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
             var installer = CreateInstaller(
                 executionContext,
@@ -88,10 +98,16 @@ public class AspireSkillsInstallerTests
                 bufferSize: 1,
                 FileOptions.Asynchronous);
 
-            await Assert.ThrowsAsync<IOException>(() =>
-                installer.InstallAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
-            Assert.Equal(3, sink.Writes.Count(context =>
-                context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true));
+            var installTask = installer.InstallAsync(CancellationToken.None);
+            var completedTask = await Task.WhenAny(cleanupRetryBudgetExceeded.Task, installTask).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Same(cleanupRetryBudgetExceeded.Task, completedTask);
+            Assert.False(installTask.IsCompleted);
+
+            await cacheLock.DisposeAsync();
+            var result = await installTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
         }
         finally
         {
