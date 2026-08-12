@@ -1,0 +1,47 @@
+{
+  "run_id": 31567169550,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31567169550",
+  "analyzed_at": "2026-08-12T06:19:11Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19276,
+    "title": "Stabilize AppHost tree discovery E2E",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-apphost-tree-discovery-e2e",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19276"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "id": 94022976667,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31567169550/job/94022976667",
+      "classification": "transient-infra",
+      "reason": "All 52 tests passed (0 failed) before the job crashed. Post-test steps failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED), a known Windows runner process initialization failure unrelated to any test or PR code.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-tree)",
+      "id": 94024737416,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31567169550/job/94024737416",
+      "classification": "code-issue",
+      "reason": "The failing test 'Aspire AppHost tree E2E running AppHosts appear before slow discovery results' timed out waiting for a tree item, in the exact test file (appHostTree.e2e.test.ts) and fixtures (fixtures.ts) that this PR modified in order to stabilize this E2E test. The PR's own stabilization attempt did not fully resolve the flakiness/timing issue.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire AppHost tree E2E running AppHosts appear before slow discovery results",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-tree)",
+      "error": "Timed out waiting for tree item 'AspireE2E.AppHost.csproj'. Wait timed out after 30040ms",
+      "stack_trace": "Aspire extension E2E shard 'apphost-tree' failed. Results directory: .test-results/e2e/apphost-tree",
+      "classification": "code-issue",
+      "reason": "This test and its supporting fixtures were directly modified by the PR (extension/src/test-e2e/appHostTree.e2e.test.ts, extension/src/test-e2e/helpers/fixtures.ts) as part of an attempt to stabilize this same test. The timeout failure directly relates to the PR's changed code, indicating the stabilization fix was insufficient rather than an unrelated flake."
+    }
+  ],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}

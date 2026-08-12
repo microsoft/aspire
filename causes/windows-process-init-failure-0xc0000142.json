@@ -59,6 +59,13 @@
       "job": "Tests / Hosting-1 / Hosting-1 (windows-latest)",
       "pr_number": 19222,
       "observed_at": "2026-08-11T10:54:21Z"
+    },
+    {
+      "run_id": 31567169550,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31567169550",
+      "job": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "pr_number": 19276,
+      "observed_at": "2026-08-12T06:19:11Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"
