@@ -33,11 +33,11 @@ jobs:
 
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             echo "Unshallowing trusted base ref ${PR_BASE_REF} so stale-range checks can compare any finalized TO against ${PR_BASE_SHA}."
-            git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
               fetch --no-tags --unshallow origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
           else
             echo "Fetching trusted base ref ${PR_BASE_REF} to confirm stale-range checks against ${PR_BASE_SHA}."
-            git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
               fetch --no-tags origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
           fi
 

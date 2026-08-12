@@ -69,7 +69,8 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         Assert.Equal("${{ github.token }}", Scalar(preloadEnv, "GITHUB_TOKEN"));
         var preloadRun = Scalar(preloadBaseHistoryStep, "run");
         Assert.NotNull(preloadRun);
-        Assert.Contains("http.extraheader=\"AUTHORIZATION: bearer ${GITHUB_TOKEN}\"", preloadRun, StringComparison.Ordinal);
+        Assert.Contains("http.https://github.com/.extraheader=\"AUTHORIZATION: bearer ${GITHUB_TOKEN}\"", preloadRun, StringComparison.Ordinal);
+        Assert.DoesNotContain("git -c http.extraheader=", preloadRun, StringComparison.Ordinal);
         Assert.Contains("fetch --no-tags --unshallow origin \"${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}\"", preloadRun, StringComparison.Ordinal);
         Assert.Contains("fetch --no-tags origin \"${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}\"", preloadRun, StringComparison.Ordinal);
         Assert.DoesNotContain("--deepen=", preloadRun, StringComparison.Ordinal);
