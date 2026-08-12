@@ -758,31 +758,11 @@ internal sealed class AspireSkillsInstaller(
 
     private TemporaryCacheDirectory CreateTemporaryCacheDirectory(string cacheRoot, string prefix)
     {
-        var fullName = Path.Combine(cacheRoot, $".{prefix}-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(fullName);
-        var leasePath = GetTemporaryCacheDirectoryLeasePath(fullName);
-        return new TemporaryCacheDirectory(
-            fullName,
-            leasePath,
-            OpenTemporaryCacheDirectoryLease(fullName),
+        return TemporaryCacheDirectory.Create(
+            cacheRoot,
+            prefix,
             TryDeleteDirectory,
             TryDeleteFile);
-    }
-
-    private static FileStream OpenTemporaryCacheDirectoryLease(string directory)
-    {
-        return new FileStream(
-            GetTemporaryCacheDirectoryLeasePath(directory),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 1,
-            FileOptions.None);
-    }
-
-    private static string GetTemporaryCacheDirectoryLeasePath(string directory)
-    {
-        return $"{directory}.lock";
     }
 
     private Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
@@ -931,8 +911,8 @@ internal sealed class AspireSkillsInstaller(
                     if (IsTemporaryCacheDirectory(version) &&
                         DateTime.UtcNow - Directory.GetLastWriteTimeUtc(directory) > maxAge)
                     {
-                        var leasePath = GetTemporaryCacheDirectoryLeasePath(directory);
-                        using (OpenTemporaryCacheDirectoryLease(directory))
+                        var leasePath = TemporaryCacheDirectory.GetLeasePath(directory);
+                        using (TemporaryCacheDirectory.OpenLease(directory))
                         {
                             TryDeleteDirectory(directory);
                         }
@@ -1139,53 +1119,4 @@ internal sealed class AspireSkillsInstaller(
 
     private sealed record GitHubReleaseAsset(string Name, string DownloadUrl, string? Digest);
 
-    private sealed class TemporaryCacheDirectory : IDisposable
-    {
-        private readonly string _leasePath;
-        private readonly FileStream _lease;
-        private readonly Action<string> _deleteDirectory;
-        private readonly Action<string> _deleteFile;
-        private bool _deleteOnDispose = true;
-        private bool _disposed;
-
-        public TemporaryCacheDirectory(
-            string fullName,
-            string leasePath,
-            FileStream lease,
-            Action<string> deleteDirectory,
-            Action<string> deleteFile)
-        {
-            FullName = fullName;
-            _leasePath = leasePath;
-            _lease = lease;
-            _deleteDirectory = deleteDirectory;
-            _deleteFile = deleteFile;
-        }
-
-        public string FullName { get; }
-
-        public void MoveTo(string targetDirectory)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            Directory.Move(FullName, targetDirectory);
-            _deleteOnDispose = false;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _disposed = true;
-            if (_deleteOnDispose)
-            {
-                _deleteDirectory(FullName);
-            }
-
-            _lease.Dispose();
-            _deleteFile(_leasePath);
-        }
-    }
 }

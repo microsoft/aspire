@@ -88,24 +88,25 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         ValidateArchiveSha256(archive.FullName, expectedArchiveSha256);
 
         Directory.CreateDirectory(bundleDirectory.FullName);
-        var extractionDirectory = Path.Combine(bundleDirectory.FullName, $".extract-{Guid.NewGuid():N}");
-        try
-        {
-            ExtractArchive(archive.FullName, extractionDirectory);
-            cancellationToken.ThrowIfCancellationRequested();
+        var temporaryDirectoryRoot = bundleDirectory.Parent
+            ?? throw new InvalidOperationException("The Aspire skills bundle staging directory must have a parent directory.");
+        // Keep extraction beside the staging directory rather than inside it. If Windows AV or
+        // indexing holds an extracted file open, best-effort cleanup must not block the later
+        // atomic move that publishes the validated staging directory.
+        using var extractionDirectory = TemporaryCacheDirectory.Create(
+            temporaryDirectoryRoot.FullName,
+            "extract",
+            path => FileDeleteHelper.TryDeleteDirectory(path),
+            path => FileDeleteHelper.TryDeleteFile(path));
 
-            var bundleRoot = FindBundleRoot(extractionDirectory);
-            var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
+        ExtractArchive(archive.FullName, extractionDirectory.FullName);
+        cancellationToken.ThrowIfCancellationRequested();
 
-            CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
-            FileDeleteHelper.TryDeleteDirectory(extractionDirectory);
-            return bundle;
-        }
-        catch
-        {
-            FileDeleteHelper.TryDeleteDirectory(extractionDirectory);
-            throw;
-        }
+        var bundleRoot = FindBundleRoot(extractionDirectory.FullName);
+        var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
+
+        CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
+        return bundle;
     }
 
     public async Task<AspireSkillsBundle> LoadAsync(

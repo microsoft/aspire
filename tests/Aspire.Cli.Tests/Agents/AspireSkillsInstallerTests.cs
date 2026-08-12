@@ -1287,10 +1287,11 @@ public class AspireSkillsInstallerTests
     [Fact]
     public async Task EmbeddedAspireSkillsBundleProvider_CreatesBundle()
     {
-        var bundleDirectory = Directory.CreateTempSubdirectory();
+        var rootDirectory = CreateTempDirectory();
 
         try
         {
+            var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
             var provider = new EmbeddedAspireSkillsBundleProvider(
                 new AspireSkillsBundleProvider(),
                 NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
@@ -1302,11 +1303,42 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
             Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
-            Assert.Empty(bundleDirectory.GetFiles(".embedded-*"));
+            AssertNoTemporaryEntries(rootDirectory, "embedded");
         }
         finally
         {
-            Directory.Delete(bundleDirectory.FullName, recursive: true);
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task EmbeddedAspireSkillsBundleProvider_WhenTemporaryArchiveIsLocked_CanPromoteBundle()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates Windows delete-sharing behavior.");
+
+        var rootDirectory = CreateTempDirectory();
+        ArchiveLockingAspireSkillsBundleProvider? lockingBundleProvider = null;
+
+        try
+        {
+            var stageDirectory = new DirectoryInfo(Path.Combine(rootDirectory, ".stage-test"));
+            var targetDirectory = Path.Combine(rootDirectory, "cached");
+            lockingBundleProvider = new ArchiveLockingAspireSkillsBundleProvider(new AspireSkillsBundleProvider());
+            var provider = new EmbeddedAspireSkillsBundleProvider(
+                lockingBundleProvider,
+                NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
+
+            var bundle = await provider.CreateBundleAsync(stageDirectory, CancellationToken.None);
+
+            Assert.NotNull(bundle);
+            Assert.NotEmpty(Directory.GetDirectories(rootDirectory, ".embedded-*"));
+            Directory.Move(stageDirectory.FullName, targetDirectory);
+            Assert.True(File.Exists(Path.Combine(targetDirectory, "skill-manifest.json")));
+        }
+        finally
+        {
+            lockingBundleProvider?.Dispose();
+            Directory.Delete(rootDirectory, recursive: true);
         }
     }
 
@@ -1332,7 +1364,7 @@ public class AspireSkillsInstallerTests
                 CancellationToken.None));
 
             Assert.Contains("supports Aspire CLI versions", exception.Message);
-            Assert.Empty(bundleDirectory.GetDirectories(".extract-*"));
+            AssertNoTemporaryEntries(rootDirectory, "extract");
         }
         finally
         {
@@ -1372,10 +1404,11 @@ public class AspireSkillsInstallerTests
     [Fact]
     public async Task EmbeddedAspireSkillsBundleProvider_WhenCancelled_RemovesTemporaryArchive()
     {
-        var bundleDirectory = Directory.CreateTempSubdirectory();
+        var rootDirectory = CreateTempDirectory();
 
         try
         {
+            var bundleDirectory = new DirectoryInfo(Path.Combine(rootDirectory, "bundle"));
             var provider = new EmbeddedAspireSkillsBundleProvider(
                 new AspireSkillsBundleProvider(),
                 NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
@@ -1386,11 +1419,11 @@ public class AspireSkillsInstallerTests
                 bundleDirectory,
                 cancellationTokenSource.Token));
 
-            Assert.Empty(bundleDirectory.GetFiles(".embedded-*"));
+            AssertNoTemporaryEntries(rootDirectory, "embedded");
         }
         finally
         {
-            Directory.Delete(bundleDirectory.FullName, recursive: true);
+            Directory.Delete(rootDirectory, recursive: true);
         }
     }
 
@@ -1966,6 +1999,12 @@ public class AspireSkillsInstallerTests
         return Directory.CreateTempSubdirectory("aspire-skills-installer-test-").FullName;
     }
 
+    private static void AssertNoTemporaryEntries(string rootDirectory, string prefix)
+    {
+        Assert.Empty(Directory.GetDirectories(rootDirectory, $".{prefix}-*"));
+        Assert.Empty(Directory.GetFiles(rootDirectory, $".{prefix}-*.lock"));
+    }
+
     private sealed class TestGitHubArtifactAttestationVerifier : IGitHubArtifactAttestationVerifier
     {
         public bool VerifyCalled { get; private set; }
@@ -2054,4 +2093,44 @@ public class AspireSkillsInstallerTests
             }
         }
     }
+
+    private sealed class ArchiveLockingAspireSkillsBundleProvider(IAspireSkillsBundleProvider inner) : IAspireSkillsBundleProvider, IDisposable
+    {
+        private FileStream? _archiveLock;
+
+        public async Task<AspireSkillsBundle> CreateAsync(
+            FileInfo archive,
+            DirectoryInfo bundleDirectory,
+            string expectedArchiveSha256,
+            CancellationToken cancellationToken,
+            bool skipCompatibilityCheck = false)
+        {
+            _archiveLock = new FileStream(
+                archive.FullName,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+            return await inner.CreateAsync(
+                archive,
+                bundleDirectory,
+                expectedArchiveSha256,
+                cancellationToken,
+                skipCompatibilityCheck);
+        }
+
+        public Task<AspireSkillsBundle> LoadAsync(
+            DirectoryInfo bundleDirectory,
+            CancellationToken cancellationToken,
+            bool skipCompatibilityCheck = false)
+        {
+            return inner.LoadAsync(bundleDirectory, cancellationToken, skipCompatibilityCheck);
+        }
+
+        public void Dispose()
+        {
+            _archiveLock?.Dispose();
+        }
+    }
+
 }

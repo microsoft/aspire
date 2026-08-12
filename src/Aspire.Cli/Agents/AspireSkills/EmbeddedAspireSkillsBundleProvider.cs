@@ -67,28 +67,28 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         }
 
         Directory.CreateDirectory(bundleDirectory.FullName);
-        var archivePath = Path.Combine(bundleDirectory.FullName, $".embedded-{Guid.NewGuid():N}.tgz");
-        try
-        {
-            await using (var fileStream = File.Create(archivePath))
-            {
-                await archiveStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
-            }
+        var temporaryDirectoryRoot = bundleDirectory.Parent
+            ?? throw new InvalidOperationException("The Aspire skills bundle staging directory must have a parent directory.");
+        // Keep the archive beside the staging directory so a transient Windows file lock during
+        // best-effort cleanup cannot prevent the validated staging directory from being published.
+        using var temporaryDirectory = TemporaryCacheDirectory.Create(
+            temporaryDirectoryRoot.FullName,
+            "embedded",
+            path => FileDeleteHelper.TryDeleteDirectory(path),
+            path => FileDeleteHelper.TryDeleteFile(path));
+        var archivePath = Path.Combine(temporaryDirectory.FullName, "bundle.tgz");
 
-            var bundle = await _bundleProvider.CreateAsync(
-                new FileInfo(archivePath),
-                bundleDirectory,
-                metadata.Sha256,
-                cancellationToken,
-                skipCompatibilityCheck: true).ConfigureAwait(false);
-            FileDeleteHelper.TryDeleteFile(archivePath);
-            return bundle;
-        }
-        catch
+        await using (var fileStream = File.Create(archivePath))
         {
-            FileDeleteHelper.TryDeleteFile(archivePath);
-            throw;
+            await archiveStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
         }
+
+        return await _bundleProvider.CreateAsync(
+            new FileInfo(archivePath),
+            bundleDirectory,
+            metadata.Sha256,
+            cancellationToken,
+            skipCompatibilityCheck: true).ConfigureAwait(false);
     }
 
     private Stream? OpenArchive()
