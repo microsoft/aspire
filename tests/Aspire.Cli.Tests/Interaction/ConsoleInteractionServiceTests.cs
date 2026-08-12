@@ -26,11 +26,11 @@ public class ConsoleInteractionServiceTests
     private static CliExecutionContext CreateExecutionContext(bool debugMode = false, LogLevel? consoleLogLevel = null, string? logFilePath = null) =>
         new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", identityChannel: "local", debugMode: debugMode, consoleLogLevel: consoleLogLevel);
 
-    private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
+    private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null, ILoggerFactory? loggerFactory = null)
     {
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Fact]
@@ -286,6 +286,30 @@ public class ConsoleInteractionServiceTests
         // In debug mode, should use DisplaySubtleMessage instead of spinner
     }
 
+    [Fact]
+    public async Task ShowDynamicStatusAsync_InDebugMode_DisplaysSubtleMessagesInsteadOfSpinner()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(debugMode: true));
+
+        var result = await interactionService.ShowDynamicStatusAsync("Processing request...", updateStatus =>
+        {
+            updateStatus("Still processing...");
+            return Task.FromResult("test result");
+        }).DefaultTimeout();
+
+        Assert.Equal("test result", result);
+        Assert.Contains("Processing request...", output.ToString());
+        Assert.Contains("Still processing...", output.ToString());
+    }
+
     [Theory]
     [InlineData(LogLevel.Trace)]
     [InlineData(LogLevel.Debug)]
@@ -296,13 +320,14 @@ public class ConsoleInteractionServiceTests
     public async Task StatusMethods_WithConsoleLogging_DoNotStartSpinner(LogLevel consoleLogLevel)
     {
         var output = new StringBuilder();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new SpectreConsoleLoggerProvider(new StringWriter(output), new ConsoleLogBufferContext())));
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
             Ansi = AnsiSupport.No,
             ColorSystem = ColorSystemSupport.NoColors,
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
-        var interactionService = CreateInteractionService(console, CreateExecutionContext(consoleLogLevel: consoleLogLevel));
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(consoleLogLevel: consoleLogLevel), loggerFactory: loggerFactory);
 
         var asyncStatusValue = await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(GetInStatus(interactionService))).DefaultTimeout();
         var dynamicStatusValue = await interactionService.ShowDynamicStatusAsync("Working...", updateStatus =>
@@ -316,7 +341,8 @@ public class ConsoleInteractionServiceTests
         Assert.Equal(0, asyncStatusValue);
         Assert.Equal(0, dynamicStatusValue);
         Assert.Equal(0, synchronousStatusValue);
-        Assert.Empty(output.ToString());
+        Assert.Contains("Working...", output.ToString());
+        Assert.Contains("Still working...", output.ToString());
     }
 
     [Fact]
