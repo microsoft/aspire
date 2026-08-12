@@ -842,7 +842,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     return true;
                 }
 
-                return dotnetProjectLaunchResourceArgumentIndex is not null;
+                return dotnetProjectLaunchResourceArgumentIndex is { } index && index >= omittedLaunchToolArgumentCount;
             }
         }
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
