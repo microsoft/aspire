@@ -19,34 +19,11 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 1
+          # Release PRs need the base branch's complete history so the finalized
+          # range can be checked without ad-hoc Git credentials or marker-derived
+          # fetches. Ordinary PRs keep the inexpensive shallow checkout.
+          fetch-depth: ${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' && '0' || '1' }}
           persist-credentials: false
-
-      - name: Preload trusted base history for release-branch stale range checks
-        if: ${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' }}
-        env:
-          PR_BASE_REF: ${{ github.base_ref }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            echo "Unshallowing trusted base ref ${PR_BASE_REF} so stale-range checks can compare any finalized TO against ${PR_BASE_SHA}."
-            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-              fetch --no-tags --unshallow origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
-          else
-            echo "Fetching trusted base ref ${PR_BASE_REF} to confirm stale-range checks against ${PR_BASE_SHA}."
-            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-              fetch --no-tags origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
-          fi
-
-          if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "::error::Failed to preload trusted PR base history for ${PR_BASE_REF} (${PR_BASE_SHA})."
-            exit 1
-          fi
-
-          echo "Trusted PR base commit ${PR_BASE_SHA} is available locally."
 
       - name: Verify extension changelog is finalized
         env:

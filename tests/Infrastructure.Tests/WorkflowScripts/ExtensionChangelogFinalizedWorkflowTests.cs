@@ -54,28 +54,15 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         var checkoutStep = Assert.Single(steps, step => Scalar(step, "uses")?.Contains("actions/checkout", StringComparison.Ordinal) == true);
         var checkoutWith = Assert.IsType<YamlMappingNode>(checkoutStep.Children[new YamlScalarNode("with")]);
         Assert.Equal("${{ github.event.pull_request.head.sha }}", Scalar(checkoutWith, "ref"));
-        Assert.Equal("1", Scalar(checkoutWith, "fetch-depth"));
+        Assert.Equal(
+            "${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' && '0' || '1' }}",
+            Scalar(checkoutWith, "fetch-depth"));
         Assert.Equal("false", Scalar(checkoutWith, "persist-credentials"));
 
-        var preloadBaseHistoryStep = Assert.Single(
+        Assert.DoesNotContain(
             steps,
             step => Scalar(step, "name") == "Preload trusted base history for release-branch stale range checks");
-        Assert.Equal(
-            "${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' }}",
-            Scalar(preloadBaseHistoryStep, "if"));
-        var preloadEnv = Assert.IsType<YamlMappingNode>(preloadBaseHistoryStep.Children[new YamlScalarNode("env")]);
-        Assert.Equal("${{ github.base_ref }}", Scalar(preloadEnv, "PR_BASE_REF"));
-        Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(preloadEnv, "PR_BASE_SHA"));
-        Assert.Equal("${{ github.token }}", Scalar(preloadEnv, "GITHUB_TOKEN"));
-        var preloadRun = Scalar(preloadBaseHistoryStep, "run");
-        Assert.NotNull(preloadRun);
-        Assert.Contains("http.https://github.com/.extraheader=\"AUTHORIZATION: bearer ${GITHUB_TOKEN}\"", preloadRun, StringComparison.Ordinal);
-        Assert.DoesNotContain("git -c http.extraheader=", preloadRun, StringComparison.Ordinal);
-        Assert.Contains("fetch --no-tags --unshallow origin \"${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}\"", preloadRun, StringComparison.Ordinal);
-        Assert.Contains("fetch --no-tags origin \"${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}\"", preloadRun, StringComparison.Ordinal);
-        Assert.DoesNotContain("--deepen=", preloadRun, StringComparison.Ordinal);
-        Assert.DoesNotContain("${from_sha}", preloadRun, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("${to_sha}", preloadRun, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("git fetch", workflowText, StringComparison.Ordinal);
 
         var verifyStep = Assert.Single(
             steps,
@@ -278,27 +265,18 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
 
     [Fact]
     [RequiresTools(["bash", "git"])]
-    public async Task ReleaseBranchTrustedBasePreloadMakesDeepFinalizedToAvailableInShallowClone()
+    public async Task ReleaseBranchGatePassesWhenFinalizedRangeIsAvailable()
     {
-        var repository = await CreateShallowReleaseBranchCloneAsync(mainCommitsAfterToOnMain: 150);
-        var preloadScript = GetWorkflowRunScript("Preload trusted base history for release-branch stale range checks");
+        var repository = await CreateReleaseBranchRepositoryAsync(
+            currentSectionBodyFactory: (fromSha, toSha) => $$"""
+                <!-- aspire-ext-changelog-finalized from={{fromSha}} to={{toSha}} base=1.98.0 -->
 
-        var beforePreload = await RunProcessAsync(
-            "git",
-            ["cat-file", "-e", $"{repository.ToSha}^{{commit}}"],
-            repository.WorkingDirectory);
-        Assert.NotEqual(0, beforePreload.ExitCode);
+                ### Fixes
 
-        var preloadResult = await RunInlineBashAsync(preloadScript, repository.WorkingDirectory, repository.ReleaseBranchEnvironment);
-        Assert.Equal(0, preloadResult.ExitCode);
-
-        var afterPreload = await RunProcessAsync(
-            "git",
-            ["cat-file", "-e", $"{repository.ToSha}^{{commit}}"],
-            repository.WorkingDirectory);
-        Assert.Equal(0, afterPreload.ExitCode);
-
-        var gateResult = await RunGateScriptAsync(repository.WorkingDirectory, repository.ReleaseBranchEnvironment);
+                - Current release note.
+                """,
+            addExtensionChangeOnMain: false);
+        var gateResult = await RunGateScriptAsync(repository.ReleaseBranchEnvironment);
         Assert.Equal(0, gateResult.ExitCode);
     }
 
@@ -429,93 +407,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
             baseSha);
     }
 
-    private async Task<ReleaseBranchRepository> CreateShallowReleaseBranchCloneAsync(int mainCommitsAfterToOnMain)
-    {
-        var seedRepositoryPath = Path.Combine(_workspace.Path, "seed");
-        var originRepositoryPath = Path.Combine(_workspace.Path, "origin.git");
-        var clonePath = Path.Combine(_workspace.Path, "release-clone");
-
-        Directory.CreateDirectory(seedRepositoryPath);
-        await InitializeGitRepositoryAsync(seedRepositoryPath);
-
-        await WritePackageJsonAsync(seedRepositoryPath, "1.98.0");
-        await WriteChangelogAsync(seedRepositoryPath, """
-            # Aspire VS Code Extension Changelog
-
-            ## v1.98.0
-
-            ### Fixes
-
-            - Previous release note.
-            """);
-        await WriteWorkspaceFileAsync(seedRepositoryPath, Path.Combine("extension", "src", "baseline.txt"), "baseline");
-        await CommitAllAsync(seedRepositoryPath, "Create baseline changelog");
-        var fromSha = await GetHeadShaAsync(seedRepositoryPath);
-
-        await WriteWorkspaceFileAsync(seedRepositoryPath, Path.Combine("extension", "src", "feature.txt"), "feature-one");
-        await CommitAllAsync(seedRepositoryPath, "Add extension feature");
-        var toSha = await GetHeadShaAsync(seedRepositoryPath);
-
-        await RunGitAsync(seedRepositoryPath, "checkout", "-b", "extension-release/v1.99.0");
-        await WritePackageJsonAsync(seedRepositoryPath, "1.99.0");
-        await WriteChangelogAsync(seedRepositoryPath, $$"""
-            # Aspire VS Code Extension Changelog
-
-            ## v1.99.0
-
-            <!-- aspire-ext-changelog-finalized from={{fromSha}} to={{toSha}} base=1.98.0 -->
-            ### Fixes
-
-            - Ship finalized extension release notes.
-
-            ## v1.98.0
-
-            ### Fixes
-
-            - Previous release note.
-            """);
-        await CommitAllAsync(seedRepositoryPath, "Prepare release branch changelog");
-
-        await RunGitAsync(seedRepositoryPath, "checkout", "main");
-
-        for (var index = 1; index <= mainCommitsAfterToOnMain; index++)
-        {
-            await WriteWorkspaceFileAsync(
-                seedRepositoryPath,
-                Path.Combine("docs", "late-main.md"),
-                $"non-extension main change {index}{Environment.NewLine}");
-            await CommitAllAsync(seedRepositoryPath, $"Advance main {index:D3}");
-        }
-
-        var baseSha = await GetHeadShaAsync(seedRepositoryPath);
-
-        await RunProcessAsync("git", ["init", "--bare", originRepositoryPath], _workspace.Path);
-        await RunGitAsync(seedRepositoryPath, "remote", "add", "origin", originRepositoryPath);
-        await RunGitAsync(seedRepositoryPath, "push", "origin", "main", "extension-release/v1.99.0");
-
-        var originUri = new Uri(originRepositoryPath).AbsoluteUri;
-        var cloneResult = await RunProcessAsync(
-            "git",
-            ["clone", "--branch", "extension-release/v1.99.0", "--depth", "1", originUri, clonePath],
-            _workspace.Path);
-        Assert.True(
-            cloneResult.ExitCode == 0,
-            $"Failed to create shallow release clone.{Environment.NewLine}{cloneResult.Output}");
-
-        return new ReleaseBranchRepository(
-            clonePath,
-            new Dictionary<string, string?>
-            {
-                ["PR_HEAD_REF"] = "extension-release/v1.99.0",
-                ["PR_BASE_REF"] = "main",
-                ["PR_BASE_SHA"] = baseSha,
-                ["GITHUB_TOKEN"] = "test-token",
-            },
-            fromSha,
-            toSha,
-            baseSha);
-    }
-
     private async Task InitializeGitRepositoryAsync(string workingDirectory)
     {
         await RunGitAsync(workingDirectory, "init");
@@ -571,40 +462,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
             $"git {string.Join(' ', args)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
     }
 
-    private async Task<CommandResult> RunInlineBashAsync(string script, string workingDirectory, IReadOnlyDictionary<string, string?>? environment = null)
-    {
-        using var process = new Process();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.ArgumentList.Add("-s");
-        process.StartInfo.WorkingDirectory = workingDirectory;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.RedirectStandardInput = true;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.UseShellExecute = false;
-
-        if (environment is not null)
-        {
-            foreach (var (key, value) in environment)
-            {
-                process.StartInfo.Environment[key] = value ?? string.Empty;
-            }
-        }
-
-        process.Start();
-        await process.StandardInput.WriteAsync(script);
-        process.StandardInput.Close();
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
-
-        var outputText = await stdoutTask + await stderrTask;
-        output.WriteLine(outputText);
-
-        return new CommandResult(process.ExitCode, outputText);
-    }
-
     private async Task<CommandResult> RunProcessAsync(string fileName, IEnumerable<string> args, string workingDirectory)
     {
         using var process = new Process();
@@ -630,36 +487,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         output.WriteLine(outputText);
 
         return new CommandResult(process.ExitCode, outputText);
-    }
-
-    private static string GetWorkflowRunScript(string stepName)
-    {
-        var workflow = LoadWorkflow();
-        var root = (YamlMappingNode)workflow.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-
-        foreach (var jobEntry in jobs.Children)
-        {
-            if (jobEntry.Value is not YamlMappingNode job
-                || !job.Children.TryGetValue(new YamlScalarNode("steps"), out var stepsNode)
-                || stepsNode is not YamlSequenceNode steps)
-            {
-                continue;
-            }
-
-            foreach (var step in steps.Children.OfType<YamlMappingNode>())
-            {
-                if (Scalar(step, "name") == stepName)
-                {
-                    var run = Scalar(step, "run");
-                    Assert.False(string.IsNullOrEmpty(run), $"Expected step '{stepName}' to define a run script.");
-                    return run!;
-                }
-            }
-        }
-
-        Assert.Fail($"Could not find workflow step '{stepName}'.");
-        return null!;
     }
 
     private static YamlStream LoadWorkflow()
