@@ -209,6 +209,51 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task FormatTestFailuresUsesSafeMarkdownFences()
+    {
+        var failures = new[]
+        {
+            new
+            {
+                test = "Tests.SampleTheory(`value`)\n@maintainers",
+                error = "Expected ``` but got value",
+                stack_trace = "at ````frame````",
+                standard_output = "before\n```\n@team\n# heading",
+                standard_error = "stderr"
+            }
+        };
+
+        var output = await InvokeScriptAsync("format-test-failures", failures);
+
+        var expected = """
+            ### ``Tests.SampleTheory(`value`) @maintainers``
+
+            **Error:**
+            ````
+            Expected ``` but got value
+            ````
+            **Stack Trace:**
+            `````
+            at ````frame````
+            `````
+            **Standard Output (sensitive values redacted):**
+            ````
+            before
+            ```
+            @team
+            # heading
+            ````
+            **Standard Error (sensitive values redacted):**
+            ```
+            stderr
+            ```
+            """.ReplaceLineEndings("\n");
+
+        Assert.Equal(expected, output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics()
     {
         var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
@@ -216,24 +261,19 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         {
             standard_output = privateKeyAcrossTruncationBoundary,
             standard_error = "Host=db;Password=secret-value;Timeout=30\nTOKEN: colon-secret\nhttps://user:pass@example.com/path",
+            truncated_private_key = "Diagnostic prefix\n-----BEGIN RSA PRIVATE KEY-----\nsecret-key-material",
             nested = new[] { "eyJ1234567890.abcdefghijk.ABCDEFGHIJK" }
         };
-        var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-redact.json");
-        await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
 
-        using var command = new NodeCommand(_output, "analyze-ci-failure-redact");
-        command.WithWorkingDirectory(_repoRoot);
-
-        var result = await command.ExecuteScriptAsync(_scriptPath, "redact", inputPath);
-
-        Assert.Equal(0, result.ExitCode);
-        var redacted = JsonSerializer.Deserialize<JsonElement>(result.Output, s_jsonOptions);
+        var output = await InvokeScriptAsync("redact", input);
+        var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
         Assert.Equal(
             $"{new string('x', 3950)}[REDACTED]\nExpected 42 but got 41",
             redacted.GetProperty("standard_output").GetString());
         Assert.Equal(
             "Host=db;Password=[REDACTED];Timeout=30\nTOKEN: [REDACTED]\nhttps://[REDACTED]:[REDACTED]@example.com/path",
             redacted.GetProperty("standard_error").GetString());
+        Assert.Equal("Diagnostic prefix\n[REDACTED]", redacted.GetProperty("truncated_private_key").GetString());
         Assert.Equal("[REDACTED]", redacted.GetProperty("nested")[0].GetString());
     }
 
@@ -268,6 +308,20 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             ? new[] { operation, analysisPath, causePath }
             : new[] { operation, analysisPath, causePath, marker };
         var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
+        Assert.Equal(0, result.ExitCode);
+
+        return result.Output.ReplaceLineEndings("\n");
+    }
+
+    private async Task<string> InvokeScriptAsync(string operation, object input)
+    {
+        var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-input.json");
+        await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
+
+        using var command = new NodeCommand(_output, $"analyze-ci-failure-{operation}");
+        command.WithWorkingDirectory(_repoRoot);
+
+        var result = await command.ExecuteScriptAsync(_scriptPath, operation, inputPath);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
