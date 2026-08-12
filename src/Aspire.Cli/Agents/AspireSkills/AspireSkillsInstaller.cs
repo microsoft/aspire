@@ -45,6 +45,10 @@ internal sealed class AspireSkillsInstaller(
     private const string LastUsedFileName = ".lastused";
 
     private const int CacheLockMaxAttempts = 4;
+    private const int WindowsSharingViolationHResult = unchecked((int)0x80070020);
+    private const int WindowsLockViolationHResult = unchecked((int)0x80070021);
+    private const int LinuxWouldBlockHResult = 11;
+    private const int MacOsWouldBlockHResult = 35;
 
     private static readonly TimeSpan s_cacheLockInitialRetryDelay = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan s_cacheLockMaxRetryDelay = TimeSpan.FromMilliseconds(400);
@@ -814,7 +818,9 @@ internal sealed class AspireSkillsInstaller(
                     bufferSize: 1,
                     FileOptions.Asynchronous);
             }
-            catch (IOException ex) when (maxAttempts is null || attempt < maxAttempts.Value)
+            catch (IOException ex) when (
+                IsCacheLockContention(ex, OperatingSystem.IsWindows()) &&
+                (maxAttempts is null || attempt < maxAttempts.Value))
             {
                 if (maxAttempts is { } boundedAttempts)
                 {
@@ -842,6 +848,19 @@ internal sealed class AspireSkillsInstaller(
                 }
             }
         }
+    }
+
+    internal static bool IsCacheLockContention(IOException exception, bool isWindows)
+    {
+        if (isWindows)
+        {
+            return exception.HResult is WindowsSharingViolationHResult or WindowsLockViolationHResult;
+        }
+
+        // On Unix, FileStream implements FileShare.None with a non-blocking flock and exposes
+        // EWOULDBLOCK as the raw errno in IOException.HResult: 11 on Linux and 35 on macOS.
+        // See https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs.
+        return exception.HResult is LinuxWouldBlockHResult or MacOsWouldBlockHResult;
     }
 
     private static void ValidateBundleVersion(AspireSkillsBundle bundle, string expectedVersion)

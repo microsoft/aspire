@@ -58,6 +58,22 @@ public class AspireSkillsInstallerTests
         }
     }
 
+    [Theory]
+    [InlineData(unchecked((int)0x80070020), true, true)]
+    [InlineData(unchecked((int)0x80070021), true, true)]
+    [InlineData(unchecked((int)0x80070005), true, false)]
+    [InlineData(unchecked((int)0x80070070), true, false)]
+    [InlineData(11, false, true)]
+    [InlineData(35, false, true)]
+    [InlineData(2, false, false)]
+    [InlineData(28, false, false)]
+    public void IsCacheLockContention_OnlyMatchesPlatformLockErrors(int hresult, bool isWindows, bool expected)
+    {
+        var exception = new IOException("Cache lock failed.", hresult);
+
+        Assert.Equal(expected, AspireSkillsInstaller.IsCacheLockContention(exception, isWindows));
+    }
+
     [Fact]
     public async Task InstallAsync_WhenRequiredCacheLockExceedsCleanupRetryBudget_WaitsForRelease()
     {
