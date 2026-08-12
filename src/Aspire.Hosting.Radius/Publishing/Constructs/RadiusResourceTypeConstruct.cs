@@ -63,7 +63,11 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     }
 
     /// <summary>
-    /// The administrator user name, written to <c>properties.username</c>.
+    /// The administrator user name, written to <c>properties.username</c>. Internal: assigned
+    /// through <see cref="SetSchemaProperty"/> so a generic resource-type construct does not pin
+    /// three type-specific property names into its public surface — <c>database</c> means nothing
+    /// for a cache or a queue. A <c>ConfigureRadiusInfrastructure</c> callback that needs to set
+    /// one can do so through the type's own recipe parameters.
     /// </summary>
     /// <remarks>
     /// The <c>Radius.*</c> resource-type manifests declare their recipe inputs — <c>username</c>,
@@ -76,7 +80,7 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     /// and its Kubernetes recipe
     /// <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep"/>.
     /// </remarks>
-    public BicepValue<object> UserName
+    internal BicepValue<object> UserName
     {
         get { Initialize(); return _userName!; }
         set { Initialize(); _userName!.Assign(value); }
@@ -87,16 +91,23 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     /// <c>x-radius-sensitive</c>, so Radius encrypts it, redacts it on reads, and hands it to the
     /// recipe decrypted.
     /// </summary>
-    public BicepValue<object> Password
+    /// <remarks>
+    /// Internal for the same reason as <see cref="UserName"/>, and additionally because a settable
+    /// public property here would be an unguarded route for a literal credential into
+    /// <c>app.bicep</c>: the publisher's own <c>@secure()</c> parameter discipline applies to the
+    /// values it resolves, not to a value assigned from a callback.
+    /// </remarks>
+    internal BicepValue<object> Password
     {
         get { Initialize(); return _password!; }
         set { Initialize(); _password!.Assign(value); }
     }
 
     /// <summary>
-    /// The database the recipe should provision, written to <c>properties.database</c>.
+    /// The database the recipe should provision, written to <c>properties.database</c>. Internal
+    /// for the same reason as <see cref="UserName"/>.
     /// </summary>
-    public BicepValue<object> Database
+    internal BicepValue<object> Database
     {
         get { Initialize(); return _database!; }
         set { Initialize(); _database!.Assign(value); }

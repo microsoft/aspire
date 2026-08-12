@@ -71,6 +71,20 @@ internal static class RadiusBackingConnections
         internal sealed record RecipeInputProperties : RadiusCredentialMode;
 
         /// <summary>
+        /// The recipe deploys the workload with <em>no</em> authentication, so there is no
+        /// credential to project. Any password Aspire generated for run mode resolves to an empty
+        /// value, and <paramref name="Reason"/> is written into the publish-time warning that
+        /// reports it.
+        /// </summary>
+        /// <remarks>
+        /// Distinct from <see cref="NotProjected"/>: the address <em>is</em> projected, only the
+        /// credential is absent. Emitting <c>listSecrets().password</c> for such a type is worse
+        /// than emitting nothing — the recipe records no secrets, so the accessor fails the
+        /// deployment when ARM evaluates a property the returned object does not have.
+        /// </remarks>
+        internal sealed record NoCredential(string Reason) : RadiusCredentialMode;
+
+        /// <summary>
         /// The type carries no credential Aspire can project. <paramref name="Reason"/> is written
         /// into the publish-time error so the omission is explained rather than merely observed.
         /// </summary>
@@ -119,9 +133,20 @@ internal static class RadiusBackingConnections
     private static readonly Dictionary<string, RadiusConnectionSchema> s_schemas = new(StringComparer.Ordinal)
     {
         // Legacy portable types expose host/port as plain properties and their credentials through
-        // a first-class listSecrets() action. Redis has no user name; Mongo and RabbitMQ do.
+        // a first-class listSecrets() action. Mongo and RabbitMQ also expose a user name.
+        //
+        // Redis is the exception: the recipe the environment pins for it
+        // (ghcr.io/radius-project/recipes/local-dev/rediscaches) deploys a bare `redis` image with
+        // no `requirepass` and its `output result` carries only `values: { host, port }` — no
+        // `secrets` block at all. So `cache.listSecrets().password` is not merely empty, it is a
+        // property the returned object does not have, which fails the deployment when ARM evaluates
+        // it. The Redis Aspire deploys here is unauthenticated, and modelling it as such is what
+        // keeps the projected values honest.
+        // See https://github.com/radius-project/recipes/blob/main/local-dev/rediscaches.bicep.
         [RadiusResourceTypes.LegacyRedisCaches] =
-            new("host", "port", null, new RadiusCredentialMode.ListSecrets("password")),
+            new("host", "port", null, new RadiusCredentialMode.NoCredential(
+                "the 'local-dev/rediscaches' recipe deploys Redis without authentication and publishes no password " +
+                "secret, so there is no deployed credential to hand to consumers")),
         [RadiusResourceTypes.LegacyMongoDatabases] =
             new("host", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
         [RadiusResourceTypes.LegacyRabbitMQQueues] =

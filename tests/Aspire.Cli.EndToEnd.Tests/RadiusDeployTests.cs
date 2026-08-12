@@ -405,10 +405,21 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
+            // Supply the parameter through an owner-only ARM JSON parameters file rather than
+            // `-p name=value`, mirroring what RadiusDeploymentPipelineStep does on the shipped
+            // path — and keeping the credential out of the terminal capture and the failure
+            // artifacts this test uploads.
+            await auto.TypeAsync(
+                "PGPARAMS=$(mktemp -d)/parameters.json && " +
+                $"printf '%s' '{{\"$schema\":\"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#\",\"contentVersion\":\"1.0.0.0\",\"parameters\":{{\"pg_password\":{{\"value\":\"{PostgresPassword}\"}}}}}}' > \"$PGPARAMS\" && " +
+                "chmod 600 \"$PGPARAMS\" && echo \"wrote $PGPARAMS\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
             // `rad deploy` on the published output rather than `aspire deploy`, because the latter
             // republishes and would discard the extension import added above. The artifacts under
             // test are still exactly the ones Aspire generated.
-            await auto.TypeAsync($"rad deploy radius-output/app.bicep --group default -p pg_password={PostgresPassword}");
+            await auto.TypeAsync("rad deploy radius-output/app.bicep --group default --parameters @\"$PGPARAMS\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
 
@@ -456,14 +467,19 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // describes. The success marker is split in the shell source (PGVERIFY''_OK evaluates to
             // PGVERIFY_OK) so the contiguous token appears only in the loop's output, never in the
             // echoed command line.
-            await auto.TypeAsync("for i in $(seq 1 20); do " +
+            //
+            // The attempt count and the wait below are a pair: 12 attempts sleep 120s in total, and
+            // each attempt also schedules a pod and may pull the image, so the loop's worst case has
+            // to stay comfortably inside the wait or the test fails with a timeout while it is still
+            // legitimately retrying.
+            await auto.TypeAsync("for i in $(seq 1 12); do " +
                 $"if kubectl run pgcheck$i -n {radiusNamespace} --rm -i --restart=Never --image={PostgresImage} " +
                 "--image-pull-policy=IfNotPresent --env=PGPASSWORD=\"$PGPASSWORD\" --command -- " +
                 "psql -h \"$PGHOST\" -p \"$PGPORT\" -U \"$PGUSER\" -d \"$PGDATABASE\" -tAc 'select 1' | grep -q '^1$'; " +
                 "then echo PGVERIFY''_OK; break; fi; " +
                 "echo \"Attempt $i: psql could not connect, retrying...\"; sleep 10; done");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PGVERIFY_OK", timeout: TimeSpan.FromMinutes(5));
+            await auto.WaitUntilTextAsync("PGVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);

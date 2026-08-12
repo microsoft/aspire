@@ -74,7 +74,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
         image: 'myapp/api:latest'
         env: {
           ConnectionStrings__cache: {
-            value: '${renamed_cache.properties.host}:${renamed_cache.properties.port},password=${renamed_cache.listSecrets().password}'
+            value: '${renamed_cache.properties.host}:${renamed_cache.properties.port},password='
           }
           CACHE_HOST: {
             value: renamed_cache.properties.host
@@ -83,10 +83,10 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: string(renamed_cache.properties.port)
           }
           CACHE_PASSWORD: {
-            value: renamed_cache.listSecrets().password
+            value: ''
           }
           CACHE_URI: {
-            value: 'redis://:${uriComponent(renamed_cache.listSecrets().password)}@${renamed_cache.properties.host}:${renamed_cache.properties.port}'
+            value: 'redis://:@${renamed_cache.properties.host}:${renamed_cache.properties.port}'
           }
         }
       }
