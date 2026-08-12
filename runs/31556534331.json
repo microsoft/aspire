@@ -1,0 +1,38 @@
+{
+  "run_id": 31556534331,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31556534331",
+  "analyzed_at": "2026-08-12T03:20:11Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19226,
+    "title": "Add AKS persistent volume support",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-add-aks-persistent-volumes",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19226"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 93994527435,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31556534331/job/93994527435",
+      "classification": "flaky-test",
+      "reason": "The e2eShardMatrix.test.js Extension host E2E test fails intermittently on Windows. This matches a known prior flaky-test cause (extension-e2eshardmatrix-windows-flaky) and is unrelated to the PR's AKS persistent volume changes, which only touch Aspire.Hosting.Azure.Kubernetes and related test/README files.",
+      "failed_steps": ["Run tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "extension/src/test/e2eShardMatrix.test.js (Extension host E2E test)",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "error": "1 test failed. Extension host test runner error 1 test failed.",
+      "stack_trace": "at Context.<anonymous> (d:\\a\\aspire\\aspire\\extension\\out\\test\\e2eShardMatrix.test.js:146:9)\n\tat process.processImmediate (node:internal/timers:504:21)\nExit code: 1",
+      "classification": "flaky",
+      "reason": "This test is not related to any file changed by the PR (which only modifies Aspire.Hosting.Azure.Kubernetes and its tests). The error signature matches a previously recorded recurring flaky failure for this exact test on Windows Extension host test runner."
+    }
+  ],
+  "causes": ["extension-e2eshardmatrix-windows-flaky"]
+}
