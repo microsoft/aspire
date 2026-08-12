@@ -238,7 +238,8 @@ namespace Projects%3B
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                              AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
-                             SearchPathForAspireCli="false">
+                             SearchPathForAspireCli="false"
+                             WarnOnInvalidPaths="false">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
@@ -266,10 +267,16 @@ namespace Projects%3B
            Each literal percent must survive both command processors: %% escapes the outer batch,
            while the leading carets keep the resulting percent signs literal in the nested command. -->
       <_AspireCliSetupPathForCommandShim Condition="'$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPathWithEscapedMetacharacters), '%', '^^%%'))</_AspireCliSetupPathForCommandShim>
+      <_AspireCliSetupPathForExecutable>$(_AspireCliSetupPath)</_AspireCliSetupPathForExecutable>
+      <!-- Exec writes a native executable command such as
+           "C:\install%NAME%\aspire.exe" setup
+           to one temporary Windows batch file. Double each percent sign once so cmd.exe
+           preserves the literal path instead of expanding %NAME% as an environment variable. -->
+      <_AspireCliSetupPathForExecutable Condition="'$(OS)' == 'Windows_NT' and '$(_AspireCliSetupPath)' != '' and '$(_AspireCliSetupPathIsWindowsCommandShim)' != 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPath), '%', '%%'))</_AspireCliSetupPathForExecutable>
       <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
       <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
 
-      <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' != 'true'">"$(_AspireCliSetupPath)" setup</_AspireCliSetupCommand>
+      <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' != 'true'">"$(_AspireCliSetupPathForExecutable)" setup</_AspireCliSetupCommand>
       <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)') and '$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">cmd /D /V:OFF /C $(_AspireCliSetupPathForCommandShim) setup</_AspireCliSetupCommand>
       <_AspireCliSetupCommand Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupCommand>
       <!-- The escaped command-shim string is valid only inside Exec's temporary batch file. -->

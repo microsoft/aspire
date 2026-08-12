@@ -12,13 +12,21 @@ var forwardedArgs = dnxArgumentIndex >= 0 ? args[(dnxArgumentIndex + 1)..] : arg
 
 var setupArgumentIndex = Array.IndexOf(forwardedArgs, "setup");
 var installPathArgumentIndex = Array.IndexOf(forwardedArgs, "--install-path");
-if (setupArgumentIndex >= 0 &&
-    installPathArgumentIndex >= 0 &&
-    installPathArgumentIndex + 1 < forwardedArgs.Length)
+// The targets exercise setup as either:
+//   aspire.exe setup
+//   dotnet ... dnx --yes aspire.cli@<version> -- setup --install-path <path>
+var setupInstallPath = forwardedArgs switch
 {
-    var installPath = forwardedArgs[installPathArgumentIndex + 1];
-    var dcpDirectory = Directory.CreateDirectory(Path.Combine(installPath, "bundle", "dcp"));
-    var managedDirectory = Directory.CreateDirectory(Path.Combine(installPath, "bundle", "managed"));
+    ["setup"] => AppContext.BaseDirectory,
+    _ when setupArgumentIndex >= 0 &&
+        installPathArgumentIndex >= 0 &&
+        installPathArgumentIndex + 1 < forwardedArgs.Length => forwardedArgs[installPathArgumentIndex + 1],
+    _ => null
+};
+if (setupInstallPath is not null)
+{
+    var dcpDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dcp"));
+    var managedDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "managed"));
     File.WriteAllText(Path.Combine(dcpDirectory.FullName, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
     File.WriteAllText(Path.Combine(managedDirectory.FullName, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), "");
     return;
