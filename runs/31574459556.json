@@ -1,0 +1,29 @@
+{
+  "run_id": 31574459556,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31574459556",
+  "analyzed_at": "2026-08-12T08:12:32Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19127,
+    "title": "Run VS Code extension E2E tests on a current VS Code",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-18374-vscode-e2e-supported-version",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19127"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Qdrant / Hosting.Qdrant (windows-latest)",
+      "id": 94045189042,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31574459556/job/94045189042",
+      "classification": "transient-infra",
+      "reason": "Test run completed successfully (24 total, 0 failed, 24 succeeded), but post-test steps (Check for hang dump files, Upload logs, Copy CLI E2E recordings, Upload CLI E2E recordings, Generate test results summary) failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED). PR only modifies VS Code extension e2e test files, unrelated to Qdrant hosting tests.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
