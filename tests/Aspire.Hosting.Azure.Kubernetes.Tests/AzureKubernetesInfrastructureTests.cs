@@ -196,7 +196,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task AzureDeploymentContextUsesCurrentDeploymentState()
+    public async Task DeploymentScopeUsesCurrentDeploymentState()
     {
         const string subscriptionId = "00000000-0000-0000-0000-000000000001";
         const string resourceGroup = "deployment-rg";
@@ -211,16 +211,19 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             .AddSingleton<IDeploymentStateManager>(deploymentStateManager)
             .BuildServiceProvider();
 
-        var deploymentContext = await AzureKubernetesEnvironmentResource.GetAzureDeploymentContextAsync(
+        // Nothing is pinned on the resource, so the scope falls back to global deployment state.
+        var deploymentScope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+            scopedSubscription: null,
+            scopedResourceGroup: null,
             services,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(subscriptionId, deploymentContext.SubscriptionId);
-        Assert.Equal(resourceGroup, deploymentContext.ResourceGroup);
+        Assert.Equal(subscriptionId, deploymentScope.SubscriptionId);
+        Assert.Equal(resourceGroup, deploymentScope.ResourceGroup);
     }
 
     [Fact]
-    public async Task AzureDeploymentContextRequiresSubscription()
+    public async Task DeploymentScopeRequiresSubscription()
     {
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         deploymentStateManager.SetSection("Azure", new JsonObject
@@ -233,7 +236,9 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             .BuildServiceProvider();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => AzureKubernetesEnvironmentResource.GetAzureDeploymentContextAsync(
+            () => AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
+                scopedSubscription: null,
+                scopedResourceGroup: null,
                 services,
                 TestContext.Current.CancellationToken));
 
@@ -390,7 +395,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         // step would block forever without it. Provisioning normally completes it, and nothing
         // provisions here. It must be signalled after step creation because the base resource's
         // PipelineStepAnnotation assigns a fresh, incomplete source each time steps are built.
-        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+        Assert.NotNull(aks.Resource.ProvisioningTaskCompletionSource);
+        aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
         await getCredentialsStep.Action(new PipelineStepContext
@@ -414,7 +420,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             pipelineContext.Summary.Items,
             item => item.Key == "🔑 Connect to cluster");
         Assert.Equal(
-            $"`az aks get-credentials --resource-group queried-rg --name {clusterName} --subscription {subscriptionId}`",
+            $"`az aks get-credentials --resource-group 'queried-rg' --name '{clusterName}' --subscription {subscriptionId}`",
             connectHint.Value);
 
         Assert.Equal(
@@ -478,7 +484,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
 
-        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+        Assert.NotNull(aks.Resource.ProvisioningTaskCompletionSource);
+        aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
         await getCredentialsStep.Action(new PipelineStepContext
@@ -498,14 +505,14 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             pipelineContext.Summary.Items,
             item => item.Key == "🔑 Connect to cluster");
         Assert.Equal(
-            $"`az aks get-credentials --resource-group {clusterResourceGroup} --name {clusterName} --subscription {clusterSubscriptionId}`",
+            $"`az aks get-credentials --resource-group '{clusterResourceGroup}' --name '{clusterName}' --subscription {clusterSubscriptionId}`",
             connectHint.Value);
     }
 
     [Fact]
     public async Task DeploymentScopeFallsBackToDeploymentStateWhenResourcePinsNothing()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
             scopedSubscription: null,
@@ -519,7 +526,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeKeepsDeploymentResourceGroupWhenResourcePinsSameSubscription()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
             scopedSubscription: "sub-global",
@@ -533,7 +540,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeDropsDeploymentResourceGroupWhenResourcePinsAnotherSubscription()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
             scopedSubscription: "sub-other",
@@ -550,7 +557,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeUsesDeploymentSubscriptionWhenResourcePinsOnlyResourceGroup()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         var scope = await AzureKubernetesEnvironmentResource.ResolveDeploymentScopeAsync(
             scopedSubscription: null,
@@ -581,7 +588,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeResolvesParameterBackedScopeValues()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         var subscriptionParameter = new ParameterResource("sub", _ => "sub-from-parameter");
         var resourceGroupParameter = new ParameterResource("rg", _ => "rg-from-parameter");
@@ -598,7 +605,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeThrowsWhenScopeProviderResolvesNull()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         // Provisioning rejects a null scope value outright. Silently substituting the app's own
         // subscription here would diverge from that and could adopt a same-named cluster elsewhere.
@@ -617,7 +624,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeThrowsWhenScopeProviderResolvesEmpty()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         // An empty value is dropped by the string.IsNullOrEmpty checks downstream, silently
         // reintroducing the global-scope fallback, so it has to be rejected just like null.
@@ -689,7 +696,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
 
-        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+        Assert.NotNull(aks.Resource.ProvisioningTaskCompletionSource);
+        aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
         await getCredentialsStep.Action(new PipelineStepContext
@@ -757,7 +765,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var getCredentialsStep = Assert.Single(steps, step => step.Name == "aks-get-credentials-aks");
 
-        aks.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+        Assert.NotNull(aks.Resource.ProvisioningTaskCompletionSource);
+        aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
         await getCredentialsStep.Action(new PipelineStepContext
@@ -775,7 +784,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task DeploymentScopeThrowsWhenScopeValueIsEmptyString()
     {
-        var services = CreateServicesWithAzureState("sub-global", "rg-global");
+        using var services = CreateServicesWithAzureState("sub-global", "rg-global");
 
         // Nothing upstream rejects an empty scope string: AsExistingInResourceGroup and the
         // AzureBicepResourceScope constructors only guard against null. Without this check the
@@ -790,7 +799,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
     }
 
-    private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)    {
+    private static ServiceProvider CreateServicesWithAzureState(string subscriptionId, string? resourceGroup)
+    {
         var deploymentStateManager = new InMemoryDeploymentStateManager();
         var azureState = new JsonObject { ["SubscriptionId"] = subscriptionId };
 
