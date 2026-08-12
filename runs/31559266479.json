@@ -1,0 +1,38 @@
+{
+  "run_id": 31559266479,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31559266479",
+  "analyzed_at": "2026-08-12T04:12:15Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19219,
+    "title": "Pin AKS credential pipeline to the deployment subscription",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-fix-aks-credential-subscription",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19219"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 93999382649,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31559266479/job/93999382649",
+      "classification": "flaky-test",
+      "reason": "The only failure is in extension/src/test/e2eShardMatrix.test.js, an Extension host E2E test unrelated to the PR's changes (which only touch Azure Kubernetes AKS pipeline hosting code and Bicep resource scope). Matches a known recurring flaky failure pattern (cause extension-e2eshardmatrix-windows-flaky, issue #19265).",
+      "failed_steps": ["Run tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "extension/src/test/e2eShardMatrix.test.js (Extension host E2E test)",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "error": "1 test failed. Extension host test runner error 1 test failed.",
+      "stack_trace": "at Context.<anonymous> (d:\\a\\aspire\\aspire\\extension\\out\\test\\e2eShardMatrix.test.js:146:9)\nat process.processImmediate (node:internal/timers:504:21)\nExit code: 1",
+      "classification": "flaky",
+      "reason": "The PR only modifies Azure Kubernetes AKS pipeline hosting code and Bicep resource scope (src/Aspire.Hosting.Azure.Kubernetes, src/Aspire.Hosting.Azure), none of which relate to the VS Code extension's e2eShardMatrix test. This exact failure signature matches a previously recorded recurring flaky test (cause extension-e2eshardmatrix-windows-flaky) with 2 prior occurrences on Windows runners."
+    }
+  ],
+  "causes": ["extension-e2eshardmatrix-windows-flaky"]
+}
