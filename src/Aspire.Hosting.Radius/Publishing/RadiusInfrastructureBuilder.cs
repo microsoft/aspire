@@ -1339,6 +1339,25 @@ internal sealed class RadiusInfrastructureBuilder
 
         var databaseChild = referenced.Count == 1 ? referenced[0] : databaseChildren[0];
 
+        // The server-level connection string carries no database name (see the no-child branch
+        // above), so a consumer that references the *server* rather than one of its databases opens
+        // the client's default database — the user name — which is not the one being created here.
+        // In run mode both exist, because the Postgres image creates a database named after
+        // POSTGRES_USER in addition to the ones Aspire creates for each AddDatabase(...) child. A
+        // recipe provisions exactly one, so the parity cannot be preserved and the reference is left
+        // pointing at a database that will not exist.
+        if (referencedResourceNames.Contains(resource.Name))
+        {
+            _logger.LogWarning(
+                "Radius resource '{ResourceName}' is referenced directly, but its recipe creates only the database " +
+                "'{Selected}'. A server-level connection string names no database, so consumers default to the one " +
+                "named after the user, which the recipe does not create. Reference the database with " +
+                "WithReference({ResourceName}Database) instead of the server.",
+                resource.Name,
+                databaseChild.Name,
+                resource.Name);
+        }
+
         if (databaseChildren.Count > 1)
         {
             _logger.LogWarning(

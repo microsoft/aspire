@@ -392,8 +392,10 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // This is a Radius 0.59-only workaround. Radius 0.60 carries
             // Radius.Data/postgreSqlDatabases in the pinned `radius` Bicep extension *and* registers
             // it by default at install time, so both this step and the `rad resource-type create`
-            // above disappear once RadiusBicepExtension.Version moves to 0.60 — at which point this
-            // test deploys the untouched published artifacts through `aspire deploy`.
+            // above disappear once RadiusBicepExtension.Version moves to 0.60. A recipe still has to
+            // be registered for the type until it is added to the default Kubernetes recipe pack
+            // (https://github.com/radius-project/resource-types-contrib/issues/276), so the type
+            // registration below is what goes away first, not the recipe registration.
             await auto.TypeAsync("rad bicep publish-extension --from-file /tmp/postgresqldatabases.yaml --target radius-output/aspire-udt.tgz --force");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
