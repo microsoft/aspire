@@ -245,7 +245,9 @@ internal sealed class AspireSkillsInstaller(
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        // A truncated response body throws HttpIOException rather than HttpRequestException.
+        // Catch it explicitly so local cache and archive I/O failures still propagate.
+        catch (Exception ex) when (ex is HttpRequestException or HttpIOException or JsonException)
         {
             logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}.", version);
             return AcquisitionResult.Unavailable(knownArchiveSha256);

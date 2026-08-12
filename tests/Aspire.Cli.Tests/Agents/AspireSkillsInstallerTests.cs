@@ -1026,6 +1026,33 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_WhenGitHubResponseEndsEarly_UsesEmbeddedBundle()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var handler = new MockHttpMessageHandler(new HttpIOException(HttpRequestError.ResponseEnded));
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenGitHubIsUnavailable_UsesVerifiedGitHubCache()
     {
         var rootDirectory = CreateTempDirectory();
