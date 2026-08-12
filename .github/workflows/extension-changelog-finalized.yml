@@ -1,0 +1,20 @@
+name: VS Code extension changelog merge gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  extension_changelog_finalized:
+    name: Extension changelog finalized
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Verify extension changelog is finalized
+        run: bash .github/workflows/check-extension-changelog-finalized.sh
