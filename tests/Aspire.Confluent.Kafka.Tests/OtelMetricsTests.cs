@@ -62,8 +62,6 @@ public class OtelMetricsTests
 
         using var host = builder.Build();
         await host.StartAsync();
-        IGrouping<string, Metric>[] groups;
-
         string topic = $"otel-topic-{Guid.NewGuid()}";
         using (var producer = useKeyed
             ? host.Services.GetRequiredKeyedService<IProducer<string, string>>(key)
@@ -111,14 +109,19 @@ public class OtelMetricsTests
 
         await host.StopAsync();
 
-        groups = metrics.Where(x => x.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka")
-            .GroupBy(x => x.Name).ToArray();
+        var metricNames = metrics
+            .Where(x => x.MeterName == "OpenTelemetry.Instrumentation.ConfluentKafka")
+            .Select(x => x.Name)
+            .Distinct()
+            .Order()
+            .ToArray();
 
-        Assert.Equal(4, groups.Length);
-
-        Assert.Contains(groups, x => x.Key == "messaging.receive.duration");
-        Assert.Contains(groups, x => x.Key == "messaging.receive.messages");
-        Assert.Contains(groups, x => x.Key == "messaging.publish.duration");
-        Assert.Contains(groups, x => x.Key == "messaging.publish.messages");
+        Assert.Equal(
+            [
+                "messaging.client.consumed.messages",
+                "messaging.client.operation.duration",
+                "messaging.client.sent.messages",
+            ],
+            metricNames);
     }
 }

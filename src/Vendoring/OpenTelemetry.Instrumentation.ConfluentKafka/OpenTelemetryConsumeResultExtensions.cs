@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
@@ -27,13 +28,13 @@ internal static class OpenTelemetryConsumeResultExtensions
         this ConsumeResult<TKey, TValue> consumeResult,
         out PropagationContext propagationContext)
     {
-#if NETFRAMEWORK
+#if NET
+        ArgumentNullException.ThrowIfNull(consumeResult);
+#else
         if (consumeResult == null)
         {
             throw new ArgumentNullException(nameof(consumeResult));
         }
-#else
-        ArgumentNullException.ThrowIfNull(consumeResult);
 #endif
 
         try
@@ -75,13 +76,13 @@ internal static class OpenTelemetryConsumeResultExtensions
         OpenTelemetryConsumeAndProcessMessageHandler<TKey, TValue> handler,
         CancellationToken cancellationToken)
     {
-#if NETFRAMEWORK
+#if NET
+        ArgumentNullException.ThrowIfNull(consumer);
+#else
         if (consumer == null)
         {
             throw new ArgumentNullException(nameof(consumer));
         }
-#else
-        ArgumentNullException.ThrowIfNull(consumer);
 #endif
 
         if (consumer is not InstrumentedConsumer<TKey, TValue> instrumentedConsumer)
@@ -89,13 +90,13 @@ internal static class OpenTelemetryConsumeResultExtensions
             throw new ArgumentException("Invalid consumer type.", nameof(consumer));
         }
 
-#if NETFRAMEWORK
-        if (handler is null)
+#if NET
+        ArgumentNullException.ThrowIfNull(handler);
+#else
+        if (handler == null)
         {
             throw new ArgumentNullException(nameof(handler));
         }
-#else
-        ArgumentNullException.ThrowIfNull(handler);
 #endif
 
         var consumeResult = instrumentedConsumer.Consume(cancellationToken);
@@ -105,25 +106,7 @@ internal static class OpenTelemetryConsumeResultExtensions
             return consumeResult;
         }
 
-        Activity? processActivity = null;
-        if (TryExtractPropagationContext(consumeResult, out var propagationContext))
-        {
-            processActivity = StartProcessActivity(
-                propagationContext,
-                consumeResult.TopicPartitionOffset,
-                consumeResult.Message.Key,
-                instrumentedConsumer.Name,
-                instrumentedConsumer.GroupId!);
-        }
-        else
-        {
-            processActivity = StartProcessActivity(
-                default,
-                consumeResult.TopicPartitionOffset,
-                consumeResult.Message.Key,
-                instrumentedConsumer.Name,
-                instrumentedConsumer.GroupId!);
-        }
+        var processActivity = StartProcessActivity(TryExtractPropagationContext(consumeResult, out var propagationContext) ? propagationContext : default, consumeResult.TopicPartitionOffset, consumeResult.Message.Key, consumeResult.Message.Value is null, instrumentedConsumer.Name, instrumentedConsumer.GroupId!);
 
         try
         {
@@ -131,8 +114,9 @@ internal static class OpenTelemetryConsumeResultExtensions
         }
         catch (Exception ex)
         {
-            processActivity?.SetStatus(ActivityStatusCode.Error);
+            processActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             processActivity?.SetTag(SemanticConventions.AttributeErrorType, ex.GetType().FullName);
+            throw;
         }
         finally
         {
@@ -145,29 +129,62 @@ internal static class OpenTelemetryConsumeResultExtensions
     internal static PropagationContext ExtractPropagationContext(Headers? headers)
         => Propagators.DefaultTextMapPropagator.Extract(default, headers, ExtractTraceContext);
 
-    private static Activity? StartProcessActivity<TKey>(PropagationContext propagationContext, TopicPartitionOffset? topicPartitionOffset, TKey? key, string clientId, string groupId)
+    private static Activity? StartProcessActivity<TKey>(PropagationContext propagationContext, TopicPartitionOffset? topicPartitionOffset, TKey? key, bool isTombstone, string clientId, string groupId)
     {
+#pragma warning disable IDE0370 // Suppression is unnecessary
         var spanName = string.IsNullOrEmpty(topicPartitionOffset?.Topic)
             ? ConfluentKafkaCommon.ProcessOperationName
-            : string.Concat(topicPartitionOffset!.Topic, " ", ConfluentKafkaCommon.ProcessOperationName);
+            : string.Concat(ConfluentKafkaCommon.ProcessOperationName, " ", topicPartitionOffset!.Topic);
+#pragma warning restore IDE0370 // Suppression is unnecessary
 
         ActivityLink[] activityLinks = propagationContext != default && propagationContext.ActivityContext.IsValid()
-            ? new[] { new ActivityLink(propagationContext.ActivityContext) }
-            : Array.Empty<ActivityLink>();
+            ? [new ActivityLink(propagationContext.ActivityContext)]
+            : [];
 
-        Activity? activity = ConfluentKafkaCommon.ActivitySource.StartActivity(spanName, kind: ActivityKind.Consumer, links: activityLinks, parentContext: default);
+        // Provide the attributes that can influence sampling decisions at span creation time
+        var initialTags = new ActivityTagsCollection
+        {
+            [SemanticConventions.AttributeMessagingOperationName] = ConfluentKafkaCommon.ProcessOperationName,
+            [SemanticConventions.AttributeMessagingOperationType] = ConfluentKafkaCommon.ProcessOperationType,
+            [SemanticConventions.AttributeMessagingSystem] = ConfluentKafkaCommon.KafkaMessagingSystem,
+        };
+
+        if (groupId is { Length: > 0 })
+        {
+            initialTags.Add(SemanticConventions.AttributeMessagingConsumerGroupName, groupId);
+        }
+
+        // messaging.destination.name is only set for actual topics; it must be omitted when unknown.
+        if (topicPartitionOffset?.Topic is { Length: > 0 } topic)
+        {
+            initialTags.Add(SemanticConventions.AttributeMessagingDestinationName, topic);
+
+            if (topicPartitionOffset?.Partition is { } partition)
+            {
+                initialTags.Add(SemanticConventions.AttributeMessagingDestinationPartitionId, partition.Value.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        var activity = ConfluentKafkaCommon.ActivitySource.StartActivity(
+            spanName,
+            kind: ActivityKind.Consumer,
+            parentContext: default,
+            tags: initialTags,
+            links: activityLinks);
+
         if (activity?.IsAllDataRequested == true)
         {
-            activity.SetTag(SemanticConventions.AttributeMessagingSystem, ConfluentKafkaCommon.KafkaMessagingSystem);
             activity.SetTag(SemanticConventions.AttributeMessagingClientId, clientId);
-            activity.SetTag(SemanticConventions.AttributeMessagingDestinationName, topicPartitionOffset?.Topic);
-            activity.SetTag(SemanticConventions.AttributeMessagingKafkaDestinationPartition, topicPartitionOffset?.Partition.Value);
-            activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageOffset, topicPartitionOffset?.Offset.Value);
-            activity.SetTag(SemanticConventions.AttributeMessagingKafkaConsumerGroup, groupId);
-            activity.SetTag(SemanticConventions.AttributeMessagingOperation, ConfluentKafkaCommon.ProcessOperationName);
-            if (key != null)
+            activity.SetTag(SemanticConventions.AttributeMessagingKafkaOffset, topicPartitionOffset?.Offset.Value);
+
+            if (ConfluentKafkaCommon.FormatMessageKey(key) is { } messageKey)
             {
-                activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageKey, key);
+                activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageKey, messageKey);
+            }
+
+            if (isTombstone)
+            {
+                activity.SetTag(SemanticConventions.AttributeMessagingKafkaMessageTombstone, true);
             }
         }
 

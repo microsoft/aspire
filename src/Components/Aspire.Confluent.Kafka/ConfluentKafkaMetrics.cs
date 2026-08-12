@@ -54,15 +54,15 @@ internal sealed class ConfluentKafkaMetrics
         public const string TxBytes = "messaging.kafka.network.transmitted";
         public const string Rx = "messaging.kafka.network.rx";
         public const string RxBytes = "messaging.kafka.network.received";
-        public const string TxMessages = "messaging.publish.messages";
+        public const string TxMessages = "messaging.client.sent.messages";
         public const string TxMessageBytes = "messaging.kafka.message.transmitted";
-        public const string RxMessages = "messaging.receive.messages";
+        public const string RxMessages = "messaging.client.consumed.messages";
         public const string RxMessageBytes = "messaging.kafka.message.received";
     }
 
     public static class Tags
     {
-        public const string ClientId = "messaging.client_id";
+        public const string ClientId = "messaging.client.id";
         public const string Type = "type";
         public const string Name = "name";
     }
