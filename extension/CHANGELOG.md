@@ -2,17 +2,8 @@
 
 ## v1.17.0
 
-### Features
-
-- Make C# Dev Kit Hot Reload discoverable while debugging: shows an advisory when C# Dev Kit is installed with Hot Reload disabled, with a shortcut to open the relevant setting ([#19067](https://github.com/microsoft/aspire/pull/19067)).
-
-### Fixes
-
-- Emit a DCP session-termination notification when stopping resources from the dashboard, fixing a stuck "stopping" state for VS Code-controlled resources ([#15426](https://github.com/microsoft/aspire/issues/15426), [#19125](https://github.com/microsoft/aspire/pull/19125)).
-- Keep `launch.json` AppHost targets from overwriting the workspace default AppHost selection ([#19080](https://github.com/microsoft/aspire/issues/19080), [#19126](https://github.com/microsoft/aspire/pull/19126)).
-- Honor `ASPIRE_HOME` for deployment state so isolated CLI runs no longer leave deployment parameters or secrets in the persistent user profile ([#19211](https://github.com/microsoft/aspire/issues/19211), [#19244](https://github.com/microsoft/aspire/pull/19244)).
-- Fix an intermittent self-signed certificate generation failure ([#19176](https://github.com/microsoft/aspire/pull/19176)).
-- Update `js-yaml` to 4.3.1 to resolve a quadratic CPU consumption security advisory ([GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj), [#19231](https://github.com/microsoft/aspire/pull/19231)).
+<!-- aspire-ext-changelog from=8278bca4a530f0fc513bdf4ed03b10683e36c16e to=199a9f39e25e8487371e228629594184083293f3 base=1.16.0 -->
+_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
 
 ## v1.16.0
 
