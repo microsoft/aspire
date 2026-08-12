@@ -2,8 +2,33 @@
 
 ## v1.17.0
 
-<!-- aspire-ext-changelog from=8278bca4a530f0fc513bdf4ed03b10683e36c16e to=199a9f39e25e8487371e228629594184083293f3 base=1.16.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+### Features
+
+- Add Hot Reload discoverability for .NET resources while debugging: the extension now surfaces C# Dev Kit's Hot Reload controls for Aspire-managed .NET projects instead of hiding them ([#19067](https://github.com/microsoft/aspire/pull/19067)).
+- Show runtime-unhealthy resources as warnings in the Aspire pane instead of silently reporting them as running ([#18973](https://github.com/microsoft/aspire/pull/18973)).
+- Add a "Copy AppHost path" action when clicking the Path tree item in the AppHosts view ([#18578](https://github.com/microsoft/aspire/issues/18578), [#18621](https://github.com/microsoft/aspire/pull/18621)).
+- Add non-watch debug/F5 parity for plain executables carrying project metadata (e.g. `DotnetProjectResource`), so they debug and render like a project resource ([#18729](https://github.com/microsoft/aspire/pull/18729)).
+- Execute resource start/stop/restart and custom commands from the Aspire pane without opening an integrated terminal ([#18457](https://github.com/microsoft/aspire/pull/18457)).
+- Use incremental, streaming AppHost discovery instead of a full rescan on every workspace change, reducing discovery latency ([#18443](https://github.com/microsoft/aspire/pull/18443)).
+
+### Fixes
+
+- Fix AppHost commands (start/stop/restart) not terminating the underlying DCP session, which could leave orphaned processes behind ([#19125](https://github.com/microsoft/aspire/pull/19125)).
+- Honor `ASPIRE_HOME` when resolving deployment state instead of always using the default location ([#19244](https://github.com/microsoft/aspire/pull/19244)).
+- Keep AppHost targets configured via `launch.json` out of the workspace's default AppHost list ([#19126](https://github.com/microsoft/aspire/pull/19126)).
+- Fix an intermittent failure generating self-signed development certificates caused by DER-invalid serial numbers ([#19176](https://github.com/microsoft/aspire/pull/19176)).
+- Respect project-level server-ready action overrides instead of always using the extension default ([#19200](https://github.com/microsoft/aspire/pull/19200)).
+- Fix Azure Functions projects failing to launch over HTTPS from VS Code ([#19001](https://github.com/microsoft/aspire/pull/19001)).
+- Fix incorrect build ownership for file-based AppHosts, which could cause builds to be skipped or duplicated ([#18984](https://github.com/microsoft/aspire/pull/18984)).
+- Use "run" wording instead of "debug" wording when launching an AppHost without debugging ([#18987](https://github.com/microsoft/aspire/pull/18987)).
+- Fix Aspire CLI discovery failing to find a global .NET tool install on Windows ([#18940](https://github.com/microsoft/aspire/pull/18940)).
+- Fix stale global AppHost entries lingering in the Aspire pane after a debug session stops ([#18594](https://github.com/microsoft/aspire/pull/18594)).
+- Stop the AppHost's own debug session before stopping its parent Aspire debug session, avoiding duplicate/out-of-order stop attempts ([#18561](https://github.com/microsoft/aspire/pull/18561)).
+- Improve reliability of the AppHost status stream: fix a broken exponential backoff after restarts and make the CLI compatibility banner accurate across multiple open AppHosts ([#18527](https://github.com/microsoft/aspire/pull/18527)).
+- Fix the extension ignoring a non-zero debuggee exit code, which could mask a crashed AppHost as a clean exit ([#18712](https://github.com/microsoft/aspire/pull/18712)).
+- Improve extension CLI probe startup reliability: avoid discovery races and stray CLI output during startup ([#18517](https://github.com/microsoft/aspire/pull/18517)).
+- Forward `aspire.aspireCliExecutablePath` as `AspireCliPath` so MSBuild bundle resolution picks up a configured dev CLI path ([#18073](https://github.com/microsoft/aspire/issues/18073), [#18362](https://github.com/microsoft/aspire/pull/18362)).
+- Update `js-yaml` to 4.3.1 to resolve [GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj) ([#19231](https://github.com/microsoft/aspire/pull/19231)).
 
 ## v1.16.0
 
