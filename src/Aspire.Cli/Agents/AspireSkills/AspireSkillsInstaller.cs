@@ -249,7 +249,7 @@ internal sealed class AspireSkillsInstaller(
                 await archiveStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
             }
 
-            ValidateArchiveSha256(archivePath, metadata.Sha256!);
+            ValidateArchiveSha512(archivePath, metadata.Sha512!);
 
             try
             {
@@ -307,21 +307,21 @@ internal sealed class AspireSkillsInstaller(
             return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName;
         }
 
-        if (string.IsNullOrWhiteSpace(metadata.Sha256))
+        if (string.IsNullOrWhiteSpace(metadata.Sha512))
         {
-            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha256;
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha512;
         }
 
         return null;
     }
 
-    private static void ValidateArchiveSha256(string archivePath, string expectedSha256)
+    private static void ValidateArchiveSha512(string archivePath, string expectedSha512)
     {
-        var expectedHash = AspireSkillsBundle.NormalizeSha256(expectedSha256);
+        var expectedHash = AspireSkillsBundle.NormalizeSha512(expectedSha512);
         string actualHash;
         using (var stream = File.OpenRead(archivePath))
         {
-            actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            actualHash = Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
         }
 
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
