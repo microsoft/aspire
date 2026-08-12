@@ -304,16 +304,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return false;
         }
 
-        if (!modelResource.SupportsDebugging(_configuration, out var annotation))
-        {
-            return modelResource is ProjectResource;
-        }
+        var supportsDebugging = modelResource.SupportsDebugging(_configuration, out var annotation);
 
-        // Project-backed resources can leave the process scaffold incomplete when the active launch configuration
-        // owns the invocation. The remaining IDE-only arguments cannot be used as a Process fallback.
-        if (HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments))
+        // SupportsDebugging can return false while still yielding the resource's annotation, such as when Visual
+        // Studio omits DEBUG_SESSION_INFO for a custom launch type. Check command completeness before the unsupported
+        // path offers every ProjectResource a Process fallback.
+        if (annotation is not null &&
+            HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments))
         {
             return false;
+        }
+
+        if (!supportsDebugging || annotation is null)
+        {
+            return modelResource is ProjectResource;
         }
 
         return modelResource is ProjectResource
