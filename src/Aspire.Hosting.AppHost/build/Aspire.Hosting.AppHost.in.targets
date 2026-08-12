@@ -259,7 +259,6 @@ namespace Projects%3B
            Each literal percent must survive both command processors: %% escapes the outer batch,
            while the leading carets keep the resulting percent signs literal in the nested command. -->
       <_AspireCliSetupPathForCommandShim Condition="'$(_AspireCliSetupPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireCliSetupPathWithEscapedMetacharacters), '%', '^^%%'))</_AspireCliSetupPathForCommandShim>
-      <_AspireCliSetupHome Condition="'$(ASPIRE_HOME)' != ''">$(ASPIRE_HOME)</_AspireCliSetupHome>
       <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
       <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
 
@@ -283,7 +282,7 @@ namespace Projects%3B
           StandardOutputImportance="Low"
           StandardErrorImportance="Low"
           Timeout="$(_AspireCliBundleSetupTimeout)"
-          ContinueOnError="ErrorAndContinue">
+          ContinueOnError="WarnAndContinue">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
     </Exec>
 
@@ -323,7 +322,7 @@ namespace Projects%3B
           StandardOutputImportance="Low"
           StandardErrorImportance="Low"
           Timeout="$(_AspireCliBundleSetupTimeout)"
-          ContinueOnError="ErrorAndContinue">
+          ContinueOnError="WarnAndContinue">
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
     </Exec>
 
