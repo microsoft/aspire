@@ -787,8 +787,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         var dotnetProjectLaunchResourceArgumentIndex = FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
             er.ModelResource,
-            appHostArgList,
-            launchToolArgumentCount);
+            appHostArgList);
         var launchArgs = new List<LaunchArgument>();
         int? dotnetProjectLaunchArgumentIndex = null;
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
@@ -893,8 +892,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     private static int? FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
         IResource resource,
-        IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs,
-        int launchToolArgumentCount)
+        IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs)
     {
         if (resource is not ProjectResource ||
             !resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
@@ -903,23 +901,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return null;
         }
 
-        // Recognize the project-launching SDK verb only at the start of a complete invocation:
+        // Recognize the project-launching SDK verb only immediately after the dotnet executable:
         //   dotnet run ...
         //   dotnet watch ...
-        // A declared launch-tool prefix identifies that invocation. Without one, project subtypes such as MAUI
-        // historically place the verb first in ordinary resource args. A later value is an application argument,
-        // such as "watch" in `dotnet exec app.dll watch`, and must not be interpreted as the SDK verb.
+        // Later values belong to another SDK command or the launched application, for example:
+        //   dotnet tool run <command>
+        //   dotnet exec app.dll watch
+        // They must not be interpreted as the top-level project-launch verb.
         // See https://learn.microsoft.com/dotnet/core/tools/dotnet-run and
         // https://learn.microsoft.com/dotnet/core/tools/dotnet-watch.
-        var invocationArgumentCount = launchToolArgumentCount > 0
-            ? Math.Min(launchToolArgumentCount, appHostArgs.Count)
-            : Math.Min(1, appHostArgs.Count);
-        for (var i = 0; i < invocationArgumentCount; i++)
+        if (appHostArgs.Count > 0 && appHostArgs[0].Value is "run" or "watch")
         {
-            if (appHostArgs[i].Value is "run" or "watch")
-            {
-                return i;
-            }
+            return 0;
         }
 
         return null;
