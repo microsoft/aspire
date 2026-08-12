@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed WithDebugSupport's argsCallback incorrectly subtracting the tool entrypoint (e.g. `go run `, `python -m `) via an ordinary WithArgs callback, which only worked when registered in a specific order and left the app model IDE-only. Regular arguments are now separated from launch tool (entrypoint) arguments.",
-  "docsPrs": [],
+  "docsPrs": [
+    1458
+  ],
   "docsRequired": true,
   "emoji": "🐛",
   "firstMergedAt": "2026-08-11T18:22:54Z",

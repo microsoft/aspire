@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #18999 (backported as #19234), matched to existing 'Separate regular arguments from launch tool' entry",
+  "mergedAt": "2026-08-12T14:03:25Z",
+  "number": 1458,
+  "runDate": "2026-08-12T18:21:17Z",
+  "status": "included",
+  "title": "[docs] Document WithLaunchToolArgs in ASPIREEXTENSION001 diagnostic page"
+}
