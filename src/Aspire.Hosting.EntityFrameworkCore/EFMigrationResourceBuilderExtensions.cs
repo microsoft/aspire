@@ -234,7 +234,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject(this IResourceBuilder<EFMigrationResource> builder, string projectPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
@@ -258,7 +258,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
         where TProject : IProjectMetadata, new()
     {

@@ -4,9 +4,16 @@ import test from "node:test";
 
 import { APP_JS, STYLES } from "./render.mjs";
 
-test("renderer theme styles follow canvas tokens with accessible light fallbacks", () => {
-  assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, #ffffff\)\)/);
-  assert.match(STYLES, /--fg: var\(--fgColor-default, var\(--text-color-default, #1f2328\)\)/);
+test("renderer follows Primer and canvas theme tokens with system color-scheme fallbacks", () => {
+  assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, var\(--fallback-bg\)\)\)/);
+  assert.match(STYLES, /--fg: var\(--fgColor-default, var\(--text-color-default, var\(--fallback-fg\)\)\)/);
+  assert.match(STYLES, /--muted: var\(--fgColor-muted, var\(--text-color-muted, var\(--fallback-muted\)\)\)/);
+  assert.match(STYLES, /--border: var\(--borderColor-default, var\(--border-color-default, var\(--fallback-border\)\)\)/);
+  assert.match(STYLES, /--focus: var\(--focus-outlineColor, var\(--color-focus-outline, var\(--fallback-focus\)\)\)/);
+  assert.match(STYLES, /--white: var\(--fgColor-onEmphasis, var\(--color-white, #ffffff\)\)/);
+  assert.match(STYLES, /@media \(prefers-color-scheme: dark\) \{[\s\S]*?--fallback-bg: #0d1117/);
+  assert.match(STYLES, /:root\[data-color-mode="light"\] \{[\s\S]*?--fallback-bg: #ffffff/);
+  assert.match(STYLES, /:root\[data-color-mode="dark"\] \{[\s\S]*?--fallback-bg: #0d1117/);
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);
@@ -19,6 +26,10 @@ test("renderer theme styles follow canvas tokens with accessible light fallbacks
   assert.doesNotMatch(STYLES, /animation: paintfill/);
   assert.doesNotMatch(STYLES, /box-shadow: 0 0 8px/);
   assert.doesNotMatch(STYLES, /var\(--n-/);
+  assert.match(STYLES, /\.refresh-pref\.active \{/);
+  assert.match(STYLES, /\.update-ready\[hidden\] \{ display: none; \}/);
+  assert.match(STYLES, /\.live-tooltip::after \{[\s\S]*?content: attr\(data-tooltip\)/);
+  assert.match(STYLES, /\.live-tooltip:hover::after, \.live-tooltip:focus-visible::after/);
 });
 
 test("render keeps the current dashboard visible and surfaces later load errors", () => {
@@ -587,34 +598,180 @@ test("setProgress doesn't fade the bar from a terminal SSE tick while another re
   assert.equal(loadbar.style.width, "0");
 });
 
-test("onSseRefresh only re-pulls state while the queue is showing, so an off-queue nudge can't clobber an open form", async () => {
-  // Every mutation streams the fresh dashboard over the 'state' event (stashed off-queue by
-  // applyPushedState) and then fires the legacy 'refresh' nudge. Acting on that nudge off the queue
-  // would call load() -> render() and rebuild an open Accounts/Settings/Filters form, discarding the
-  // user's uncommitted text. fetch hands back a strictly-increasing seq so each real load applies.
-  let seq = 0;
-  const fetchSeq = async () => {
-    seq += 1;
-    return jsonResponse({ dashboard: { seq, marker: "s" + seq, authenticated: false, accounts: [], message: "" }, prefs: {} });
+test("an available background update leaves the board unchanged until it is applied", async () => {
+  let stateReads = 0;
+  const next = {
+    dashboard: { seq: 8, marker: "complete", authenticated: false, accounts: [], message: "" },
+    prefs: { autoApplyUpdates: false },
   };
-  const flush = () => new Promise((r) => setTimeout(r, 0));
-  const { api } = createRendererHarness({ fetch: fetchSeq });
-  await flush();
-  assert.equal(api.getState().marker, "s1", "module-init load applies the first snapshot");
+  const { api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) !== "api/state") return new Promise(() => {});
+      stateReads++;
+      return stateReads === 1 ? new Promise(() => {}) : jsonResponse(next);
+    },
+  });
+  api.setState({ seq: 4, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: false });
+  api.onUpdateAvailable({ seq: 8, fetchedAt: "2026-08-06T00:00:00Z" });
 
-  // Off the queue (a form view): the nudge is a no-op, so fetch isn't called and state is untouched.
-  api.setView("accounts");
-  api.onSseRefresh();
-  await flush();
-  assert.equal(seq, 1, "an off-queue refresh nudge must not re-pull /api/state");
-  assert.equal(api.getState().marker, "s1");
+  assert.equal(api.getState().marker, "visible");
+  assert.equal(api.getUpdateAvailable().seq, 8);
 
-  // On the queue: the nudge re-pulls /api/state and applies the newer snapshot.
-  api.setView("queue");
-  api.onSseRefresh();
-  await flush();
-  assert.equal(seq, 2, "a queue refresh nudge re-pulls /api/state");
-  assert.equal(api.getState().marker, "s2");
+  await api.applyAvailableUpdate();
+
+  assert.equal(api.getState().marker, "complete");
+  assert.equal(api.getAppliedSeq(), 8);
+  assert.equal(api.getUpdateAvailable(), null);
+});
+
+test("the toolbar Auto switch persists without refreshing the board", async () => {
+  let posted;
+  const { api } = createRendererHarness({
+    fetch: async (url, options) => {
+      if (String(url) === "api/auto-apply") {
+        posted = JSON.parse(options.body);
+        return jsonResponse({ prefs: { autoApplyUpdates: false } });
+      }
+      return new Promise(() => {});
+    },
+  });
+  api.setState({ seq: 3, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: true });
+
+  await api.toggleAutoApply();
+
+  assert.deepEqual(posted, { enabled: false });
+  assert.equal(api.autoApplyEnabled(), false);
+  assert.equal(api.getState().marker, "visible");
+});
+
+test("enabling Auto applies an update that was already waiting", async () => {
+  let stateReads = 0;
+  const { api } = createRendererHarness({
+    fetch: async (url) => {
+      if (String(url) === "api/auto-apply") {
+        return jsonResponse({ prefs: { autoApplyUpdates: true } });
+      }
+      if (String(url) === "api/state") {
+        stateReads++;
+        if (stateReads === 1) return new Promise(() => {});
+        return jsonResponse({
+          dashboard: { seq: 9, marker: "applied", authenticated: false, accounts: [], message: "" },
+          prefs: { autoApplyUpdates: true },
+        });
+      }
+      return new Promise(() => {});
+    },
+  });
+  api.setState({ seq: 5, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: false });
+  api.onUpdateAvailable({ seq: 9 });
+
+  await api.toggleAutoApply();
+
+  assert.equal(api.autoApplyEnabled(), true);
+  assert.equal(api.getState().marker, "applied");
+  assert.equal(api.getUpdateAvailable(), null);
+});
+
+test("snapshot replay restores the pending indicator without replacing the board when Auto is off", () => {
+  const { api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setState({ seq: 5, marker: "visible", authenticated: false, accounts: [], message: "" });
+  api.setPrefs({ autoApplyUpdates: true });
+
+  api.onSnapshot({ seq: 9, prefs: { autoApplyUpdates: false } });
+
+  assert.equal(api.getState().marker, "visible");
+  assert.equal(api.autoApplyEnabled(), false);
+  assert.equal(api.getUpdateAvailable().seq, 9);
+});
+
+test("refresh tooltip counts down to the server's next background poll", () => {
+  const attributes = {};
+  const refreshButton = {
+    dataset: {},
+    classList: classList(),
+    setAttribute(name, value) { attributes[name] = value; },
+  };
+  let intervalMs;
+  const { api } = createRendererHarness({
+    elements: { "refresh-btn": refreshButton },
+    setInterval(_handler, milliseconds) { intervalMs = milliseconds; return 1; },
+  });
+
+  api.onPollSchedule({ nextPollAt: Date.now() + 34_000 });
+
+  assert.match(refreshButton.dataset.tooltip, /^Refresh now \(data will auto-update in 3[34]s\)$/);
+  assert.equal(attributes["aria-label"], refreshButton.dataset.tooltip);
+  assert.equal(intervalMs, 1000);
+});
+
+test("issueCard renders linked pull requests as separate safe new-tab links below the pills", () => {
+  const { api } = createRendererHarness();
+  const html = api.issueCard({
+    issue: {
+      repository: "microsoft/aspire",
+      number: 42,
+      title: "Issue title",
+      url: "https://github.com/microsoft/aspire/issues/42",
+      author: "octo",
+      authorAvatarUrl: null,
+      linkedPullRequests: [{
+        repository: "microsoft/aspire",
+        number: 99,
+        title: "Cover single-file AppHost re-search fallback",
+        url: "https://github.com/microsoft/aspire/pull/99",
+        state: "OPEN",
+      }, {
+        repository: "microsoft/aspire",
+        number: 100,
+        title: "Merged implementation",
+        url: "https://github.com/microsoft/aspire/pull/100",
+        state: "MERGED",
+      }, {
+        repository: "microsoft/aspire",
+        number: 101,
+        title: "Closed implementation",
+        url: "https://github.com/microsoft/aspire/pull/101",
+        state: "CLOSED",
+      }],
+    },
+    signals: [{ label: "Regression", tone: "danger" }],
+  });
+
+  assert.match(html, /class="card-main" href="https:\/\/github\.com\/microsoft\/aspire\/issues\/42" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /class="card-main linked-pr" href="https:\/\/github\.com\/microsoft\/aspire\/pull\/99" target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /aria-label="Open pull request: Cover single-file AppHost re-search fallback"[\s\S]*linked-pr-icon open/);
+  assert.match(html, /href="https:\/\/github\.com\/microsoft\/aspire\/pull\/100"[\s\S]*aria-label="Merged pull request: Merged implementation"[\s\S]*linked-pr-icon merged/);
+  assert.doesNotMatch(html, /pull\/101|Closed implementation/);
+  assert.doesNotMatch(html, /class="linked-prs"/);
+  assert.ok(html.indexOf('class="pills"') < html.indexOf('class="card-main linked-pr"'));
+});
+
+test("openLinkedPr routes the canonical link through the in-app browser endpoint", async () => {
+  let request;
+  const { api } = createRendererHarness({
+    fetch: async (url, options) => {
+      if (String(url) === "api/open-pr") {
+        request = { url: String(url), body: JSON.parse(options.body) };
+        return jsonResponse({ ok: true, instanceId: "aspire-team-app-pr-microsoft-aspire-99" });
+      }
+      return new Promise(() => {});
+    },
+  });
+  const link = {
+    href: "https://github.com/microsoft/aspire/pull/99",
+    classList: classList(),
+  };
+
+  await api.openLinkedPr(link);
+
+  assert.deepEqual(request, {
+    url: "api/open-pr",
+    body: { url: "https://github.com/microsoft/aspire/pull/99" },
+  });
+  assert.equal(link.classList.contains("busy"), false);
 });
 
 test("signalActions detects review debt from the serialized flag when the pill is truncated", () => {
@@ -650,16 +807,617 @@ test("signalActions ignores raw GitHub label pills so a repo label can't spoof a
   assert.equal(api.signalActions({ signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","), "resolve-conflicts");
 });
 
-function createRendererHarness(overrides = {}) {
+test("Health mode renders provider evidence and remains available without GitHub authentication", () => {
+  const { app, api } = createRendererHarness();
+  const github = {
+    id: "github:github.com:microsoft/aspire-samples",
+    provider: "github",
+    name: "microsoft/aspire-samples",
+    repository: "microsoft/aspire-samples",
+    branch: "main",
+    url: "https://github.com/microsoft/aspire-samples",
+    state: "failing",
+    latest: {
+      id: "abcdef0123456789",
+      at: "2026-01-08T00:00:00Z",
+      actor: "dependabot[bot]",
+      message: "Bump package <unsafe>",
+    },
+    daysSinceSuccess: 9,
+    failureStreak: 7,
+    canOpenRepoSession: true,
+    reasons: [{
+      tone: "danger",
+      summary: "The failing head is a likely regression source <unsafe>.",
+      url: "javascript:alert(1)",
+    }],
+    evidence: [{ label: "CI / build", detail: "failure & timeout", url: "https://github.com/microsoft/aspire-samples/actions" }],
+  };
+  const azure = {
+    id: "azdo:dnceng:internal:1602",
+    provider: "azure-devops",
+    name: "microsoft-aspire",
+    branch: "refs/heads/main",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    state: "degraded",
+    latest: { id: 42, number: "20260108.1", at: "2026-01-08T01:00:00Z", result: "partiallySucceeded" },
+    daysSinceSuccess: 1,
+    failureStreak: 50,
+    failureStreakLowerBound: true,
+    canOpenRepoSession: false,
+    reasons: [{ tone: "warning", summary: "Deployment is likely blocked upstream." }],
+    evidence: [],
+  };
+
+  api.setState(healthDashboard([github, azure], {
+    total: 2,
+    healthy: 0,
+    running: 0,
+    degraded: 1,
+    failing: 1,
+    unavailable: 0,
+    unknown: 0,
+  }, false));
+  api.setPrefs(rendererPrefs());
+  api.render();
+
+  assert.match(app.innerHTML, /data-mode="health"/);
+  assert.match(app.innerHTML, /Repository &amp; delivery health/);
+  assert.match(app.innerHTML, /microsoft\/aspire-samples/);
+  assert.match(app.innerHTML, /Failure streak<\/span><span class="v">7<\/span>/);
+  assert.match(app.innerHTML, /Failure streak<\/span><span class="v">50\+<\/span>/);
+  assert.match(app.innerHTML, /class="health-reason-banner"/);
+  assert.match(app.innerHTML, /likely regression source &lt;unsafe&gt;/);
+  assert.doesNotMatch(app.innerHTML, /<unsafe>/);
+  assert.match(app.innerHTML, /href="#"[^>]*>The failing head/);
+  assert.match(app.innerHTML, /data-kind="diagnose-health"[^>]*data-source-id="github:github\.com:microsoft\/aspire-samples"/);
+  assert.match(app.innerHTML, /Fix in repo/);
+  assert.match(app.innerHTML, /Work fix here/);
+  assert.match(app.innerHTML, /class="health-drag"/);
+  assert.match(app.innerHTML, /draggable="true"/);
+  assert.match(app.innerHTML, /aria-label="Reorder microsoft\/aspire-samples\. Position 1 of 2\."/);
+  assert.match(app.innerHTML, /<details class="health-details"/);
+  assert.match(app.innerHTML, /class="health-details-chevron" aria-hidden="true"/);
+  assert.match(app.innerHTML, /class="health-metrics"/);
+  assert.doesNotMatch(app.innerHTML, /No GitHub credentials detected/);
+  assert.match(STYLES, /\.health-card:hover \{[\s\S]*?translateY\(-1px\)/);
+  assert.match(STYLES, /\.health-unit\.dragging \{[\s\S]*?rotate\(\.35deg\)/);
+  assert.match(STYLES, /\.health-drag-ghost \{[\s\S]*?var\(--shadow-floating\)/);
+  assert.match(STYLES, /\.health-details\[open\] \.health-details-chevron \{ transform: rotate\(180deg\); \}/);
+  assert.match(STYLES, /prefers-reduced-motion: reduce[\s\S]*?\.health-unit\.dragging/);
+  assert.match(STYLES, /@media \(max-width: 470px\)[\s\S]*?button\.brand \{ display: none; \}[\s\S]*?#filters-btn \{ display: none; \}/);
+});
+
+test("Health mode groups related provider sources under one repository", () => {
+  const groupId = "repository:github.com/microsoft/aspire";
+  const github = {
+    id: "github:github.com/microsoft/aspire",
+    provider: "github",
+    name: "microsoft/aspire",
+    repository: "microsoft/aspire",
+    host: "github.com",
+    groupId,
+    groupName: "microsoft/aspire",
+    groupMatch: "canonical",
+    branch: "main",
+    url: "https://github.com/microsoft/aspire",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const azure = {
+    id: "azdo:dnceng/internal/1602",
+    provider: "azure-devops",
+    name: "microsoft-aspire",
+    organizationName: "dnceng",
+    project: "internal",
+    groupId,
+    groupName: "microsoft/aspire",
+    groupMatch: "name",
+    branch: "refs/heads/main",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    discovered: true,
+    discovery: { kind: "azure-cli-default" },
+    state: "failing",
+    reasons: [],
+    evidence: [],
+  };
+  const { app, api } = createRendererHarness();
+  api.setState(healthDashboard([github, azure], {
+    total: 2,
+    healthy: 1,
+    running: 0,
+    degraded: 0,
+    failing: 1,
+    unavailable: 0,
+    unknown: 0,
+  }, true));
+  api.setPrefs(rendererPrefs());
+
+  api.render();
+
+  assert.match(app.innerHTML, /class="health-unit health-source-group"/);
+  assert.match(app.innerHTML, /microsoft\/aspire/);
+  assert.match(app.innerHTML, /2 delivery sources/);
+  assert.match(app.innerHTML, /Repository name match/);
+  assert.match(app.innerHTML, /Default branch/);
+  assert.match(app.innerHTML, /Azure DevOps \u00b7 dnceng\/internal/);
+  assert.match(app.innerHTML, /Auto\u2011discovered/);
+  assert.match(
+    api.healthCard({ ...azure, discovery: { kind: "official-default" } }, 0, 1),
+    /Official default/,
+  );
+  assert.match(app.innerHTML, /1 repository group across 2 sources\. Drag groups to prioritize\./);
+  assert.equal((app.innerHTML.match(/data-health-drag=/g) || []).length, 1);
+});
+
+test("Health order saves optimistically and keeps the server-confirmed order", async () => {
+  let request = null;
+  const motionView = { classList: classList() };
+  motionView.classList.add("no-motion");
+  const { api } = createRendererHarness({
+    querySelector: (selector) => selector === ".view" ? motionView : null,
+    fetch: async (path, options) => {
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({
+        dashboard: {
+          ...healthDashboard([second, first], {
+            total: 2,
+            healthy: 1,
+            running: 0,
+            degraded: 0,
+            failing: 1,
+            unavailable: 0,
+            unknown: 0,
+          }, true),
+          seq: 2,
+        },
+        prefs: { ...rendererPrefs(), healthOrder: [second.id, first.id] },
+      });
+    },
+  });
+  const first = {
+    id: "github:github.com:microsoft/aspire",
+    provider: "github",
+    name: "microsoft/aspire",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const second = {
+    id: "azdo:dnceng:internal:1602",
+    provider: "azure-devops",
+    name: "Internal deployment",
+    state: "failing",
+    reasons: [],
+    evidence: [],
+  };
+  api.setState({
+    ...healthDashboard([first, second], {
+      total: 2,
+      healthy: 1,
+      running: 0,
+      degraded: 0,
+      failing: 1,
+      unavailable: 0,
+      unknown: 0,
+    }, true),
+    seq: 1,
+  });
+  api.setPrefs(rendererPrefs());
+
+  await api.commitHealthOrder([second, first], [first, second], second.id);
+
+  assert.deepEqual(request, {
+    path: "api/health/order",
+    body: { order: [second.id, first.id] },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(api.getState().health.items)), [second, first]);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.getPrefs().healthOrder)), [second.id, first.id]);
+  assert.equal(motionView.classList.contains("no-motion"), false);
+});
+
+test("Health order rolls back when persistence fails", async () => {
+  const first = {
+    id: "github:github.com/microsoft/aspire",
+    provider: "github",
+    name: "microsoft/aspire",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const second = {
+    id: "azdo:dnceng:internal:1602",
+    provider: "azure-devops",
+    name: "Internal deployment",
+    state: "failing",
+    reasons: [],
+    evidence: [],
+  };
+  const { app, api } = createRendererHarness({
+    fetch: async () => jsonResponse({ error: "Preferences are read-only" }, { ok: false, status: 500 }),
+  });
+  api.setState({
+    ...healthDashboard([first, second], {
+      total: 2,
+      healthy: 1,
+      running: 0,
+      degraded: 0,
+      failing: 1,
+      unavailable: 0,
+      unknown: 0,
+    }, true),
+    seq: 1,
+  });
+  api.setPrefs(rendererPrefs());
+
+  await api.commitHealthOrder([second, first], [first, second], second.id);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(api.getState().health.items)), [first, second]);
+  assert.match(app.innerHTML, /Preferences are read-only/);
+});
+
+test("Health group reordering persists every related source as one contiguous unit", async () => {
+  let request = null;
+  const aspireGroup = "repository:github.com/microsoft/aspire";
+  const docsGroup = "repository:github.com/microsoft/aspire.dev";
+  const github = {
+    id: "github:github.com/microsoft/aspire",
+    provider: "github",
+    name: "microsoft/aspire",
+    groupId: aspireGroup,
+    groupName: "microsoft/aspire",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const azure = {
+    id: "azdo:dnceng/internal/1602",
+    provider: "azure-devops",
+    name: "microsoft-aspire",
+    groupId: aspireGroup,
+    groupName: "microsoft/aspire",
+    state: "failing",
+    reasons: [],
+    evidence: [],
+  };
+  const docs = {
+    id: "github:github.com/microsoft/aspire.dev",
+    provider: "github",
+    name: "microsoft/aspire.dev",
+    groupId: docsGroup,
+    groupName: "microsoft/aspire.dev",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const { app, api } = createRendererHarness({
+    fetch: async (path, options) => {
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({ prefs: { ...rendererPrefs(), healthOrder: request.body.order } });
+    },
+  });
+  api.setState({
+    ...healthDashboard([github, azure, docs], {
+      total: 3,
+      healthy: 2,
+      running: 0,
+      degraded: 0,
+      failing: 1,
+      unavailable: 0,
+      unknown: 0,
+    }, true),
+    seq: 1,
+  });
+  api.setPrefs(rendererPrefs());
+
+  await api.dropHealthSource(docsGroup, aspireGroup, false);
+
+  assert.deepEqual(request.body.order, [docs.id, github.id, azure.id]);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(api.getState().health.items.map((item) => item.id))),
+    [docs.id, github.id, azure.id],
+  );
+  assert.match(app.innerHTML, /Moved microsoft\/aspire\.dev to position 1 of 2\./);
+});
+
+test("Health dragover keeps its marker stable while the pointer remains in the same drop zone", () => {
+  const first = dragCard();
+  const second = dragCard();
+  first.dataset.healthGroupId = "first";
+  second.dataset.healthGroupId = "second";
+  const handle = dragHandle("first", first);
+  const { api } = createRendererHarness({
+    querySelectorAll: (selector) => {
+      if (selector === ".health-unit" || selector === ".health-unit[data-health-group-id]") return [first, second];
+      if (selector === "[data-health-drag]") return [handle];
+      return [];
+    },
+  });
+
+  api.wireHealthOrdering();
+  handle.listeners.dragstart({
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+  const dragover = {
+    clientX: 75,
+    clientY: 50,
+    preventDefault() {},
+    dataTransfer: { dropEffect: "" },
+  };
+  second.listeners.dragover(dragover);
+  const mutations = second.mutations;
+
+  second.listeners.dragover(dragover);
+  assert.equal(second.mutations, mutations);
+  assert.equal(second.classList.has("drag-after"), true);
+
+  second.listeners.dragover({ ...dragover, clientX: 50, clientY: 25 });
+  assert.equal(second.classList.has("drag-after"), false);
+  assert.equal(second.classList.has("drag-before"), true);
+});
+
+test("an equivalent order confirmation advances state without repainting the grid", () => {
+  const first = {
+    id: "github:github.com/microsoft/aspire",
+    provider: "github",
+    name: "microsoft/aspire",
+    state: "healthy",
+    reasons: [],
+    evidence: [],
+  };
+  const initial = { ...healthDashboard([first], {
+    total: 1,
+    healthy: 1,
+    running: 0,
+    degraded: 0,
+    failing: 0,
+    unavailable: 0,
+    unknown: 0,
+  }, true), seq: 1 };
+  const { app, api } = createRendererHarness();
+  api.setState(initial);
+  api.setPrefs(rendererPrefs());
+  api.setHealthOrderSaving(true);
+  app.innerHTML = "stable grid";
+
+  api.applyPushedState({
+    dashboard: { ...initial, seq: 2 },
+    prefs: { ...rendererPrefs(), healthOrder: [first.id] },
+  });
+
+  assert.equal(app.innerHTML, "stable grid");
+  assert.equal(api.getState().seq, 2);
+  assert.equal(api.getAppliedSeq(), 2);
+});
+
+test("health actions post only the canonical source id to the dedicated endpoint", async () => {
+  let request = null;
+  const { api } = createRendererHarness({
+    fetch: async (path, options) => {
+      if (String(path) !== "api/health/action") return new Promise(() => {});
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({ queued: false, target: "current-session" });
+    },
+  });
+  const classes = new Set();
+  const main = {
+    disabled: false,
+    innerHTML: "Diagnose here",
+    classList: {
+      add(value) { classes.add(value); },
+      remove(value) { classes.delete(value); },
+      contains(value) { return classes.has(value); },
+    },
+  };
+  const split = {
+    isConnected: true,
+    dataset: { kind: "diagnose-health", sourceId: "github:github.com:microsoft/aspire", doneLabel: "Requested" },
+    querySelector(selector) { return selector === ".cb-main" ? main : null; },
+  };
+
+  await api.onCardAction(split, "current-session");
+
+  assert.deepEqual(request, {
+    path: "api/health/action",
+    body: {
+      kind: "diagnose-health",
+      target: "current-session",
+      source: { id: "github:github.com:microsoft/aspire" },
+    },
+  });
+  assert.equal(classes.has("done"), true);
+  assert.match(main.innerHTML, /Running in this session/);
+});
+
+test("Azure pipeline settings add and remove normalized sources without persisting credentials", async () => {
+  const calls = [];
+  const added = {
+    id: "azdo:dnceng:internal:1602",
+    name: "microsoft-aspire",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    branch: "refs/heads/release/13.1",
+    definitionId: 1602,
+  };
+  const { app, api } = createRendererHarness({
+    fetch: async (path, options) => {
+      const endpoint = String(path);
+      if (!endpoint.startsWith("api/health/pipeline/")) return new Promise(() => {});
+      calls.push({ endpoint, body: JSON.parse(options.body) });
+      const pipelines = endpoint.endsWith("/add") ? [added] : [];
+      return jsonResponse({
+        dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: calls.length + 1 },
+        prefs: { ...rendererPrefs(), azurePipelines: pipelines },
+      });
+    },
+  });
+  api.setState({ ...healthDashboard([], emptyHealthCounts(), true), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.setPipelineDrafts(added.url, "release/13.1");
+
+  await api.addAzurePipeline();
+
+  assert.deepEqual(calls[0], {
+    endpoint: "api/health/pipeline/add",
+    body: { url: added.url, branch: "release/13.1" },
+  });
+  assert.equal(api.getPrefs().azurePipelines.length, 1);
+  assert.equal(api.getPipelineDrafts().url, "");
+  assert.equal(api.getPipelineDrafts().branch, "");
+  assert.equal(api.getPipelineDrafts().error, "");
+  assert.match(app.innerHTML, /microsoft-aspire/);
+  assert.doesNotMatch(JSON.stringify(api.getPrefs()), /AZURE_DEVOPS_EXT_PAT|token|credential/i);
+
+  await api.removeAzurePipeline(added.id);
+
+  assert.deepEqual(calls[1], { endpoint: "api/health/pipeline/remove", body: { id: added.id } });
+  assert.equal(api.getPrefs().azurePipelines.length, 0);
+});
+
+test("invalid Azure pipeline settings keep the draft and show the provider validation error", async () => {
+  const { app, api } = createRendererHarness({
+    fetch: async (path) => String(path) === "api/health/pipeline/add"
+      ? jsonResponse({ error: "Only Azure DevOps pipeline or build URLs are supported" }, { ok: false, status: 400 })
+      : new Promise(() => {}),
+  });
+  api.setState({ ...healthDashboard([], emptyHealthCounts(), true), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.setPipelineDrafts("https://example.com/build/1", "");
+
+  await api.addAzurePipeline();
+
+  assert.equal(api.getPipelineDrafts().url, "https://example.com/build/1");
+  assert.equal(api.getPipelineDrafts().branch, "");
+  assert.equal(api.getPipelineDrafts().error, "Only Azure DevOps pipeline or build URLs are supported");
+  assert.match(app.innerHTML, /Only Azure DevOps pipeline or build URLs are supported/);
+  assert.match(app.innerHTML, /value="https:\/\/example\.com\/build\/1"/);
+});
+
+test("Azure pipeline mutations preserve unsaved settings fields across renders", async () => {
+  const elements = {
+    "release-input": { value: "13.4-preview" },
+    "s-drafts": { checked: true },
+    "n-review": { checked: false },
+    "n-ready": { checked: true },
+    "n-changes": { checked: false },
+    "n-ci": { checked: false },
+  };
+  const resetToPersistedValues = () => {
+    elements["release-input"].value = "13.1";
+    elements["s-drafts"].checked = false;
+    elements["n-review"].checked = true;
+    elements["n-ready"].checked = false;
+    elements["n-changes"].checked = true;
+    elements["n-ci"].checked = true;
+  };
   const app = {
+    html: "",
+    get innerHTML() { return this.html; },
+    set innerHTML(value) {
+      this.html = value;
+      if (value.includes("<h2>Settings</h2>")) resetToPersistedValues();
+    },
+    removeAttribute() {},
+    classList: classList(),
+  };
+  const added = {
+    id: "azdo:dnceng:internal:1602",
+    name: "microsoft-aspire",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    branch: "refs/heads/release/13.1",
+    definitionId: 1602,
+  };
+  const { api } = createRendererHarness({
+    app,
+    elements,
+    fetch: async (path) => String(path) === "api/health/pipeline/add"
+      ? jsonResponse({
+          dashboard: { ...healthDashboard([], emptyHealthCounts(), true), seq: 2 },
+          prefs: { ...rendererPrefs(), azurePipelines: [added] },
+        })
+      : new Promise(() => {}),
+  });
+  api.setState({ ...healthDashboard([], emptyHealthCounts(), true), seq: 1 });
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.setPipelineDrafts(added.url, "");
+
+  await api.addAzurePipeline();
+
+  assert.equal(elements["release-input"].value, "13.4-preview");
+  assert.equal(elements["s-drafts"].checked, true);
+  assert.equal(elements["n-review"].checked, false);
+  assert.equal(elements["n-ready"].checked, true);
+  assert.equal(elements["n-changes"].checked, false);
+  assert.equal(elements["n-ci"].checked, false);
+});
+
+test("settings Enter shortcut leaves interactive controls to their native actions", () => {
+  const source = APP_JS.match(/function isSettingsSaveShortcut\(event\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source);
+  const isSettingsSaveShortcut = vm.runInNewContext(`(${source})`);
+
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", id: "pipeline-add-btn" } }), false);
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", className: "pipeline-remove" } }), false);
+  assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "INPUT", id: "release-input" } }), true);
+});
+
+function rendererPrefs() {
+  return {
+    mode: "health",
+    release: "13.1",
+    showDrafts: false,
+    azurePipelines: [],
+    notifications: {
+      assigned: true,
+      reviewRequested: true,
+      mention: true,
+      changesRequested: true,
+      ciFailing: true,
+    },
+  };
+}
+
+function emptyHealthCounts() {
+  return { total: 0, healthy: 0, running: 0, degraded: 0, failing: 0, unavailable: 0, unknown: 0 };
+}
+
+function healthDashboard(items, counts, authenticated) {
+  return {
+    authenticated,
+    viewer: authenticated ? "octo" : null,
+    mode: "health",
+    accounts: [],
+    activeAccounts: [],
+    notifications: [],
+    repos: [],
+    lanes: [],
+    health: { items, counts },
+    counts,
+    errors: [],
+    fetchedAt: "2026-01-08T02:00:00Z",
+  };
+}
+
+function createRendererHarness(overrides = {}) {
+  const app = overrides.app ?? {
     innerHTML: "",
     removeAttribute() {},
     classList: classList(),
   };
   const document = {
-    getElementById(id) { return id === "app" ? app : (id === "loadbar" ? (overrides.loadbar ?? null) : null); },
+    getElementById(id) {
+      if (id === "app") return app;
+      if (id === "loadbar") return overrides.loadbar ?? null;
+      return overrides.elements?.[id] ?? null;
+    },
     querySelector: overrides.querySelector ?? (() => null),
-    querySelectorAll: () => [],
+    querySelectorAll: overrides.querySelectorAll ?? (() => []),
     addEventListener() {},
   };
   const sandbox = {
@@ -672,12 +1430,52 @@ function createRendererHarness(overrides = {}) {
     fetch: overrides.fetch ?? (async () => jsonResponse({ dashboard: null, prefs: null })),
     setTimeout: overrides.setTimeout ?? ((handler) => { handler(); return 1; }),
     clearTimeout: overrides.clearTimeout ?? (() => {}),
+    URL,
+    setInterval: overrides.setInterval ?? (() => 1),
+    clearInterval: overrides.clearInterval ?? (() => {}),
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
+}
+
+function dragCard() {
+  const classes = new Set();
+  const card = {
+    dataset: {},
+    listeners: {},
+    mutations: 0,
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+    getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 100 }; },
+    classList: {
+      add(...values) {
+        for (const value of values) classes.add(value);
+        this.owner.mutations++;
+      },
+      remove(...values) {
+        for (const value of values) classes.delete(value);
+        this.owner.mutations++;
+      },
+      contains(value) { return classes.has(value); },
+      has(value) { return classes.has(value); },
+      owner: null,
+    },
+  };
+  card.classList.owner = card;
+  return card;
+}
+
+function dragHandle(id, card) {
+  return {
+    dataset: { healthDrag: id },
+    listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+    setAttribute() {},
+    removeAttribute() {},
+    closest() { return card; },
+  };
 }
 
 test("cb-menu keyboard model lets Tab traverse out of the menu instead of trapping focus", () => {

@@ -28,6 +28,9 @@ export const installCliDailyBuild = vscode.l10n.t('Daily build (dev)');
 export const installCliDailyBuildDescription = vscode.l10n.t('Latest build from main via the install script');
 export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
 export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
+export const azureFunctionsUnsupportedTaskShell = vscode.l10n.t('The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.');
+export const azureFunctionsCmdPercentArgument = vscode.l10n.t('Azure Functions launch arguments containing "%" are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
+export const azureFunctionsCmdDelayedExpansion = vscode.l10n.t('Azure Functions launch arguments containing "!" are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
@@ -181,6 +184,8 @@ export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string,
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
+export const hotReloadDisabledNotice = vscode.l10n.t('C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.');
+export const openSettingsLabel = vscode.l10n.t('Open Settings');
 export const dismissLabel = vscode.l10n.t('Dismiss');
 export const openCliInstallInstructions = vscode.l10n.t('See CLI installation instructions');
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');

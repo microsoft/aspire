@@ -345,12 +345,13 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
   context.subscriptions.push(installCliRegistration, verifyCliInstalledRegistration);
 
-  const debugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService);
+  const dynamicDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, vscode.DebugConfigurationProviderTriggerKind.Dynamic);
+  const initialDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, vscode.DebugConfigurationProviderTriggerKind.Initial);
   context.subscriptions.push(
-    vscode.debug.registerDebugConfigurationProvider('aspire', debugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Dynamic)
+    vscode.debug.registerDebugConfigurationProvider('aspire', dynamicDebugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Dynamic)
   );
   context.subscriptions.push(
-    vscode.debug.registerDebugConfigurationProvider('aspire', debugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Initial)
+    vscode.debug.registerDebugConfigurationProvider('aspire', initialDebugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Initial)
   );
 
   context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('aspire', new AspireDebugAdapterDescriptorFactory(rpcServer, dcpServer, terminalProvider, aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext), aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext))));
@@ -363,7 +364,7 @@ export async function activate(context: vscode.ExtensionContext) {
     getAspireDebugSession: aspireExtensionContext.getAspireDebugSession.bind(aspireExtensionContext),
   }));
 
-  aspireExtensionContext.initialize(rpcServer, context, debugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
+  aspireExtensionContext.initialize(rpcServer, context, dynamicDebugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
 
   // Register Aspire MCP server definition provider so the Aspire MCP server
   // appears automatically in VS Code's MCP tools list for Aspire workspaces.
@@ -423,8 +424,8 @@ export async function activate(context: vscode.ExtensionContext) {
   return Object.freeze(api);
 }
 
-export function deactivate() {
-  aspireExtensionContext.dispose();
+export function deactivate(): Promise<void> {
+  return aspireExtensionContext.deactivate();
 }
 
 function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {

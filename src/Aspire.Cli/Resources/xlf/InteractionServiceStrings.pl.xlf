@@ -157,9 +157,9 @@
         <target state="needs-review-translation">Nie określono opcji --apphost i wykryto wiele plików projektu hosta aplikacji.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">Nie określono argumentu projektu i nie wykryto plików projektu hosta aplikacji.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

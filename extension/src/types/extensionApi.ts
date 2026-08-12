@@ -105,6 +105,7 @@ export interface AspireExtensionE2EStateFile {
     debugLaunches: readonly AspireExtensionE2EDebugLaunch[];
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
     stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
+    taskProcessEvents: readonly AspireExtensionE2ETaskProcessEvent[];
     control?: AspireExtensionE2EControlStatus;
 }
 
@@ -123,6 +124,16 @@ export type AspireExtensionE2EDebugConsoleOutput = AspireDebugConsoleOutputEvent
 export interface AspireExtensionE2EStoppingPathEvent extends AspireExtensionE2ESequence {
     appHostPath: string;
     state: 'entered' | 'left';
+}
+
+export interface AspireExtensionE2ETaskProcessEvent extends AspireExtensionE2ESequence {
+    executionId: number;
+    state: 'started' | 'ended';
+    taskName: string;
+    taskSource: string;
+    taskDefinitionType: string;
+    processId?: number;
+    exitCode?: number;
 }
 
 export interface AspireDebugConsoleOutputEvent {
@@ -185,6 +196,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
+    | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
@@ -194,6 +206,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
+    | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }

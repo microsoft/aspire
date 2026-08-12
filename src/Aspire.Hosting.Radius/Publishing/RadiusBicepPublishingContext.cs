@@ -97,6 +97,11 @@ internal sealed class RadiusBicepPublishingContext
             await File.WriteAllTextAsync(bicepPath, bicepContent, cancellationToken).ConfigureAwait(false);
             await File.WriteAllTextAsync(configPath, bicepConfigContent, cancellationToken).ConfigureAwait(false);
 
+            // Copy each committed (encrypted) SealedSecret manifest into a per-store subdirectory of
+            // the environment output so a cross-machine `deploy` can apply the self-contained
+            // artifact when the author's source manifest path is absent. No-op when none declared.
+            CopySealedSecretManifests(options, outputDir, logger);
+
             logger.LogInformation(
                 "Bicep generation complete for environment '{EnvironmentName}': {BicepPath}",
                 _environment.Name,
@@ -147,6 +152,36 @@ internal sealed class RadiusBicepPublishingContext
                 pack.BicepIdentifier,
                 recipeCount,
                 recipeTypes);
+        }
+    }
+
+    // Writes each committed (encrypted) SealedSecret manifest into a per-store subdirectory
+    // (sealed-secrets/<storeName>/<file>) next to the emitted app.bicep so the published artifact
+    // is self-contained and the deploy step can apply it. Namespacing by the unique store name means
+    // two stores whose source manifests share a file name (but live in different source directories)
+    // cannot silently overwrite each other. The manifest is already encrypted, and we write the exact
+    // bytes validated at build time so a later source-file swap cannot change the published artifact.
+    // Missing manifests were already rejected at build time (ASPIRERADIUS044).
+    private static void CopySealedSecretManifests(RadiusInfrastructureOptions options, string outputDir, ILogger logger)
+    {
+        // The pipeline output directory is persistent and is NOT cleaned by PipelineOutputService, so
+        // a prior publish's manifests for stores that were since removed or renamed would linger and
+        // keep obsolete (encrypted) credential material in the published artifact. The `sealed-secrets`
+        // subtree is owned entirely by this integration, so clear it wholesale before writing the
+        // current set — this runs even when there are no manifests now, so removing the last store also
+        // prunes its stale artifact.
+        var root = Secrets.SealedSecretArtifact.RootPath(outputDir);
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        foreach (var (storeName, manifest) in options.SealedSecretManifests)
+        {
+            var destination = Secrets.SealedSecretArtifact.ResolvePath(outputDir, storeName, manifest.SourcePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllBytes(destination, manifest.Content.ToArray());
+            logger.LogInformation("Copied SealedSecret manifest to {Destination}", destination);
         }
     }
 

@@ -84,10 +84,28 @@ internal sealed class ApplicationOrchestrator
         if (@event.Resource is IResourceWithConnectionString resourceWithConnectionString)
         {
             var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
+            var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in resourceWithConnectionString.GetConnectionProperties())
+            {
+                try
+                {
+                    connectionProperties[property.Key] = await property.Value.GetValueAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve connection property {ConnectionPropertyName} for resource {ResourceName}.", property.Key, resourceWithConnectionString.Name);
+                }
+            }
 
             await _notificationService.PublishUpdateAsync(resourceWithConnectionString, state => state with
             {
-                Properties = [.. state.Properties, new(CustomResourceKnownProperties.ConnectionString, connectionString) { IsSensitive = true }]
+                Properties = [.. state.Properties,
+                    new(CustomResourceKnownProperties.ConnectionString, connectionString) { IsSensitive = true },
+                    new(CustomResourceKnownProperties.ConnectionProperties, connectionProperties) { IsSensitive = true }]
             })
             .ConfigureAwait(false);
         }
@@ -205,7 +223,9 @@ internal sealed class ApplicationOrchestrator
                 // Endpoint URLs are inactive (hidden in the dashboard) when published here. It is assumed they will get activated later when the endpoint is considered active
                 // by whatever allocated the endpoint in the first place, e.g. for resources controlled by DCP, when DCP detects the endpoint is listening.
                 IsInactive = url.Endpoint is not null,
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be flowed for compatibility.
                 DisplayProperties = new(url.DisplayText ?? "", url.DisplayOrder ?? 0)
+#pragma warning restore CS0618
             });
         }
         return urls;

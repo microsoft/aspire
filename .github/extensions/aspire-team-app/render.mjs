@@ -6,7 +6,7 @@
 //
 // UX model: this is a small surface, so there are no modals, overlays, or
 // drawers. The shell is an in-canvas view router that transitions between full
-// pages (queue / settings / accounts / notifications) with restrained motion.
+// pages (queue / health / settings / accounts / notifications) with restrained motion.
 
 export const HTML = `<!doctype html>
 <html lang="en">
@@ -51,42 +51,49 @@ export const HTML = `<!doctype html>
 export const STYLES = `
 :root {
   color-scheme: light dark;
-  /* Primer primitive first, then the canvas host's older vars, then a hex floor.
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+
+  /* Prefer Primer primitives, then the canvas host's semantic tokens. The explicit
+     fallbacks cover standalone rendering and hosts that omit the theme payload.
      https://primer.style/foundations/primitives/color */
-  --bg: var(--bgColor-default, var(--background-color-default, #ffffff));
+  --bg: var(--bgColor-default, var(--background-color-default, var(--fallback-bg)));
   --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
   --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
   --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
   --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
   --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--fgColor-default, var(--text-color-default, #1f2328));
-  --muted: var(--fgColor-muted, var(--text-color-muted, #656d76));
-  --border: var(--borderColor-default, var(--border-color-default, #d0d7de));
+  --fg: var(--fgColor-default, var(--text-color-default, var(--fallback-fg)));
+  --muted: var(--fgColor-muted, var(--text-color-muted, var(--fallback-muted)));
+  --border: var(--borderColor-default, var(--border-color-default, var(--fallback-border)));
   --border-soft: color-mix(in srgb, var(--border), transparent 35%);
   --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
-  --focus: var(--focus-outlineColor, var(--color-focus-outline, #0969da));
-  --white: var(--fgColor-onEmphasis, var(--color-white, #fff));
+  --focus: var(--focus-outlineColor, var(--color-focus-outline, var(--fallback-focus)));
+  --white: var(--fgColor-onEmphasis, var(--color-white, #ffffff));
 
   /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
      Maps to Primer's "done" (purple) role. */
-  --accent: var(--fgColor-done, var(--true-color-purple, #8250df));
+  --accent: var(--fgColor-done, var(--true-color-purple, light-dark(#8250df, #a371f7)));
   --accent-strong: color-mix(in srgb, var(--accent), var(--fg) 18%);
   --accent-2: color-mix(in srgb, var(--accent), var(--blue) 22%);
   --purple: var(--accent);
 
   /* Primary action green - matches the app's confirm button (sampled #347d39) */
-  --green: #347d39;
-  --green-emphasis: #3f9147;
+  --green: light-dark(#347d39, #238636);
+  --green-emphasis: light-dark(#3f9147, #2ea043);
   --green-border: transparent;
   --green-fg: #ffffff;
 
   /* Informational blue - links, identifiers, toggles, focus */
-  --blue: var(--fgColor-accent, var(--true-color-blue, #0969da));
+  --blue: var(--fgColor-accent, var(--true-color-blue, light-dark(#0969da, #58a6ff)));
 
-  --success: var(--fgColor-success, var(--true-color-green, #1a7f37));
-  --warning: var(--fgColor-attention, var(--true-color-yellow, #9a6700));
-  --danger: var(--fgColor-danger, var(--true-color-red, #cf222e));
+  --success: var(--fgColor-success, var(--true-color-green, light-dark(#1a7f37, #3fb950)));
+  --warning: var(--fgColor-attention, var(--true-color-yellow, light-dark(#9a6700, #d29922)));
+  --danger: var(--fgColor-danger, var(--true-color-red, light-dark(#cf222e, #f85149)));
 
   /* Primer floating-overlay shadow for popovers/menus; neutral (not a colored glow).
      https://primer.style/foundations/primitives/box-shadow */
@@ -99,8 +106,34 @@ export const STYLES = `
   --radius: 6px;
 }
 
-:root[data-color-mode="light"], body[data-color-mode="light"] { color-scheme: light; }
-:root[data-color-mode="dark"], body[data-color-mode="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fallback-bg: #0d1117;
+    --fallback-fg: #f0f6fc;
+    --fallback-muted: #8c959f;
+    --fallback-border: #30363d;
+    --fallback-focus: #58a6ff;
+  }
+}
+
+:root[data-color-mode="light"] {
+  color-scheme: light;
+  --fallback-bg: #ffffff;
+  --fallback-fg: #1f2328;
+  --fallback-muted: #656d76;
+  --fallback-border: #d0d7de;
+  --fallback-focus: #0969da;
+}
+body[data-color-mode="light"] { color-scheme: light; }
+:root[data-color-mode="dark"] {
+  color-scheme: dark;
+  --fallback-bg: #0d1117;
+  --fallback-fg: #f0f6fc;
+  --fallback-muted: #8c959f;
+  --fallback-border: #30363d;
+  --fallback-focus: #58a6ff;
+}
+body[data-color-mode="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -157,6 +190,29 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .tab.active { color: var(--fg); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); }
 .spacer { flex: 1; }
 .tb-actions { display: inline-flex; align-items: center; gap: 6px; }
+.refresh-pref {
+  height: 30px; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--muted); padding: 0 10px; font-size: 11.5px; font-weight: 600;
+  transition: color .15s, border-color .15s, background .15s, opacity .15s;
+}
+.refresh-pref:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
+.refresh-pref[disabled] { cursor: default; opacity: .65; }
+.refresh-pref .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .15s, box-shadow .15s; }
+.refresh-pref.active { color: var(--fg); background: var(--surface-3); border-color: var(--border-strong); }
+.refresh-pref.active .status-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent); }
+.update-ready {
+  height: 30px; display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px; padding: 0 11px; background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-strong); font-size: 11.5px; font-weight: 650;
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.update-ready:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.update-ready[hidden] { display: none; }
+.update-ready[disabled] { cursor: wait; opacity: .7; }
+.update-ready .update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.update-ready.busy .update-dot { background: transparent; border: 1.5px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; }
 
 .backbtn {
   display: inline-flex; align-items: center; gap: 6px; margin-left: 4px;
@@ -175,6 +231,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .iconbtn:hover { color: var(--fg); border-color: var(--border-strong); background: var(--surface-2); }
 .iconbtn.active { color: var(--fg); border-color: var(--border-strong); background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-soft); }
 .iconbtn.spin svg { animation: spin 1s linear infinite; }
+.live-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 80;
+  width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-3);
+  color: var(--fg); box-shadow: var(--shadow-floating); font-size: 11.5px; font-weight: 500;
+  line-height: 1.35; white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translateY(-2px); transition: opacity .12s ease, transform .12s ease;
+}
+.live-tooltip:hover::after, .live-tooltip:focus-visible::after { opacity: 1; transform: none; }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px; background: var(--danger); color: var(--white); font-size: 10px; font-weight: 700;
@@ -186,6 +252,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .viewport { flex: 1; }
 .view { animation: viewEnter .22s ease both; }
 .view.back { animation: viewEnterBack .22s ease both; }
+.view.no-motion { animation: none; }
 @keyframes viewEnter { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 @keyframes viewEnterBack { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 
@@ -387,6 +454,16 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .reason { color: var(--muted); font-size: 12px; }
 .pills { display: flex; flex-wrap: wrap; gap: 5px; }
 .pills:empty { display: none; }
+.linked-pr {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 7px; min-width: 0; padding: 2px 0;
+  border-radius: 5px; color: var(--fg); font-size: 11.5px; font-weight: 600; line-height: 1.35;
+}
+.linked-pr:hover .linked-pr-title { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.linked-pr-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--muted); }
+.linked-pr-icon.open { color: var(--success); }
+.linked-pr-icon.merged { color: var(--purple); }
+.linked-pr-icon svg { width: 14px; height: 14px; }
+.linked-pr-title { min-width: 0; overflow-wrap: anywhere; }
 .pill {
   --pill-tone: var(--muted);
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
@@ -404,6 +481,224 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .pill.accent  { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
 .pill.info    { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
 .pill.muted   { background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
+
+/* Repository and delivery health */
+.health-shell {
+  min-height: calc(100dvh - 106px); padding: 18px 20px 32px;
+  background: var(--surface);
+}
+.health-grid {
+  max-width: 1320px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 12px; align-items: stretch;
+}
+.health-unit {
+  position: relative; display: flex; min-width: 0; isolation: isolate;
+  transform-origin: center;
+  transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .16s ease;
+}
+.health-unit-single > .health-card { width: 100%; }
+.health-source-group {
+  grid-column: span 2; display: block; padding: 10px;
+  background: color-mix(in srgb, var(--bg), var(--fg) 3%);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition:
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    box-shadow .22s cubic-bezier(.2, .8, .2, 1),
+    border-color .16s ease,
+    opacity .16s ease;
+}
+.health-source-group:hover { border-color: var(--border-strong); }
+.health-group-head {
+  display: flex; align-items: center; gap: 9px; min-width: 0; padding: 1px 2px 10px;
+}
+.health-group-icon {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  color: var(--muted); background: var(--surface-3); border-radius: 7px;
+}
+.health-group-title { min-width: 0; flex: 1; }
+.health-group-title a, .health-group-title > span:first-child {
+  display: block; overflow: hidden; color: var(--fg); font-size: 13.5px;
+  font-weight: 650; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-group-title a:hover { color: var(--blue); }
+.health-group-title small { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; line-height: 1.3; }
+.health-group-match {
+  flex: none; padding: 3px 7px; color: var(--muted); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px; font-size: 10px; font-weight: 600;
+}
+.health-group-cards {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; align-items: stretch;
+}
+.health-source-group .health-card { min-height: 252px; box-shadow: none; }
+.health-source-group .health-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--fg) 7%, transparent);
+  transform: none;
+}
+.health-card {
+  --health-tone: var(--muted);
+  position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 258px;
+  color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition:
+    transform .22s cubic-bezier(.2, .8, .2, 1),
+    box-shadow .22s cubic-bezier(.2, .8, .2, 1),
+    border-color .16s ease,
+    opacity .16s ease;
+}
+.health-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--fg) 10%, transparent);
+  transform: translateY(-1px);
+}
+.health-card:focus-within { border-color: color-mix(in srgb, var(--focus), var(--border) 25%); }
+.health-card.healthy { --health-tone: var(--success); }
+.health-card.failing { --health-tone: var(--danger); }
+.health-card.degraded, .health-card.running { --health-tone: var(--warning); }
+.health-grid.drag-active { cursor: grabbing; }
+.health-grid.drag-active .health-unit { user-select: none; }
+.health-unit.dragging {
+  z-index: 3; opacity: .58; box-shadow: var(--shadow-floating);
+  transform: scale(1.018) rotate(.35deg);
+}
+.health-unit.dragging > .health-card,
+.health-unit.dragging.health-source-group { border-color: var(--focus); }
+.health-unit.drag-before::after,
+.health-unit.drag-after::after {
+  content: ""; position: absolute; z-index: 4; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 999px; background: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 12%, transparent);
+}
+.health-unit.drag-before::after { left: -8px; }
+.health-unit.drag-after::after { right: -8px; }
+.health-source-group.drag-before::after,
+.health-source-group.drag-after::after {
+  left: 10px; right: 10px; width: auto; height: 3px; top: auto; bottom: auto;
+}
+.health-source-group.drag-before::after { top: -8px; }
+.health-source-group.drag-after::after { bottom: -8px; }
+.health-drag-ghost {
+  position: fixed; top: -10000px; left: -10000px; z-index: 10000;
+  opacity: .98; pointer-events: none; border-color: var(--focus);
+  box-shadow: var(--shadow-floating); transform: rotate(.65deg) scale(1.015);
+}
+.health-grid.ordering .health-drag { opacity: .55; pointer-events: none; }
+.health-card-top {
+  display: flex; align-items: center; gap: 9px; min-width: 0; padding: 14px 14px 10px;
+}
+.health-drag {
+  width: 26px; height: 32px; margin-left: -5px; flex: none; display: grid; place-items: center; padding: 0;
+  color: var(--muted); opacity: .68; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; cursor: grab;
+  transition: color .15s ease, opacity .15s ease, background .15s ease, transform .15s ease;
+}
+.health-unit:hover .health-drag, .health-drag:hover { opacity: 1; color: var(--fg); }
+.health-drag:hover { background: var(--surface-3); }
+.health-drag:active { cursor: grabbing; transform: scale(.94); }
+.health-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.health-drag::before {
+  content: ""; width: 12px; height: 18px;
+  background: radial-gradient(circle, currentColor 1.25px, transparent 1.5px) 0 0 / 6px 6px;
+}
+.health-provider {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 7px;
+  color: var(--muted); background: var(--surface-3);
+}
+.health-provider svg { width: 15px; height: 15px; }
+.health-title { min-width: 0; flex: 1; }
+.health-title a, .health-title > span:first-child {
+  display: block; font-size: 13.5px; font-weight: 650; line-height: 1.3; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-title a:hover { color: var(--blue); }
+.health-title .provider-name { display: block; color: var(--muted); font-size: 10.5px; line-height: 1.3; margin-top: 1px; }
+.health-state {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 9px;
+  color: color-mix(in srgb, var(--health-tone), var(--fg) 24%);
+  background: color-mix(in srgb, var(--health-tone) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--health-tone) 34%, var(--border));
+  border-radius: 999px; font-size: 10.5px; font-weight: 650;
+}
+.health-state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--health-tone); }
+.health-card-body { display: flex; flex: 1; flex-direction: column; gap: 12px; padding: 0 14px 13px; }
+.health-latest { min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.health-latest-line { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.health-latest b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 650; }
+.health-latest time { margin-left: auto; flex: none; color: var(--muted); }
+.health-latest .commit-message { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+.health-metrics {
+  display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 12px;
+  padding-top: 10px; border-top: 1px solid var(--border-soft);
+}
+.health-metric { min-width: 0; }
+.health-metric .k { display: block; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.health-metric .v {
+  display: block; margin-top: 3px; color: var(--fg); font-family: var(--mono); font-size: 11.5px;
+  font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.health-reasons { display: flex; flex-direction: column; gap: 5px; }
+.health-reason-banner {
+  display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px;
+  color: var(--fg); background: color-mix(in srgb, var(--health-tone) 7%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--health-tone) 24%, var(--border));
+  border-radius: 8px;
+}
+.health-reason-icon { display: inline-flex; flex: none; margin-top: 1px; color: var(--health-tone); }
+.health-reason-icon svg { width: 14px; height: 14px; }
+.health-reason-content { min-width: 0; }
+.health-primary-reason {
+  margin: 0; color: var(--fg); font-size: 11.5px; font-weight: 550; line-height: 1.45;
+}
+.health-primary-reason a { color: inherit; }
+.health-primary-reason a:hover { color: var(--blue); }
+.health-secondary-reasons { margin: 6px 0 0; padding: 0 0 0 15px; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+.health-secondary-reasons li + li { margin-top: 3px; }
+.health-details { margin-top: auto; color: var(--muted); font-size: 10.5px; }
+.health-details summary {
+  width: fit-content; min-height: 24px; display: inline-flex; align-items: center; gap: 3px;
+  color: var(--muted); font-weight: 600; cursor: pointer; user-select: none;
+  list-style: none;
+}
+.health-details summary::-webkit-details-marker { display: none; }
+.health-details summary:hover { color: var(--fg); }
+.health-details[open] summary { margin-bottom: 7px; color: var(--fg); }
+.health-details-chevron { display: inline-flex; transition: transform .18s ease; }
+.health-details-chevron svg { width: 12px; height: 12px; }
+.health-details[open] .health-details-chevron { transform: rotate(180deg); }
+.health-evidence { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; background: var(--surface); border-radius: 8px; }
+.health-evidence a { display: flex; gap: 7px; align-items: baseline; min-width: 0; color: var(--muted); font-size: 10px; }
+.health-evidence a:hover { color: var(--blue); }
+.health-evidence .ev-label { color: var(--fg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-evidence .ev-detail { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-actions {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 12px;
+  border-top: 1px solid var(--border-soft);
+}
+.health-actions .card-btn { min-height: 28px; background: var(--bg); box-shadow: 0 1px 0 color-mix(in srgb, var(--fg) 7%, transparent); }
+.health-actions .card-btn:hover { background: var(--surface-3); }
+.health-order-status {
+  position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.pipeline-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .34fr) 32px; gap: 8px; }
+.pipeline-add input {
+  min-width: 0; height: 32px; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0 10px; font-size: 12px;
+}
+.pipeline-add input:first-child { font-family: var(--mono); }
+.pipeline-add input:focus { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+.pipeline-add button:disabled { opacity: .6; cursor: default; }
+.pipeline-err { min-height: 18px; margin-top: 5px; color: var(--danger); font-size: 11.5px; }
+.pipeline-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.pipeline-row { display: flex; align-items: center; gap: 9px; padding: 8px 6px; border-top: 1px solid var(--border); }
+.pipeline-row:first-child { border-top: 0; }
+.pipeline-main { min-width: 0; flex: 1; }
+.pipeline-name { display: block; font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-meta { display: block; color: var(--muted); font-family: var(--mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Sub-page scaffold */
 .page { padding: 16px; max-width: 760px; margin: 0 auto; }
@@ -689,8 +984,17 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
   .iconbtn.spin svg, .rescan-btn.spin svg, .card-btn.spin .cb-ico svg { animation: none; }
-  .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico { transition: none; }
+  .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico, .health-details-chevron { transition: none; }
   .repo-row.added, .repo-row.removing, .repo-add input.shake, .repo-edit-input.shake { animation: none; }
+  .health-card, .health-card:hover, .health-unit, .health-unit:hover, .health-unit.dragging,
+  .health-unit.drag-before, .health-unit.drag-after {
+    transition: none; transform: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .health-source-group { grid-column: span 1; }
+  .health-group-cards { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
@@ -698,15 +1002,31 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   .brand-text { display: none; }
   .tabs { margin-left: 0; }
   .tab { padding: 5px 11px; }
+  .refresh-pref { width: 30px; padding: 0; justify-content: center; }
+  .refresh-pref .refresh-label { display: none; }
+  .update-ready .update-detail { display: none; }
   .acct-chip { max-width: 150px; }
   .acct-chip .name { max-width: 70px; }
   .page { padding: 14px; }
+  .health-shell { padding: 14px 12px 28px; }
+  .health-grid { grid-template-columns: 1fr; }
+  .health-unit.drag-before::after, .health-unit.drag-after::after {
+    left: 10px; right: 10px; width: auto; height: 3px; top: auto; bottom: auto;
+  }
+  .health-unit.drag-before::after { top: -8px; }
+  .health-unit.drag-after::after { bottom: -8px; }
+  .pipeline-add { grid-template-columns: 1fr 32px; }
+  .pipeline-add .pipeline-branch { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (max-width: 470px) {
-  .topbar { gap: 6px; padding: 10px 10px; }
-  .tab { padding: 5px 9px; font-size: 12px; }
-  .acct-chip { padding: 0 7px; gap: 6px; }
+  .topbar { gap: 4px; padding: 10px 7px; }
+  button.brand { display: none; }
+  .tabs { gap: 1px; padding: 2px; }
+  .tab { padding: 5px; font-size: 11.5px; }
+  .acct-chip { padding: 0 5px; gap: 4px; }
   .acct-chip .name { display: none; }
+  .tb-actions { gap: 4px; }
+  #filters-btn { display: none; }
   .iconbtn { width: 28px; height: 28px; }
   .backbtn { height: 28px; }
 }
@@ -718,7 +1038,7 @@ const app = document.getElementById("app");
 const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
-let view = "queue";       // queue | settings | accounts | notifications
+let view = "queue";       // queue | settings | accounts | notifications | filters
 let keysBound = false;
 let cbMenuBound = false;
 let prevRank = 0;
@@ -740,24 +1060,55 @@ let loadError = null;
 // settings, etc.) is stashed here and applied when they return to the queue, so a
 // background refresh never clobbers an in-progress edit.
 let pendingState = null;
+// Completed background snapshots wait here when automatic application is disabled. The SSE event
+// carries metadata only; clicking Apply reads the already-computed complete snapshot from the server.
+let updateAvailable = null;
+let applyingUpdate = false;
+let savingAutoApply = false;
+let nextPollAt = null;
+let pollCountdownTimer = null;
 // Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
-// timestamp and is unsafe as a stream key: a partial and the final can share a millisecond,
-// and snapshots can arrive out of order. The server stamps a strictly increasing seq on
-// every partial/final; we apply only strictly-newer ones. -1 so the first real snapshot (0+)
-// always applies.
+// timestamp and is unsafe as a stream key because overlapping requests can settle out of order.
+// The server stamps a strictly increasing seq whenever semantic content changes; we apply only
+// strictly-newer snapshots. -1 lets the first real snapshot (0+) always apply.
 let lastAppliedSeq = -1;
 // Record the revision of whatever snapshot was just assigned to state. Call at every point
 // that adopts a server snapshot so later SSE pushes are ordered against it.
 function adoptAppliedRev() {
   if (state && typeof state.seq === "number") lastAppliedSeq = state.seq;
 }
+function adoptState(payload) {
+  state = payload.dashboard;
+  prefs = payload.prefs;
+  loadError = null;
+  adoptAppliedRev();
+  const appliedSeq = state && state.seq;
+  if (!updateAvailable || typeof appliedSeq !== "number" || appliedSeq >= updateAvailable.seq) {
+    updateAvailable = null;
+  }
+}
+function autoApplyEnabled() {
+  return !prefs || prefs.autoApplyUpdates !== false;
+}
+function refreshTooltip() {
+  if (typeof nextPollAt !== "number") return "Refresh now";
+  const seconds = Math.max(0, Math.ceil((nextPollAt - Date.now()) / 1000));
+  return "Refresh now (data will auto-update in " + seconds + "s)";
+}
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
 const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
+let pipelineUrlDraft = "";
+let pipelineBranchDraft = "";
+let pipelineError = "";
+let pipelineSaving = false;
+let draggedHealthId = null;
+let healthOrderSaving = false;
+let healthOrderAnnouncement = "";
 
-// Card actions whose POST to /api/agent/action is still in flight, keyed by (action kind, PR)
+// Agent actions still in flight, keyed by action kind and canonical PR/source identity,
 // so a split can be tracked independently of its owning card's DOM node. The in-DOM busy state
 // on the button is not enough on its own: a streamed 'state' event re-renders the card and hands
 // back a fresh, enabled button mid-request, which a second click would use to re-queue the same
@@ -818,6 +1169,14 @@ function srcLabel(s) { return SRC_LABEL[s] || s; }
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+function safeHref(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" || url.protocol === "http:" ? esc(url.href) : "#";
+  } catch {
+    return "#";
+  }
+}
 function timeAgo(iso) {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000);
   if (s < 60) return s + "s ago";
@@ -866,6 +1225,7 @@ async function load() {
   // that newer valid state. Suppress the failure when a newer revision was applied after this
   // request started (the withRefresh catch gates the same class of race with its refreshGen id).
   const startSeq = lastAppliedSeq;
+  let changed = false;
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
@@ -875,31 +1235,23 @@ async function load() {
     // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
     const seq = data.dashboard && data.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      state = data.dashboard; prefs = data.prefs; loadError = null;
-      adoptAppliedRev();
+      adoptState(data);
+      changed = true;
     }
   } catch (e) {
     // Only publish this failure if no newer revision was applied while the GET was pending. A late
     // failure from a superseded request must not clobber the newer valid state (or its banner).
     if (lastAppliedSeq === startSeq) {
       loadError = String((e && e.message) || e);
+      changed = true;
     }
   }
-  render();
-}
-
-// Handle the SSE 'refresh' nudge. Every mutation streams the fresh dashboard over the 'state' event
-// (which applyPushedState stashes into pendingState while off the queue) and then fires this legacy
-// 'refresh'. Re-pulling here unconditionally would call load() -> render() even while a form-bearing
-// view (Accounts/Settings/Filters) is open, discarding the user's uncommitted text. Mirror
-// applyPushedState's guard and only act on the nudge while the queue is showing; the paired 'state'
-// push already stashed the latest snapshot, which goView() applies on return to the queue.
-function onSseRefresh() {
-  if (view === "queue") { load(); }
+  if (changed) render(); else updateRefreshControls();
 }
 
 async function withRefresh(fn) {
   const myGen = ++refreshGen;
+  let changed = false;
   refreshInFlight++;
   refreshing = true; setLoading(true); beginProgress();
   try {
@@ -911,8 +1263,8 @@ async function withRefresh(fn) {
       // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
       const seq = data.dashboard.seq;
       if (typeof seq !== "number" || seq > lastAppliedSeq) {
-        state = data.dashboard; prefs = data.prefs; loadError = null;
-        adoptAppliedRev();
+        adoptState(data);
+        changed = true;
       }
     }
   } catch (e) {
@@ -921,6 +1273,7 @@ async function withRefresh(fn) {
     // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
     if (myGen === refreshGen) {
       loadError = String((e && e.message) || e);
+      changed = true;
     }
   } finally {
     refreshInFlight--;
@@ -932,13 +1285,41 @@ async function withRefresh(fn) {
     // (SSE disconnected, or this refresh joined a background compute started with
     // progress:false, which emits no progress events).
     if (refreshInFlight === 0) { refreshing = false; endProgress(); }
-    render();
+    if (changed) render(); else updateRefreshControls();
   }
 }
 
 function setLoading(on) {
   const rb = document.getElementById("refresh-btn");
   if (rb) rb.classList.toggle("spin", on);
+}
+
+function updateRefreshControls() {
+  const rb = document.getElementById("refresh-btn");
+  if (rb) {
+    rb.classList.toggle("spin", refreshing);
+    const tooltip = refreshTooltip();
+    rb.dataset.tooltip = tooltip;
+    rb.setAttribute("aria-label", tooltip);
+  }
+
+  const auto = document.getElementById("auto-apply-btn");
+  const enabled = autoApplyEnabled();
+  if (auto) {
+    auto.classList.toggle("active", enabled);
+    auto.setAttribute("aria-checked", enabled ? "true" : "false");
+    auto.title = enabled
+      ? "Background updates apply automatically"
+      : "Background updates wait until you apply them";
+    auto.disabled = savingAutoApply;
+  }
+
+  const apply = document.getElementById("apply-update-btn");
+  if (apply) {
+    apply.hidden = !updateAvailable || enabled;
+    apply.disabled = applyingUpdate;
+    apply.classList.toggle("busy", applyingUpdate);
+  }
 }
 
 /* ---- deterministic progress bar ----
@@ -992,18 +1373,31 @@ function applyPushedState(payload) {
   if (view !== "queue") { pendingState = payload; return; }
   const seq = payload.dashboard.seq;
   if (typeof seq === "number" && seq <= lastAppliedSeq) {
-    // Stale or duplicate: an older/out-of-order partial, or the final we already applied via
-    // the triggering request's response. Reject outright — do not overwrite the newer state
-    // we already show (a duplicate carries identical content, a stale one carries older data).
+    // Stale or duplicate: the request response may have already applied this snapshot, or an older
+    // overlapping request settled late. Never overwrite the newer state already on screen.
+    return;
+  }
+  // The order endpoint broadcasts the same card snapshot that the optimistic render already
+  // shows. Adopt its revision and preferences without rebuilding the grid, which would cancel
+  // the in-progress FLIP animation and appear as a flash.
+  if (healthOrderSaving && sameRenderedHealthDashboard(state, payload.dashboard)) {
+    state = payload.dashboard; prefs = payload.prefs; loadError = null;
+    adoptAppliedRev();
     return;
   }
   applyState(payload);
 }
+
+function sameRenderedHealthDashboard(left, right) {
+  if (left?.mode !== "health" || right?.mode !== "health") return false;
+  return left.loading === right.loading
+    && JSON.stringify(left.health ?? null) === JSON.stringify(right.health ?? null)
+    && JSON.stringify(left.errors ?? []) === JSON.stringify(right.errors ?? []);
+}
 function applyState(payload) {
   const scroller = document.scrollingElement;
   const top = scroller ? scroller.scrollTop : 0;
-  state = payload.dashboard; prefs = payload.prefs; loadError = null;
-  adoptAppliedRev();
+  adoptState(payload);
   render();
   if (top && scroller) scroller.scrollTop = top;
 }
@@ -1013,17 +1407,440 @@ async function postJSON(path, body) {
   return readJson(res);
 }
 
+function onUpdateAvailable(payload) {
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (!updateAvailable || payload.seq > updateAvailable.seq) updateAvailable = payload;
+  updateRefreshControls();
+}
+
+function onPreferences(nextPrefs) {
+  if (!nextPrefs || typeof nextPrefs !== "object") return;
+  const wasEnabled = autoApplyEnabled();
+  prefs = nextPrefs;
+  updateRefreshControls();
+  if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
+    applyAvailableUpdate();
+  }
+}
+
+function onSnapshot(payload) {
+  onPollSchedule(payload);
+  if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
+  if (payload.prefs && typeof payload.prefs === "object") prefs = payload.prefs;
+  // Initial load already reads the complete cache. On reconnect, replay either applies the missed
+  // state automatically or restores the pending-update affordance without touching the board.
+  if (!state) return;
+  if (autoApplyEnabled()) load(); else onUpdateAvailable(payload);
+}
+
+function onPollSchedule(payload) {
+  const value = Number(payload && payload.nextPollAt);
+  if (!Number.isFinite(value) || value <= 0) return;
+  nextPollAt = value;
+  if (!pollCountdownTimer) {
+    pollCountdownTimer = setInterval(updateRefreshControls, 1000);
+  }
+  updateRefreshControls();
+}
+
+async function applyAvailableUpdate() {
+  if (!updateAvailable || applyingUpdate) return;
+  applyingUpdate = true;
+  updateRefreshControls();
+  try {
+    const res = await fetch("api/state");
+    const data = await readJson(res);
+    const seq = data.dashboard && data.dashboard.seq;
+    if (view !== "queue") {
+      pendingState = data;
+      prefs = data.prefs;
+      updateAvailable = null;
+    } else if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      applyState(data);
+    } else {
+      prefs = data.prefs;
+      updateAvailable = null;
+    }
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    if (view === "queue") render();
+  } finally {
+    applyingUpdate = false;
+    updateRefreshControls();
+  }
+}
+
+async function toggleAutoApply() {
+  if (savingAutoApply) return;
+  const previous = autoApplyEnabled();
+  const enabled = !previous;
+  prefs = { ...(prefs || {}), autoApplyUpdates: enabled };
+  savingAutoApply = true;
+  updateRefreshControls();
+  try {
+    const data = await postJSON("api/auto-apply", { enabled });
+    if (data && data.prefs) prefs = data.prefs;
+    if (enabled && updateAvailable) await applyAvailableUpdate();
+  } catch (e) {
+    prefs = { ...(prefs || {}), autoApplyUpdates: previous };
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    savingAutoApply = false;
+    updateRefreshControls();
+  }
+}
+
+async function openLinkedPr(link) {
+  if (!link || link.classList.contains("busy")) return;
+  link.classList.add("busy");
+  try {
+    await postJSON("api/open-pr", { url: link.href });
+  } catch (e) {
+    loadError = String((e && e.message) || e);
+    render();
+  } finally {
+    link.classList.remove("busy");
+  }
+}
+
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
-// Card action split button (Test / Review / Resolve conflicts / Address review). Posts
-// the PR descriptor plus a routing target to the loopback server, which hands a prompt
-// to the main session. 'split' is the .cb-split container (which carries the data-*);
-// 'target' is "new-session" (default) or "current-session". We give inline feedback on
-// the main button and deliberately do NOT re-render — the action changes the
-// conversation, not the dashboard, and a re-render would drop the confirmation. A later
-// SSE refresh naturally restores the default label.
+function captureSettingsDraft() {
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (!release || !showDrafts || !reviewRequested || !readyToMerge || !changesRequested || !ciFailing) return null;
+  return {
+    release: release.value,
+    showDrafts: showDrafts.checked,
+    notifications: {
+      reviewRequested: reviewRequested.checked,
+      readyToMerge: readyToMerge.checked,
+      changesRequested: changesRequested.checked,
+      ciFailing: ciFailing.checked,
+    },
+  };
+}
+
+function restoreSettingsDraft(draft) {
+  if (!draft) return;
+  const release = document.getElementById("release-input");
+  const showDrafts = document.getElementById("s-drafts");
+  const reviewRequested = document.getElementById("n-review");
+  const readyToMerge = document.getElementById("n-ready");
+  const changesRequested = document.getElementById("n-changes");
+  const ciFailing = document.getElementById("n-ci");
+  if (release) release.value = draft.release;
+  if (showDrafts) showDrafts.checked = draft.showDrafts;
+  if (reviewRequested) reviewRequested.checked = draft.notifications.reviewRequested;
+  if (readyToMerge) readyToMerge.checked = draft.notifications.readyToMerge;
+  if (changesRequested) changesRequested.checked = draft.notifications.changesRequested;
+  if (ciFailing) ciFailing.checked = draft.notifications.ciFailing;
+}
+
+async function mutateAzurePipeline(path, body, clearDraft) {
+  if (pipelineSaving) return;
+  // Pipeline state requires a full render, which otherwise rebuilds the rest of Settings
+  // from persisted preferences and discards edits that have not been saved yet.
+  let settingsDraft = captureSettingsDraft();
+  pipelineSaving = true;
+  pipelineError = "";
+  render();
+  restoreSettingsDraft(settingsDraft);
+  try {
+    const data = await postJSON(path, body);
+    if (data && data.prefs) prefs = data.prefs;
+    if (data && data.dashboard) {
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard;
+        adoptAppliedRev();
+      }
+    }
+    if (clearDraft) {
+      pipelineUrlDraft = "";
+      pipelineBranchDraft = "";
+    }
+    loadError = null;
+  } catch (error) {
+    pipelineError = String((error && error.message) || error || "Pipeline update failed");
+  } finally {
+    settingsDraft = captureSettingsDraft() || settingsDraft;
+    pipelineSaving = false;
+    render();
+    restoreSettingsDraft(settingsDraft);
+  }
+}
+
+function addAzurePipeline() {
+  const url = pipelineUrlDraft.trim();
+  const branch = pipelineBranchDraft.trim();
+  if (!url) {
+    const settingsDraft = captureSettingsDraft();
+    pipelineError = "Enter an Azure DevOps pipeline or build URL.";
+    render();
+    restoreSettingsDraft(settingsDraft);
+    return;
+  }
+  return mutateAzurePipeline("api/health/pipeline/add", { url, branch: branch || undefined }, true);
+}
+
+function removeAzurePipeline(id) {
+  if (!id) return;
+  return mutateAzurePipeline("api/health/pipeline/remove", { id }, false);
+}
+
+function currentHealthItems() {
+  return Array.isArray(state?.health?.items) ? state.health.items : [];
+}
+
+function healthRepositoryGroups(items = currentHealthItems()) {
+  const groups = new Map();
+  for (const item of items) {
+    const id = item?.groupId || item?.id;
+    if (!id) continue;
+    let group = groups.get(id);
+    if (!group) {
+      group = {
+        id,
+        name: item.groupName || item.repository?.name || item.repository || item.name || "Health source",
+        items: [],
+        url: null,
+        match: null,
+      };
+      groups.set(id, group);
+    }
+    group.items.push(item);
+    if (item.provider === "github" && item.url) group.url = item.url;
+    else if (!group.url && item.url) group.url = item.url;
+    if (item.groupMatch === "name") group.match = "name";
+    else if (!group.match && item.groupMatch === "provider") group.match = "provider";
+  }
+  return [...groups.values()];
+}
+
+function flattenHealthGroups(groups) {
+  return groups.flatMap((group) => group.items);
+}
+
+function healthSourceName(item) {
+  return item?.name || item?.repository || "Health source";
+}
+
+function focusHealthHandle(id) {
+  requestAnimationFrame(() => {
+    const handle = Array.from(document.querySelectorAll("[data-health-drag]"))
+      .find((candidate) => candidate.dataset.healthDrag === id);
+    if (handle) handle.focus();
+  });
+}
+
+function clearHealthDragMarkers() {
+  document.querySelectorAll(".health-unit").forEach((unit) => {
+    unit.classList.remove("dragging", "drag-before", "drag-after");
+  });
+}
+
+function clearHealthDropMarkers() {
+  document.querySelectorAll(".health-unit").forEach((unit) => {
+    unit.classList.remove("drag-before", "drag-after");
+    delete unit.dataset.dropAfter;
+  });
+}
+
+function setHealthDropMarker(card, after) {
+  const marker = after ? "drag-after" : "drag-before";
+  if (card.classList.contains(marker) && card.dataset.dropAfter === String(after)) return false;
+  clearHealthDropMarkers();
+  card.classList.add(marker);
+  card.dataset.dropAfter = String(after);
+  return true;
+}
+
+function captureHealthLayout() {
+  const positions = new Map();
+  document.querySelectorAll(".health-unit[data-health-group-id]").forEach((unit) => {
+    positions.set(unit.dataset.healthGroupId, unit.getBoundingClientRect());
+  });
+  return positions;
+}
+
+function animateHealthLayout(previous) {
+  if (!previous.size) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.querySelectorAll(".health-unit[data-health-group-id]").forEach((unit) => {
+    const before = previous.get(unit.dataset.healthGroupId);
+    if (!before || typeof unit.animate !== "function") return;
+    const after = unit.getBoundingClientRect();
+    const x = before.left - after.left;
+    const y = before.top - after.top;
+    if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
+    unit.animate(
+      [
+        { transform: "translate(" + x + "px, " + y + "px)", opacity: .82 },
+        { transform: "translate(0, 0)", opacity: 1 },
+      ],
+      { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" },
+    );
+  });
+}
+
+function renderHealthOrderTransition(previous) {
+  render();
+  animateHealthLayout(previous);
+}
+
+function setHealthDragImage(event, card) {
+  if (!event.dataTransfer || !card || !document.body) return;
+  const rect = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.classList.remove("dragging", "drag-before", "drag-after");
+  ghost.classList.add("health-drag-ghost");
+  ghost.style.width = rect.width + "px";
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, Math.min(36, rect.width / 2), 24);
+  setTimeout(() => ghost.remove(), 0);
+}
+
+async function commitHealthOrder(nextItems, previousItems, focusId) {
+  if (healthOrderSaving) return;
+  const previousLayout = captureHealthLayout();
+  healthOrderSaving = true;
+  state.health.items = nextItems;
+  const nextGroups = healthRepositoryGroups(nextItems);
+  const moved = nextGroups.find((group) => group.id === focusId);
+  const position = nextGroups.findIndex((group) => group.id === focusId) + 1;
+  healthOrderAnnouncement = "Moved " + healthSourceName(moved) + " to position " + position + " of " + nextGroups.length + ".";
+  renderHealthOrderTransition(previousLayout);
+  focusHealthHandle(focusId);
+
+  try {
+    const data = await postJSON("api/health/order", { order: nextItems.map((item) => item.id) });
+    if (data?.prefs) prefs = data.prefs;
+    if (data?.dashboard) {
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard;
+        adoptAppliedRev();
+      }
+    }
+    loadError = null;
+  } catch (error) {
+    const failedLayout = captureHealthLayout();
+    state.health.items = previousItems;
+    healthOrderAnnouncement = "Card order was not saved.";
+    loadError = String((error && error.message) || error || "Card order was not saved.");
+    renderHealthOrderTransition(failedLayout);
+  } finally {
+    healthOrderSaving = false;
+    document.getElementById("health-grid")?.classList.remove("ordering");
+    document.querySelector(".view")?.classList.remove("no-motion");
+    focusHealthHandle(focusId);
+  }
+}
+
+function moveHealthSource(id, delta) {
+  if (healthOrderSaving) return;
+  const previous = currentHealthItems().slice();
+  const previousGroups = healthRepositoryGroups(previous);
+  const from = previousGroups.findIndex((group) => group.id === id);
+  const to = Math.max(0, Math.min(previousGroups.length - 1, from + delta));
+  if (from < 0 || from === to) return;
+  const nextGroups = previousGroups.slice();
+  const [group] = nextGroups.splice(from, 1);
+  nextGroups.splice(to, 0, group);
+  return commitHealthOrder(flattenHealthGroups(nextGroups), previous, id);
+}
+
+function dropHealthSource(sourceId, targetId, after) {
+  if (healthOrderSaving || !sourceId || sourceId === targetId) return;
+  const previous = currentHealthItems().slice();
+  const previousGroups = healthRepositoryGroups(previous);
+  const source = previousGroups.find((group) => group.id === sourceId);
+  const nextGroups = previousGroups.filter((group) => group.id !== sourceId);
+  let targetIndex = nextGroups.findIndex((group) => group.id === targetId);
+  if (!source || targetIndex < 0) return;
+  if (after) targetIndex++;
+  nextGroups.splice(targetIndex, 0, source);
+  return commitHealthOrder(flattenHealthGroups(nextGroups), previous, sourceId);
+}
+
+function wireHealthOrdering() {
+  const units = Array.from(document.querySelectorAll(".health-unit[data-health-group-id]"));
+  const clear = () => {
+    draggedHealthId = null;
+    document.getElementById("health-grid")?.classList.remove("drag-active");
+    clearHealthDragMarkers();
+    units.forEach((unit) => { delete unit.dataset.dropAfter; });
+  };
+
+  document.querySelectorAll("[data-health-drag]").forEach((handle) => {
+    handle.addEventListener("dragstart", (event) => {
+      if (healthOrderSaving) {
+        event.preventDefault();
+        return;
+      }
+      draggedHealthId = handle.dataset.healthDrag;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedHealthId);
+      }
+      handle.setAttribute("aria-grabbed", "true");
+      const unit = handle.closest(".health-unit");
+      unit?.classList.add("dragging");
+      document.getElementById("health-grid")?.classList.add("drag-active");
+      setHealthDragImage(event, unit);
+    });
+    handle.addEventListener("dragend", () => {
+      handle.removeAttribute("aria-grabbed");
+      clear();
+    });
+    handle.addEventListener("keydown", (event) => {
+      const horizontal = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+      const vertical = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+      const delta = horizontal || vertical;
+      if (!delta) return;
+      event.preventDefault();
+      moveHealthSource(handle.dataset.healthDrag, delta);
+    });
+  });
+
+  units.forEach((unit) => {
+    unit.addEventListener("dragover", (event) => {
+      if (!draggedHealthId || draggedHealthId === unit.dataset.healthGroupId) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const rect = unit.getBoundingClientRect();
+      const xDistance = Math.abs(event.clientX - (rect.left + rect.width / 2)) / rect.width;
+      const yDistance = Math.abs(event.clientY - (rect.top + rect.height / 2)) / rect.height;
+      const after = unit.classList.contains("health-source-group")
+        ? event.clientY > rect.top + rect.height / 2
+        : xDistance > yDistance
+          ? event.clientX > rect.left + rect.width / 2
+          : event.clientY > rect.top + rect.height / 2;
+      setHealthDropMarker(unit, after);
+    });
+    unit.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const sourceId = draggedHealthId || event.dataTransfer?.getData("text/plain");
+      const after = unit.dataset.dropAfter === "true";
+      const targetId = unit.dataset.healthGroupId;
+      clear();
+      dropHealthSource(sourceId, targetId, after);
+    });
+  });
+}
+
+// PR and health action buttons post only enough identity to let the loopback server resolve
+// the canonical item from its trusted snapshot. 'split' carries the data-* attributes and
+// 'target' selects the current session or a mapped repository session. We give inline feedback
+// and deliberately do not re-render because the action changes the conversation, not the data.
 async function onCardAction(split, target) {
   const mainBtn = split.querySelector(".cb-main") || split;
   const caret = split.querySelector(".cb-caret");
@@ -1033,19 +1850,24 @@ async function onCardAction(split, target) {
   // Guard across re-renders too: if a streamed 'state' event replaced this card while an
   // earlier click's POST was still pending, the fresh button carries no .busy class, but the
   // pending key still does — so refuse to double-queue the same action (see inflightActions).
-  const key = actionKey(d.kind, d.prUrl, d.prRepo, d.prNumber);
+  const healthAction = !!d.sourceId;
+  const key = healthAction
+    ? actionKey(d.kind, d.sourceId)
+    : actionKey(d.kind, d.prUrl, d.prRepo, d.prNumber);
   if (inflightActions.has(key)) return;
-  const body = {
-    kind: d.kind,
-    target: t,
-    pr: {
-      url: d.prUrl,
-      number: Number(d.prNumber),
-      repository: d.prRepo,
-      title: d.prTitle,
-      author: d.prAuthor,
-    },
-  };
+  const body = healthAction
+    ? { kind: d.kind, target: t, source: { id: d.sourceId } }
+    : {
+        kind: d.kind,
+        target: t,
+        pr: {
+          url: d.prUrl,
+          number: Number(d.prNumber),
+          repository: d.prRepo,
+          title: d.prTitle,
+          author: d.prAuthor,
+        },
+      };
   // If a prior attempt failed, the button was re-enabled immediately but still shows the failure
   // label under a pending ~3.2s restore timer (see the catch below). A retry that lands inside that
   // window would otherwise (a) inherit the .failed styling, (b) capture the failure HTML as its
@@ -1064,7 +1886,7 @@ async function onCardAction(split, target) {
   if (caret) caret.disabled = true;
   inflightActions.add(key);
   try {
-    const res = await postJSON("api/agent/action", body);
+    const res = await postJSON(healthAction ? "api/health/action" : "api/agent/action", body);
     mainBtn.classList.remove("busy");
     mainBtn.classList.add("done");
     if (caret) caret.classList.add("done");
@@ -1188,7 +2010,7 @@ function persistAccountRepos(id, previousRepos) {
     // orders saves for this account against each other, not against those lastAppliedSeq-keyed paths.
     if (data && data.dashboard) {
       const dseq = data.dashboard.seq;
-      if (typeof dseq !== "number" || dseq > lastAppliedSeq) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
+      if (typeof dseq !== "number" || dseq > lastAppliedSeq) adoptState(data);
     }
     repoErr(id, "");
     return data;
@@ -1226,12 +2048,11 @@ async function rescanAccounts() {
     const data = await readJson(res);
     // Gate on seq like every other response path: if a newer refresh/SSE snapshot applied while this
     // rescan was in flight, adopting it would roll state (and lastAppliedSeq) backward. When it is the
-    // newest, adoptAppliedRev() also advances the revision so a delayed lower-seq SSE partial from an
-    // earlier recompute can't be accepted after this /api/accounts response and roll the queue back.
+    // newest, adoptState() also advances the revision so a delayed lower-seq response cannot roll
+    // the queue back.
     const dseq = data.dashboard && data.dashboard.seq;
     if (typeof dseq !== "number" || dseq > lastAppliedSeq) {
-      state = data.dashboard; prefs = data.prefs; loadError = null;
-      adoptAppliedRev();
+      adoptState(data);
     }
   } catch (e) {
     loadError = String((e && e.message) || e);
@@ -1261,8 +2082,7 @@ function goView(next, forward) {
     // already show, mirroring applyPushedState's gate. (No seq → legacy payload, apply as before.)
     const seq = payload.dashboard && payload.dashboard.seq;
     if (typeof seq !== "number" || seq > lastAppliedSeq) {
-      state = payload.dashboard; prefs = payload.prefs;
-      adoptAppliedRev();
+      adoptState(payload);
     }
   }
   render(forward === undefined ? undefined : forward);
@@ -1290,9 +2110,8 @@ function cardActionBtn(pr, a) {
   // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
   // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
-  // While a forced refresh is finalizing, cards can be visible from a streamed partial before the
-  // final snapshot (which action resolution trusts) arrives. Grey out actions during that window
-  // and show a spinner so users get immediate feedback instead of a transient "no longer in view".
+  // While a forced refresh is finalizing, keep actions disabled so a click cannot race a user-driven
+  // mode/account change whose replacement snapshot has not committed yet.
   const finalizing = refreshing && !inflight;
   const busyCls = (inflight || finalizing) ? " busy" : "";
   const spinCls = finalizing ? " spin" : "";
@@ -1515,7 +2334,7 @@ function prCard(item, actions) {
 
 function issueCard(item) {
   const is = item.issue;
-  return '<a class="card" href="' + esc(is.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(is.url) + '" target="_blank" rel="noopener noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(is.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(is.authorAvatarUrl, is.author, "avatar", 36) +
@@ -1524,6 +2343,20 @@ function issueCard(item) {
     "</div>" +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const linkedPullRequests = (is.linkedPullRequests || []).filter((pr) => pr.state !== "CLOSED");
+  const linked = linkedPullRequests.length
+    ? linkedPullRequests.map((pr) => {
+        const state = pr.state === "MERGED" ? "merged" : (pr.state === "OPEN" ? "open" : "unknown");
+        const stateLabel = state === "merged" ? "Merged" : (state === "open" ? "Open" : "Linked");
+        const stateIcon = state === "merged" ? ICONS.merge : ICONS.pr;
+        return (
+        '<a class="card-main linked-pr" href="' + esc(pr.url) + '" target="_blank" rel="noopener noreferrer" title="' + stateLabel + " pull request " +
+          esc(shortRepo(pr.repository)) + " #" + pr.number + '" aria-label="' + stateLabel + " pull request: " + esc(pr.title) + '">' +
+          '<span class="linked-pr-icon ' + state + '">' + stateIcon + '</span><span class="linked-pr-title">' + esc(pr.title) + "</span></a>"
+        );
+      }).join("")
+    : "";
+  return '<div class="card">' + main + linked + "</div>";
 }
 
 function laneIcon(lane) {
@@ -1731,7 +2564,7 @@ function reviewBoardHtml() {
 
 function tabs() {
   const mode = state ? state.mode : "review";
-  const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"]];
+  const defs = [["review", "Review"], ["issues", "Issues"], ["ship", "Ship"], ["health", "Health"]];
   return '<div class="tabs">' + defs.map(([id, label]) =>
     '<button class="tab ' + (mode === id ? "active" : "") + '" data-mode="' + id + '">' + label + "</button>"
   ).join("") + "</div>";
@@ -1768,13 +2601,23 @@ function accountChip() {
 
 function topbarHtml() {
   const notifCount = (state && state.notifications || []).length;
+  const autoApply = autoApplyEnabled();
+  const showUpdate = !!updateAvailable && !autoApply;
   const left = view === "queue"
     ? tabs()
     : '<button class="backbtn" id="back-btn">' + ICONS.back + "Back</button>";
   const right =
     (state ? accountChip() : "") +
     '<div class="tb-actions">' +
-    '<button class="iconbtn ' + (refreshing ? "spin" : "") + '" id="refresh-btn" title="Refresh">' + ICONS.refresh + "</button>" +
+    '<button class="iconbtn live-tooltip ' + (refreshing ? "spin" : "") + '" id="refresh-btn" aria-label="' + refreshTooltip() +
+      '" data-tooltip="' + refreshTooltip() + '">' + ICONS.refresh + "</button>" +
+    '<button class="update-ready ' + (applyingUpdate ? "busy" : "") + '" id="apply-update-btn" type="button" ' +
+      (showUpdate ? "" : "hidden ") + (applyingUpdate ? "disabled " : "") +
+      'title="Apply the latest completed background update"><span class="update-dot"></span>Apply<span class="update-detail"> update</span></button>' +
+    '<button class="refresh-pref ' + (autoApply ? "active" : "") + '" id="auto-apply-btn" type="button" role="switch" aria-checked="' +
+      (autoApply ? "true" : "false") + '" title="' +
+      (autoApply ? "Background updates apply automatically" : "Background updates wait until you apply them") +
+      '"><span class="status-dot"></span><span class="refresh-label">Auto</span></button>' +
     '<button class="iconbtn ' + (view === "filters" ? "active" : "") + '" id="filters-btn" title="What\u2019s filtered">' + ICONS.funnel + "</button>" +
     '<button class="iconbtn ' + (view === "notifications" ? "active" : "") + '" id="bell-btn" title="Notifications">' + ICONS.bell +
       (notifCount ? '<span class="badge">' + notifCount + "</span>" : "") + "</button>" +
@@ -1787,7 +2630,224 @@ function topbarHtml() {
 
 /* ---- views ---- */
 
+const HEALTH_STATUS = {
+  healthy: { label: "Healthy", tone: "success" },
+  running: { label: "Running", tone: "warning" },
+  degraded: { label: "Degraded", tone: "warning" },
+  failing: { label: "Failing", tone: "danger" },
+  unavailable: { label: "Unavailable", tone: "muted" },
+  unknown: { label: "Unknown", tone: "muted" },
+};
+
+function healthMeta(item) {
+  return HEALTH_STATUS[item && item.state] || HEALTH_STATUS.unknown;
+}
+
+function healthRelativeTime(value) {
+  if (!value || !Number.isFinite(new Date(value).getTime())) return "";
+  return timeAgo(value);
+}
+
+function healthLastSuccess(item) {
+  if (typeof item.daysSinceSuccess === "number") {
+    return item.daysSinceSuccess === 0 ? "Today" : item.daysSinceSuccess + "d ago";
+  }
+  return "Not found";
+}
+
+function healthActionBtn(item, kind, label, target) {
+  const key = actionKey(kind, item.id);
+  const busy = inflightActions.has(key);
+  const icon = kind === "diagnose-health" ? ICONS.pulse : ICONS.sparkle;
+  const doneLabel = target === "new-session" ? "Repo session requested" : "Requested";
+  return '<span class="cb-split" data-kind="' + esc(kind) + '" data-source-id="' + esc(item.id) +
+    '" data-done-label="' + esc(doneLabel) + '"><button class="card-btn cb-main' + (busy ? ' busy spin' : '') +
+    '" type="button" data-target="' + esc(target) + '"' + (busy ? ' disabled aria-busy="true"' : '') +
+    '><span class="cb-ico">' + (busy ? ICONS.refresh : icon) + '</span><span class="cb-label">' +
+    esc(label) + "</span></button></span>";
+}
+
+function healthLatest(item) {
+  if (!item.latest) return '<div class="health-latest">No recent validation signal is available.</div>';
+  const latest = item.latest;
+  const ago = healthRelativeTime(latest.at);
+  let primary;
+  if (item.provider === "github") {
+    const sha = String(latest.id || "").slice(0, 7);
+    primary = (sha ? "Commit " + sha : "Default-branch head") + (latest.actor ? " by " + latest.actor : "");
+  } else {
+    const result = latest.result || latest.status;
+    primary = "Build " + (latest.number || latest.id || "") + (result ? " (" + result + ")" : "");
+  }
+  return '<div class="health-latest"><div class="health-latest-line"><b>' + esc(primary) + '</b>' +
+    (ago ? '<time datetime="' + esc(latest.at || "") + '">' + esc(ago) + "</time>" : "") + "</div>" +
+    (latest.message ? '<span class="commit-message" title="' + esc(latest.message) + '">' +
+      esc(latest.message) + "</span>" : "") + "</div>";
+}
+
+function healthReasons(item) {
+  const reasons = Array.isArray(item.reasons) ? item.reasons : [];
+  const content = (reason) => {
+    const summary = esc(reason.summary || "Health evidence is unavailable.");
+    return reason.url
+      ? '<a href="' + safeHref(reason.url) + '" target="_blank" rel="noreferrer">' + summary + "</a>"
+      : "<span>" + summary + "</span>";
+  };
+  const primary = reasons[0] || {
+    summary: item.state === "healthy" ? "Latest validation succeeded." : "No additional diagnostic evidence is available.",
+  };
+  const secondary = reasons.slice(1, 3);
+  const icon = item.state === "healthy"
+    ? ICONS.check
+    : item.state === "failing"
+      ? ICONS.alertSm
+      : item.state === "running" || item.state === "degraded"
+        ? ICONS.clock
+        : ICONS.pulse;
+  return '<div class="health-reasons"><div class="health-reason-banner"><span class="health-reason-icon">' +
+    icon + '</span><div class="health-reason-content"><p class="health-primary-reason">' + content(primary) + "</p>" +
+    (secondary.length
+      ? '<ul class="health-secondary-reasons">' + secondary.map((reason) => "<li>" + content(reason) + "</li>").join("") + "</ul>"
+      : "") + "</div></div></div>";
+}
+
+function healthEvidence(item) {
+  const evidence = Array.isArray(item.evidence) ? item.evidence : [];
+  if (!evidence.length) return "";
+  const count = Math.min(evidence.length, 5);
+  return '<details class="health-details"><summary><span>Evidence (' + count +
+    ')</span><span class="health-details-chevron" aria-hidden="true">' + ICONS.chev + '</span></summary><div class="health-evidence">' +
+    evidence.slice(0, 5).map((entry) =>
+    '<a href="' + safeHref(entry.url || item.url) + '" target="_blank" rel="noreferrer"><span class="ev-label">' +
+    esc(entry.label || "Evidence") + '</span><span class="ev-detail">' + esc(entry.detail || "") + "</span></a>"
+  ).join("") + "</div></details>";
+}
+
+function healthCard(item, index, total, options = {}) {
+  const meta = healthMeta(item);
+  const provider = item.provider === "azure-devops" ? "Azure DevOps" : "GitHub";
+  const providerIcon = item.provider === "azure-devops" ? ICONS.building : ICONS.pulse;
+  const branch = String(item.branch || "Unknown").replace(/^refs\/heads\//, "");
+  const grouped = !!options.grouped;
+  const showHandle = options.showHandle !== false;
+  const groupId = options.groupId || item.groupId || item.id;
+  const orderName = options.groupName || item.groupName || item.name || item.repository || "health source";
+  const titleText = grouped && item.provider === "github"
+    ? "Default branch"
+    : item.name || item.repository || "Health source";
+  const title = item.url
+    ? '<a href="' + safeHref(item.url) + '" target="_blank" rel="noreferrer">' +
+      esc(titleText) + "</a>"
+    : "<span>" + esc(titleText) + "</span>";
+  let providerContext = item.provider === "azure-devops" && item.organizationName && item.project
+    ? provider + " \u00b7 " + item.organizationName + "/" + item.project
+    : item.provider === "github" && item.host
+      ? provider + " \u00b7 " + item.host
+      : provider;
+  if (item.provider === "azure-devops" && item.discovered) {
+    const discoveryKind = item.discovery?.kind;
+    const discoveryLabel = discoveryKind === "official-default"
+      ? "Official default"
+      : discoveryKind === "azure-cli-default" || !discoveryKind
+        ? "Auto\u2011discovered"
+        : null;
+    if (discoveryLabel) providerContext += " \u00b7 " + discoveryLabel;
+  }
+  const streak = item.failureStreak > 0
+    ? String(item.failureStreak) + (item.failureStreakLowerBound ? "+" : "")
+    : "0";
+  const actionTarget = item.canOpenRepoSession ? "new-session" : "current-session";
+  const fixLabel = item.canOpenRepoSession ? "Fix in repo" : "Work fix here";
+  const handle = showHandle
+    ? '<button class="health-drag" type="button" draggable="true" data-health-drag="' +
+      esc(groupId) + '" aria-label="Reorder ' + esc(orderName) +
+      ". Position " + (index + 1) + " of " + total +
+      '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>'
+    : "";
+  const orderStatus = showHandle
+    ? '<span class="health-order-status" aria-hidden="true">' + (index + 1) + " of " + total + "</span>"
+    : "";
+
+  return '<article class="health-card ' + esc(item.state || "unknown") + (grouped ? " grouped-source" : "") +
+    '" data-health-id="' + esc(item.id) + '">' +
+    '<div class="health-card-top">' + handle +
+    '<span class="health-provider">' + providerIcon + '</span><div class="health-title">' +
+    title + '<span class="provider-name">' + esc(providerContext) + '</span></div><span class="health-state"><span class="health-state-dot"></span>' +
+    esc(meta.label) + "</span></div><div class=\"health-card-body\">" +
+    healthLatest(item) +
+    healthReasons(item) +
+    '<div class="health-metrics"><div class="health-metric"><span class="k">Last success</span><span class="v">' +
+    esc(healthLastSuccess(item)) + '</span></div><div class="health-metric"><span class="k">Failure streak</span><span class="v">' +
+    esc(streak) + '</span></div><div class="health-metric"><span class="k">Branch</span><span class="v" title="' +
+    esc(branch) + '">' + esc(branch) + "</span></div></div>" +
+    healthEvidence(item) + "</div>" +
+    '<div class="health-actions">' + healthActionBtn(item, "diagnose-health", "Diagnose here", "current-session") +
+    healthActionBtn(item, "fix-health", fixLabel, actionTarget) +
+    orderStatus + "</div></article>";
+}
+
+function healthGroup(group, index, total) {
+  if (group.items.length === 1) {
+    return '<div class="health-unit health-unit-single" data-health-group-id="' + esc(group.id) + '">' +
+      healthCard(group.items[0], index, total, { groupId: group.id, groupName: group.name }) + "</div>";
+  }
+
+  const title = group.url
+    ? '<a href="' + safeHref(group.url) + '" target="_blank" rel="noreferrer">' + esc(group.name) + "</a>"
+    : "<span>" + esc(group.name) + "</span>";
+  const match = group.match === "name"
+    ? '<span class="health-group-match" title="Grouped because the Azure DevOps repository name uniquely matches this watched GitHub repository.">Repository name match</span>'
+    : group.match === "provider"
+      ? '<span class="health-group-match" title="Grouped using repository metadata reported by the provider.">Provider linked</span>'
+      : "";
+  return '<section class="health-unit health-source-group" data-health-group-id="' + esc(group.id) + '">' +
+    '<header class="health-group-head"><button class="health-drag" type="button" draggable="true" data-health-drag="' +
+    esc(group.id) + '" aria-label="Reorder ' + esc(group.name) + ". Position " + (index + 1) + " of " + total +
+    '." aria-describedby="health-order-help" title="Drag to reorder. Arrow keys also move this group."></button>' +
+    '<span class="health-group-icon">' + ICONS.layers + '</span><div class="health-group-title">' + title +
+    "<small>" + group.items.length + " delivery sources</small></div>" + match + "</header>" +
+    '<div class="health-group-cards">' +
+    group.items.map((item) => healthCard(item, index, total, {
+      groupId: group.id,
+      groupName: group.name,
+      grouped: true,
+      showHandle: false,
+    })).join("") + "</div></section>";
+}
+
+function healthView() {
+  const health = state.health || {};
+  const items = Array.isArray(health.items) ? health.items : [];
+  const groups = healthRepositoryGroups(items);
+  const counts = health.counts || {};
+  const loadingNote = state.loading ? " \u00b7 checking sources\u2026" : "";
+  const errors = state.errors && state.errors.length
+    ? '<div class="errbar">' + esc(state.errors.join(" \u00b7 ")) + "</div>"
+    : "";
+  const body = items.length
+    ? '<div class="health-grid' + (healthOrderSaving ? " ordering" : "") + '" id="health-grid">' +
+      groups.map((group, index) => healthGroup(group, index, groups.length)).join("") + "</div>"
+    : '<div class="state"><div class="ico">' + ICONS.pulse + "</div><h2>" +
+      (state.loading ? "Checking repository health\u2026" : "No health sources configured") + "</h2><p>" +
+      (state.loading ? "Results appear as each source completes." : "Watch a GitHub repository or add an Azure DevOps pipeline in Settings.") +
+      "</p></div>";
+
+  return '<div class="subbar"><span class="who">' + ICONS.pulse + " Repository &amp; delivery health</span>" +
+    '<span class="meta" id="health-order-help">' + groups.length + " repository group" + (groups.length === 1 ? "" : "s") +
+    " across " + items.length + " source" + (items.length === 1 ? "" : "s") + ". Drag groups to prioritize." + loadingNote +
+    '</span><div class="stats"><span class="stat"><span class="dot bg-success"></span><b>' + (counts.healthy || 0) +
+    '</b> Healthy</span><span class="stat"><span class="dot bg-warning"></span><b>' +
+    ((counts.running || 0) + (counts.degraded || 0)) +
+    '</b> Active / degraded</span><span class="stat"><span class="dot bg-danger"></span><b>' + (counts.failing || 0) +
+    '</b> Failing</span><span class="stat"><span class="dot bg-muted"></span><b>' +
+    ((counts.unavailable || 0) + (counts.unknown || 0)) +
+    '</b> Unknown</span></div></div>' + errors + '<div class="health-shell">' + body +
+    '<p class="health-order-status" id="health-order-announcement" aria-live="polite">' +
+    esc(healthOrderAnnouncement) + "</p></div>";
+}
+
 function queueView() {
+  if (state.mode === "health") return healthView();
   const active = state.activeAccounts || [];
   const anyEnt = active.some((a) => a.enterprise);
   const whoLabel = active.length > 1
@@ -1846,7 +2906,7 @@ function toggle(id, title, desc, checked) {
 
 function filtersView() {
   const mode = state.mode;
-  const modeName = { review: "Review", issues: "Issues", ship: "Ship" }[mode] || "Review";
+  const modeName = { review: "Review", issues: "Issues", ship: "Ship", health: "Health" }[mode] || "Review";
   const cur = (m) => (mode === m ? " current" : "");
   const drafts = state.counts && state.counts.drafts;
   const draftLine = state.showDrafts
@@ -1877,6 +2937,13 @@ function filtersView() {
       "</div>" +
     "</div>" +
 
+    '<div class="section' + cur("health") + '"><h3>' + ICONS.pulse + " Health</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.pulse + "<span>Checks the <b>default branch</b> of each watched GitHub repository and every Azure DevOps pipeline explicitly configured in Settings.</span></div>" +
+        '<div class="policy-row">' + ICONS.alertSm + "<span>Likely causes appear only when provider evidence supports them. Repository inactivity by itself does <b>not</b> make a source unhealthy.</span></div>" +
+      "</div>" +
+    "</div>" +
+
     '<div class="section"><h3>Drafts</h3>' +
       '<p class="hint">' + draftLine + " Drafts are prototypes and experiments, not review work. Change this in Settings.</p>" +
       '<div class="row-actions"><button class="btn ghost" id="filters-to-settings">Open settings</button></div>' +
@@ -1884,22 +2951,47 @@ function filtersView() {
   "</div>";
 }
 
+function pipelineEditorHtml() {
+  const pipelines = Array.isArray(prefs.azurePipelines) ? prefs.azurePipelines : [];
+  const rows = pipelines.length
+    ? pipelines.map((pipeline) => {
+        const name = pipeline.name || (pipeline.definitionId ? "Pipeline " + pipeline.definitionId : "Azure DevOps pipeline");
+        const branch = String(pipeline.branch || "refs/heads/main").replace(/^refs\/heads\//, "");
+        return '<li class="pipeline-row"><div class="pipeline-main"><span class="pipeline-name">' + esc(name) +
+          '</span><span class="pipeline-meta">' + esc(branch + " \u00b7 " + pipeline.url) +
+          '</span></div><button class="repo-ico danger pipeline-remove" type="button" data-pipeline-id="' +
+          esc(pipeline.id) + '" title="Remove pipeline" aria-label="Remove ' + esc(name) + '">' + ICONS.trash + "</button></li>";
+      }).join("")
+    : '<li class="repo-empty">No additional Azure DevOps pipelines configured.</li>';
+  return '<div class="section" id="pipeline-settings"><h3>' + ICONS.pulse + " Azure DevOps pipelines</h3>" +
+    '<p class="hint">A matching Azure Repo delivery pipeline is auto-discovered from your <b>az</b> CLI default project. Paste a pipeline or build URL to monitor additional definitions. Existing <b>az</b> or <b>AZURE_DEVOPS_EXT_PAT</b> authentication is reused; credentials are never stored.</p>' +
+    '<div class="pipeline-add"><input id="pipeline-url-input" type="text" value="' + esc(pipelineUrlDraft) +
+    '" placeholder="https://dev.azure.com/org/project/_build?definitionId=123" aria-label="Azure DevOps pipeline URL" />' +
+    '<input id="pipeline-branch-input" class="pipeline-branch" type="text" value="' + esc(pipelineBranchDraft) +
+    '" placeholder="Branch (default: main)" aria-label="Pipeline branch override" />' +
+    '<button class="repo-add-btn" id="pipeline-add-btn" type="button" title="Add pipeline" aria-label="Add pipeline"' +
+    (pipelineSaving ? ' disabled aria-busy="true"' : "") + ">" + (pipelineSaving ? ICONS.refresh : ICONS.plus) +
+    '</button></div><div class="pipeline-err" role="alert">' + esc(pipelineError) +
+    '</div><ul class="pipeline-list">' + rows + "</ul></div>";
+}
+
 function settingsView() {
   const n = prefs.notifications;
   const limit = (state.reviewLimit || 10);
   return '<div class="page">' +
-    '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
+    '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
       '<p class="hint">The shared queue is team-managed, not individually sorted. It shows at most <b>' + limit + '</b> PRs, ranked so the oldest waits surface first.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
       "</div>" +
-      toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!state.showDrafts) +
+      toggle("s-drafts", "Show draft PRs", "Include drafts in lanes and counts", !!prefs.showDrafts) +
     "</div>" +
     '<div class="section"><h3>Ship milestone</h3>' +
       '<p class="hint">Used by Ship mode to group work for the active release.</p>' +
       '<div class="field"><input type="text" id="release-input" value="' + esc(prefs.release || "") + '" placeholder="13.4" /></div></div>' +
+    pipelineEditorHtml() +
     '<div class="section" id="notif-settings"><h3>Notifications</h3>' +
       '<p class="hint">Live in-session alerts surface in the bell. Choose what counts.</p>' +
       toggle("n-review", "Review requested", "Someone asked you to review a PR", n.reviewRequested) +
@@ -2065,7 +3157,7 @@ function render(forward) {
   if (!state) return; // skeleton (initial HTML) stays until first load resolves
 
   let inner;
-  if (!state.authenticated) { view = "queue"; inner = authPicker(); }
+  if (!state.authenticated && view === "queue" && state.mode !== "health") inner = authPicker();
   else if (view === "settings") inner = settingsView();
   else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();
@@ -2081,12 +3173,14 @@ function render(forward) {
     ? '<div class="errbar loaderr" role="alert">' + esc(loadError) +
       '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
     : "";
-  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
+  const motionClass = healthOrderSaving ? " no-motion" : "";
+  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + motionClass + '">' + inner + "</div></div>";
   if (banner) {
     const bx = document.getElementById("load-errbar-dismiss");
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
   }
   wire();
+  updateRefreshControls();
   layoutGrids();
 }
 
@@ -2322,9 +3416,26 @@ function wireRepoEditor(id) {
   wireRepoRows(id);
 }
 
+function isSettingsSaveShortcut(event) {
+  if (event.key !== "Enter" || event.isComposing) return false;
+  const target = event.target || {};
+  const tagName = String(target.tagName || "").toUpperCase();
+  if (tagName === "TEXTAREA" || tagName === "BUTTON" || tagName === "A" || tagName === "SELECT" || target.isContentEditable) return false;
+  if (typeof target.closest === "function" && target.closest('[role="button"]')) return false;
+  return target.id !== "pipeline-url-input" && target.id !== "pipeline-branch-input";
+}
+
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   const rb = document.getElementById("refresh-btn"); if (rb) rb.addEventListener("click", refresh);
+  const applyUpdate = document.getElementById("apply-update-btn"); if (applyUpdate) applyUpdate.addEventListener("click", applyAvailableUpdate);
+  const autoApply = document.getElementById("auto-apply-btn"); if (autoApply) autoApply.addEventListener("click", toggleAutoApply);
+  document.querySelectorAll(".linked-pr").forEach((link) =>
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openLinkedPr(link);
+    }));
   const back = document.getElementById("back-btn"); if (back) back.addEventListener("click", () => goView("queue", false));
   const bell = document.getElementById("bell-btn"); if (bell) bell.addEventListener("click", () => goView(view === "notifications" ? "queue" : "notifications"));
   const gear = document.getElementById("gear-btn"); if (gear) gear.addEventListener("click", () => goView(view === "settings" ? "queue" : "settings"));
@@ -2334,6 +3445,25 @@ function wire() {
   const save = document.getElementById("save-settings"); if (save) save.addEventListener("click", saveSettings);
   const cancel = document.getElementById("cancel-settings"); if (cancel) cancel.addEventListener("click", () => goView("queue", false));
   const fToSettings = document.getElementById("filters-to-settings"); if (fToSettings) fToSettings.addEventListener("click", () => goView("settings"));
+  const pipelineUrl = document.getElementById("pipeline-url-input");
+  const pipelineBranch = document.getElementById("pipeline-branch-input");
+  const pipelineAdd = document.getElementById("pipeline-add-btn");
+  if (pipelineUrl) {
+    pipelineUrl.addEventListener("input", (e) => { pipelineUrlDraft = e.target.value; pipelineError = ""; });
+    pipelineUrl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); addAzurePipeline(); }
+    });
+  }
+  if (pipelineBranch) {
+    pipelineBranch.addEventListener("input", (e) => { pipelineBranchDraft = e.target.value; pipelineError = ""; });
+    pipelineBranch.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); addAzurePipeline(); }
+    });
+  }
+  if (pipelineAdd) pipelineAdd.addEventListener("click", addAzurePipeline);
+  document.querySelectorAll(".pipeline-remove").forEach((button) => {
+    button.addEventListener("click", () => removeAzurePipeline(button.dataset.pipelineId));
+  });
 
   // The Esc/Enter hints on the settings buttons are real shortcuts, like the app's
   // Cancel/Continue. Bound once so re-renders don't stack handlers. Esc also backs
@@ -2344,15 +3474,14 @@ function wire() {
       if (view === "filters" && e.key === "Escape") { e.preventDefault(); goView("queue", false); return; }
       if (view !== "settings") return;
       if (e.key === "Escape") { e.preventDefault(); goView("queue", false); }
-      else if (e.key === "Enter" && !e.isComposing && (e.target.tagName || "") !== "TEXTAREA") {
-        e.preventDefault(); saveSettings();
-      }
+      else if (isSettingsSaveShortcut(e)) { e.preventDefault(); saveSettings(); }
     });
   }
 
   const rescan = document.getElementById("rescan-btn"); if (rescan) rescan.addEventListener("click", rescanAccounts);
 
   wireAccounts();
+  wireHealthOrdering();
 
   document.querySelectorAll(".lane-head").forEach((b) =>
     b.addEventListener("click", () => {
@@ -2477,11 +3606,9 @@ function wireAccounts() {
   });
 }
 
-// Live updates over Server-Sent Events. 'progress' drives the deterministic top bar as
-// repos are fetched; 'state' streams partial and final dashboards (applied straight into
-// the UI, guarded against clobbering an active edit); 'refresh' is a legacy nudge kept for
-// back-compat that re-pulls /api/state, guarded (via onSseRefresh) to the queue view so it
-// can't rebuild an open form and discard uncommitted text.
+// Live updates over Server-Sent Events. Progress drives the deterministic top bar. State events
+// contain complete dashboards and apply atomically; when auto-apply is disabled, update-available
+// changes only the toolbar until the user chooses to swap to the completed snapshot.
 try {
   const es = new EventSource("events");
   es.addEventListener("progress", (e) => {
@@ -2490,7 +3617,18 @@ try {
   es.addEventListener("state", (e) => {
     try { applyPushedState(JSON.parse(e.data)); } catch {}
   });
-  es.addEventListener("refresh", onSseRefresh);
+  es.addEventListener("update-available", (e) => {
+    try { onUpdateAvailable(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("preferences", (e) => {
+    try { onPreferences(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("snapshot", (e) => {
+    try { onSnapshot(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("poll-schedule", (e) => {
+    try { onPollSchedule(JSON.parse(e.data)); } catch {}
+  });
 } catch {}
 
 load();

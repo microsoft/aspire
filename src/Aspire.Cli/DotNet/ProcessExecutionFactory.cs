@@ -4,6 +4,7 @@
 using Aspire.Cli.Processes;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -14,6 +15,8 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 {
+    internal static IReadOnlyList<string> InvocationScopedEnvVarNames { get; } = [KnownConfigNames.CliAppHostSelectionOrigin];
+
     private readonly IEnvironment _environment;
     private readonly ILogger<ProcessExecutionFactory> _logger;
     private readonly ILayoutDiscovery? _layoutDiscovery;
@@ -68,9 +71,11 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             startInfo.ArgumentList.Add(a);
         }
 
-        // Touching Environment here snapshots the parent env on first access, so the strip below
-        // applies even when the caller passes no explicit env. Then overlay the caller's env deltas.
+        // Touching Environment here snapshots the parent env on first access. Strip invocation-scoped
+        // values before overlaying explicit values so the detached child CLI can deliberately receive
+        // the marker while AppHost and build children do not inherit it.
         StripIdentityEnvVars(startInfo);
+        StripInvocationScopedEnvVars(startInfo);
         ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);
 
         if (env is not null)
@@ -129,6 +134,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         // into the child via startInfo.Environment (which is parent-seeded). Same rationale as the
         // other overload — see StripIdentityEnvVars.
         StripIdentityEnvVars(isolatedStartInfo);
+        StripInvocationScopedEnvVars(isolatedStartInfo);
         ApplyEnvironmentVariableFilter(isolatedStartInfo, options.EnvironmentVariableFilter);
 
         return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
@@ -146,6 +152,14 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     private static void StripIdentityEnvVars(IsolatedProcessStartInfo startInfo)
     {
         foreach (var envVarName in Acquisition.IdentityResolver.IdentityEnvVarNames)
+        {
+            startInfo.Environment.Remove(envVarName);
+        }
+    }
+
+    private static void StripInvocationScopedEnvVars(IsolatedProcessStartInfo startInfo)
+    {
+        foreach (var envVarName in InvocationScopedEnvVarNames)
         {
             startInfo.Environment.Remove(envVarName);
         }

@@ -33,6 +33,7 @@ public class NpmRunnerTests
     {
         var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment());
 
+        Assert.True(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
         Assert.False(startInfo.UseShellExecute);

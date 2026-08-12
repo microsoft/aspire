@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
+import { appHostSelectionOriginConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -130,6 +131,7 @@ export interface RunSessionPayload {
 }
 
 export interface DebugLaunchSettings {
+    [key: string]: unknown;
     env?: { [key: string]: string };
     args?: string[];
     launchProfile?: string;
@@ -155,7 +157,9 @@ export interface ProcessRestartedNotification extends RunSessionNotification {
 
 export interface SessionTerminatedNotification extends RunSessionNotification {
     notification_type: 'sessionTerminated';
-    exit_code: number;
+    // The DCP contract permits omission when termination is not caused by a process exit.
+    // See docs/specs/IDE-execution.md#session-change-notifications.
+    exit_code?: number;
 }
 
 export interface ServiceLogsNotification extends RunSessionNotification {
@@ -209,6 +213,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     step?: string;
     skipCliAvailabilityCheck?: boolean;
     env?: { [key: string]: string };
+    [appHostSelectionOriginConfigKey]?: AppHostSelectionOrigin;
 }
 
 interface AspireDebuggersConfiguration {

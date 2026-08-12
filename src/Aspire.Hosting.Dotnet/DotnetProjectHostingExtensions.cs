@@ -43,7 +43,7 @@ public static class DotnetProjectHostingExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -95,7 +95,7 @@ public static class DotnetProjectHostingExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -127,17 +127,14 @@ public static class DotnetProjectHostingExtensions
                               .WithIconName("CodeCsRectangle")
                               .WithProjectDefaults(options);
 
-        // Build the `dotnet run` command line for a non-debug launch of a DotnetProjectResource:
+        // Declare the default `dotnet run` invocation separately from the program arguments so a later
+        // WithLaunchToolArgs call replaces it instead of being prepended to it:
         //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile OR
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
-        resource.WithArgs(ctx =>
+        resource.WithLaunchToolArgs(ctx =>
         {
-            // Mirrors the fallback rule in Dcp/ExecutableCreator: 
-            // a Process fallback is offered for the plain executable UNLESS 
-            // the launch configuration is "project", OR the configuration rewrites the arguments for debugging. 
-            // For any other active annotation a fallback IS offered and we need to construct the args here.
             if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                && (debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project || debugAnnotation.RewritesArgumentsForDebugging))
+                && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project)
             {
                 return;
             }
@@ -169,25 +166,38 @@ public static class DotnetProjectHostingExtensions
             // and must take priority. WithProjectDefaults materializes the profile's environment manually.
             ctx.Args.Add("--no-launch-profile");
 
-            // The launch profile's command line args are still applied here (run mode), after a `--`
-            // separator so they're passed to the app, matching the ProjectResource launch behavior.
-            if (builder.ExecutionContext.IsRunMode && !options.ExcludeLaunchProfile)
+            if (GetLaunchProfileArguments(ctx.Resource).Count > 0)
             {
-                var launchProfile = ctx.Resource.GetEffectiveLaunchProfile()?.LaunchProfile;
-                if (launchProfile is not null && !string.IsNullOrWhiteSpace(launchProfile.CommandLineArgs))
-                {
-                    var launchProfileArgs = CommandLineArgsParser.Parse(launchProfile.CommandLineArgs);
-                    if (launchProfileArgs.Count > 0)
-                    {
-                        ctx.Args.Add("--");
-                        foreach (var arg in launchProfileArgs)
-                        {
-                            ctx.Args.Add(arg);
-                        }
-                    }
-                }
+                ctx.Args.Add("--");
+            }
+        }, ownedByLaunchConfigurationType: KnownLaunchConfigurationTypes.Project);
+
+        // Launch-profile command-line arguments belong to the program, not the replaceable tool invocation.
+        // Keeping them in the ordinary segment preserves them when a caller supplies a custom launch tool.
+        resource.WithArgs(ctx =>
+        {
+            foreach (var arg in GetLaunchProfileArguments(ctx.Resource))
+            {
+                ctx.Args.Add(arg);
             }
         });
+
+        List<string> GetLaunchProfileArguments(IResource resource)
+        {
+            // Project launch configurations carry the selected launch profile, so the IDE applies its command-line arguments.
+            if (!builder.ExecutionContext.IsRunMode
+                || options.ExcludeLaunchProfile
+                || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
+                    && debugAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project))
+            {
+                return [];
+            }
+
+            var launchProfile = resource.GetEffectiveLaunchProfile()?.LaunchProfile;
+            return launchProfile is not null && !string.IsNullOrWhiteSpace(launchProfile.CommandLineArgs)
+                ? CommandLineArgsParser.Parse(launchProfile.CommandLineArgs)
+                : [];
+        }
 
         resource.OnBeforeResourceStarted((r, e, ct) =>
         {

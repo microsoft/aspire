@@ -181,7 +181,10 @@ public sealed class AzurePublishingContext(
 
             if (resource.Scope is { } scope)
             {
-                await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                if (scope.HasResourceGroup)
+                {
+                    await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                }
                 await VisitAsync(scope.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
             }
 
@@ -263,27 +266,29 @@ public sealed class AzurePublishingContext(
                 return new IdentifierExpression(rg.BicepIdentifier);
             }
 
-            if (resource.Scope.IsTenantScope)
+            var scope = resource.Scope;
+
+            if (scope.IsTenantScope)
             {
                 return new FunctionCallExpression(new IdentifierExpression("tenant"));
             }
 
-            if (resource.Scope.ResourceGroup is not null && resource.Scope.Subscription is not null)
+            if (scope.HasResourceGroup && scope.Subscription is not null)
             {
                 return new FunctionCallExpression(
                     new IdentifierExpression("resourceGroup"),
-                    ResolveValue(Eval(resource.Scope.Subscription)).Compile(),
-                    ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+                    ResolveValue(Eval(scope.Subscription)).Compile(),
+                    ResolveValue(Eval(scope.ResourceGroup)).Compile());
             }
 
-            if (resource.Scope.ResourceGroup is not null)
+            if (scope.HasResourceGroup)
             {
-                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(scope.ResourceGroup)).Compile());
             }
 
-            if (resource.Scope.Subscription is not null)
+            if (scope.Subscription is not null)
             {
-                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(resource.Scope.Subscription)).Compile());
+                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(scope.Subscription)).Compile());
             }
 
             throw new InvalidOperationException("The Azure Bicep resource scope must specify a resource group, subscription, or tenant scope.");
