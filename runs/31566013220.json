@@ -1,0 +1,29 @@
+{
+  "run_id": 31566013220,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31566013220",
+  "analyzed_at": "2026-08-12T05:48:45Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19272,
+    "title": "Preserve CLI status messages without interactive spinners",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/fix-console-status-review-feedback",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19272"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Oracle / Hosting.Oracle (ubuntu-latest)",
+      "id": 94018177161,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31566013220/job/94018177161",
+      "classification": "transient-infra",
+      "reason": "The 'Checkout code' step failed with git exit code 128 due to 'server certificate verification failed' when accessing github.com. This is a runner-side SSL/network issue unrelated to any PR change; the checkout step runs before any PR code is compiled or tested.",
+      "failed_steps": ["Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["git-checkout-cert-verification-failed"]
+}

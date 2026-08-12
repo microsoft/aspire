@@ -1,0 +1,16 @@
+{
+  "id": "git-checkout-cert-verification-failed",
+  "type": "infra-failure",
+  "title": "Git checkout fails with server certificate verification failed against github.com",
+  "error_pattern": "The process '/usr/bin/git' failed with exit code 128\nunable to access 'https://github.com/microsoft/aspire/': server certificate verification failed. CAfile: none CRLfile: none",
+  "occurrences": [
+    {
+      "run_id": 31566013220,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31566013220",
+      "job": "Tests / Hosting.Oracle / Hosting.Oracle (ubuntu-latest)",
+      "pr_number": 19272,
+      "observed_at": "2026-08-12T05:48:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19279"
+}
