@@ -543,6 +543,41 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The legacy SQL recipe starts a SQL Server but never creates a database, while
+    /// <c>AddDatabase(...)</c> is composed into the consumer's connection string. That mismatch is
+    /// reported so it is not discovered as a connection failure after deployment.
+    /// </summary>
+    [Fact]
+    public void ReferencedSqlDatabase_IsReportedAsNotCreatedByTheRecipe()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var db = b.AddSqlServer("sql").AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(db);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb"));
+    }
+
+    /// <summary>
+    /// An unreferenced <c>AddDatabase(...)</c> produces no consumer connection string, so it cannot
+    /// mislead anyone. Pinned so the warning above cannot become noise on every model that declares
+    /// a database it does not use.
+    /// </summary>
+    [Fact]
+    public void UnreferencedSqlDatabase_IsNotReported()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var sql = b.AddSqlServer("sql");
+            sql.AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(sql);
+        });
+
+        Assert.Empty(logger.Matching(LogLevel.Warning, "does not create databases"));
+    }
+
+    /// <summary>
     /// A value provider whose resolution fails and which claims no deployment-substituted semantics.
     /// </summary>
     private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
