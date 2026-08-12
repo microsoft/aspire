@@ -152,6 +152,31 @@ public class BackingResourceContractTests
         Assert.Equal("backend-backend.default.svc.cluster.local", expression.Format);
     }
 
+    /// <summary>
+    /// <see cref="EndpointProperty.Scheme"/> and <see cref="EndpointProperty.TlsEnabled"/> are read
+    /// from the endpoint declaration rather than derived from an address, so a Radius-owned backing
+    /// resource can answer them.
+    /// </summary>
+    /// <remarks>
+    /// Both properties resolved through <c>IComputeEnvironmentResource</c> before backing-resource
+    /// projection existed. Rejecting them would break a Kubernetes, Azure Container Apps, or Azure
+    /// App Service consumer that asks only for the scheme, even though no recipe-owned address is
+    /// involved.
+    /// </remarks>
+    [Theory]
+    [InlineData(EndpointProperty.Scheme, "redis")]
+    [InlineData(EndpointProperty.TlsEnabled, "False")]
+    public void NonAddressEndpointProperties_AreResolvedForBackingResources(EndpointProperty property, string expected)
+    {
+        var (environment, cache) = CreateRadiusOwnedRedis();
+        var endpoint = cache.GetEndpoint("tcp");
+
+        var expression = ((IComputeEnvironmentResource)environment)
+            .GetEndpointPropertyExpression(endpoint.Property(property));
+
+        Assert.Equal(expected, expression.Format);
+    }
+
     private static (RadiusEnvironmentResource Environment, IResourceBuilder<IResourceWithEndpoints> Cache) CreateRadiusOwnedRedis()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

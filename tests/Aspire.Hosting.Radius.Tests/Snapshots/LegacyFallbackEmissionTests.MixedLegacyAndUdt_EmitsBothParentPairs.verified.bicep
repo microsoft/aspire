@@ -80,6 +80,7 @@ resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
     environment: myenv.id
     username: 'postgres'
     password: db_password
+    database: 'postgres'
   }
 }
 
