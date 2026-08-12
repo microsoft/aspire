@@ -158,6 +158,61 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public void ExtensionReleaseWorkflowChecksOutHelpersFromWorkflowDefinitionCommit()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(s_releaseWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var prepareReleaseJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("prepare-release")];
+        var steps = ((YamlSequenceNode)prepareReleaseJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
+
+        var checkoutRepositoryStep = Assert.Single(steps, step => Scalar(step, "name") == "Checkout Repository");
+        Assert.Equal("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", Scalar(checkoutRepositoryStep, "uses"));
+        var checkoutRepositoryWith = Assert.IsType<YamlMappingNode>(checkoutRepositoryStep.Children[new YamlScalarNode("with")]);
+        Assert.Equal("main", Scalar(checkoutRepositoryWith, "ref"));
+        Assert.Equal("0", Scalar(checkoutRepositoryWith, "fetch-depth"));
+        Assert.Equal("false", Scalar(checkoutRepositoryWith, "persist-credentials"));
+
+        var helperCheckoutStep = Assert.Single(steps, step => Scalar(step, "name") == "Checkout workflow helper scripts");
+        Assert.Equal("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", Scalar(helperCheckoutStep, "uses"));
+        var helperCheckoutWith = Assert.IsType<YamlMappingNode>(helperCheckoutStep.Children[new YamlScalarNode("with")]);
+        Assert.Equal("${{ github.workflow_sha }}", Scalar(helperCheckoutWith, "ref"));
+        Assert.Equal(".extension-release-workflow-source", Scalar(helperCheckoutWith, "path"));
+        Assert.Equal("1", Scalar(helperCheckoutWith, "fetch-depth"));
+        Assert.Equal("false", Scalar(helperCheckoutWith, "persist-credentials"));
+        Assert.Equal(".github/workflows/extension-release\n", Scalar(helperCheckoutWith, "sparse-checkout")?.ReplaceLineEndings("\n"));
+
+        var workflow = File.ReadAllText(s_releaseWorkflowPath);
+        Assert.Contains(
+            "python3 .extension-release-workflow-source/.github/workflows/extension-release/generate_deterministic_release_notes.py",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "python3 .extension-release-workflow-source/.github/workflows/extension-release/validate_github_pr_body.py",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "bash .extension-release-workflow-source/.github/workflows/extension-release/apply_extension_release_trigger_label.sh",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "python3 .github/workflows/extension-release/generate_deterministic_release_notes.py",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "python3 .github/workflows/extension-release/validate_github_pr_body.py",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "bash .github/workflows/extension-release/apply_extension_release_trigger_label.sh",
+            workflow,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CompiledWorkflowPreloadsAuthoritativeRangeBeforeCleaningCredentials()
     {
         var workflow = File.ReadAllText(s_changelogWorkflowLockPath);

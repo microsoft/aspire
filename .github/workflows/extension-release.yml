@@ -81,6 +81,20 @@ jobs:
           fetch-depth: 0  # Full history for diff generation
           persist-credentials: false
 
+      - name: Checkout workflow helper scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The workflow file can be dispatched from an extension-release branch
+          # before its helper scripts exist on main. Pin this checkout to the
+          # exact commit GitHub used to load the workflow definition so helper
+          # execution stays in sync with the YAML that references it.
+          ref: ${{ github.workflow_sha }}
+          path: .extension-release-workflow-source
+          sparse-checkout: |
+            .github/workflows/extension-release
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Resolve commit range
         id: resolve-sha
         env:
@@ -308,7 +322,7 @@ jobs:
 
           WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RELEASE_NOTES="$WORK_DIR/release_notes.md"
-          python3 .github/workflows/extension-release/generate_deterministic_release_notes.py \
+          python3 .extension-release-workflow-source/.github/workflows/extension-release/generate_deterministic_release_notes.py \
             "$WORK_DIR/commits.txt" \
             "$RELEASE_NOTES"
 
@@ -454,7 +468,7 @@ jobs:
             echo "> **Note:** This preparation workflow can also be tested from a fork with \`dry_run=true\`. Dry-run mode resolves the Marketplace baseline, generates the changelog entry, uploads the proposed files as a workflow artifact, and skips bot-token branch/PR creation."
           } > "$WORK_DIR/pr_body.md"
 
-          python3 .github/workflows/extension-release/validate_github_pr_body.py "$WORK_DIR/pr_body.md"
+          python3 .extension-release-workflow-source/.github/workflows/extension-release/validate_github_pr_body.py "$WORK_DIR/pr_body.md"
 
       - name: Dry-run summary
         if: ${{ inputs.dry_run }}
@@ -577,5 +591,5 @@ jobs:
           # label: adding an already-present label is a no-op that emits no
           # event, which would leave the new placeholder changelog entry
           # unprocessed.
-          bash .github/workflows/extension-release/apply_extension_release_trigger_label.sh "$PR_NUMBER"
+          bash .extension-release-workflow-source/.github/workflows/extension-release/apply_extension_release_trigger_label.sh "$PR_NUMBER"
           echo "✓ Applied 'vscode-extension-release' label to PR #${PR_NUMBER}"
