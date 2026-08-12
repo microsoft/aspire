@@ -531,8 +531,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         UseFakeRepoRoot();
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
-        var inheritedDcpDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-dcp");
+        var inheritedDcpDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-dcp")).FullName;
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(inheritedDcpDirectory), "");
         var inheritedDashboardPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-dashboard");
+        File.WriteAllText(inheritedDashboardPath, "");
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
             [BundleDiscovery.DcpPathEnvVar] = inheritedDcpDirectory,
@@ -573,6 +575,69 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_ProjectAppHostUsingCliBundleReplacesUnusableRuntimePaths(
+        bool useExplicitOverlay,
+        bool useEmptyValues)
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var unusableDcpDirectory = useEmptyValues
+            ? ""
+            : Path.Combine(_workspace.WorkspaceRoot.FullName, "missing-dcp");
+        var unusableDashboardPath = useEmptyValues
+            ? ""
+            : Path.Combine(_workspace.WorkspaceRoot.FullName, "missing-dashboard");
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.DcpPathEnvVar] = unusableDcpDirectory,
+            [BundleDiscovery.DashboardPathEnvVar] = unusableDashboardPath,
+        };
+        var inheritedEnvironment = useExplicitOverlay
+            ? new TestEnvironment()
+            : new TestEnvironment(environmentVariables.ToDictionary(pair => pair.Key, pair => (string?)pair.Value));
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                }))
+        };
+        var project = CreateDotNetAppHostProject(runner, layout, environment: inheritedEnvironment);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(layout.GetDcpPath(), env![BundleDiscovery.DcpPathEnvVar]);
+            Assert.Equal(layout.GetManagedPath(), env[BundleDiscovery.DashboardPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = useExplicitOverlay ? environmentVariables : new Dictionary<string, string>()
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);

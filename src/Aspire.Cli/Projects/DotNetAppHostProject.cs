@@ -2491,14 +2491,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         if (injectDcpAndDashboard && layout is not null)
         {
-            if (!HasEnvironmentOverride(env, BundleDiscovery.DcpPathEnvVar) &&
+            if (!IsUsableDcpDirectory(GetEffectiveEnvironmentValue(env, BundleDiscovery.DcpPathEnvVar)) &&
                 layout.GetDcpPath() is { } layoutDcpPath &&
                 IsUsableDcpDirectory(layoutDcpPath))
             {
                 env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!HasEnvironmentOverride(env, BundleDiscovery.DashboardPathEnvVar) &&
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
                 layout.GetManagedPath() is { } layoutManagedPath &&
                 IsUsableDashboardPath(layoutManagedPath))
             {
@@ -2543,7 +2543,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     }
 
     private bool HasEnvironmentOverride(IReadOnlyDictionary<string, string> env, string name)
-        => env.ContainsKey(name) || _environment.GetEnvironmentVariable(name) is not null;
+        => !string.IsNullOrWhiteSpace(GetEffectiveEnvironmentValue(env, name));
+
+    private string? GetEffectiveEnvironmentValue(IReadOnlyDictionary<string, string> env, string name)
+        => env.TryGetValue(name, out var value) ? value : _environment.GetEnvironmentVariable(name);
 
     private static bool IsUsableDcpDirectory(string? path)
         => !string.IsNullOrWhiteSpace(path) &&
