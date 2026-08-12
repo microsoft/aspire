@@ -1229,12 +1229,19 @@ internal sealed class RadiusInfrastructureBuilder
         if (databaseChildren.Count == 0)
         {
             // A server with no AddDatabase(...) child is a valid and common model, so this is a
-            // warning rather than a failure. The recipe then falls back to whatever default database
-            // it defines, which may not be the one a consumer's connection string names.
+            // warning rather than a failure. But omitting the property is not safe: the server-level
+            // connection string carries no database name (PostgresServerResource appends `/{db}`
+            // only when a database child exists), and libpq/Npgsql then default `dbname` to the
+            // *user name*, while the recipe would default its own database to `postgres_db`. For a
+            // user such as `appuser` the consumer would open a database the recipe never created.
+            // Emitting the user name as the database keeps the two ends in agreement — the schema
+            // marks `database` optional precisely so it can be supplied here.
+            await SetTypePropertyAsync(construct, "database", withConnectionString, "username").ConfigureAwait(false);
+
             _logger.LogWarning(
-                "Radius resource '{ResourceName}' declares no database, so the 'database' property is omitted " +
-                "and the recipe's own default is used. Add a database with AddDatabase(...) if consumers expect a " +
-                "specific database name.",
+                "Radius resource '{ResourceName}' declares no database, so its recipe is asked to create a database " +
+                "named after the user: the server-level connection string carries no database name and clients default " +
+                "it to the user name. Add a database with AddDatabase(...) if consumers expect a specific database name.",
                 resource.Name);
             return;
         }

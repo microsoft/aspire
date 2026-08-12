@@ -193,11 +193,12 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
-    /// A server with no <c>AddDatabase(...)</c> child is a valid, common model, so the omitted
-    /// <c>database</c> property is a warning rather than a failure.
+    /// A server with no <c>AddDatabase(...)</c> child is a valid, common model, so it warns rather
+    /// than failing — and the <c>database</c> property is set to the user name, because that is
+    /// what a client derives from a connection string that carries no database name.
     /// </summary>
     [Fact]
-    public void ServerWithNoDatabase_WarnsRatherThanFailing()
+    public void ServerWithNoDatabase_WarnsAndUsesTheUserNameAsTheDatabase()
     {
         var (bicep, logger) = GenerateBicep(b =>
         {
@@ -206,7 +207,28 @@ public class BackingResourceValueResolutionTests
         });
 
         Assert.Contains("pg.properties.host", bicep, StringComparison.Ordinal);
-        Assert.Single(logger.Matching(LogLevel.Warning, "pg", "declares no database"));
+        Assert.Contains("database: 'postgres'", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "pg", "named after the user"));
+    }
+
+    /// <summary>
+    /// The user name a childless server is given must be the one the recipe creates the database
+    /// from, so a custom user name has to reach both properties. Pinned because a mismatch here is
+    /// the exact failure this fallback exists to prevent: the recipe would create <c>postgres_db</c>
+    /// while the consumer opened a database named after its user.
+    /// </summary>
+    [Fact]
+    public void ServerWithNoDatabase_UsesTheCustomUserNameAsTheDatabase()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var userName = b.AddParameter("pguser", "appuser");
+            var pg = b.AddPostgres("pg", userName: userName);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
+        });
+
+        Assert.Contains("username: pguser", bicep, StringComparison.Ordinal);
+        Assert.Contains("database: pguser", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -486,6 +508,38 @@ public class BackingResourceValueResolutionTests
 
         Assert.Contains("'primary-${cache.properties.host}'", bicep, StringComparison.Ordinal);
         Assert.DoesNotContain("secondary-fallback", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A non-HTTP endpoint declared without a port is given an allocated one, so a consumer that
+    /// references it still receives a complete address and no environment variable is dropped.
+    /// </summary>
+    /// <remarks>
+    /// Guards the narrowed <c>catch (RadiusUnresolvableValueException)</c> in the container
+    /// environment loop. The concern is that a portless <c>tcp</c> endpoint would reach
+    /// <c>GetDefaultPort</c>, which throws a plain <see cref="InvalidOperationException"/> for a
+    /// non-HTTP scheme and would now abort the publish. It cannot: the Radius override consults
+    /// <c>RadiusServiceDiscovery.ResolveServicePort</c> first, which delegates to
+    /// <c>ResourceExtensions.ResolveEndpoints</c>, whose fallback arm allocates a port
+    /// (<c>ResolvedPort.Allocated(portAllocator.AllocatePort())</c>). <c>ResolveServicePort</c>
+    /// returns <see langword="null"/> only for a project's synthetic default HTTPS endpoint, whose
+    /// scheme <c>GetDefaultPort</c> answers with 443. This test pins that so the narrowing cannot
+    /// regress into a publish failure.
+    /// </remarks>
+    [Fact]
+    public void PortlessNonHttpEndpoint_IsResolvedRatherThanOmitted()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var backend = b.AddContainer("backend", "myapp/backend", "latest")
+                .WithEndpoint(scheme: "tcp", name: "custom");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("BACKEND_URL", backend.GetEndpoint("custom"));
+        });
+
+        Assert.Contains("BACKEND_URL", bicep, StringComparison.Ordinal);
+        Assert.Empty(logger.Matching(LogLevel.Warning, "omitted from the Radius output"));
     }
 
     /// <summary>

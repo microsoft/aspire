@@ -160,54 +160,70 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         var endpoint = endpointReference.EndpointAnnotation;
         var scheme = endpoint.UriScheme;
 
-        // Guard here as well as in GetHostAddressExpression: Port, TargetPort, Scheme and
-        // TlsEnabled never evaluate the lazy host below, so a backing resource would otherwise slip
-        // through this method with a container-derived port that has nothing to do with the port
-        // its recipe actually exposes.
-        ThrowIfBackingResource(endpointReference.Resource);
-
+        // Guard the two address-bearing properties that never evaluate the lazy host below: Port
+        // and TargetPort. The other four (Url, Host, IPV4Host, HostAndPort) reach
+        // GetHostAddressExpression through `host`, which guards them there. Scheme and TlsEnabled
+        // are deliberately *not* guarded: they are copied straight off the endpoint annotation and
+        // describe no address, so a recipe-provisioned resource can answer them correctly.
+        //
         // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
         // port), a Radius peer is reachable on the recipe Service's port, which equals the container
         // port (port == targetPort == containerPort). Resolve the service port from the same helper
         // the Bicep container-port emission uses so the emitted URL and the generated Service agree.
-        var resolvedServicePort = RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name);
-        var port = resolvedServicePort ?? GetDefaultPort(scheme, endpoint);
+        //
+        // Lazy because ResolveServicePort delegates to ResourceExtensions.ResolveEndpoints, which
+        // *allocates* a port for an otherwise-portless endpoint as a side effect. A Scheme or
+        // TlsEnabled query needs no port and must not burn an allocation.
+        var resolvedServicePort = new Lazy<int?>(() => RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name));
+        var port = new Lazy<int>(() => resolvedServicePort.Value ?? GetDefaultPort(scheme, endpoint));
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
 
         return property switch
         {
-            EndpointProperty.Url => IsDefaultPort(scheme, port)
+            EndpointProperty.Url => IsDefaultPort(scheme, port.Value)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
-                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host.Value,
-            EndpointProperty.Port => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.Port => GuardedAddress(endpointReference, () => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port.Value)}")),
             // The Radius recipe Service targets the container port, which equals the Service port
             // (port == targetPort == containerPort). Use the same resolved value as Port/Url so the
             // TargetPort property can't disagree with the container port ResolvePorts emits. Fall back
             // to the container's port reference only when no Service port is resolved (e.g. an
             // unallocated HTTPS endpoint that is dropped from service discovery anyway).
-            EndpointProperty.TargetPort => resolvedServicePort is int targetPort
+            EndpointProperty.TargetPort => GuardedAddress(endpointReference, () => resolvedServicePort.Value is int targetPort
                 ? ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(targetPort)}")
-                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}")),
             EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
-            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };
     }
 
+    // Applies the backing-resource guard to a port property that does not go through the lazy host.
+    private static ReferenceExpression GuardedAddress(EndpointReference endpointReference, Func<ReferenceExpression> build)
+    {
+        ThrowIfBackingResource(endpointReference.Resource);
+        return build();
+    }
+
     // A backing resource maps to a Radius recipe type (Applications.Datastores/*, Radius.Data/*,
     // ...) rather than Radius.Compute/containers. Its Kubernetes objects and credentials are owned
-    // by the recipe, so every endpoint-derived value for it is wrong. Fail loudly instead of
-    // emitting an address that silently resolves to nothing.
+    // by the recipe, so every *address* for it is wrong. Fail loudly instead of emitting an address
+    // that silently resolves to nothing.
     //
-    // This guard intentionally applies to *every* caller, including
+    // This guard intentionally applies to every caller that asks for an address, including
     // ComputeEnvironmentEndpointResolver, which routes here when a Kubernetes/ACA/App Service
     // consumer references a resource owned by this Radius environment. Suppressing it there would
     // not avoid a false positive — the resolver only delegates for resources this environment owns,
     // so the address really is underivable — it would merely replace an accurate failure with a
     // container-shaped FQDN that resolves to nothing, which is the defect
     // https://github.com/microsoft/aspire/issues/18935 describes.
+    //
+    // It deliberately does *not* cover endpoint metadata that carries no address: Scheme comes from
+    // EndpointAnnotation.UriScheme and TlsEnabled from EndpointAnnotation.TlsEnabled, neither of
+    // which can mislead a consumer, and both answered correctly through IComputeEnvironmentResource
+    // before backing-resource projection existed.
     private static void ThrowIfBackingResource(IResource resource)
     {
         // Child resources (a database on a server, say) are represented by their parent in the
