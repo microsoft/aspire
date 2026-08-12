@@ -113,7 +113,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             : 0;
 
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
-        var launchArgs = BuildLaunchArgs(
+        var (launchArgs, dotnetRunArgumentIndex) = BuildLaunchArgs(
             er,
             spec,
             configuration.Arguments,
@@ -123,7 +123,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             launchToolArgumentsData?.ShowInCommandLine ?? true);
         if (resolvedLaunchToolArgumentCount > 0 || !HasProjectLaunchArgsOverride(er.ModelResource))
         {
-            AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
+            AddDotnetRunArgsForExecutableAnnotatedProject(launchArgs, dotnetRunArgumentIndex, executableArgumentStartIndex);
         }
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
@@ -750,7 +750,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
     }
 
-    private static List<LaunchArgument> BuildLaunchArgs(
+    private static (List<LaunchArgument> LaunchArgs, int? DotnetRunArgumentIndex) BuildLaunchArgs(
         RenderedModelResource<Executable> er,
         ExecutableSpec spec,
         IEnumerable<(string Value, bool IsSensitive)> appHostArgs,
@@ -781,7 +781,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             omittedLaunchToolArgumentCount = Math.Max(0, omittedLaunchToolArgumentCount - 1);
         }
 
+        var dotnetRunResourceArgumentIndex = FindExecutableAnnotatedDotnetRunArgumentIndex(
+            er.ModelResource,
+            appHostArgList,
+            launchToolArgumentCount);
         var launchArgs = new List<LaunchArgument>();
+        int? dotnetRunLaunchArgumentIndex = null;
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
         List<string>? projectLaunchProfileArgs = null;
         var includeProfileArgsInSpec = false;
@@ -832,9 +837,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     return true;
                 }
 
-                return er.ModelResource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) &&
-                    string.Equals(executableAnnotation.Command, "dotnet", StringComparison.OrdinalIgnoreCase) &&
-                    appHostArgList.Any(static argument => string.Equals(argument.Value, "run", StringComparison.Ordinal));
+                return dotnetRunResourceArgumentIndex is not null;
             }
         }
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
@@ -868,27 +871,53 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
             var a = appHostArgList[i];
             var isLaunchToolArg = i < launchToolArgumentCount;
-            launchArgs.Add(CreateLaunchArgument(
+            var launchArgument = CreateLaunchArgument(
                 a.Value,
                 a.IsSensitive,
                 executable: i >= omittedLaunchToolArgumentCount,
-                display: showLaunchToolArgsInCommandLine || !isLaunchToolArg));
+                display: showLaunchToolArgsInCommandLine || !isLaunchToolArg);
+            if (dotnetRunResourceArgumentIndex == i && launchArgument.Executable)
+            {
+                dotnetRunLaunchArgumentIndex = launchArgs.Count;
+            }
+            launchArgs.Add(launchArgument);
         }
 
-        return launchArgs;
+        return (launchArgs, dotnetRunLaunchArgumentIndex);
     }
 
-    private void AddDotnetRunArgsForExecutableAnnotatedProject(RenderedModelResource<Executable> er, List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
+    private static int? FindExecutableAnnotatedDotnetRunArgumentIndex(
+        IResource resource,
+        IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs,
+        int launchToolArgumentCount)
     {
-        if (er.ModelResource is not ProjectResource ||
-            !er.ModelResource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
-            !string.Equals(executableAnnotation.Command, "dotnet", StringComparison.OrdinalIgnoreCase))
+        if (resource is not ProjectResource ||
+            !resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
+            !string.Equals(Path.GetFileNameWithoutExtension(executableAnnotation.Command), "dotnet", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            return null;
         }
 
-        var runIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "run", StringComparison.Ordinal));
-        if (runIndex < 0)
+        // A declared launch-tool prefix identifies its complete invocation. Without one, project subtypes such as
+        // MAUI historically place the `run` verb first in ordinary resource args. Do not interpret a later
+        // application argument named "run" as the SDK verb.
+        var invocationArgumentCount = launchToolArgumentCount > 0
+            ? Math.Min(launchToolArgumentCount, appHostArgs.Count)
+            : Math.Min(1, appHostArgs.Count);
+        for (var i = 0; i < invocationArgumentCount; i++)
+        {
+            if (string.Equals(appHostArgs[i].Value, "run", StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
+
+    private void AddDotnetRunArgsForExecutableAnnotatedProject(List<LaunchArgument> launchArgs, int? dotnetRunArgumentIndex, int executableArgumentStartIndex)
+    {
+        if (dotnetRunArgumentIndex is not { } runIndex)
         {
             return;
         }

@@ -6165,10 +6165,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
-    [Fact]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(bool useFullDotnetPath)
     {
         var builder = DistributedApplication.CreateBuilder();
+        var dotnetCommand = useFullDotnetPath
+            ? Path.GetFullPath(Path.Combine("test-dotnet-root", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"))
+            : "dotnet";
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
         var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
         if (defaultAnnotation is not null)
@@ -6179,7 +6184,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         projectBuilder
             .WithAnnotation(new ExecutableAnnotation
             {
-                Command = "dotnet",
+                Command = dotnetCommand,
                 WorkingDirectory = "/tmp/mauiapp"
             })
             .WithDebugSupport(
@@ -6211,6 +6216,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(dotnetCommand, exe.Spec.ExecutablePath);
         var expectedArgs = new List<string> { "run" };
         if (GetTestAssemblyConfiguration() is { } configurationName)
         {
@@ -6223,6 +6229,62 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
         Assert.Equal(
             ["run", "-f", "net10.0-ios", "--", "--profile-arg", "profile value"],
+            displayArgs.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectDoesNotTreatNonLeadingRunAsDotnetRun()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
+        var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (defaultAnnotation is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
+        }
+
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(
+                mode => new TestMauiLaunchConfiguration
+                {
+                    Mode = mode,
+                    ProjectPath = "/tmp/mauiapp/MauiApp.csproj",
+                    TargetFramework = "net10.0-ios",
+                    Platform = "ios",
+                    TargetKind = "simulator"
+                },
+                "maui")
+            .WithArgs("exec", "app.dll", "run");
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["coreclr"], SupportedLaunchConfigurations = ["maui"] })
+            })
+            .Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["--profile-arg", "profile value", "exec", "app.dll", "run"], exe.Spec.Args);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
+        Assert.Equal(
+            ["--profile-arg", "profile value", "exec", "app.dll", "run"],
             displayArgs.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
