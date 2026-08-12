@@ -51,7 +51,10 @@ internal sealed class SkillBundleFile
 {
     public string? RelativePath { get; init; }
 
-    public string? Sha256 { get; init; }
+    // Lowercase hex SHA-512 of the file contents, read from `skill-manifest.json` inside the bundle
+    // archive (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by
+    // microsoft/aspire-skills' build-aspire-bundles.mjs and verified by AspireSkillsBundle.ValidateFile.
+    public string? Sha512 { get; init; }
 }
 
 /// <summary>
@@ -67,7 +70,8 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
 
     public string? AssetName { get; init; }
 
-    public string? Sha256 { get; init; }
+    // Lowercase hex SHA-512 of the embedded `.tgz` archive; verified by AspireSkillsInstaller before extraction.
+    public string? Sha512 { get; init; }
 }
 
 /// <summary>

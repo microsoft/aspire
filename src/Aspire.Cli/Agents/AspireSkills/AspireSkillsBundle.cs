@@ -204,9 +204,9 @@ internal sealed class AspireSkillsBundle
     private static void ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
-        if (string.IsNullOrWhiteSpace(file.Sha256))
+        if (string.IsNullOrWhiteSpace(file.Sha512))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' does not specify a SHA-256 hash.", relativePath, skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' does not specify a SHA-512 hash.", relativePath, skillName));
         }
 
         var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
@@ -215,16 +215,16 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' was not found.", relativePath, skillName));
         }
 
-        var expectedHash = NormalizeSha256(file.Sha256);
+        var expectedHash = NormalizeSha512(file.Sha512);
         string actualHash;
         using (var stream = File.OpenRead(fullPath))
         {
-            actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            actualHash = Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
         }
 
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed SHA-256 verification.", relativePath, skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed SHA-512 verification.", relativePath, skillName));
         }
 
         if (string.Equals(relativePath, SkillFileName, StringComparison.Ordinal))
@@ -347,12 +347,12 @@ internal sealed class AspireSkillsBundle
         return Path.Combine(segments);
     }
 
-    internal static string NormalizeSha256(string sha256)
+    internal static string NormalizeSha512(string sha512)
     {
-        const string prefix = "sha256-";
-        return sha256.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            ? sha256[prefix.Length..]
-            : sha256;
+        const string prefix = "sha512-";
+        return sha512.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? sha512[prefix.Length..]
+            : sha512;
     }
 
     private static void ValidateCompatibility(SkillBundleSupports? supports, string currentCliVersion, string currentSdkVersion)

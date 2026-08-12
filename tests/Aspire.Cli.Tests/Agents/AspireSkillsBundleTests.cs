@@ -89,11 +89,11 @@ public class AspireSkillsBundleTests
             await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
             {
                 ["SKILL.md"] = CreateSkillFileContent()
-            }, hashOverride: "0000000000000000000000000000000000000000000000000000000000000000");
+            }, hashOverride: "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
 
-            Assert.Contains("failed SHA-256 verification", exception.Message);
+            Assert.Contains("failed SHA-512 verification", exception.Message);
         }
         finally
         {
@@ -181,7 +181,7 @@ public class AspireSkillsBundleTests
                             new SkillBundleFile
                             {
                                 RelativePath = "../SKILL.md",
-                                Sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+                                Sha512 = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
                             }
                         ]
                     }
@@ -225,7 +225,7 @@ public class AspireSkillsBundleTests
                       "name": "{{CommonAgentApplicators.AspireifySkillName}}",
                       "description": "{{AspireifySkillDescription}}",
                       "files": [
-                        { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
+                        { "relativePath": "SKILL.md", "sha512": "{{ComputeSha512(skillPath)}}" }
                       ]
                     }
                   ]
@@ -271,7 +271,7 @@ public class AspireSkillsBundleTests
                             new SkillBundleFile
                             {
                                 RelativePath = "SKILL.md",
-                                Sha256 = ComputeSha256(skillPath)
+                                Sha512 = ComputeSha512(skillPath)
                             }
                         ]
                     }
@@ -380,7 +380,7 @@ public class AspireSkillsBundleTests
                 bundleDirectory,
                 new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() });
 
-            // Truncate the bundled SKILL.md so the SHA-256 in the manifest no longer matches.
+            // Truncate the bundled SKILL.md so the SHA-512 in the manifest no longer matches.
             // The compatibility skip must not bypass content verification.
             var skillPath = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
             await File.WriteAllTextAsync(skillPath, "tampered");
@@ -429,7 +429,7 @@ public class AspireSkillsBundleTests
                         .Select(file => new SkillBundleFile
                         {
                             RelativePath = file.Key,
-                            Sha256 = hashOverride ?? ComputeSha256(Path.Combine(skillDirectory, AspireSkillsBundle.NormalizeRelativePath(file.Key)))
+                            Sha512 = hashOverride ?? ComputeSha512(Path.Combine(skillDirectory, AspireSkillsBundle.NormalizeRelativePath(file.Key)))
                         })
                         .ToArray()
                 }
@@ -466,7 +466,7 @@ public class AspireSkillsBundleTests
                 new SkillBundleFile
                 {
                     RelativePath = "SKILL.md",
-                    Sha256 = ComputeSha256(Path.Combine(bundleDirectory, "skills", skillName, "SKILL.md"))
+                    Sha512 = ComputeSha512(Path.Combine(bundleDirectory, "skills", skillName, "SKILL.md"))
                 }
             ]
         };
@@ -478,10 +478,10 @@ public class AspireSkillsBundleTests
         return File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
     private static string CreateSkillFileContent(

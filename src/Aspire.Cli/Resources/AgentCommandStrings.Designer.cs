@@ -475,16 +475,16 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-256 hash..
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-512 hash..
         /// </summary>
-        internal static string AspireSkillsInstaller_MissingMetadataSha256 {
+        internal static string AspireSkillsInstaller_MissingMetadataSha512 {
             get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataSha256", resourceCulture);
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataSha512", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'..
+        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'..
         /// </summary>
         internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
             get {

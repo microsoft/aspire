@@ -191,12 +191,12 @@ public class AspireSkillsInstallerTests
 
         Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
         Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
-        Assert.Equal(metadata.Sha256, ComputeSha256(archiveStream));
+        Assert.Equal(metadata.Sha512, ComputeSha512(archiveStream));
     }
 
-    private static string ComputeSha256(Stream stream)
+    private static string ComputeSha512(Stream stream)
     {
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public class AspireSkillsInstallerTests
                 Repository = AspireSkillsInstaller.GitHubRepository,
                 Tag = $"v{AspireSkillsInstaller.Version}",
                 AssetName = $"aspire-skills-v{AspireSkillsInstaller.Version}.tgz",
-                Sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+                Sha512 = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
             };
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var installer = CreateInstaller(
@@ -355,8 +355,8 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.NotNull(result.Message);
-            Assert.Contains("SHA-256", result.Message, StringComparison.Ordinal);
-            Assert.Contains("0000000000000000000000000000000000000000000000000000000000000000", result.Message, StringComparison.Ordinal);
+            Assert.Contains("SHA-512", result.Message, StringComparison.Ordinal);
+            Assert.Contains("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", result.Message, StringComparison.Ordinal);
             Assert.True(embeddedBundleProvider.OpenArchiveCalled);
         }
         finally
@@ -488,7 +488,7 @@ public class AspireSkillsInstallerTests
                         new SkillBundleFile
                         {
                             RelativePath = "SKILL.md",
-                            Sha256 = ComputeSha256(skillPath)
+                            Sha512 = ComputeSha512(skillPath)
                         }
                     ]
                 }
@@ -531,15 +531,15 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
-    private static string ComputeSha256(byte[] bytes)
+    private static string ComputeSha512(byte[] bytes)
     {
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(bytes)).ToLowerInvariant();
     }
 
     private static async Task<TestEmbeddedAspireSkillsBundleProvider> CreateEmbeddedBundleProviderAsync(SkillBundleSupports? supports = null)
@@ -553,7 +553,7 @@ public class AspireSkillsInstallerTests
                 Repository = AspireSkillsInstaller.GitHubRepository,
                 Tag = $"v{AspireSkillsInstaller.Version}",
                 AssetName = $"aspire-skills-v{AspireSkillsInstaller.Version}.tgz",
-                Sha256 = ComputeSha256(archiveBytes)
+                Sha512 = ComputeSha512(archiveBytes)
             },
             ArchiveBytes = archiveBytes
         };
