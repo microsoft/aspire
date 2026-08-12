@@ -3,5 +3,12 @@
   "repository": "microsoft/aspire-skills",
   "tag": "v0.0.1",
   "assetName": "aspire-skills-v0.0.1.tgz",
-  "sha256": "8a8022a250818c730c78a5054f485e0a09ec80ac60da63910cf5091684ceec9a"
+  "sha256": "8a8022a250818c730c78a5054f485e0a09ec80ac60da63910cf5091684ceec9a",
+  "hooks": {
+    "commitSha": "f8270164334fff609e6b301de8486e5e04207221",
+    "files": {
+      "track-telemetry.sh": "dcae2ecfe6bdbddefd366b90a527ae3ee90f74e3850d787202e0ac55aefdd42b",
+      "track-telemetry.ps1": "25de2dee7ffcdddf708ed709037bf2b40fea3636e9d9018e0f733a4b5c0ddf63"
+    }
+  }
 }
