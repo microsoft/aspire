@@ -425,6 +425,50 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsDistinctSecretParametersWithSameName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var topLevelParameter = builder.AddParameter("shared-name", "top-level-secret", secret: true);
+        var referencedParameter = new ParameterResource("shared-name", _ => "referenced-secret", secret: true);
+        var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(context => context.EnvironmentVariables["REFERENCED_SECRET"] = referencedParameter);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        topLevelParameter.Resource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        topLevelParameter.Resource.WaitForValueTcs.SetResult("top-level-secret");
+        referencedParameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        referencedParameter.WaitForValueTcs.SetResult("referenced-secret");
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("TOP_LEVEL_SECRET", "top-level-secret", true),
+                new EnvironmentVariableSnapshot("REFERENCED_SECRET", "referenced-secret", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "owner");
+        Assert.Null(Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "TOP_LEVEL_SECRET").Value);
+        Assert.Null(Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "REFERENCED_SECRET").Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_DoesNotBlockOnUnresolvedSecretParameter()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

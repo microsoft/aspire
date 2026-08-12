@@ -1288,14 +1288,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
 
-        // Keyed by name to de-duplicate a parameter that is both a top-level resource and referenced elsewhere.
-        var secretParameters = new Dictionary<string, ParameterResource>(StringComparer.Ordinal);
+        // Parameter resources referenced by annotations are not registered in the model, so they are not
+        // subject to its unique-name constraint. Collect by reference to preserve distinct same-named secrets.
+        var secretParameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
 
         foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
         {
             if (parameter.Secret)
             {
-                secretParameters[parameter.Name] = parameter;
+                secretParameters.Add(parameter);
             }
         }
 
@@ -1319,12 +1320,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             {
                 if (parameter.Secret)
                 {
-                    secretParameters[parameter.Name] = parameter;
+                    secretParameters.Add(parameter);
                 }
             }
         }
 
-        return _secretParameters = [.. secretParameters.Values];
+        return _secretParameters = [.. secretParameters];
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
