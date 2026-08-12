@@ -1,0 +1,38 @@
+{
+  "run_id": 31638399292,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31638399292",
+  "analyzed_at": "2026-08-12T21:11:09Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19082,
+    "title": "Fix misleading AppHost build failure diagnostics",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-fix-apphost-build-diagnostic",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19082"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 94255229307,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31638399292/job/94255229307",
+      "classification": "flaky-test",
+      "reason": "The job failed due to a 'Collection was modified; enumeration operation may not execute' race condition inside the pipeline step execution engine (DistributedApplicationPipeline), unrelated to the PR's changes which only touch Aspire.Cli.Projects.ProjectLocator and CLI tests. This matches a known class of thread-safety flakes previously seen (see prior cause servicebus-azureeventsource-collection-modified) involving concurrent list enumeration during pipeline steps.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "System.InvalidOperationException : Step 'validate-compute-environments' failed: Collection was modified; enumeration operation may not execute.\n---- System.InvalidOperationException : Collection was modified; enumeration operation may not execute.",
+      "stack_trace": "at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:1148\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:913\n----- Inner Stack Trace -----\n   at System.Collections.Generic.List`1.Enumerator.MoveNext()\n   at System.Linq.Enumerable.OfTypeIterator[TResult](IEnumerable source)+MoveNext()\n   at System.Collections.Generic.List`1..ctor(IEnumerable`1 collection)",
+      "classification": "flaky",
+      "reason": "The failing test and pipeline code (Aspire.Hosting.Pipelines.DistributedApplicationPipeline, Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests) are not part of the PR's changed files (which only modify Aspire.Cli.Projects.ProjectLocator.cs and CLI test files). The error is a classic concurrent-collection-modification race condition during enumeration, consistent with a known pattern of thread-safety flakiness in test fakes/pipeline execution seen elsewhere in the codebase (e.g. servicebus-azureeventsource-collection-modified)."
+    }
+  ],
+  "causes": ["azureresourcepreparer-collection-modified"]
+}

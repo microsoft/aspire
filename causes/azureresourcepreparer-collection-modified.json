@@ -1,0 +1,17 @@
+{
+  "id": "azureresourcepreparer-collection-modified",
+  "type": "flaky-test",
+  "title": "Flaky: AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource fails with 'Collection was modified' race condition",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource",
+  "error_pattern": "System.InvalidOperationException : Step 'validate-compute-environments' failed: Collection was modified; enumeration operation may not execute.\n---- System.InvalidOperationException : Collection was modified; enumeration operation may not execute.\n   at System.Collections.Generic.List`1.Enumerator.MoveNext()\n   at System.Linq.Enumerable.OfTypeIterator[TResult](IEnumerable source)+MoveNext()\n   at System.Collections.Generic.List`1..ctor(IEnumerable`1 collection)",
+  "occurrences": [
+    {
+      "run_id": 31638399292,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31638399292",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 19082,
+      "observed_at": "2026-08-12T21:11:09Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19308"
+}
