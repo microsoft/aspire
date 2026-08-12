@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "TypeScript (ATS) AppHosts can now register custom health check callbacks using builder.addHealthCheck() and attach them to resources. Project resources also gain withEndpointsInEnvironment() to control which endpoints are injected into their environment variables.",
-  "docsPrs": [],
+  "docsPrs": [
+    1466
+  ],
   "docsRequired": true,
   "emoji": "💚",
   "firstMergedAt": "2026-06-05T19:55:06Z",

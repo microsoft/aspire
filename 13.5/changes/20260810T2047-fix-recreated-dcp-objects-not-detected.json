@@ -5,15 +5,16 @@
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
-  "description": "Local runs now correctly recognize DCP resources that were deleted and recreated while the watch connection was disconnected, so late console-log subscribers keep receiving logs for the replacement resource instead of missing updates.",
+  "description": "Local runs now correctly recognize DCP resources that were deleted and recreated while the watch connection was disconnected, so late console-log subscribers keep receiving logs for the replacement resource instead of missing updates. A follow-up fix further improves handling of log deduplication for recreated resources.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "🔄",
   "firstMergedAt": "2026-08-10T20:47:33Z",
-  "lastMergedAt": "2026-08-10T20:47:33Z",
+  "lastMergedAt": "2026-08-11T19:13:42Z",
   "name": "Fix missed updates for recreated resources during local run",
   "owner": "karolz-ms",
   "prs": [
-    19199
+    19199,
+    19240
   ]
 }

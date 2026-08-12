@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents DevTunnelOptions.Region and fixes dev tunnel option examples; matched to DevTunnel region configuration changelog entry (PR 14112).",
+  "mergedAt": "2026-08-11T20:06:25Z",
+  "number": 1468,
+  "runDate": "2026-08-12T06:29:24Z",
+  "status": "included",
+  "title": "Fix Dev Tunnels \"Configure dev tunnel options\" examples and document Region"
+}

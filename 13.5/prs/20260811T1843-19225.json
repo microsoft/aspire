@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19215. Fixes metric label selection behavior in dashboard charts.",
+  "mergedAt": "2026-08-11T18:43:13Z",
+  "number": 19225,
+  "runDate": "2026-08-12T06:29:24Z",
+  "status": "included",
+  "title": "[release/13.5] Fix metric label selection behavior"
+}

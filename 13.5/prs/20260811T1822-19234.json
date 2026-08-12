@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #18999. New user-facing fix separating regular args from launch tool entrypoint args.",
+  "mergedAt": "2026-08-11T18:22:54Z",
+  "number": 19234,
+  "runDate": "2026-08-12T06:29:24Z",
+  "status": "included",
+  "title": "[release/13.5] Separate regular arguments from launch tool (\"entrypoint\") arguments"
+}

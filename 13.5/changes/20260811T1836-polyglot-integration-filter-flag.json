@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed `aspire add`, `aspire integration list`, and `aspire integration search` returning no results in polyglot (non-C#) AppHosts because the polyglot compatibility filter relied on `tags:polyglot` NuGet queries that remote feeds don't answer reliably. The filter is now gated behind an off-by-default `features.polyglotIntegrationFilterEnabled` flag.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-08-11T18:35:59Z",
+  "lastMergedAt": "2026-08-11T18:35:59Z",
+  "name": "Gate polyglot integration filtering behind an off-by-default feature flag",
+  "owner": "mitchdenny",
+  "prs": [
+    19233
+  ]
+}

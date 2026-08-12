@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed persistent resources configured with port 0 (meaning \"automatically allocate a port\") being incorrectly treated as if a specific port had been prescribed by the app host code, which could prevent proper port allocation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-08-11T19:08:55Z",
+  "lastMergedAt": "2026-08-11T19:08:55Z",
+  "name": "Fix persistent resources using port 0 (auto-allocated)",
+  "owner": "karolz-ms",
+  "prs": [
+    19218
+  ]
+}

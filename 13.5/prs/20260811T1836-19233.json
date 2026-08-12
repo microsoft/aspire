@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19222. Fixes polyglot AppHost integration discovery returning no results.",
+  "mergedAt": "2026-08-11T18:35:59Z",
+  "number": 19233,
+  "runDate": "2026-08-12T06:29:24Z",
+  "status": "included",
+  "title": "[release/13.5] Gate polyglot integration filtering behind an off-by-default feature flag"
+}

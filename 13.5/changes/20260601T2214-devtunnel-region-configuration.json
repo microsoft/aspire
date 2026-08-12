@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
@@ -8,9 +8,11 @@
     "@kola-tm"
   ],
   "description": "Added a Region property to DevTunnelOptions, allowing you to specify the region where the dev tunnel is created. The fully qualified tunnel ID now includes the region.",
-  "docsPrs": [],
+  "docsPrs": [
+    1468
+  ],
   "docsRequired": true,
-  "emoji": "\ud83c\udf0d",
+  "emoji": "🌍",
   "firstMergedAt": "2026-06-01T22:14:59Z",
   "lastMergedAt": "2026-06-01T22:14:59Z",
   "name": "DevTunnel region configuration",
