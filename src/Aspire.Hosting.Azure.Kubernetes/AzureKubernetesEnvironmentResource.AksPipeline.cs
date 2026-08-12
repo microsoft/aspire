@@ -741,16 +741,31 @@ public partial class AzureKubernetesEnvironmentResource
                 $"az resource list failed (exit code {result.ExitCode}): {result.StandardError}");
         }
 
-        var resourceGroup = result.StandardOutput.Trim().ReplaceLineEndings("").Trim();
+        // With '-o tsv' the query emits one resource group per matching cluster, newline separated:
+        //   my-rg
+        //   other-rg
+        // A cluster name is only unique within a resource group, not within a subscription, so the
+        // query can legitimately return several rows. Picking one would silently deploy into, and
+        // hand back credentials for, an unrelated cluster.
+        var resourceGroups = result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (string.IsNullOrEmpty(resourceGroup))
+        if (resourceGroups.Length == 0)
         {
             throw new InvalidOperationException(
                 $"Could not resolve resource group for AKS cluster '{clusterName}'. " +
                 "Ensure Azure provisioning has completed.");
         }
 
-        return resourceGroup;
+        if (resourceGroups.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"Found {resourceGroups.Length} AKS clusters named '{clusterName}' in subscription " +
+                $"'{subscriptionId}' (resource groups: {string.Join(", ", resourceGroups)}). " +
+                "Specify which one to use by calling AsExistingInResourceGroup on the resource.");
+        }
+
+        return resourceGroups[0];
     }
 
     /// <summary>
@@ -787,7 +802,7 @@ public partial class AzureKubernetesEnvironmentResource
         => $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\"";
 
     internal static string BuildResourceGroupQueryArguments(string subscriptionId, string clusterName)
-        => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
+        => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
 
     /// <summary>
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
