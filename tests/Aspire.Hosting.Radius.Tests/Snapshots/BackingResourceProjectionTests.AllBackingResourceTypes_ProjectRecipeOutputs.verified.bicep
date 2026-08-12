@@ -134,7 +134,7 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
         image: 'myapp/api:latest'
         env: {
           ConnectionStrings__cache: {
-            value: '${cache.properties.host}:${cache.properties.port},password=${cache.listSecrets().password}'
+            value: '${cache.properties.host}:${cache.properties.port},password='
           }
           CACHE_HOST: {
             value: cache.properties.host
@@ -143,10 +143,10 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: string(cache.properties.port)
           }
           CACHE_PASSWORD: {
-            value: cache.listSecrets().password
+            value: ''
           }
           CACHE_URI: {
-            value: 'redis://:${uriComponent(cache.listSecrets().password)}@${cache.properties.host}:${cache.properties.port}'
+            value: 'redis://:@${cache.properties.host}:${cache.properties.port}'
           }
           ConnectionStrings__pgdb: {
             value: 'Host=${pg.properties.host};Port=${pg.properties.port};Username=postgres;Password=${pg_password};Database=pgdb'

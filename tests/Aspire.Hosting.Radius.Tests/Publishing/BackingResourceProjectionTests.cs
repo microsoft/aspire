@@ -117,8 +117,21 @@ public class BackingResourceProjectionTests
 
     /// <summary>
     /// Aspire's generated password is meaningless for a legacy backing resource - the recipe
-    /// generates its own - so the parameter must not be emitted as the value a consumer reads.
+    /// generates its own, or (Redis) provisions none at all - so the parameter must not be emitted
+    /// as the value a consumer reads.
     /// </summary>
+    /// <remarks>
+    /// Redis is deliberately the subject because it is the strongest form of the guarantee: its
+    /// recipe deploys an unauthenticated server, so the correct emitted credential is empty and any
+    /// `cache_password` in the document would be a leak of a run-mode-only value. Read the snapshot
+    /// with that in mind - the empty `password=` in `ConnectionStrings__cache` is the *projected*
+    /// value, not a redaction, and this file therefore says nothing about the `listSecrets()` path.
+    /// That path is pinned for the types that do have a recipe-generated credential by
+    /// <see cref="AllBackingResourceTypes_ProjectRecipeOutputs"/> (Mongo, RabbitMQ, SQL Server) and
+    /// asserted directly - so an upstream change to a connection-string format cannot silently
+    /// erase it - by <c>BackingResourceValueResolutionTests.UriFormattedValues_AreEscapedInTheEmittedBicep</c>
+    /// and <c>BackingResourceValueResolutionTests.RedisPasswordIsNotProjected_BecauseTheRecipeDeploysAnUnauthenticatedServer</c>.
+    /// </remarks>
     [Fact]
     public Task LegacyBackingResource_DoesNotLeakAspireGeneratedPasswordParameter()
     {
