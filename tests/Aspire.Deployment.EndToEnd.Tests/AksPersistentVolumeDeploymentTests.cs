@@ -44,7 +44,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("akspv");
         var projectName = "AksPersistentVolume";
