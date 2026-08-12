@@ -296,10 +296,14 @@ public partial class AzureKubernetesEnvironmentResource
                     "☸ AKS Cluster",
                     new MarkdownString($"**{clusterName}** in resource group **{resourceGroup}**"));
 
+                // Quote the values: ValidateAzureResourceName permits parentheses in resource group
+                // names, and an unquoted `team(prod)` is a syntax error in bash and zsh. This hint is
+                // advertised as copy-pasteable, so it has to survive the same names the real
+                // invocation built by BuildGetCredentialsArguments already handles.
                 context.Summary.Add(
                     "🔑 Connect to cluster",
                     new MarkdownString(
-                        $"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName} --subscription {subscriptionId}`"));
+                        $"`az aks get-credentials --resource-group '{resourceGroup}' --name '{clusterName}' --subscription {subscriptionId}`"));
 
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
@@ -596,25 +600,6 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
-    /// Gets the current Azure subscription and resource group from deployment state.
-    /// </summary>
-    internal static async Task<(string SubscriptionId, string? ResourceGroup)> GetAzureDeploymentContextAsync(
-        IServiceProvider services,
-        CancellationToken cancellationToken)
-    {
-        var (subscriptionId, resourceGroup) = await TryGetAzureDeploymentStateAsync(services, cancellationToken).ConfigureAwait(false);
-
-        if (string.IsNullOrEmpty(subscriptionId))
-        {
-            throw new InvalidOperationException(
-                "Could not resolve the Azure subscription selected for deployment. " +
-                "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
-        }
-
-        return (subscriptionId, resourceGroup);
-    }
-
-    /// <summary>
     /// Reads the global Azure deployment state without requiring a subscription to be present.
     /// </summary>
     internal static async Task<(string? SubscriptionId, string? ResourceGroup)> TryGetAzureDeploymentStateAsync(
@@ -711,11 +696,21 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
-    /// Gets the resource group, trying deployment state first, falling back to an Azure CLI query.
+    /// Gets the resource group the cluster lives in, preferring an already-resolved one and falling
+    /// back to an Azure CLI query.
     /// </summary>
     /// <remarks>
+    /// <paramref name="savedResourceGroup"/> is the resource group from the resolved deployment
+    /// scope, which may have come from <c>AzureBicepResource.Scope</c> or an
+    /// <c>ExistingAzureResourceAnnotation</c> rather than from deployment state. It is null when the
+    /// resource group is genuinely unknown: either deployment state predates it being recorded, or
+    /// <see cref="ResolveDeploymentScopeAsync"/> deliberately dropped it because the resource pins a
+    /// different subscription than the app deploys into, where the saved name would be meaningless
+    /// or, worse, match an unrelated group.
+    /// <para>
     /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the Azure CLI
-    /// fallback is scoped to the deployment subscription without invoking the real az CLI.
+    /// fallback is scoped to the resolved subscription without invoking the real az CLI.
+    /// </para>
     /// </remarks>
     internal static async Task<string> GetResourceGroupAsync(
         string azPath,
@@ -730,8 +725,8 @@ public partial class AzureKubernetesEnvironmentResource
             return savedResourceGroup;
         }
 
-        // Older or incomplete deployment state may not contain the resource group. Keep the
-        // Azure query scoped to the subscription selected by Aspire rather than the CLI default.
+        // Keep the query scoped to the resolved subscription rather than the CLI default, otherwise
+        // a same-named cluster in the ambient subscription could be picked up instead.
         logger.LogDebug(
             "Resource group not in deployment state, querying Azure for cluster '{ClusterName}'",
             clusterName);
