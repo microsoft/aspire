@@ -740,9 +740,7 @@ async function main() {
     throw testFailure;
   }
 
-  if (completedTests) {
-    printSuccessDiagnosticsSummary();
-  }
+  printSuccessDiagnosticsSummary();
 }
 
 async function runCleanupStep(name, action, cleanupErrors) {

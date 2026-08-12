@@ -260,6 +260,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('let cleanupFailed = false;'));
         assert.ok(runner.includes('cleanupFailed = true;'));
         assert.ok(runner.includes('if (allowTestFailure && hasCompletedMochaTestFailures(readMochaResults()) && !cleanupFailed)'));
+        assert.strictEqual(runner.includes('completedTests'), false);
     });
 
     test('keeps Linux E2E recordings for successful runs by default', () => {
