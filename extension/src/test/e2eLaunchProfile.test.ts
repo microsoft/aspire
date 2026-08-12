@@ -516,7 +516,7 @@ suite('E2E launch profile', () => {
         assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
-    test('gates slow AppHost discovery before asserting transient loading UI', () => {
+    test('waits for durable AppHost discovery gates before asserting running state', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
@@ -524,19 +524,26 @@ suite('E2E launch profile', () => {
 
         assert.ok(fixtures.includes('writeGatedStreamingDiscoveryCliWrapper'));
         assert.ok(fixtures.includes('function waitForReleaseFile'));
+        assert.ok(fixtures.includes('waitForPsSnapshotRequest: () => waitForPath(psSnapshotRequestFilePath, 30_000)'));
+        assert.ok(fixtures.includes('waitForLsCandidateRequest: () => waitForPath(lsCandidateRequestFilePath, 30_000)'));
         assert.ok(appHostTree.includes('writeGatedStreamingDiscoveryCliWrapper'));
         assert.ok(appHostTree.includes('discoveryGate.releasePsSnapshot();'));
         assert.ok(appHostTree.includes('discoveryGate.releaseLsCandidate();'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForWorkspaceRediscoveryLoading'));
 
         const cleanupIndex = runningBeforeDiscoveryTest.indexOf('finally {');
         assert.ok(cleanupIndex >= 0, 'Expected the E2E to keep cleanup releases in a finally block.');
         const testBeforeCleanup = runningBeforeDiscoveryTest.slice(0, cleanupIndex);
-        const loadingIndex = testBeforeCleanup.indexOf('await waitForWorkspaceRediscoveryLoading');
+        const waitForPsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForPsSnapshotRequest();');
+        const waitForLsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForLsCandidateRequest();');
+        const runningStateIndex = testBeforeCleanup.indexOf('const runningBeforeDiscovery = await waitForExtensionState');
         const releasePsIndex = testBeforeCleanup.indexOf('discoveryGate.releasePsSnapshot();');
         const releaseLsIndex = testBeforeCleanup.indexOf('discoveryGate.releaseLsCandidate();');
 
-        assert.ok(loadingIndex >= 0, 'The E2E must wait for the transient loading UI before releasing the running AppHost snapshot.');
-        assert.ok(releasePsIndex > loadingIndex, 'The running AppHost snapshot must be released after the loading UI has been observed.');
+        assert.ok(waitForPsRequestIndex >= 0, 'The E2E must wait until the running AppHost snapshot reaches its gate.');
+        assert.ok(waitForLsRequestIndex > waitForPsRequestIndex, 'The E2E must wait until workspace discovery reaches its gate.');
+        assert.ok(runningStateIndex > waitForLsRequestIndex, 'The running AppHost must be asserted only after both refresh paths are gated.');
+        assert.ok(releasePsIndex > runningStateIndex, 'The running AppHost snapshot must remain gated until the running AppHost is observed.');
         assert.ok(releaseLsIndex > releasePsIndex, 'The slow workspace candidate must be released after the running AppHost snapshot.');
     });
 

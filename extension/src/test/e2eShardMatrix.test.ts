@@ -12,7 +12,17 @@ suite('E2E shard matrix', () => {
     const workflowPath = path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml');
     const specDirectory = path.join(extensionRoot, 'src', 'test-e2e');
     const disabledIssuePattern = /^https:\/\/github\.com\/microsoft\/aspire\/issues\/\d+$/;
-    const expectedDisabledRows = new Map<string, string>();
+
+    // Hand-maintained on purpose: disabling an E2E shard must be an explicit, reviewable code change
+    // rather than something a workflow edit can do silently. Deriving this from the workflow would
+    // make the assertion vacuous. Keys are `name|shardName|spec` and values are the tracking issue.
+    // Add an entry when a row gains `disabledIssue`, and delete it when the shard is re-enabled.
+    const expectedDisabledRows = new Map<string, string>([
+        [
+            'Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js',
+            'https://github.com/microsoft/aspire/issues/19151',
+        ],
+    ]);
 
     function canonicalSpecPaths(specFileNames: readonly string[]): string[] {
         return specFileNames

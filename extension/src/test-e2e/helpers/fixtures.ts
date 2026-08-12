@@ -242,8 +242,16 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
     });
 }
 
-export function writeGatedStreamingDiscoveryCliWrapper(): { cliPath: string; releasePsSnapshot: () => void; releaseLsCandidate: () => void } {
+export function writeGatedStreamingDiscoveryCliWrapper(): {
+    cliPath: string;
+    waitForPsSnapshotRequest: () => Promise<void>;
+    waitForLsCandidateRequest: () => Promise<void>;
+    releasePsSnapshot: () => void;
+    releaseLsCandidate: () => void;
+} {
     const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-streaming-discovery');
+    const psSnapshotRequestFilePath = path.join(gateDirectory, 'ps-snapshot-request');
+    const lsCandidateRequestFilePath = path.join(gateDirectory, 'ls-candidate-request');
     const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
     const lsCandidateReleaseFilePath = path.join(gateDirectory, 'release-ls-candidate');
     removePath(gateDirectory, { recursive: true, force: true });
@@ -258,12 +266,16 @@ export function writeGatedStreamingDiscoveryCliWrapper(): { cliPath: string; rel
             selected: true,
         },
         streamedLsDelayMs: 5_000,
+        streamedLsRequestFilePath: lsCandidateRequestFilePath,
         streamedLsReleaseFilePath: lsCandidateReleaseFilePath,
+        psSnapshotRequestFilePath,
         psSnapshotReleaseFilePath,
     });
 
     return {
         cliPath,
+        waitForPsSnapshotRequest: () => waitForPath(psSnapshotRequestFilePath, 30_000),
+        waitForLsCandidateRequest: () => waitForPath(lsCandidateRequestFilePath, 30_000),
         releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
         releaseLsCandidate: () => writeFileWithRetry(lsCandidateReleaseFilePath, ''),
     };
@@ -763,10 +775,12 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        streamedLsRequestFilePath?: string;
         streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
+        psSnapshotRequestFilePath?: string;
         psSnapshotReleaseFilePath?: string;
     },
 ): string {
@@ -814,6 +828,7 @@ ${options.streamedLsInvocationLogPath === undefined ? '' : `  fs.appendFileSync(
     process.exit(126);
   }
 
+${options.streamedLsRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.streamedLsRequestFilePath)}, '');`}
 ${options.streamedLsReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.streamedLsReleaseFilePath)}, 'streamed ls candidate');`}
   setTimeout(() => {
     console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
@@ -822,6 +837,7 @@ ${options.streamedLsReleaseFilePath === undefined ? '' : `  waitForReleaseFile($
 }
 else {`}
 if (args[0] === 'ps') {
+${options.psSnapshotRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.psSnapshotRequestFilePath)}, '');`}
 ${options.psSnapshotReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.psSnapshotReleaseFilePath)}, 'ps snapshot');`}
   if (!args.includes('--follow')) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});

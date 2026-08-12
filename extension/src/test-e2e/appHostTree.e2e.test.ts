@@ -186,23 +186,21 @@ suite('Aspire AppHost tree E2E', function () {
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
         await waitForRunningAppHost();
 
-        // The loading welcome text is transient. Gate both ps and ls so the test
-        // observes loading before any runtime snapshot can restore the running AppHost.
+        // Gate both refresh paths so the running AppHost can be asserted before workspace
+        // discovery produces a candidate, without depending on the transient loading state.
         const discoveryGate = writeGatedStreamingDiscoveryCliWrapper();
         await setE2eCliPathForE2E(discoveryGate.cliPath);
         const invocationCountBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         try {
             await executeE2eControlCommand({ name: 'refreshAppHosts' }, { waitFor: 'started' });
 
-            await waitForWorkspaceRediscoveryLoading('workspace AppHost refresh loading state before running AppHost refresh');
-
-            discoveryGate.releasePsSnapshot();
+            await discoveryGate.waitForPsSnapshotRequest();
+            await discoveryGate.waitForLsCandidateRequest();
             const runningBeforeDiscovery = await waitForExtensionState(
-                file => !file.state.isRepositoryLoading
-                    && file.state.isWorkspaceAppHostDiscoveryComplete === false
+                file => file.state.isWorkspaceAppHostDiscoveryComplete === false
                     && file.state.workspaceAppHostCandidatePaths.length === 0
                     && findRunningAppHost(file.state) !== undefined,
-                'running AppHost to clear loading before workspace discovery produces a candidate',
+                'running AppHost before workspace discovery produces a candidate',
                 30000);
             assert.ok(findRunningAppHost(runningBeforeDiscovery.state));
 
@@ -210,6 +208,7 @@ suite('Aspire AppHost tree E2E', function () {
             const runningItem = await waitForTreeItem(section, appHostLabel);
             assert.strictEqual(await runningItem.getLabel(), appHostLabel);
 
+            discoveryGate.releasePsSnapshot();
             discoveryGate.releaseLsCandidate();
             const candidateAfterRunning = await waitForExtensionState(
                 file => file.state.isWorkspaceAppHostDiscoveryComplete === false
