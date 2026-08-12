@@ -969,7 +969,7 @@ internal sealed class ProjectLocator(
                     else if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.None)
                     {
                         logger.LogDebug("Multiple AppHost project files found in directory {Directory}, selecting none", directory.FullName);
-                        projectFile = null;
+                        return new AppHostProjectSearchResult(null, appHostProjects);
                     }
                     else if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw)
                     {
