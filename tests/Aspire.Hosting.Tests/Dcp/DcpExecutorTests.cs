@@ -4627,6 +4627,43 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectResource_WithDotnetToolRunLaunchArgs_DoesNotInjectProjectLaunchOptions_InProcessMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http")
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/project"
+            })
+            .WithLaunchToolArgs(ctx =>
+            {
+                ctx.Args.Add("tool");
+                ctx.Args.Add("run");
+                ctx.Args.Add("package");
+                ctx.Args.Add("--");
+            })
+            .WithArgs("app-arg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        var expectedArgs = new[] { "tool", "run", "package", "--", "--profile-arg", "profile value", "app-arg" };
+
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Equal(expectedArgs, argAnnotations.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+    }
+
+    [Fact]
     public async Task ProjectResource_EmptyLaunchToolArgs_KeepsDotnetRunScaffolding_InProcessMode()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -6116,7 +6153,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_CustomIdeLaunch_OwnedLaunchToolArgsPreserveLaunchProfileArgs()
+    public async Task ProjectResource_CustomIdeLaunch_OwnedDotnetToolRunArgsPreserveLaunchProfileArgs()
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
@@ -6132,6 +6169,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 static context =>
                 {
                     context.Args.Add("tool");
+                    context.Args.Add("run");
+                    context.Args.Add("package");
                     context.Args.Add("--");
                 },
                 ownedByLaunchConfigurationType: "custom")
@@ -6160,8 +6199,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
-        Assert.Equal(["tool", "--", "--profile-arg", "profile value", "app-arg"], displayArgs.Select(a => a.Argument));
-        Assert.All(displayArgs.Take(2), argument => Assert.Null(argument.EffectiveArgumentIndex));
+        Assert.Equal(["tool", "run", "package", "--", "--profile-arg", "profile value", "app-arg"], displayArgs.Select(a => a.Argument));
+        Assert.All(displayArgs.Take(4), argument => Assert.Null(argument.EffectiveArgumentIndex));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
