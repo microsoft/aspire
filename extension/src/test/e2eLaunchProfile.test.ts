@@ -231,14 +231,12 @@ suite('E2E launch profile', () => {
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
         const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
-        const skipNoticeIndex = workflow.indexOf('Note skipped Azure Functions E2E shard');
         const runStepIndex = workflow.indexOf('- name: Run extension E2E tests');
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const runStep = workflow.slice(runStepIndex, uploadStepIndex);
 
         assert.ok(workflow.includes('shardName: azure-functions'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
-        assert.ok(workflow.includes("disabledIssue: 'https://github.com/microsoft/aspire/issues/19151'"));
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
         assert.ok(workflow.includes('vscode-azureresourcegroups/0.12.7/vspackage'));
@@ -250,9 +248,18 @@ suite('E2E launch profile', () => {
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
-        assert.ok(skipNoticeIndex >= 0);
-        assert.ok(runStepIndex > skipNoticeIndex);
-        assert.ok(runStep.includes('if: ${{ !matrix.disabledIssue }}'));
+        assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE: ${{ matrix.allowFailure }}'));
+        assert.strictEqual(runStep.includes('continue-on-error:'), false);
+    });
+
+    test('allows completed E2E test failures without hiding setup or cleanup failures', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+
+        assert.ok(runner.includes("const allowTestFailure = process.env.ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE === 'true';"));
+        assert.ok(runner.includes('let cleanupFailed = false;'));
+        assert.ok(runner.includes('cleanupFailed = true;'));
+        assert.ok(runner.includes('if (allowTestFailure && hasCompletedMochaTestFailures(readMochaResults()) && !cleanupFailed)'));
     });
 
     test('keeps Linux E2E recordings for successful runs by default', () => {

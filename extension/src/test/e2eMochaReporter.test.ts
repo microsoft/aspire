@@ -50,6 +50,31 @@ suite('E2E Mocha reporter', () => {
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
     });
+
+    test('only classifies completed test failures as advisory', () => {
+        const { hasCompletedMochaTestFailures } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
+        const failedTest = {
+            title: 'starts an AppHost',
+            fullTitle: 'Aspire E2E starts an AppHost',
+        };
+
+        assert.strictEqual(hasCompletedMochaTestFailures({
+            tests: [failedTest],
+            failures: [failedTest],
+        }), true);
+        assert.strictEqual(hasCompletedMochaTestFailures(undefined), false);
+        assert.strictEqual(hasCompletedMochaTestFailures({
+            tests: [],
+            failures: [{ title: '"before all" hook', fullTitle: 'Aspire E2E "before all" hook' }],
+        }), false);
+        assert.strictEqual(hasCompletedMochaTestFailures({
+            tests: [failedTest],
+            failures: [
+                failedTest,
+                { title: '"after all" hook', fullTitle: 'Aspire E2E "after all" hook' },
+            ],
+        }), false);
+    });
 });
 
 function createReporterTest(title: string) {

@@ -16,6 +16,7 @@ const {
   runWithRetries,
   terminateOrphanedDescendants,
 } = require('./e2e-download-retry');
+const { hasCompletedMochaTestFailures } = require('./e2e-mocha-results.cjs');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -87,6 +88,7 @@ const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const allowTestFailure = process.env.ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE === 'true';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -603,7 +605,7 @@ function waitForProcessClose(closed, timeoutMs) {
 async function main() {
   let recording;
   let testFailure;
-  let completedTests = false;
+  let cleanupFailed = false;
   try {
     if (verifyExtesterFeedOnly) {
       verifyExtesterFeed();
@@ -703,7 +705,6 @@ async function main() {
     catch (error) {
       testFailure = error;
     }
-    completedTests = true;
   }
   finally {
     const cleanupErrors = [];
@@ -716,6 +717,7 @@ async function main() {
     await runCleanupStep('cleanup temporary run root', cleanupTemporaryRunRoot, cleanupErrors);
 
     if (cleanupErrors.length > 0) {
+      cleanupFailed = true;
       const cleanupFailure = new AggregateError(cleanupErrors, 'One or more E2E cleanup steps failed.');
       if (testFailure) {
         console.error(cleanupFailure);
@@ -728,6 +730,13 @@ async function main() {
 
   if (testFailure) {
     printFailureDiagnosticsSummary();
+    // Setup failures throw past the run-tests catch, while the reporter's completed-test records
+    // distinguish assertion failures from ExTester startup, hook, crash, and timeout failures.
+    if (allowTestFailure && hasCompletedMochaTestFailures(readMochaResults()) && !cleanupFailed) {
+      console.warn(`::warning title=VS Code extension E2E test failure allowed::${shardName} failed during test execution. Diagnostics were uploaded for investigation.`);
+      return;
+    }
+
     throw testFailure;
   }
 

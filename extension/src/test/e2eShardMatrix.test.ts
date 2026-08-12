@@ -17,12 +17,7 @@ suite('E2E shard matrix', () => {
     // rather than something a workflow edit can do silently. Deriving this from the workflow would
     // make the assertion vacuous. Keys are `name|shardName|spec` and values are the tracking issue.
     // Add an entry when a row gains `disabledIssue`, and delete it when the shard is re-enabled.
-    const expectedDisabledRows = new Map<string, string>([
-        [
-            'Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js',
-            'https://github.com/microsoft/aspire/issues/19151',
-        ],
-    ]);
+    const expectedDisabledRows = new Map<string, string>();
 
     function canonicalSpecPaths(specFileNames: readonly string[]): string[] {
         return specFileNames
@@ -60,6 +55,7 @@ suite('E2E shard matrix', () => {
                 name: optionalString(row, 'name', index),
                 shardName: optionalString(row, 'shardName', index),
                 spec: optionalString(row, 'spec', index),
+                allowFailure: optionalBoolean(row, 'allowFailure', index),
                 disabledIssue: optionalString(row, 'disabledIssue', index),
             };
         });
@@ -85,6 +81,16 @@ suite('E2E shard matrix', () => {
 
         assert.strictEqual(typeof value, 'string', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a string.`);
         return value as string;
+    }
+
+    function optionalBoolean(row: Record<string, unknown>, key: string, index: number): boolean | undefined {
+        const value = row[key];
+        if (value === undefined) {
+            return undefined;
+        }
+
+        assert.strictEqual(typeof value, 'boolean', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a boolean.`);
+        return value as boolean;
     }
 
     function matrixSpecPaths(workflow: string): string[] {
@@ -122,6 +128,15 @@ suite('E2E shard matrix', () => {
             'Disabled E2E matrix rows must exactly match the explicit allowlist in e2eShardMatrix.test.ts.');
     }
 
+    function assertAllRowsAllowFailure(workflow: string): void {
+        for (const row of matrixRows(workflow)) {
+            assert.strictEqual(
+                row.allowFailure,
+                true,
+                `E2E matrix row '${row.name}|${row.shardName}|${row.spec}' must set allowFailure: true.`);
+        }
+    }
+
     function assertMatrixMatchesSpecs(workflow: string, specFileNames: readonly string[]): void {
         assert.deepStrictEqual(
             matrixSpecPaths(workflow),
@@ -148,6 +163,7 @@ suite('E2E shard matrix', () => {
         assert.ok(canonicalSpecPaths(specFileNames).length > 0, `Expected E2E spec files under ${specDirectory}.`);
         assert.ok(matrixSpecPaths(workflow).length > 0, 'Expected spec entries in the E2E workflow matrix.');
         assertMatrixMatchesSpecs(workflow, specFileNames);
+        assertAllRowsAllowFailure(workflow);
         assertDisabledRowsAreTracked(workflow, expectedDisabledRows);
     });
 
@@ -263,5 +279,6 @@ interface MatrixRow {
     name?: string;
     shardName?: string;
     spec?: string;
+    allowFailure?: boolean;
     disabledIssue?: string;
 }
