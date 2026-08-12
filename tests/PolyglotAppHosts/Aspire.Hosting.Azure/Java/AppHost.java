@@ -32,7 +32,11 @@ void main() throws Exception {
         inlineBicep.clearDefaultRoleAssignments();
         inlineBicep.getBicepIdentifier();
         inlineBicep.isExisting();
-        var infrastructure = builder.addAzureInfrastructure("infra", (infrastructureContext) -> { });
+        var infrastructure = builder.addAzureInfrastructure("infra", (infrastructureContext) -> {
+                var result = new AzureInfrastructureCustomizationResult();
+                result.setInfrastructureJson(infrastructureContext.getInfrastructureJson());
+                return result;
+        });
         var infrastructureOutput = infrastructure.getOutput("serviceUrl");
         infrastructureOutput.name();
         infrastructureOutput.value();
@@ -55,7 +59,11 @@ void main() throws Exception {
         infrastructure.publishAsExisting(existingName, existingResourceGroup);
         infrastructure.asExisting(existingName, existingResourceGroup);
         var identity = builder.addAzureUserAssignedIdentity("identity");
-        identity.configureInfrastructure((infrastructureContext) -> { });
+        identity.configureInfrastructure((infrastructureContext) -> {
+                var result = new AzureInfrastructureCustomizationResult();
+                result.setInfrastructureJson(infrastructureContext.getInfrastructureJson());
+                return result;
+        });
         identity.withParameter("identityEmpty");
         identity.withParameter("identityPlain", "value");
         identity.withParameter("identityList", new String[] { "a", "b" });

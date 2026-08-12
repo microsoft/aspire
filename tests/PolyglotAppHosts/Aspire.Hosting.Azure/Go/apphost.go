@@ -105,9 +105,10 @@ output inlineUrl string = 'https://inline.example.com'
 		log.Fatalf(aspire.FormatError(inlineBicep.Err()))
 	}
 
-	infra := builder.AddAzureInfrastructure("infra", func(ctx aspire.AzureResourceInfrastructure) {
-		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+	infra := builder.AddAzureInfrastructure("infra", func(ctx *aspire.AzureInfrastructureCustomizationContext) *aspire.AzureInfrastructureCustomizationResult {
+		return &aspire.AzureInfrastructureCustomizationResult{
+			InfrastructureJson: ctx.InfrastructureJson,
+		}
 	})
 	if infra.Err() != nil {
 		log.Fatalf(aspire.FormatError(infra.Err()))
@@ -143,9 +144,10 @@ output inlineUrl string = 'https://inline.example.com'
 	if identity.Err() != nil {
 		log.Fatalf(aspire.FormatError(identity.Err()))
 	}
-	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
-		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+	_ = identity.ConfigureInfrastructure(func(ctx *aspire.AzureInfrastructureCustomizationContext) *aspire.AzureInfrastructureCustomizationResult {
+		return &aspire.AzureInfrastructureCustomizationResult{
+			InfrastructureJson: ctx.InfrastructureJson,
+		}
 	})
 
 	identity.WithParameter("identityEmpty")

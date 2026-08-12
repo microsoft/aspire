@@ -39,7 +39,7 @@
     <PackageVersion Include="Microsoft.Extensions.Azure" Version="1.14.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.5.0" />
     <!-- Azure Management SDK for .NET dependencies -->
-    <PackageVersion Include="Azure.Provisioning" Version="1.5.0" />
+    <PackageVersion Include="Azure.Provisioning" Version="1.6.0-alpha.20260413.2" />
     <PackageVersion Include="Azure.Provisioning.AppConfiguration" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.2.0" />
     <PackageVersion Include="Azure.Provisioning.AppService" Version="1.3.1" />

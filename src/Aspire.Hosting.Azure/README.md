@@ -49,6 +49,46 @@ const bicepResource = await builder.addBicepTemplate("bicep", "template.bicep")
                            .withParameter("parametername", "parametervalue");
 ```
 
+## Customize generated Azure infrastructure from TypeScript
+
+TypeScript AppHosts can customize the Azure infrastructure that Aspire generates before deployment. Install the Azure provisioning packages for serialization and for each resource type that the callback modifies:
+
+```bash
+npm install @azure/provisioning-serialization @azure/provisioning-storage
+```
+
+Importing the service package registers its resource types with the deserializer. The callback can then locate typed resources, modify them, and return the serialized infrastructure:
+
+```typescript
+import { deserialize, serialize } from "@azure/provisioning-serialization";
+import { StorageAccount } from "@azure/provisioning-storage";
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+const storage = await builder.addAzureStorage("storage");
+
+await storage.configureInfrastructure(async ({ infrastructureJson }) => {
+    if (!infrastructureJson) {
+        throw new Error("Aspire did not provide the generated infrastructure.");
+    }
+
+    const [infrastructure] = deserialize(infrastructureJson);
+    const storageAccount = infrastructure?.getResources(StorageAccount)[0];
+    if (!storageAccount) {
+        throw new Error("The generated infrastructure did not contain a storage account.");
+    }
+
+    storageAccount.sku = { name: "Standard_LRS" };
+    storageAccount.properties.allowSharedKeyAccess = true;
+
+    return { infrastructureJson: JSON.stringify(serialize([infrastructure])) };
+});
+
+await builder.build().run();
+```
+
+The callback runs when Aspire generates Bicep for deployment. Use compatible versions of the Azure provisioning npm packages and the `Aspire.Hosting.Azure` integration.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

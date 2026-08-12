@@ -1,4 +1,6 @@
-import { createBuilder, DeploymentScope, refExpr } from './.aspire/modules/aspire.mjs';
+import { UserAssignedIdentity } from '@azure/provisioning-managed-identity';
+import { deserialize, serialize } from '@azure/provisioning-serialization';
+import { createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -39,8 +41,23 @@ await inlineBicep.getBicepIdentifier();
 await inlineBicep.isExisting();
 
 const infrastructure = await builder.addAzureInfrastructure("infra", async infrastructureContext => {
-    await infrastructureContext.bicepName();
-    await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
+    if (!infrastructureContext.infrastructureJson) {
+        throw new Error("The infrastructure JSON is required.");
+    }
+
+    const stacks = deserialize(infrastructureContext.infrastructureJson);
+    const stack = stacks[0];
+    if (!stack) {
+        throw new Error("The infrastructure document did not contain a stack.");
+    }
+
+    new UserAssignedIdentity(stack, {
+        name: "polyglotidentity",
+        location: "westus3",
+        tags: { configuredBy: "typescript" }
+    });
+
+    return { infrastructureJson: JSON.stringify(serialize(stacks)) };
 });
 const infrastructureOutput = await infrastructure.getOutput("serviceUrl");
 await infrastructureOutput.name();
@@ -66,8 +83,19 @@ await infrastructure.asExisting(existingName, { resourceGroup: existingResourceG
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
 await identity.configureInfrastructure(async infrastructureContext => {
-    await infrastructureContext.bicepName();
-    await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
+    if (!infrastructureContext.infrastructureJson) {
+        throw new Error("The infrastructure JSON is required.");
+    }
+
+    const stacks = deserialize(infrastructureContext.infrastructureJson);
+    const customizedIdentity = stacks.flatMap(stack => stack.getResources(UserAssignedIdentity))[0];
+    if (!customizedIdentity) {
+        throw new Error("The infrastructure document did not contain a user-assigned identity.");
+    }
+
+    customizedIdentity.tags = { configuredBy: "typescript" };
+
+    return { infrastructureJson: JSON.stringify(serialize(stacks)) };
 });
 await identity.withParameter("identityEmpty");
 await identity.withParameter("identityPlain", { value: "value" });

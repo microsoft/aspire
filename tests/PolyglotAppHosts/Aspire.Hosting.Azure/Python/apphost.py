@@ -4,6 +4,10 @@
 from aspire_app import create_builder
 
 
+def pass_through_infrastructure(context):
+    return {"InfrastructureJson": context["InfrastructureJson"]}
+
+
 with create_builder() as builder:
     builder.add_azure_provisioning("resource")
     location = builder.add_parameter("parameter")
@@ -31,7 +35,7 @@ with create_builder() as builder:
     inline_bicep.clear_default_role_assignments()
     inline_bicep.get_bicep_identifier()
     inline_bicep.is_existing()
-    infrastructure = builder.add_azure_infrastructure("resource")
+    infrastructure = builder.add_azure_infrastructure("resource", pass_through_infrastructure)
     infrastructure_output = infrastructure.get_output()
     infrastructure_output.name.get()
     infrastructure_output.value.get()
@@ -54,7 +58,7 @@ with create_builder() as builder:
     infrastructure.publish_as_existing_from_parameters()
     infrastructure.as_existing()
     identity = builder.add_azure_user_assigned_identity("resource")
-    identity.configure_infrastructure()
+    identity.configure_infrastructure(pass_through_infrastructure)
     identity.with_parameter()
     identity.with_parameter_string_value()
     identity.with_parameter_string_values()

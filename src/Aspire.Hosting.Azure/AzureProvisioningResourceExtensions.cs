@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning;
 using Azure.Provisioning.KeyVault;
 
@@ -21,7 +22,8 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="name">The name of the resource being added.</param>
     /// <param name="configureInfrastructure">A callback used to configure the infrastructure resource.</param>
     /// <returns>A resource builder for the <see cref="AzureProvisioningResource"/> that can be used for further configuration.</returns>
-    [AspireExport]
+    /// <remarks>Polyglot AppHosts use the generated <c>addAzureInfrastructure</c> method with a serialized Azure provisioning infrastructure callback.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the JSON-based addAzureInfrastructure export.")]
     public static IResourceBuilder<AzureProvisioningResource> AddAzureInfrastructure(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     {
         builder.AddAzureProvisioning();
@@ -38,7 +40,8 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">The configuration callback.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport]
+    /// <remarks>Polyglot AppHosts use the generated <c>configureInfrastructure</c> method with a serialized Azure provisioning infrastructure callback.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the JSON-based configureInfrastructure export.")]
     public static IResourceBuilder<T> ConfigureInfrastructure<T>(this IResourceBuilder<T> builder, Action<AzureResourceInfrastructure> configure)
         where T : AzureProvisioningResource
     {
@@ -47,6 +50,39 @@ public static class AzureProvisioningResourceExtensions
 
         builder.Resource.ConfigureInfrastructure += configure;
         return builder;
+    }
+
+    /// <summary>
+    /// Adds an Azure provisioning resource that can be configured through the serialized Azure provisioning model.
+    /// </summary>
+    [AspireExport("addAzureInfrastructureWithJson", MethodName = "addAzureInfrastructure")]
+    internal static IResourceBuilder<AzureProvisioningResource> AddAzureInfrastructureForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        Func<AzureInfrastructureCustomizationContext, AzureInfrastructureCustomizationResult> configureInfrastructure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configureInfrastructure);
+
+        return builder.AddAzureInfrastructure(
+            name,
+            infrastructure => AzureInfrastructureJsonBridge.Transform(infrastructure, configureInfrastructure));
+    }
+
+    /// <summary>
+    /// Configures an Azure provisioning resource through the serialized Azure provisioning model.
+    /// </summary>
+    [AspireExport("configureInfrastructureWithJson", MethodName = "configureInfrastructure")]
+    internal static IResourceBuilder<T> ConfigureInfrastructureForPolyglot<T>(
+        this IResourceBuilder<T> builder,
+        Func<AzureInfrastructureCustomizationContext, AzureInfrastructureCustomizationResult> configure)
+        where T : AzureProvisioningResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        return builder.ConfigureInfrastructure(
+            infrastructure => AzureInfrastructureJsonBridge.Transform(infrastructure, configure));
     }
 
     /// <summary>
