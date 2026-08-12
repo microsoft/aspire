@@ -1,0 +1,38 @@
+{
+  "run_id": 31554526779,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31554526779",
+  "analyzed_at": "2026-08-12T02:19:51Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19125,
+    "title": "Emit DCP session termination when stopping resources",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/issue15426-vscode-session-terminated",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19125"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 93985397445,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31554526779/job/93985397445",
+      "classification": "flaky-test",
+      "reason": "The only failing test is in extension/out/test/e2eShardMatrix.test.js, an E2E extension host test runner file that is unrelated to any file changed in this PR (PR only touched extension/src/dcp/*.ts, extension/src/debugger/AspireDebugSession.ts, and their test files, none of which are e2eShardMatrix.test.js). All unit tests including the DCP session termination tests (AspireDcpServer.test.ts, RunSessionRegistry.test.ts, AspireDebugSession.test.ts) passed. The failure occurs in the Extension host E2E test runner on Windows, an area known for environment-sensitive flakiness (VS Code Electron host startup/teardown).",
+      "failed_steps": ["Run tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "e2eShardMatrix.test.js (Extension host E2E test)",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "error": "1 test failed. Extension host test runner error 1 test failed. (exit code 1)",
+      "stack_trace": "at Context.<anonymous> (d:\\a\\aspire\\aspire\\extension\\out\\test\\e2eShardMatrix.test.js:146:9)\n\tat process.processImmediate (node:internal/timers:504:21)",
+      "classification": "flaky",
+      "reason": "This test file (e2eShardMatrix.test.js) is not part of the PR's changed files; the PR only modified DCP session/debugger source and their dedicated unit test files, all of which passed. The failure is isolated to an unrelated E2E VS Code extension host test on Windows, consistent with known environment-dependent flakiness in the Extension host test runner."
+    }
+  ],
+  "causes": ["extension-e2eshardmatrix-windows-flaky"]
+}

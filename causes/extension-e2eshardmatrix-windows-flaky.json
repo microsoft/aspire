@@ -1,0 +1,17 @@
+{
+  "id": "extension-e2eshardmatrix-windows-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension e2eShardMatrix.test.js fails intermittently on Windows Extension host test runner",
+  "test_name": "extension/src/test/e2eShardMatrix.test.js (Extension host E2E test)",
+  "error_pattern": "1 test failed. Extension host test runner error 1 test failed.\n\tat Context.<anonymous> (d:\\a\\aspire\\aspire\\extension\\out\\test\\e2eShardMatrix.test.js:146:9)\n\tat process.processImmediate (node:internal/timers:504:21)\nExit code: 1",
+  "occurrences": [
+    {
+      "run_id": 31554526779,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31554526779",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19125,
+      "observed_at": "2026-08-12T02:19:51Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19265"
+}
