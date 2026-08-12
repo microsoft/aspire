@@ -113,7 +113,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             : 0;
 
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
-        var (launchArgs, dotnetRunArgumentIndex) = BuildLaunchArgs(
+        var (launchArgs, dotnetProjectLaunchArgumentIndex) = BuildLaunchArgs(
             er,
             spec,
             configuration.Arguments,
@@ -123,7 +123,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             launchToolArgumentsData?.ShowInCommandLine ?? true);
         if (resolvedLaunchToolArgumentCount > 0 || !HasProjectLaunchArgsOverride(er.ModelResource))
         {
-            AddDotnetRunArgsForExecutableAnnotatedProject(launchArgs, dotnetRunArgumentIndex, executableArgumentStartIndex);
+            AddDotnetProjectLaunchArgsForExecutableAnnotatedProject(launchArgs, dotnetProjectLaunchArgumentIndex, executableArgumentStartIndex);
         }
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
@@ -750,7 +750,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
     }
 
-    private static (List<LaunchArgument> LaunchArgs, int? DotnetRunArgumentIndex) BuildLaunchArgs(
+    private static (List<LaunchArgument> LaunchArgs, int? DotnetProjectLaunchArgumentIndex) BuildLaunchArgs(
         RenderedModelResource<Executable> er,
         ExecutableSpec spec,
         IEnumerable<(string Value, bool IsSensitive)> appHostArgs,
@@ -781,12 +781,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             omittedLaunchToolArgumentCount = Math.Max(0, omittedLaunchToolArgumentCount - 1);
         }
 
-        var dotnetRunResourceArgumentIndex = FindExecutableAnnotatedDotnetRunArgumentIndex(
+        var dotnetProjectLaunchResourceArgumentIndex = FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
             er.ModelResource,
             appHostArgList,
             launchToolArgumentCount);
         var launchArgs = new List<LaunchArgument>();
-        int? dotnetRunLaunchArgumentIndex = null;
+        int? dotnetProjectLaunchArgumentIndex = null;
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
         List<string>? projectLaunchProfileArgs = null;
         var includeProfileArgsInSpec = false;
@@ -824,8 +824,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     launchToolArgumentCount == 0 &&
                     HasDotnetApplicationArgumentBoundary())
                 {
-                    // A prepared project command or explicit `dotnet run` invocation needs a double-dash before
-                    // application arguments. Custom IDE launchers receive raw application arguments instead.
+                    // A prepared project command or explicit `dotnet run`/`dotnet watch` invocation needs a
+                    // double-dash before application arguments. Custom IDE launchers receive raw application
+                    // arguments instead.
                     projectLaunchProfileArgs.Insert(0, "--");
                 }
             }
@@ -837,7 +838,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     return true;
                 }
 
-                return dotnetRunResourceArgumentIndex is not null;
+                return dotnetProjectLaunchResourceArgumentIndex is not null;
             }
         }
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
@@ -876,17 +877,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 a.IsSensitive,
                 executable: i >= omittedLaunchToolArgumentCount,
                 display: showLaunchToolArgsInCommandLine || !isLaunchToolArg);
-            if (dotnetRunResourceArgumentIndex == i && launchArgument.Executable)
+            if (dotnetProjectLaunchResourceArgumentIndex == i && launchArgument.Executable)
             {
-                dotnetRunLaunchArgumentIndex = launchArgs.Count;
+                dotnetProjectLaunchArgumentIndex = launchArgs.Count;
             }
             launchArgs.Add(launchArgument);
         }
 
-        return (launchArgs, dotnetRunLaunchArgumentIndex);
+        return (launchArgs, dotnetProjectLaunchArgumentIndex);
     }
 
-    private static int? FindExecutableAnnotatedDotnetRunArgumentIndex(
+    private static int? FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
         IResource resource,
         IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs,
         int launchToolArgumentCount)
@@ -898,15 +899,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return null;
         }
 
-        // A declared launch-tool prefix identifies its complete invocation. Without one, project subtypes such as
-        // MAUI historically place the `run` verb first in ordinary resource args. Do not interpret a later
-        // application argument named "run" as the SDK verb.
+        // Recognize the project-launching SDK verb only at the start of a complete invocation:
+        //   dotnet run ...
+        //   dotnet watch ...
+        // A declared launch-tool prefix identifies that invocation. Without one, project subtypes such as MAUI
+        // historically place the verb first in ordinary resource args. A later value is an application argument,
+        // such as "watch" in `dotnet exec app.dll watch`, and must not be interpreted as the SDK verb.
+        // See https://learn.microsoft.com/dotnet/core/tools/dotnet-run and
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-watch.
         var invocationArgumentCount = launchToolArgumentCount > 0
             ? Math.Min(launchToolArgumentCount, appHostArgs.Count)
             : Math.Min(1, appHostArgs.Count);
         for (var i = 0; i < invocationArgumentCount; i++)
         {
-            if (string.Equals(appHostArgs[i].Value, "run", StringComparison.Ordinal))
+            if (appHostArgs[i].Value is "run" or "watch")
             {
                 return i;
             }
@@ -915,9 +921,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return null;
     }
 
-    private void AddDotnetRunArgsForExecutableAnnotatedProject(List<LaunchArgument> launchArgs, int? dotnetRunArgumentIndex, int executableArgumentStartIndex)
+    private void AddDotnetProjectLaunchArgsForExecutableAnnotatedProject(List<LaunchArgument> launchArgs, int? dotnetProjectLaunchArgumentIndex, int executableArgumentStartIndex)
     {
-        if (dotnetRunArgumentIndex is not { } runIndex)
+        if (dotnetProjectLaunchArgumentIndex is not { } projectLaunchIndex)
         {
             return;
         }
@@ -925,27 +931,27 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         List<LaunchArgument>? launchProfileArgs = null;
         var firstExecutableArgumentIndex = launchArgs.FindIndex(static argument => argument.Executable);
         if (firstExecutableArgumentIndex >= 0 &&
-            runIndex > firstExecutableArgumentIndex &&
+            projectLaunchIndex > firstExecutableArgumentIndex &&
             string.Equals(launchArgs[firstExecutableArgumentIndex].Value, "--", StringComparison.Ordinal))
         {
-            // Executable launch-profile args were composed before the caller-provided `dotnet run` command.
+            // Executable launch-profile args were composed before the caller-provided project launch command.
             // Preserve any non-executable launch-tool display prefix, then move the profile segment after
-            // `dotnet run` so the SDK parses it as application arguments.
-            var launchProfileArgumentCount = runIndex - firstExecutableArgumentIndex;
+            // the project launch command so the SDK parses it as application arguments.
+            var launchProfileArgumentCount = projectLaunchIndex - firstExecutableArgumentIndex;
             launchProfileArgs = launchArgs.GetRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
             launchArgs.RemoveRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
-            runIndex -= launchProfileArgumentCount;
+            projectLaunchIndex -= launchProfileArgumentCount;
         }
 
         var argsToInsert = new List<string>();
         if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration) &&
-            !ContainsDotnetRunOption(launchArgs, "--configuration", "-c"))
+            !ContainsDotnetProjectLaunchOption(launchArgs, "--configuration", "-c"))
         {
             argsToInsert.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
         }
 
-        if (!ContainsDotnetRunOption(launchArgs, "--no-launch-profile") &&
-            !ContainsDotnetRunOption(launchArgs, "--launch-profile"))
+        if (!ContainsDotnetProjectLaunchOption(launchArgs, "--no-launch-profile") &&
+            !ContainsDotnetProjectLaunchOption(launchArgs, "--launch-profile"))
         {
             argsToInsert.Add("--no-launch-profile");
         }
@@ -955,27 +961,27 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return;
         }
 
-        // Some ProjectResource subtypes provide the `dotnet run` command through resource args
+        // Some ProjectResource subtypes provide a `dotnet run` or `dotnet watch` command through resource args
         // instead of using Aspire's default project wrapper. Keep the SDK-shaped command, but
         // preserve the same AppHost configuration and launch-profile suppression that regular
         // process-launched project resources get.
         if (argsToInsert.Count > 0)
         {
-            launchArgs.InsertRange(runIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
+            launchArgs.InsertRange(projectLaunchIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
         }
 
         if (launchProfileArgs is not null)
         {
             // Launch profile args were originally before the app host args, separated by `--`.
-            // Once this path preserves the caller-provided `dotnet run` command, those args must
-            // move after the inserted SDK options so `dotnet run` parses them as application args.
+            // Once this path preserves the caller-provided project launch command, those args must
+            // move after the inserted SDK options so the SDK parses them as application args.
             launchArgs.AddRange(launchProfileArgs);
         }
 
         ReindexExecutableLaunchArgs(launchArgs, executableArgumentStartIndex);
     }
 
-    private static bool ContainsDotnetRunOption(List<LaunchArgument> launchArgs, params string[] options)
+    private static bool ContainsDotnetProjectLaunchOption(List<LaunchArgument> launchArgs, params string[] options)
     {
         var separatorIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "--", StringComparison.Ordinal));
         var endIndex = separatorIndex < 0 ? launchArgs.Count : separatorIndex;
