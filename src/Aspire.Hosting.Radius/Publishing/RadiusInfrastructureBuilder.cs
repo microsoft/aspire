@@ -1907,6 +1907,8 @@ internal sealed class RadiusInfrastructureBuilder
 
         var scheme = endpointReference.EndpointAnnotation.UriScheme;
 
+        ThrowIfTransportSecurityIsNotRecipeBacked(endpointReference, property, resource, radiusType);
+
         switch (property)
         {
             case EndpointProperty.Host or EndpointProperty.IPV4Host:
@@ -1964,6 +1966,52 @@ internal sealed class RadiusInfrastructureBuilder
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a port output, " +
                     $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS079.");
+    }
+
+    /// <summary>
+    /// Rejects a value that would describe the connection's transport security from the Aspire
+    /// endpoint, when the recipe - not Aspire - decides what the deployed workload actually speaks.
+    /// </summary>
+    /// <remarks>
+    /// <c>AddRedis("cache").WithTls()</c> makes the primary endpoint <c>rediss</c> with
+    /// <see cref="EndpointAnnotation.TlsEnabled"/> set, which describes how the container runs
+    /// locally. In publish mode the workload is provisioned by the mapped recipe instead, and no
+    /// currently mapped type publishes a TLS output - <c>local-dev/rediscaches</c>, for example,
+    /// starts plain Redis on 6379. Projecting the Aspire value would emit <c>rediss://</c> and
+    /// <c>ssl=true</c> against a plaintext server, so the consumer fails to connect at run time with
+    /// a handshake error that points at neither the recipe nor the AppHost.
+    /// <para>
+    /// Only the properties that carry the security decision are rejected: <c>Scheme</c>,
+    /// <c>TlsEnabled</c>, and <c>Url</c>, which embeds the scheme. <c>Host</c>, <c>Port</c>, and
+    /// <c>HostAndPort</c> stay projectable - the address is correct regardless of transport, and a
+    /// consumer reading only those connects to exactly the right place.
+    /// </para>
+    /// <para>
+    /// This fails the publish rather than warning because the emitted document is not usable: unlike
+    /// a credential the recipe overrides, there is no value here that becomes right at deploy time.
+    /// When a mapped type does publish a TLS output, this becomes a projection off that output
+    /// instead of a diagnostic.
+    /// </para>
+    /// </remarks>
+    private static void ThrowIfTransportSecurityIsNotRecipeBacked(
+        EndpointReference endpointReference,
+        EndpointProperty property,
+        IResource resource,
+        string radiusType)
+    {
+        if (!endpointReference.EndpointAnnotation.TlsEnabled ||
+            property is not (EndpointProperty.Scheme or EndpointProperty.TlsEnabled or EndpointProperty.Url))
+        {
+            return;
+        }
+
+        throw new RadiusBackingResourceEndpointException(
+            resource,
+            $"Endpoint '{endpointReference.EndpointName}' of resource '{resource.Name}' is TLS-enabled, but the Radius " +
+            $"type '{radiusType}' that provisions it publishes no transport-security output, so '{property}' would " +
+            $"describe how '{resource.Name}' runs locally rather than how the recipe deploys it. Remove the TLS " +
+            $"configuration for publishing, or provision the resource yourself if the deployed workload must use TLS. " +
+            $"Diagnostic: ASPIRERADIUS081.");
     }
 
     /// <summary>
