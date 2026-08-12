@@ -220,10 +220,15 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
                     {
                         context.FirstDatabaseMatch ??= resource;
 
-                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.OrdinalIgnoreCase))
+                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.Ordinal))
                         {
                             resourceMatch = resource;
                             return true;
+                        }
+
+                        if (context.DatabaseName is not null && string.Equals(resourceDatabaseName, context.DatabaseName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            context.CaseInsensitiveDatabaseMatch ??= resource;
                         }
                     }
                     else if (resource.Properties.ContainsKey(KnownProperties.Resource.ConnectionString))
@@ -331,6 +336,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         public ResourceViewModel? FirstAddressMatch { get; set; }
         public ResourceViewModel? FirstServerMatch { get; set; }
         public ResourceViewModel? FirstDatabaseMatch { get; set; }
-        public ResourceViewModel? FallbackMatch => FirstServerMatch ?? FirstDatabaseMatch ?? FirstAddressMatch;
+        public ResourceViewModel? CaseInsensitiveDatabaseMatch { get; set; }
+        public ResourceViewModel? FallbackMatch => CaseInsensitiveDatabaseMatch ?? FirstServerMatch ?? FirstDatabaseMatch ?? FirstAddressMatch;
     }
 }

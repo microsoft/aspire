@@ -97,9 +97,7 @@ public sealed class ResourceViewModel
 
     private string? ExtractDatabaseName()
     {
-        if (Properties.TryGetValue(KnownProperties.Resource.ConnectionProperties, out var connectionPropertiesProperty) &&
-            connectionPropertiesProperty.Value.StructValue is { } connectionProperties &&
-            connectionProperties.Fields.TryGetValue("DatabaseName", out var databaseNameProperty) &&
+        if (TryGetConnectionProperty("DatabaseName", out var databaseNameProperty) &&
             databaseNameProperty.TryConvertToString(out var databaseName))
         {
             return databaseName;
@@ -113,6 +111,33 @@ public sealed class ResourceViewModel
         }
 
         return null;
+    }
+
+    private bool TryGetConnectionProperty(string propertyName, [NotNullWhen(true)] out Value? propertyValue)
+    {
+        if (!Properties.TryGetValue(KnownProperties.Resource.ConnectionProperties, out var connectionPropertiesProperty) ||
+            connectionPropertiesProperty.Value.StructValue is not { } connectionProperties)
+        {
+            propertyValue = null;
+            return false;
+        }
+
+        if (connectionProperties.Fields.TryGetValue(propertyName, out propertyValue))
+        {
+            return true;
+        }
+
+        foreach (var (name, value) in connectionProperties.Fields)
+        {
+            if (string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                propertyValue = value;
+                return true;
+            }
+        }
+
+        propertyValue = null;
+        return false;
     }
 
     public required ImmutableArray<HealthReportViewModel> HealthReports

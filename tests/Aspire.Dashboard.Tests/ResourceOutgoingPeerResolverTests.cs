@@ -148,6 +148,19 @@ public class ResourceOutgoingPeerResolverTests
     }
 
     [Fact]
+    public void DatabaseAttributePrefersExactDatabaseNameMatchOverCaseInsensitiveMatch()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["Catalog"] = CreateResourceWithConnectionString("Catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=Catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalog"] = CreateResourceWithConnectionString("catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "50267"), KeyValuePair.Create("db.namespace", "catalog")], out var value));
+        Assert.Equal("catalog", value);
+    }
+
+    [Fact]
     public void DatabaseAttributeMatchesDatabaseResourceAfterAddressTransformationOverExactContainerResource()
     {
         var resources = new Dictionary<string, ResourceViewModel>
@@ -229,13 +242,15 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("catalogdb", value);
     }
 
-    [Fact]
-    public void DatabaseAttributeMatchesDatabaseNameConnectionProperty()
+    [Theory]
+    [InlineData("DatabaseName")]
+    [InlineData("databaseName")]
+    public void DatabaseAttributeMatchesDatabaseNameConnectionProperty(string databaseNamePropertyName)
     {
         var resources = new Dictionary<string, ResourceViewModel>
         {
-            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "jobsdb"),
-            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "catalogdb")
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "jobsdb", databaseNamePropertyName: databaseNamePropertyName),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "catalogdb", databaseNamePropertyName: databaseNamePropertyName)
         };
 
         Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
@@ -458,7 +473,7 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("key-vault", value);
     }
 
-    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null, string? databaseName = null)
+    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null, string? databaseName = null, string databaseNamePropertyName = "DatabaseName")
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -475,7 +490,7 @@ public class ResourceOutgoingPeerResolverTests
         if (databaseName is not null)
         {
             var connectionProperties = new Struct();
-            connectionProperties.Fields["DatabaseName"] = Value.ForString(databaseName);
+            connectionProperties.Fields[databaseNamePropertyName] = Value.ForString(databaseName);
             properties[KnownProperties.Resource.ConnectionProperties] = new(
                 name: KnownProperties.Resource.ConnectionProperties,
                 value: new Value { StructValue = connectionProperties },
