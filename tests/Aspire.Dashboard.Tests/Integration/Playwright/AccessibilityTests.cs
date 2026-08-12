@@ -212,6 +212,13 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         var hover = await ReadFluentControlColorsAsync(button);
         states.Add(("hover", hover.Foreground, hover.Background));
 
+        Assert.True(
+            RelativeLuminance(hover.Background.R, hover.Background.G, hover.Background.B) <
+                RelativeLuminance(rest.Background.R, rest.Background.G, rest.Background.B),
+            $"Dark accent button hover background should be darker than rest: " +
+            $"rest rgb({rest.Background.R},{rest.Background.G},{rest.Background.B}), " +
+            $"hover rgb({hover.Background.R},{hover.Background.G},{hover.Background.B}).");
+
         await page.Mouse.DownAsync();
         var active = await ReadFluentControlColorsAsync(button);
         states.Add(("active", active.Foreground, active.Background));
