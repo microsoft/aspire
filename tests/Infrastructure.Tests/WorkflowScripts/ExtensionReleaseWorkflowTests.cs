@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text;
 using Aspire.TestUtilities;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
@@ -149,6 +150,18 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.Contains("git log --format='%H%x09%s' --no-merges", preloadStep, StringComparison.Ordinal);
         Assert.Contains("${FROM_SHA}..${TO_SHA}", preloadStep, StringComparison.Ordinal);
         Assert.Contains("-- extension/ >/dev/null 2>&1", preloadStep, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task CompiledWorkflowPreloadScriptHasValidBashSyntax()
+    {
+        var script = GetCompiledWorkflowRunScript("Preload authoritative marker range for local changelog enumeration");
+        var result = await RunBashSyntaxCheckAsync(script);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"Expected compiled preload script to pass 'bash -n'.{Environment.NewLine}{result.Output}");
     }
 
     [Fact]
@@ -377,4 +390,71 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
 
         return index;
     }
+
+    private static string GetCompiledWorkflowRunScript(string stepName)
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(s_changelogWorkflowLockPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+
+        foreach (var jobEntry in jobs.Children)
+        {
+            if (jobEntry.Value is not YamlMappingNode job
+                || !job.Children.TryGetValue(new YamlScalarNode("steps"), out var stepsNode)
+                || stepsNode is not YamlSequenceNode steps)
+            {
+                continue;
+            }
+
+            foreach (var step in steps.Children.OfType<YamlMappingNode>())
+            {
+                if (Scalar(step, "name") == stepName)
+                {
+                    var run = Scalar(step, "run");
+                    Assert.False(string.IsNullOrEmpty(run), $"Expected step '{stepName}' to define a run script.");
+                    return run!;
+                }
+            }
+        }
+
+        Assert.Fail($"Could not find workflow step '{stepName}'.");
+        return null!;
+    }
+
+    private async Task<CommandResult> RunBashSyntaxCheckAsync(string script)
+    {
+        using var process = new Process();
+        process.StartInfo.FileName = "bash";
+        process.StartInfo.ArgumentList.Add("-n");
+        process.StartInfo.WorkingDirectory = RepoRoot.Path;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.RedirectStandardInput = true;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.UseShellExecute = false;
+
+        process.Start();
+        await process.StandardInput.WriteAsync(script);
+        process.StandardInput.Close();
+
+        // Read both streams concurrently to avoid deadlock when bash emits parser diagnostics.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await process.WaitForExitAsync(timeout.Token);
+
+        var output = await stdoutTask + await stderrTask;
+        testOutput.WriteLine(output);
+
+        return new CommandResult(process.ExitCode, output);
+    }
+
+    private static string? Scalar(YamlMappingNode node, string key)
+        => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
+            ? scalar.Value
+            : null;
+
+    private sealed record CommandResult(int ExitCode, string Output);
 }

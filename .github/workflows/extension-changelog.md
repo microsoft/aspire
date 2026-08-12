@@ -159,7 +159,10 @@ pre-agent-steps:
       fi
 
       MARKER_LINE="${MARKERS[0]}"
-      if [[ ! "${MARKER_LINE}" =~ ^<!--\ aspire-ext-changelog\ from=([0-9a-f]{40})\ to=([0-9a-f]{40})\ base=[^>]*\ -->$ ]]; then
+      # Bash parses literal '<' tokens in an inline [[ ... =~ ... ]] regex as syntax, so keep
+      # the HTML comment marker pattern in a variable before matching it.
+      MARKER_REGEX='^<!-- aspire-ext-changelog from=([0-9a-f]{40}) to=([0-9a-f]{40}) base=[^>]* -->$'
+      if [[ ! "${MARKER_LINE}" =~ ${MARKER_REGEX} ]]; then
         echo "::error::Could not parse authoritative marker: ${MARKER_LINE}"
         exit 1
       fi
