@@ -454,6 +454,8 @@ jobs:
             echo "> **Note:** This preparation workflow can also be tested from a fork with \`dry_run=true\`. Dry-run mode resolves the Marketplace baseline, generates the changelog entry, uploads the proposed files as a workflow artifact, and skips bot-token branch/PR creation."
           } > "$WORK_DIR/pr_body.md"
 
+          python3 .github/workflows/extension-release/validate_github_pr_body.py "$WORK_DIR/pr_body.md"
+
       - name: Dry-run summary
         if: ${{ inputs.dry_run }}
         env:
@@ -569,14 +571,11 @@ jobs:
             --color BFD4F2 \
             --description "Bot-created VS Code extension release PR; triggers the extension-changelog agentic workflow." \
             --force >/dev/null 2>&1 || true
-          # Remove then re-add the label so a fresh `labeled` event always fires,
-          # even on a re-run where the label is already present (adding a label
-          # that already exists on the PR is a no-op that fires no event). On a
-          # re-run the release workflow has just force-pushed a new placeholder,
-          # so the downstream changelog workflow must run again. The remove is a
-          # harmless no-op (with `|| true`) when the label isn't present yet, and
-          # the resulting `unlabeled` event is ignored by extension-changelog
-          # (which only triggers on `labeled`).
-          gh pr edit "$PR_NUMBER" --remove-label vscode-extension-release >/dev/null 2>&1 || true
-          gh pr edit "$PR_NUMBER" --add-label vscode-extension-release
+          # Remove then re-add the label only when it is already present so a
+          # re-run emits a fresh `labeled` event. If the label exists but
+          # removal fails, abort instead of silently continuing with a stale
+          # label: adding an already-present label is a no-op that emits no
+          # event, which would leave the new placeholder changelog entry
+          # unprocessed.
+          bash .github/workflows/extension-release/apply_extension_release_trigger_label.sh "$PR_NUMBER"
           echo "✓ Applied 'vscode-extension-release' label to PR #${PR_NUMBER}"

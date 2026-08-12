@@ -20,6 +20,18 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         "workflows",
         "extension-release",
         "generate_deterministic_release_notes.py");
+    private static readonly string s_applyTriggerLabelScriptPath = Path.Combine(
+        RepoRoot.Path,
+        ".github",
+        "workflows",
+        "extension-release",
+        "apply_extension_release_trigger_label.sh");
+    private static readonly string s_prBodyValidatorPath = Path.Combine(
+        RepoRoot.Path,
+        ".github",
+        "workflows",
+        "extension-release",
+        "validate_github_pr_body.py");
 
     [Fact]
     public void ExtensionReleaseWorkflowUsesSharedGeneratorWithoutSilentCapsOrTruncation()
@@ -109,6 +121,18 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             "preload, or required enrichment searches fail outright",
             prompt,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "<!-- aspire-ext-changelog-finalized from=<FROM_SHA> to=<TO_SHA> base=<BASE_VERSION> -->",
+            prompt,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "The pending `aspire-ext-changelog` marker MUST NOT survive",
+            prompt,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "replaced with the finalized marker and your generated notes",
+            prompt,
+            StringComparison.Ordinal);
         Assert.False(
             prompt.Contains("Use the compare API to get the commits between the validated SHAs:", StringComparison.Ordinal),
             "The prompt must not treat API pagination as the authoritative candidate set.");
@@ -119,6 +143,18 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             prompt.Contains("after explicit fetch", StringComparison.Ordinal),
             "The prompt must not describe failure handling in terms of an agent-side fetch that is no longer allowed.");
         Assert.Contains("{{#runtime-import .github/workflows/extension-changelog.md}}", compiledWorkflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExtensionReleaseWorkflowValidatesPrBodyLengthAndRelabelsAtomically()
+    {
+        var workflow = File.ReadAllText(s_releaseWorkflowPath);
+
+        Assert.Contains("validate_github_pr_body.py", workflow, StringComparison.Ordinal);
+        Assert.Contains("apply_extension_release_trigger_label.sh", workflow, StringComparison.Ordinal);
+        Assert.False(
+            workflow.Contains("""gh pr edit "$PR_NUMBER" --remove-label vscode-extension-release >/dev/null 2>&1 || true""", StringComparison.Ordinal),
+            "The workflow must not swallow a failed label removal before re-adding the trigger label.");
     }
 
     [Fact]
@@ -162,6 +198,101 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.True(
             result.ExitCode == 0,
             $"Expected compiled preload script to pass 'bash -n'.{Environment.NewLine}{result.Output}");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task ApplyingTriggerLabelFailsWhenExistingLabelCannotBeRemoved()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("extension-release-label-failure");
+        try
+        {
+            var fakeGh = await CreateFakeGhAsync(tempDirectory.FullName);
+            var result = await RunBashScriptAsync(
+                s_applyTriggerLabelScriptPath,
+                ["123"],
+                new Dictionary<string, string?>
+                {
+                    ["GH_CALL_LOG"] = fakeGh.CallLogPath,
+                    ["GH_HAS_LABEL"] = "true",
+                    ["GH_REMOVE_LABEL_EXIT_CODE"] = "1",
+                    ["PATH"] = fakeGh.PathEnvironment,
+                });
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Failed to remove existing 'vscode-extension-release' label", result.Output, StringComparison.Ordinal);
+            Assert.False(
+                (await File.ReadAllTextAsync(fakeGh.CallLogPath)).Contains("--add-label vscode-extension-release", StringComparison.Ordinal),
+                "The helper must not re-add the label after a failed removal.");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task ApplyingTriggerLabelAddsLabelWithoutRemovingWhenMissing()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("extension-release-label-add");
+        try
+        {
+            var fakeGh = await CreateFakeGhAsync(tempDirectory.FullName);
+            var result = await RunBashScriptAsync(
+                s_applyTriggerLabelScriptPath,
+                ["123"],
+                new Dictionary<string, string?>
+                {
+                    ["GH_CALL_LOG"] = fakeGh.CallLogPath,
+                    ["GH_HAS_LABEL"] = "false",
+                    ["PATH"] = fakeGh.PathEnvironment,
+                });
+
+            Assert.Equal(0, result.ExitCode);
+
+            var callLog = await File.ReadAllTextAsync(fakeGh.CallLogPath);
+            Assert.Contains("pr view 123 --json labels --jq .labels[].name", callLog, StringComparison.Ordinal);
+            Assert.DoesNotContain("--remove-label vscode-extension-release", callLog, StringComparison.Ordinal);
+            Assert.Contains("pr edit 123 --add-label vscode-extension-release", callLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task ApplyingTriggerLabelReAddsExistingLabelAfterSuccessfulRemoval()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("extension-release-label-readd");
+        try
+        {
+            var fakeGh = await CreateFakeGhAsync(tempDirectory.FullName);
+            var result = await RunBashScriptAsync(
+                s_applyTriggerLabelScriptPath,
+                ["123"],
+                new Dictionary<string, string?>
+                {
+                    ["GH_CALL_LOG"] = fakeGh.CallLogPath,
+                    ["GH_HAS_LABEL"] = "true",
+                    ["PATH"] = fakeGh.PathEnvironment,
+                });
+
+            Assert.Equal(0, result.ExitCode);
+
+            var callLog = (await File.ReadAllTextAsync(fakeGh.CallLogPath)).ReplaceLineEndings("\n");
+            var removeIndex = callLog.IndexOf("pr edit 123 --remove-label vscode-extension-release", StringComparison.Ordinal);
+            var addIndex = callLog.IndexOf("pr edit 123 --add-label vscode-extension-release", StringComparison.Ordinal);
+
+            Assert.True(removeIndex >= 0, "Expected the helper to remove the existing trigger label before re-adding it.");
+            Assert.True(addIndex > removeIndex, "Expected the helper to re-add the trigger label after removing it.");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
     }
 
     [Fact]
@@ -211,6 +342,30 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
     public Task DeterministicFallbackStripsPrSuffixFromCrLfInputOnUnix()
         => DeterministicFallbackStripsPrSuffixFromCrLfInput("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GitHubPullRequestBodyValidatorAcceptsBodiesAtLimitOnWindows()
+        => GitHubPullRequestBodyValidatorAcceptsBodiesAtLimit("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GitHubPullRequestBodyValidatorAcceptsBodiesAtLimitOnUnix()
+        => GitHubPullRequestBodyValidatorAcceptsBodiesAtLimit("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GitHubPullRequestBodyValidatorRejectsBodiesOverLimitOnWindows()
+        => GitHubPullRequestBodyValidatorRejectsBodiesOverLimit("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GitHubPullRequestBodyValidatorRejectsBodiesOverLimitOnUnix()
+        => GitHubPullRequestBodyValidatorRejectsBodiesOverLimit("python3");
 
     private async Task DeterministicFallbackIncludesEveryAcceptedCommit(string pythonExecutable)
     {
@@ -313,6 +468,44 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.Equal(["- Alpha"], bulletLines);
     }
 
+    private async Task GitHubPullRequestBodyValidatorAcceptsBodiesAtLimit(string pythonExecutable)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("extension-release-pr-body-limit-pass");
+        try
+        {
+            var bodyPath = Path.Combine(tempDirectory.FullName, "pr_body.md");
+            await File.WriteAllTextAsync(bodyPath, new string('a', 65_536));
+
+            var result = await RunPythonScriptAsync(pythonExecutable, s_prBodyValidatorPath, [bodyPath]);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("GitHub pull request body length", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
+    private async Task GitHubPullRequestBodyValidatorRejectsBodiesOverLimit(string pythonExecutable)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("extension-release-pr-body-limit-fail");
+        try
+        {
+            var bodyPath = Path.Combine(tempDirectory.FullName, "pr_body.md");
+            await File.WriteAllTextAsync(bodyPath, new string('a', 65_537));
+
+            var result = await RunPythonScriptAsync(pythonExecutable, s_prBodyValidatorPath, [bodyPath]);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("exceeds GitHub's 65536-character pull request body limit", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
     private async Task<string> GenerateDeterministicReleaseNotesAsync(string pythonExecutable, IEnumerable<string> commitLines, string? lineEnding = null)
     {
         Assert.True(File.Exists(s_releaseNotesGeneratorPath), $"Expected release notes generator at '{s_releaseNotesGeneratorPath}'.");
@@ -370,6 +563,39 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         {
             Directory.Delete(tempDirectory.FullName, recursive: true);
         }
+    }
+
+    private async Task<CommandResult> RunPythonScriptAsync(string pythonExecutable, string scriptPath, IEnumerable<string> args)
+    {
+        Assert.True(File.Exists(scriptPath), $"Expected helper script at '{scriptPath}'.");
+
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo(pythonExecutable)
+        {
+            WorkingDirectory = RepoRoot.Path,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (var arg in args)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
+        process.Start();
+
+        // Read both streams concurrently to avoid deadlock when a helper prints diagnostics.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        await process.WaitForExitAsync(timeout.Token);
+
+        var output = await stdoutTask + await stderrTask;
+        testOutput.WriteLine(output);
+
+        return new CommandResult(process.ExitCode, output);
     }
 
     private static string GetSection(string text, string startPattern, string endPattern)
@@ -451,10 +677,114 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         return new CommandResult(process.ExitCode, output);
     }
 
+    private async Task<CommandResult> RunBashScriptAsync(string scriptPath, IEnumerable<string> args, IReadOnlyDictionary<string, string?> environment)
+    {
+        Assert.True(File.Exists(scriptPath), $"Expected helper script at '{scriptPath}'.");
+
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo("bash")
+        {
+            WorkingDirectory = RepoRoot.Path,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (var arg in args)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
+
+        foreach (var (key, value) in environment)
+        {
+            process.StartInfo.Environment[key] = value ?? string.Empty;
+        }
+
+        process.Start();
+
+        // Read both streams concurrently to avoid deadlock when bash emits diagnostics.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        await process.WaitForExitAsync(timeout.Token);
+
+        var output = await stdoutTask + await stderrTask;
+        testOutput.WriteLine(output);
+
+        return new CommandResult(process.ExitCode, output);
+    }
+
+    private async Task<FakeGhFixture> CreateFakeGhAsync(string rootDirectory)
+    {
+        var binDirectory = Path.Combine(rootDirectory, "bin");
+        Directory.CreateDirectory(binDirectory);
+
+        var callLogPath = Path.Combine(rootDirectory, "gh-call-log.txt");
+        var fakeGhPath = Path.Combine(binDirectory, "gh");
+        await File.WriteAllTextAsync(
+            fakeGhPath,
+            """
+            #!/usr/bin/env bash
+            set -euo pipefail
+
+            printf '%s\n' "$*" >> "${GH_CALL_LOG}"
+
+            if [[ "$1" == "pr" && "$2" == "view" ]]; then
+              if [[ "${GH_HAS_LABEL:-false}" == "true" ]]; then
+                printf '%s\n' "vscode-extension-release"
+              fi
+              exit 0
+            fi
+
+            if [[ "$1" == "pr" && "$2" == "edit" && "$4" == "--remove-label" ]]; then
+              exit "${GH_REMOVE_LABEL_EXIT_CODE:-0}"
+            fi
+
+            if [[ "$1" == "pr" && "$2" == "edit" && "$4" == "--add-label" ]]; then
+              exit "${GH_ADD_LABEL_EXIT_CODE:-0}"
+            fi
+
+            exit 0
+            """);
+
+        var chmodResult = await RunBashCommandAsync($"chmod +x \"{fakeGhPath}\"");
+        Assert.Equal(0, chmodResult.ExitCode);
+
+        return new FakeGhFixture(callLogPath, $"{binDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+    }
+
+    private async Task<CommandResult> RunBashCommandAsync(string command)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo("bash")
+        {
+            WorkingDirectory = RepoRoot.Path,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add(command);
+
+        process.Start();
+
+        // Read both streams concurrently to avoid deadlock when bash emits diagnostics.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        await process.WaitForExitAsync(timeout.Token);
+
+        var output = await stdoutTask + await stderrTask;
+        testOutput.WriteLine(output);
+
+        return new CommandResult(process.ExitCode, output);
+    }
+
     private static string? Scalar(YamlMappingNode node, string key)
         => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
             ? scalar.Value
             : null;
 
+    private sealed record FakeGhFixture(string CallLogPath, string PathEnvironment);
     private sealed record CommandResult(int ExitCode, string Output);
 }

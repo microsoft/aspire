@@ -5,10 +5,12 @@ description: |
   applies the `vscode-extension-release` label. This agentic workflow detects
   that placeholder, generates polished, user-facing release notes from the
   extension commit range recorded in the placeholder marker, and replaces the
-  placeholder on the PR branch via a safe output. The generated notes match the
-  tone and structure of recent `extension/CHANGELOG.md` entries — this workflow
-  does not invent a new format, and it never invents changes that aren't backed
-  by commits in the range.
+  placeholder on the PR branch via a safe output. The generated notes keep a
+  distinct finalized marker in the release entry so the merge gate can detect
+  stale main-branch extension changes before merge. The generated notes match
+  the tone and structure of recent `extension/CHANGELOG.md` entries — this
+  workflow does not invent a new format, and it never invents changes that
+  aren't backed by commits in the range.
 
 max-daily-ai-credits: -1
 
@@ -147,14 +149,14 @@ pre-agent-steps:
         exit 0
       fi
 
-      mapfile -t MARKERS < <(grep 'aspire-ext-changelog' "${CHANGELOG}" || true)
+      mapfile -t MARKERS < <(grep '<!-- aspire-ext-changelog from=' "${CHANGELOG}" || true)
       if [ "${#MARKERS[@]}" -eq 0 ]; then
-        echo "No aspire-ext-changelog marker present; skipping authoritative range preload."
+        echo "No pending aspire-ext-changelog marker present; skipping authoritative range preload."
         exit 0
       fi
 
       if [ "${#MARKERS[@]}" -ne 1 ]; then
-        echo "::error::Expected exactly one aspire-ext-changelog marker, found ${#MARKERS[@]}."
+        echo "::error::Expected exactly one pending aspire-ext-changelog marker, found ${#MARKERS[@]}."
         exit 1
       fi
 
@@ -267,14 +269,16 @@ _Release notes are being generated automatically and will replace this placehold
 ```
 
 The authoritative sentinel is the HTML marker comment that starts with
-`<!-- aspire-ext-changelog`. Apply these rules:
+`<!-- aspire-ext-changelog from=`. Apply these rules:
 
-- If the file contains **no** `aspire-ext-changelog` marker, a human or an
-  earlier run already replaced the placeholder. Write a diagnostic to the run
-  summary and **exit successfully without emitting any safe output**. (This can
-  happen if the label is re-applied after the placeholder was already replaced —
-  handle it cheaply and stop before doing any other work.)
-- If the file contains **more than one** `aspire-ext-changelog` marker,
+- If the file contains **no** pending `aspire-ext-changelog` marker, a human or
+  an earlier run already replaced the placeholder. A finalized release entry may
+  still contain `<!-- aspire-ext-changelog-finalized ... -->`, and that is
+  expected. Write a diagnostic to the run summary and **exit successfully
+  without emitting any safe output**. (This can happen if the label is
+  re-applied after the placeholder was already replaced — handle it cheaply and
+  stop before doing any other work.)
+- If the file contains **more than one** pending `aspire-ext-changelog` marker,
   something is wrong (a malformed or tampered changelog). **Fail the workflow**
   with a clear diagnostic; do not guess which one to replace.
 - If there is **exactly one** marker, continue.
@@ -373,18 +377,23 @@ extension, not the internal implementation.
 Edit `extension/CHANGELOG.md` in the workspace so that:
 
 - The `## v<version>` heading is preserved.
+- Immediately under that heading, emit the finalized metadata marker:
+
+  `<!-- aspire-ext-changelog-finalized from=<FROM_SHA> to=<TO_SHA> base=<BASE_VERSION> -->`
+
 - The entire placeholder body — **including the `<!-- aspire-ext-changelog ... -->`
   marker comment and the italic "_Release notes are being generated…_" line** —
-  is removed and replaced with your generated notes. The marker MUST NOT survive
-  in the final file; if it did, a later run (e.g. from the label being
-  re-applied) would have no reliable way to tell the work was already done.
+  is removed and replaced with the finalized marker and your generated notes.
+  The pending `aspire-ext-changelog` marker MUST NOT survive in the final file;
+  if it did, a later run (e.g. from the label being re-applied) would have no
+  reliable way to tell the work was already done.
 - The final Markdown contains no multiple consecutive blank lines (`\n\n\n`),
   which would fail the repository's Markdownlint `MD012/no-multiple-blanks`
   required check.
 - All other existing entries below are left untouched.
 
 If, after excluding noise in Step 4, there are **no** user-facing changes,
-replace the placeholder body with a single line such as
+keep the finalized marker and replace the placeholder body with a single line such as
 `- No user-facing changes in this release.` under the version heading (match how
 prior maintenance-only entries are phrased if any exist).
 
@@ -410,7 +419,8 @@ Two distinct outcomes — handle them differently:
 
 - The PR head branch does not start with `extension-release/`, or the PR base
   branch is not `main` (Step 1).
-- `extension/CHANGELOG.md` no longer contains the marker (Step 2) — already done.
+- `extension/CHANGELOG.md` no longer contains the pending marker (Step 2) —
+  already done.
 
 For these, write a clear diagnostic to the run summary and exit 0 **without
 emitting a `push-to-pull-request-branch` safe output**. The safe-output job is a
