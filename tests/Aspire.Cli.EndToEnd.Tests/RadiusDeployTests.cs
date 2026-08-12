@@ -380,14 +380,20 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // The Bicep extension `rad` resolves (br:biceptypes.azurecr.io/radius:<version>) carries
-            // types only for the built-in namespaces, so a contrib type such as
+            // types only for the built-in namespaces at 0.59, so a contrib type such as
             // Radius.Data/postgreSqlDatabases compiles to a *classic* ARM resource (BCP081, "does
             // not have types available") and the deployment engine routes it to the Azure provider:
             //   "Azure deployment failed, please ensure you have configured an Azure provider..."
             // Registering the type with the control plane is not enough; the compiler needs it too.
             // Generating a local extension from the same manifest and importing it is the supported
             // workaround, and it is what a user deploying an Aspire-generated Radius app with a
-            // PostgreSQL or SQL Server resource has to do today.
+            // PostgreSQL resource has to do today (see the README's PostgreSQL prerequisites).
+            //
+            // This is a Radius 0.59-only workaround. Radius 0.60 carries
+            // Radius.Data/postgreSqlDatabases in the pinned `radius` Bicep extension *and* registers
+            // it by default at install time, so both this step and the `rad resource-type create`
+            // above disappear once RadiusBicepExtension.Version moves to 0.60 — at which point this
+            // test deploys the untouched published artifacts through `aspire deploy`.
             await auto.TypeAsync("rad bicep publish-extension --from-file /tmp/postgresqldatabases.yaml --target radius-output/aspire-udt.tgz --force");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));

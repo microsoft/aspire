@@ -1109,7 +1109,67 @@ internal sealed class RadiusInfrastructureBuilder
                     // TryProjectBackingEndpoint still fails loudly if a consumer asks for one.
                     break;
             }
+
+            WarnIfDatabaseIsNotCreatedByTheRecipe(resource, radiusType, referencedResourceNames);
         }
+    }
+
+    /// <summary>
+    /// Warns when a referenced <c>AddDatabase(...)</c> child names a database the recipe does not
+    /// create, so the consumer's connection string points at something that will not exist.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the legacy <c>Applications.Datastores/sqlDatabases</c> type has this problem. Its
+    /// built-in recipe takes a <c>database</c> parameter but merely echoes it back in the recipe's
+    /// own outputs: the workload it deploys is a plain SQL Edge Deployment plus Service with the
+    /// <c>sa</c> login and no init container or job, so nothing ever runs <c>CREATE DATABASE</c>.
+    /// Meanwhile <c>SqlServerDatabaseResource.ConnectionStringExpression</c> appends the
+    /// <c>AddDatabase(...)</c> name, and <c>AddDatabase</c> only creates the database in run mode.
+    /// See <see href="https://github.com/radius-project/recipes/blob/main/local-dev/sqldatabases.bicep"/>.
+    /// </para>
+    /// <para>
+    /// This warns rather than failing. Provisioning the database is not something the publisher can
+    /// do, and the alternative — remapping SQL Server to the contrib
+    /// <c>Radius.Data/sqlServerDatabases</c> type, whose schema does declare <c>database</c> as
+    /// required and created — is not possible while that type has no published Kubernetes recipe
+    /// (<c>ghcr.io/radius-project/kube-recipes/sqlserverdatabases</c> does not exist). Failing the
+    /// publish would break models that deploy successfully today whenever the application creates
+    /// the database itself, for example through EF Core's <c>EnsureCreated</c>/<c>Migrate</c>.
+    /// </para>
+    /// <para>
+    /// Scoped to <em>referenced</em> children, matching the <c>ASPIRERADIUS072</c> precedent: an
+    /// unreferenced <c>AddDatabase(...)</c> is inert and produces no consumer connection string.
+    /// </para>
+    /// </remarks>
+    private void WarnIfDatabaseIsNotCreatedByTheRecipe(
+        IResource resource,
+        string radiusType,
+        HashSet<string> referencedResourceNames)
+    {
+        if (!string.Equals(radiusType, RadiusResourceTypes.LegacySqlDatabases, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var referenced = FindDatabaseChildren(resource)
+            .Where(d => referencedResourceNames.Contains(d.Name))
+            .Select(d => d.Name)
+            .ToList();
+
+        if (referenced.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "Radius resource '{ResourceName}' is emitted as '{RadiusType}', whose recipe starts a SQL Server but does " +
+            "not create databases. Consumers of '{Databases}' receive a connection string naming a database the " +
+            "deployment will not contain unless the application creates it itself. Have the application create the " +
+            "database on startup, or deploy SQL Server outside the Radius environment.",
+            resource.Name,
+            radiusType,
+            string.Join("', '", referenced));
     }
 
     /// <summary>
