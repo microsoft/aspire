@@ -65,7 +65,9 @@ public sealed class ResolveAspireCliInvocation : Microsoft.Build.Utilities.Task
             return true;
         }
 
-        var forceDnx = string.Equals(AspireCliInvocationMode, "Dnx", StringComparison.OrdinalIgnoreCase);
+        var forceDnx =
+            string.Equals(AspireCliInvocationMode, "Dnx", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(AspireCliInvocationMode, "DnxPinned", StringComparison.OrdinalIgnoreCase);
         if (!forceDnx)
         {
             ResolvedAspireCliPath = CommandPathResolver.ResolveFromPath("aspire", PathEnvironmentVariable);

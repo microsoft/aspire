@@ -197,12 +197,15 @@ namespace Projects%3B
   <PropertyGroup>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' == ''">Path</_AspireCliInvocationMode>
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
-    <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">true</_AspireUseDnxCliRunHook>
+    <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireUseDnxCliRunHook>
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
-    <!-- Project Resource v2 is expected to remove Aspire.AppHost.Sdk. When that happens,
-         replace AspireHostingSDKVersion as the paired CLI version source.
+    <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
+         or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
+         version paired with the AppHost SDK. Project Resource v2 is expected to remove Aspire.AppHost.Sdk;
+         when that happens, replace AspireHostingSDKVersion as the paired CLI version source.
          See https://github.com/microsoft/aspire/issues/16386. -->
-    <_AspireCliDnxPackageReference>$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
   </PropertyGroup>
 
   <Target Name="_ResolveAspireCliInvocation"
@@ -422,9 +425,9 @@ namespace Projects%3B
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments Condition="'$(AspireCliPath)' != '' or '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">run --project "$(_AspireRunProject)" --no-build --</RunArguments>
-      <!-- Bundle opt-in authorizes DNX to restore the Aspire CLI version paired with this AppHost SDK
-           from the user's configured NuGet sources. dotnet run is noninteractive, so DNX cannot ask
-           for confirmation during the launch. -->
+      <!-- Bundle opt-in authorizes DNX to restore the selected Aspire CLI package from the user's
+           configured NuGet sources. dotnet run is noninteractive, so DNX cannot ask for confirmation
+           during the launch. -->
       <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <!-- The explicit-shim command line is emitted as:
              cmd /D /V:OFF /C C:\path^ with^ spaces\aspire.cmd run [separator] user-arg
@@ -446,7 +449,7 @@ namespace Projects%3B
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireUseDnxCliRunHook)' == 'true' and '$(AspireCliPath)' == ''">
     <Error Code="ASPIRE011"
            Condition="'$(_AspireResolvedDnxPath)' == ''"
-           Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=Dnx, but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
+           Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
   </Target>
 
   <!-- This target registers the location of the Aspire orchestration dependencies -->
