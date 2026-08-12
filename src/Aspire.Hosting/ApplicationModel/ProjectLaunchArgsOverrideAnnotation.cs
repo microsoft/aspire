@@ -19,6 +19,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <c>build</c> that accept the project path as a positional argument. The <c>--no-launch-profile</c>
 /// flag is omitted when this annotation is present.
 /// </para>
+/// <para>
+/// A non-empty launch-tool argument callback replaces this base command. If the callback resolves no
+/// arguments, this override remains the Process command.
+/// </para>
 /// </remarks>
 /// <example>
 /// Override DCP's default launch to use <c>dotnet build /t:Run</c>:

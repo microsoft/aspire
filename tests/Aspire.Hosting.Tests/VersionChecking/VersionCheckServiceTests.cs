@@ -10,7 +10,9 @@ using Aspire.Hosting.VersionChecking;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
@@ -352,6 +354,39 @@ public class VersionCheckServiceTests
         Assert.Equal("100.0.0", mockSecretsManager.Secrets[VersionCheckService.IgnoreVersionKey]);
     }
 
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, false)]
+    public async Task ExecuteAsync_IgnoreVersion_LogsWarningOnlyWhenUserSecretsUnavailable(bool isAvailable, bool canSetSecret, bool expectWarning)
+    {
+        var interactionService = new TestInteractionService();
+        var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
+        var logger = new FakeLogger<VersionCheckService>();
+        var userSecretsManager = new MockUserSecretsManager(canSetSecret, isAvailable);
+        var service = CreateVersionCheckService(
+            interactionService: interactionService,
+            packageFetcher: new TestPackageFetcher(packagesTcs.Task),
+            userSecretsManager: userSecretsManager,
+            logger: logger);
+
+        _ = service.StartAsync(CancellationToken.None);
+
+        packagesTcs.TrySetResult([new NuGetPackage { Id = PackageFetcher.PackageId, Version = "100.0.0" }]);
+
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(true));
+
+        await service.ExecuteTask!.DefaultTimeout();
+
+        var warnings = logger.Collector.GetSnapshot().Where(log => log.Level == LogLevel.Warning).ToList();
+        Assert.Equal(expectWarning ? 1 : 0, warnings.Count);
+
+        if (expectWarning)
+        {
+            Assert.Equal("Could not ignore the version update notification to 100.0.0 because user secrets are not configured correctly. See https://aka.ms/aspire/user-secrets for more information.", warnings[0].Message);
+        }
+    }
+
     private static VersionCheckService CreateVersionCheckService(
         IInteractionService? interactionService = null,
         IPackageFetcher? packageFetcher = null,
@@ -359,11 +394,12 @@ public class VersionCheckServiceTests
         TimeProvider? timeProvider = null,
         DistributedApplicationOptions? options = null,
         IPackageVersionProvider? packageVersionProvider = null,
-        IUserSecretsManager? userSecretsManager = null)
+        IUserSecretsManager? userSecretsManager = null,
+        ILogger<VersionCheckService>? logger = null)
     {
         return new VersionCheckService(
             interactionService ?? new TestInteractionService(),
-            NullLogger<VersionCheckService>.Instance,
+            logger ?? NullLogger<VersionCheckService>.Instance,
             configuration ?? new ConfigurationManager(),
             options ?? new DistributedApplicationOptions(),
             packageFetcher ?? new TestPackageFetcher(),

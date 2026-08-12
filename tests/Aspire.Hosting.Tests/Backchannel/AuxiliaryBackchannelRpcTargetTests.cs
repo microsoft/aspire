@@ -641,6 +641,11 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 new ResourcePropertySnapshot("number", 42),
                 new ResourcePropertySnapshot("flag", true),
                 new ResourcePropertySnapshot("list", new[] { "one", "two" }),
+                new ResourcePropertySnapshot("object", new KeyValuePair<string, string>[]
+                {
+                    new("Host", "localhost"),
+                    new("DatabaseName", "catalogdb")
+                }),
                 new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
             ]
         }).DefaultTimeout();
@@ -664,6 +669,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             list,
             value => Assert.Equal("one", value?.GetValue<string>()),
             value => Assert.Equal("two", value?.GetValue<string>()));
+        var nameValueObject = Assert.IsAssignableFrom<JsonObject>(snapshot.Properties["object"]);
+        Assert.Equal("localhost", nameValueObject["Host"]?.GetValue<string>());
+        Assert.Equal("catalogdb", nameValueObject["DatabaseName"]?.GetValue<string>());
         Assert.Null(snapshot.Properties["ConnectionString"]);
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);

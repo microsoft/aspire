@@ -192,6 +192,14 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 UpdateState = c => Hosting.ApplicationModel.ResourceCommandState.Enabled,
                 Visibility = ResourceCommandVisibility.Api
             });
+        builder.WithCommand(
+            name: "UnknownStateName",
+            displayName: "Unknown state display name",
+            executeCommand: c => Task.FromResult(CommandResults.Success()),
+            commandOptions: new()
+            {
+                UpdateState = c => (Hosting.ApplicationModel.ResourceCommandState)999
+            });
 
         logger.LogInformation("Publishing resource.");
         await resourceNotificationService.PublishUpdateAsync(testResource, s =>
@@ -202,7 +210,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         logger.LogInformation("Waiting for the resource with a command. Required so added resource is always in the service's initial data collection");
         await dashboardServiceData.WaitForResourceAsync(testResource.Name, r =>
         {
-            return r.Commands.Length == 2;
+            return r.Commands.Length == 3;
         }).DefaultTimeout();
 
         var cts = new CancellationTokenSource();
@@ -216,34 +224,47 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             writer,
             context);
 
-        // Assert
         logger.LogInformation("Reading result from writer.");
-        var update = await writer.ReadNextAsync().DefaultTimeout();
+        var readUpdateTask = writer.ReadNextAsync().DefaultTimeout();
+        var completedTask = await Task.WhenAny(task, readUpdateTask).DefaultTimeout();
+        await completedTask.DefaultTimeout();
+        Assert.Same(readUpdateTask, completedTask);
+
+        var update = await readUpdateTask;
+        Assert.False(task.IsCompleted, "WatchResources should remain active until cancellation.");
 
         logger.LogInformation($"Initial data count: {update.InitialData.Resources.Count}");
         var resourceData = Assert.Single(update.InitialData.Resources);
 
         logger.LogInformation($"Commands count: {resourceData.Commands.Count}");
-        var commandData = Assert.Single(resourceData.Commands);
-
-        Assert.Equal("TestName", commandData.Name);
-        Assert.Equal("Display name!", commandData.DisplayName);
-        Assert.Equal("Display description!", commandData.DisplayDescription);
+        Assert.Collection(resourceData.Commands,
+            commandData =>
+            {
+                Assert.Equal("TestName", commandData.Name);
+                Assert.Equal("Display name!", commandData.DisplayName);
+                Assert.Equal("Display description!", commandData.DisplayDescription);
 #pragma warning disable CS0612 // Parameter is obsolete but still verified for compatibility.
-        Assert.Equal(Value.ForList(Value.ForString("One"), Value.ForString("Two")), commandData.Parameter);
+                Assert.Equal(Value.ForList(Value.ForString("One"), Value.ForString("Two")), commandData.Parameter);
 #pragma warning restore CS0612
-        var argumentInput = Assert.Single(commandData.ArgumentInputs);
-        Assert.Equal("selector", argumentInput.Name);
-        Assert.Equal("Selector", argumentInput.Label);
-        Assert.Equal("CSS selector to click.", argumentInput.Description);
-        Assert.Equal(DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
-        Assert.True(argumentInput.Required);
-        Assert.Equal("#submit", argumentInput.Placeholder);
-        Assert.Equal("Confirmation message!", commandData.ConfirmationMessage);
-        Assert.Equal("Icon name!", commandData.IconName);
-        Assert.Equal(DashboardService.Proto.V1.IconVariant.Filled, commandData.IconVariant);
-        Assert.True(commandData.IsHighlighted);
-        Assert.DoesNotContain(resourceData.Commands, command => command.Name == "HeadlessName");
+                var argumentInput = Assert.Single(commandData.ArgumentInputs);
+                Assert.Equal("selector", argumentInput.Name);
+                Assert.Equal("Selector", argumentInput.Label);
+                Assert.Equal("CSS selector to click.", argumentInput.Description);
+                Assert.Equal(DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
+                Assert.True(argumentInput.Required);
+                Assert.Equal("#submit", argumentInput.Placeholder);
+                Assert.Equal("Confirmation message!", commandData.ConfirmationMessage);
+                Assert.Equal("Icon name!", commandData.IconName);
+                Assert.Equal(DashboardService.Proto.V1.IconVariant.Filled, commandData.IconVariant);
+                Assert.True(commandData.IsHighlighted);
+                Assert.Equal(DashboardService.Proto.V1.ResourceCommandState.Enabled, commandData.State);
+            },
+            commandData =>
+            {
+                Assert.Equal("UnknownStateName", commandData.Name);
+                Assert.Equal("Unknown state display name", commandData.DisplayName);
+                Assert.Equal(DashboardService.Proto.V1.ResourceCommandState.Hidden, commandData.State);
+            });
 
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }
@@ -1052,4 +1073,3 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         }
     }
 }
-

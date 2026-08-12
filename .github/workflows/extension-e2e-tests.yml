@@ -125,6 +125,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: discovery-configuration
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
             spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -133,6 +134,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: apphost-tree
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
             spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -173,6 +175,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: debug-dashboard
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
             spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
             runner: windows-latest
             rid: win-x64
@@ -247,6 +250,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19151
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -486,6 +490,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
+          ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
           ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
           # and useful for diagnosing timing-sensitive flakes after the fact.

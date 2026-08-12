@@ -60,7 +60,7 @@ public static class KnownLaunchConfigurationTypes
 /// </para>
 /// <para>
 /// Integrations create a derived type and supply it through
-/// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>
+/// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string)"/>
 /// or its asynchronous overload.
 /// </para>
 /// </remarks>
@@ -91,7 +91,7 @@ public class ExecutableLaunchConfiguration(string type)
     /// Defaults to <see cref="ExecutableLaunchMode.Debug"/> when a debugger is attached to the app host
     /// and <see cref="ExecutableLaunchMode.NoDebug"/> otherwise. The mode requested by the IDE for the
     /// current debug session is passed to the producer callback of
-    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string, Action{CommandLineArgsCallbackContext})"/>.
+    /// <see cref="ResourceBuilderExtensions.WithDebugSupport{T, TLaunchConfiguration}(IResourceBuilder{T}, Func{string, TLaunchConfiguration}, string)"/>.
     /// </remarks>
     [JsonPropertyName("mode")]
     public string Mode { get; set; } = System.Diagnostics.Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug;

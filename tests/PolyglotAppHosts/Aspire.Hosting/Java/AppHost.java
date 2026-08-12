@@ -109,6 +109,8 @@ void main() throws Exception {
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");
         aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5));
+        var aksVolume = aks.addPersistentVolume("aks-data");
+        aksVolume.withCapacity("20Gi");
         var pipeline = builder.pipeline();
         pipeline.addStep("custom-builder-step", (stepContext) -> { var builderSummary = stepContext.summary(); builderSummary.add("BuilderPipelineStep", "Validated"); }, new AddStepOptions().dependsOn(new String[] { WellKnownPipelineSteps.Build }).requiredBy(new String[] { WellKnownPipelineSteps.Publish }));
         pipeline.configure((configContext) -> { var builderPipeline = configContext.pipeline(); var _allSteps = builderPipeline.steps(); var _builderTaggedSteps = configContext.getSteps("custom-build"); });

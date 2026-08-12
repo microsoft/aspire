@@ -166,6 +166,8 @@
   "aspire-vscode.strings.executableLaunchProfileMissingExecutablePath": "Launch profile '{0}' uses commandName 'Executable' but does not specify an executablePath. Add an executablePath to the launch profile.",
   "aspire-vscode.strings.lookingForDevkitBuildTask": "C# Dev Kit is installed, looking for C# Dev Kit build task...",
   "aspire-vscode.strings.csharpDevKitNotInstalled": "C# Dev Kit is not installed, building using dotnet CLI...",
+  "aspire-vscode.strings.hotReloadDisabledNotice": "C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.",
+  "aspire-vscode.strings.openSettingsLabel": "Open Settings",
   "aspire-vscode.strings.cliNotAvailable": "Aspire CLI is not available on PATH. Please install it and restart VS Code.",
   "aspire-vscode.strings.cliFoundAtDefaultPath": "Aspire CLI found at {0}. The extension will use this path.",
   "aspire-vscode.strings.openCliInstallInstructions": "See CLI installation instructions",

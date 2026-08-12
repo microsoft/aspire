@@ -247,8 +247,9 @@ internal sealed class RadiusDeploymentPipelineStep
 
     // Resolves the deploy-time parameter values (from RadiusDeployParametersAnnotation) and writes
     // them to an owner-only temporary ARM JSON parameters file. Returns the file path, or null when
-    // there are no parameters to supply. The caller is responsible for deleting the file.
-    private async Task<string?> WriteDeployParametersFileAsync(ILogger logger, CancellationToken cancellationToken)
+    // there are no parameters to supply. The caller is responsible for deleting the file. Internal so
+    // tests can exercise the real file contract (ARM JSON shape + owner-only permissions).
+    internal async Task<string?> WriteDeployParametersFileAsync(ILogger logger, CancellationToken cancellationToken)
     {
         if (!_environment.TryGetAnnotationsOfType<RadiusDeployParametersAnnotation>(out var annotations))
         {
@@ -310,7 +311,8 @@ internal sealed class RadiusDeploymentPipelineStep
         return filePath;
     }
 
-    private static void DeleteDeployParametersFile(string? parametersFilePath, ILogger logger)
+    // Internal so tests can assert file cleanup.
+    internal static void DeleteDeployParametersFile(string? parametersFilePath, ILogger logger)
     {
         if (parametersFilePath is null)
         {
