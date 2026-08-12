@@ -231,12 +231,16 @@ namespace Projects%3B
          cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
     <PropertyGroup>
       <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
+      <!-- Suppress the expected invalid-layout warning only when an existing CLI can prepare its
+           bundle. Explicit bundle paths and missing explicit CLI paths cannot be recovered. -->
+      <_AspireCliBundleWarnOnInvalidPaths>false</_AspireCliBundleWarnOnInvalidPaths>
+      <_AspireCliBundleWarnOnInvalidPaths Condition="'$(AspireCliBundlePath)' != '' or ('$(AspireCliPath)' != '' and !Exists('$(AspireCliPath)'))">true</_AspireCliBundleWarnOnInvalidPaths>
     </PropertyGroup>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
                              AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
                              SearchPathForAspireCli="false"
-                             WarnOnInvalidPaths="false">
+                             WarnOnInvalidPaths="$(_AspireCliBundleWarnOnInvalidPaths)">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
