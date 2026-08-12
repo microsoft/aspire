@@ -309,9 +309,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return modelResource is ProjectResource;
         }
 
-        // Project-backed resources suppress their process scaffold when the active launch configuration owns the
-        // tool invocation. If that prefix resolves empty, the remaining command line is IDE-only and cannot be used
-        // as a Process fallback.
+        // Project-backed resources can leave the process scaffold incomplete when the active launch configuration
+        // owns the invocation. The remaining IDE-only arguments cannot be used as a Process fallback.
         if (HasIncompleteProcessCommand(modelResource, annotation, resolvedLaunchToolArgumentCount, hasPreparedProjectArguments))
         {
             return false;
@@ -327,10 +326,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         int resolvedLaunchToolArgumentCount,
         bool hasPreparedProjectArguments)
     {
+        // A custom project launcher such as Azure Functions owns the invocation when the integration has not
+        // supplied an explicit executable. Ordinary WithArgs values are application arguments, so they cannot turn
+        // the default `dotnet` executable into a runnable Process fallback.
+        var customProjectLaunchOwnsInvocation =
+            modelResource is ProjectResource &&
+            annotation.LaunchConfigurationType is not KnownLaunchConfigurationTypes.Project &&
+            !modelResource.HasAnnotationOfType<ExecutableAnnotation>();
+
         return resolvedLaunchToolArgumentCount == 0
             && !hasPreparedProjectArguments
             && modelResource.HasAnnotationOfType<IProjectMetadata>()
-            && modelResource.HasLaunchToolArgsOwnedBy(annotation);
+            && (modelResource.HasLaunchToolArgsOwnedBy(annotation) || customProjectLaunchOwnsInvocation);
     }
 
     private async Task PrepareProjectExecutablesAsync(CancellationToken cancellationToken)
@@ -809,12 +816,25 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 projectLaunchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
                 if (projectLaunchProfileArgs.Count > 0 &&
                     ordinaryAppHostArgumentCount > 0 &&
-                    launchToolArgumentCount == 0)
+                    launchToolArgumentCount == 0 &&
+                    HasDotnetApplicationArgumentBoundary())
                 {
-                    // The implicit `dotnet run` scaffold needs a double-dash before application arguments. A custom
-                    // launch-tool declaration owns its complete invocation, including any separator its tool requires.
+                    // A prepared project command or explicit `dotnet run` invocation needs a double-dash before
+                    // application arguments. Custom IDE launchers receive raw application arguments instead.
                     projectLaunchProfileArgs.Insert(0, "--");
                 }
+            }
+
+            bool HasDotnetApplicationArgumentBoundary()
+            {
+                if (executableArgumentStartIndex > 0)
+                {
+                    return true;
+                }
+
+                return er.ModelResource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) &&
+                    string.Equals(executableAnnotation.Command, "dotnet", StringComparison.OrdinalIgnoreCase) &&
+                    appHostArgList.Any(static argument => string.Equals(argument.Value, "run", StringComparison.Ordinal));
             }
         }
         // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
