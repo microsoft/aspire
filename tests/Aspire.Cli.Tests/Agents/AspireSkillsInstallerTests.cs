@@ -200,6 +200,91 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
+    public async Task EmbeddedAspireSkillsBundle_ArchiveAndPerFileHashes_AreValidSha512()
+    {
+        var provider = new EmbeddedAspireSkillsBundleProvider(NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
+        var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(provider.Metadata);
+        Assert.NotNull(metadata.Version);
+        Assert.NotNull(metadata.AssetName);
+        Assert.NotNull(metadata.Sha512);
+
+        var extractRoot = CreateTempDirectory();
+        try
+        {
+            // Stage the embedded archive to disk and confirm its full-file SHA-512 matches the metadata
+            // the installer trusts before extraction (mirrors AspireSkillsInstaller.ValidateArchiveSha512).
+            var archivePath = Path.Combine(extractRoot, metadata.AssetName!);
+            await using (var archiveStream = Assert.IsAssignableFrom<Stream>(provider.OpenArchive()))
+            await using (var fileStream = File.Create(archivePath))
+            {
+                await archiveStream.CopyToAsync(fileStream);
+            }
+
+            Assert.Equal(AspireSkillsBundle.NormalizeSha512(metadata.Sha512!), ComputeSha512(archivePath));
+
+            // Extract the .tgz and independently recompute every per-file SHA-512 from the internal
+            // skill-manifest.json. This proves the embedded manifest carries real SHA-512 digests
+            // (128 hex chars) that match the extracted bytes, and it self-computes from whatever is
+            // embedded, so it stays valid if the bundle is later replaced by a freshly attested release.
+            var contentDir = Path.Combine(extractRoot, "content");
+            Directory.CreateDirectory(contentDir);
+            await using (var fileStream = File.OpenRead(archivePath))
+            await using (var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress))
+            {
+                await TarFile.ExtractToDirectoryAsync(gzipStream, contentDir, overwriteFiles: true, CancellationToken.None);
+            }
+
+            var manifestPath = Directory.EnumerateFiles(contentDir, "skill-manifest.json", SearchOption.AllDirectories).Single();
+            var bundleRoot = Path.GetDirectoryName(manifestPath)!;
+
+            SkillBundleManifest? manifest;
+            await using (var manifestStream = File.OpenRead(manifestPath))
+            {
+                manifest = await JsonSerializer.DeserializeAsync(manifestStream, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+            }
+
+            Assert.NotNull(manifest);
+            Assert.NotEmpty(manifest!.Skills);
+
+            var validatedFileCount = 0;
+            foreach (var skill in manifest.Skills)
+            {
+                Assert.NotEmpty(skill.Files);
+                foreach (var file in skill.Files)
+                {
+                    var normalizedHash = AspireSkillsBundle.NormalizeSha512(file.Sha512!);
+                    // A SHA-512 digest is 64 bytes => 128 lowercase hex characters (a lingering SHA-256
+                    // digest would be 64 characters), so the length check is what pins this to SHA-512.
+                    Assert.Equal(128, normalizedHash.Length);
+
+                    var filePath = Path.Combine(bundleRoot, "skills", skill.Name!, AspireSkillsBundle.NormalizeRelativePath(file.RelativePath));
+                    Assert.Equal(normalizedHash, ComputeSha512(filePath));
+                    validatedFileCount++;
+                }
+            }
+
+            Assert.True(validatedFileCount > 0);
+
+            // Run the production loader end-to-end over the extracted bundle. Per-file SHA-512
+            // verification lives in AspireSkillsBundle.ValidateFile, so a clean load is the same
+            // check the runtime performs before caching the embedded snapshot.
+            var bundle = await AspireSkillsBundle.LoadAsync(
+                new DirectoryInfo(bundleRoot),
+                metadata.Version!,
+                metadata.Version!,
+                skipCompatibilityCheck: true,
+                CancellationToken.None);
+
+            Assert.Equal(metadata.Version, bundle.Version);
+            Assert.NotEmpty(bundle.GetSkillDefinitions());
+        }
+        finally
+        {
+            Directory.Delete(extractRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenGitHubReleaseAssetIsAvailable_UsesGitHub()
     {
         var rootDirectory = CreateTempDirectory();
