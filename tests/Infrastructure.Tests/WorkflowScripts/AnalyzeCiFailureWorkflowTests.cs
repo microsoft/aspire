@@ -281,6 +281,21 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal("[REDACTED]", redacted.GetProperty("nested")[0].GetString());
     }
 
+    [Theory]
+    [InlineData("{\"accessToken\":\"opaque-secret\"}", "{\"accessToken\":\"[REDACTED]\"}")]
+    [InlineData("{'authToken':'opaque-secret'}", "{'authToken':'[REDACTED]'}")]
+    [InlineData("accessToken=opaque-secret", "accessToken=[REDACTED]")]
+    [InlineData("refreshToken: opaque-secret", "refreshToken: [REDACTED]")]
+    [InlineData("_authToken=opaque-secret", "_authToken=[REDACTED]")]
+    [RequiresTools(["node"])]
+    public async Task RedactOperationRemovesTokenValues(string value, string expected)
+    {
+        var output = await InvokeScriptAsync("redact", new { diagnostic = value });
+        var redacted = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(expected, redacted.GetProperty("diagnostic").GetString());
+    }
+
     private static object CreateAnalysis(object[]? failedTests = null)
     {
         return new
