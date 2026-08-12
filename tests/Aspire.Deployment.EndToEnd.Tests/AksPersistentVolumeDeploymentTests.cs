@@ -194,7 +194,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         }
         finally
         {
-            TriggerCleanupResourceGroup(resourceGroupName);
+            await CleanupResourceGroupAsync(resourceGroupName);
         }
     }
 
@@ -417,7 +417,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    private void TriggerCleanupResourceGroup(string resourceGroupName)
+    private async Task CleanupResourceGroupAsync(string resourceGroupName)
     {
         using var process = new System.Diagnostics.Process
         {
@@ -435,12 +435,23 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         try
         {
             process.Start();
-            output.WriteLine($"Cleanup triggered for resource group: {resourceGroupName}");
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0)
+            {
+                output.WriteLine($"Resource group deletion initiated: {resourceGroupName}");
+                DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Deletion initiated");
+            }
+            else
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                output.WriteLine($"Resource group deletion may have failed (exit code {process.ExitCode}): {error}");
+                DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, $"Exit code {process.ExitCode}: {error}");
+            }
         }
         catch (Exception ex)
         {
-            output.WriteLine($"Failed to trigger cleanup: {ex.Message}");
+            output.WriteLine($"Failed to cleanup resource group: {ex.Message}");
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, ex.Message);
         }
     }
