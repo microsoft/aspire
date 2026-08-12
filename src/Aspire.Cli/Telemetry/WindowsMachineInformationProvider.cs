@@ -7,7 +7,8 @@ using Microsoft.Win32;
 
 namespace Aspire.Cli.Telemetry;
 
-// This is copied from https://github.com/microsoft/mcp/tree/e9f5da8fa093239d42d4b867afdf5e73e291d472/core/Microsoft.Mcp.Core/src/Services/Telemetry
+// This is copied from https://github.com/microsoft/mcp/tree/6bb4d76a63d24854efe0fa0bd96f5ab6f699ed3a/core/Azure.Mcp.Core/src/Services/Telemetry
+// Current upstream: https://github.com/microsoft/mcp/tree/e9f5da8fa093239d42d4b867afdf5e73e291d472/core/Microsoft.Mcp.Core/src/Services/Telemetry
 // Keep in sync with updates there.
 
 [SupportedOSPlatform("windows")]
