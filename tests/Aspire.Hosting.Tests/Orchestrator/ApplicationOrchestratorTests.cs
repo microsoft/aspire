@@ -447,12 +447,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ConnectionStringAvailableEventPublishesConnectionStringAndProperties()
+    public async Task ConnectionStringAvailableEventPublishesConnectionStringAndResolvableProperties()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", "localhost"));
+        var unresolvedProperty = ReferenceExpression.Create($"{new ThrowingValueProvider()}");
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", "localhost", unresolvedProperty));
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1265,7 +1266,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public IResource Parent { get; } = parent;
     }
 
-    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null)
+    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
         public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{connectionString}");
@@ -1285,6 +1286,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             if (host is not null)
             {
                 yield return new("Host", ReferenceExpression.Create($"{host}"));
+            }
+
+            if (unresolvedProperty is not null)
+            {
+                yield return new("Unavailable", unresolvedProperty);
             }
         }
     }
@@ -1544,5 +1550,15 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await watchResourceTask.DefaultTimeout();
 
         Assert.Equal(parentProjectResourceId, childProjectParentResourceId);
+    }
+
+    private sealed class ThrowingValueProvider : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => "{throwing.value}";
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("The connection property isn't available.");
+        }
     }
 }

@@ -87,7 +87,18 @@ internal sealed class ApplicationOrchestrator
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in resourceWithConnectionString.GetConnectionProperties())
             {
-                connectionProperties[property.Key] = await property.Value.GetValueAsync(token).ConfigureAwait(false);
+                try
+                {
+                    connectionProperties[property.Key] = await property.Value.GetValueAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve connection property {ConnectionPropertyName} for resource {ResourceName}.", property.Key, resourceWithConnectionString.Name);
+                }
             }
 
             await _notificationService.PublishUpdateAsync(resourceWithConnectionString, state => state with
