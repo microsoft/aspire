@@ -7,74 +7,30 @@ using YamlDotNet.RepresentationModel;
 namespace Infrastructure.Tests.Pipelines;
 
 /// <summary>
-/// Guards the shard-disable contract in <c>.github/workflows/extension-e2e-tests.yml</c>.
+/// Guards the advisory-failure contract in <c>.github/workflows/extension-e2e-tests.yml</c>.
 ///
-/// A shard row is disabled by adding <c>disabledIssue</c> to its matrix entry, which keeps the job
-/// visible in the checks list while the underlying fixture is broken. That only works if every step
-/// the disabled shard cannot survive is guarded by the same condition: guarding the prerequisite
-/// installation alone leaves the suite itself running against missing prerequisites, so the shard
-/// fails anyway (or worse, passes without running anything and hides the disable).
+/// Every shard still runs and produces diagnostics, but test failures are temporarily non-blocking.
+/// Setup, compilation, and other harness failures remain blocking because only the test step uses
+/// <c>continue-on-error</c>.
 /// </summary>
 public sealed class ExtensionE2eWorkflowTests
 {
     private const string WorkflowRelativePath = ".github/workflows/extension-e2e-tests.yml";
-    private const string DisabledGuard = "!matrix.disabledIssue";
 
     [Fact]
-    public void DisabledShardRowsSkipEveryShardOnlyStep()
+    public void AllShardRowsRunWithAllowedTestFailures()
     {
         var job = LoadExtensionE2eJob();
 
-        var disabledRows = MatrixIncludeRows(job)
-            .Where(row => row.Children.ContainsKey(new YamlScalarNode("disabledIssue")))
-            .ToList();
-        Assert.NotEmpty(disabledRows);
+        var rows = MatrixIncludeRows(job).ToList();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, row => Assert.Equal("true", Scalar(row, "allowFailure")));
+        Assert.All(rows, row => Assert.False(row.Children.ContainsKey(new YamlScalarNode("disabledIssue"))));
 
         var steps = ((YamlSequenceNode)job.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
-
-        // The suite itself. Without the guard the disabled shard still runs the E2E tests, which is
-        // exactly what `disabledIssue` is supposed to prevent.
-        var runSuiteSteps = steps.Where(step => Scalar(step, "run")?.Contains("run-e2e.js", StringComparison.Ordinal) == true).ToList();
-        Assert.NotEmpty(runSuiteSteps);
-        foreach (var step in runSuiteSteps)
-        {
-            var condition = Scalar(step, "if");
-            Assert.True(
-                condition?.Contains(DisabledGuard, StringComparison.Ordinal) == true,
-                $"Step '{Scalar(step, "name")}' runs the E2E suite but is not guarded by '{DisabledGuard}' (if: {condition ?? "<none>"}).");
-        }
-
-        // Shard-specific setup. Any step conditioned on a matrix capability flag belongs to one
-        // shard only, so a disabled row must skip it too - otherwise the row keeps paying for (and
-        // can keep failing on) setup for a suite that never runs.
-        var shardSetupSteps = steps
-            .Where(step => Scalar(step, "if") is { } condition
-                && condition.Contains("matrix.installAzureFunctions", StringComparison.Ordinal))
-            .ToList();
-        Assert.NotEmpty(shardSetupSteps);
-        foreach (var step in shardSetupSteps)
-        {
-            var condition = Scalar(step, "if")!;
-            Assert.True(
-                condition.Contains(DisabledGuard, StringComparison.Ordinal),
-                $"Step '{Scalar(step, "name")}' is shard-specific setup but is not guarded by '{DisabledGuard}' (if: {condition}).");
-        }
-    }
-
-    [Fact]
-    public void DisabledShardRowsAnnounceWhyTheyAreSkipped()
-    {
-        var job = LoadExtensionE2eJob();
-        var steps = ((YamlSequenceNode)job.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>();
-
-        // A green shard that ran nothing is indistinguishable from a green shard that passed unless
-        // the job says so, so the disable has to be visible in the run itself.
-        var noticeStep = steps.FirstOrDefault(step =>
-            Scalar(step, "if")?.Contains("matrix.disabledIssue", StringComparison.Ordinal) == true
-            && Scalar(step, "if")?.Contains(DisabledGuard, StringComparison.Ordinal) != true);
-
-        Assert.NotNull(noticeStep);
-        Assert.Contains("matrix.disabledIssue", Scalar(noticeStep, "run"), StringComparison.Ordinal);
+        var runSuiteStep = Assert.Single(steps, step => Scalar(step, "name") == "Run extension E2E tests");
+        Assert.Null(Scalar(runSuiteStep, "if"));
+        Assert.Equal("${{ matrix.allowFailure }}", Scalar(runSuiteStep, "continue-on-error"));
     }
 
     private static YamlMappingNode LoadExtensionE2eJob()
