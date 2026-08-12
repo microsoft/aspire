@@ -232,6 +232,46 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A consumer that references the server rather than the database gets a connection string with
+    /// no database name and opens the one named after the user, which is not the database the recipe
+    /// creates. Run mode hides this because the Postgres image creates a database named after
+    /// <c>POSTGRES_USER</c> alongside the ones Aspire creates per child; a recipe provisions one, so
+    /// the reference is left pointing at a database that will not exist and has to be reported.
+    /// </summary>
+    [Fact]
+    public void ServerReferencedInsteadOfItsDatabase_IsReportedAsPointingAtAMissingDatabase()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            pg.AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
+        });
+
+        Assert.Contains("database: 'appdb'", bicep, StringComparison.Ordinal);
+        Assert.Single(logger.Matching(LogLevel.Warning, "pg", "referenced directly"));
+    }
+
+    /// <summary>
+    /// The counterpart to the above: a consumer that references the database itself receives that
+    /// database's name in its connection string, which is exactly what the recipe creates, so there
+    /// is nothing to report.
+    /// </summary>
+    [Fact]
+    public void DatabaseReferencedRatherThanTheServer_IsNotReported()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var pg = b.AddPostgres("pg");
+            var db = pg.AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(db);
+        });
+
+        Assert.Contains("database: 'appdb'", bicep, StringComparison.Ordinal);
+        Assert.Empty(logger.Matching(LogLevel.Warning, "pg", "referenced directly"));
+    }
+
+    /// <summary>
     /// Annotations are the only reference signal available when the <c>database</c> property is
     /// chosen, and a <c>WithEnvironment</c> callback that composes a database's value inline records
     /// none. Picking the first child in that case creates a database the consumer does not use, so
