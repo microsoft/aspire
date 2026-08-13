@@ -179,7 +179,7 @@ public class FileUploadStoreTests
     [Fact]
     public void RemoveUnreferencedFiles_DeletionFails_RetriesOnNextCleanup()
     {
-        using var fileSystemService = new TestFileSystemService(createDirectoryAtTempFilePath: true);
+        using var fileSystemService = new TestFileSystemService(failFirstTempFileDispose: true);
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
@@ -189,10 +189,7 @@ public class FileUploadStoreTests
         fileUploadStore.RemoveUnreferencedFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
-        Assert.True(Directory.Exists(filePath));
-
-        Directory.Delete(filePath);
-        File.Create(filePath).Dispose();
+        Assert.True(File.Exists(filePath));
 
         fileUploadStore.RemoveUnreferencedFiles();
 
