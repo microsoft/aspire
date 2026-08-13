@@ -1016,7 +1016,7 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function removePath(targetPath: string, options: fs.RmOptions): void {
+export function removePath(targetPath: string, options: fs.RmOptions): void {
     const maxAttempts = process.platform === 'win32' ? 40 : 1;
     for (let attempt = 1; ; attempt++) {
         try {

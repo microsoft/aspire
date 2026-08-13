@@ -83,9 +83,6 @@
       <source xml:lang="en">Aspire: Launch default AppHost</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.defaultConfigurationNameForWorkspaceFolder">
-      <source xml:lang="en">Aspire: Launch default AppHost ({0})</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.defaultConfigurationNameForDuplicateWorkspaceFolder">
       <source xml:lang="en">Aspire: Launch default AppHost ({0}: {1})</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unsupportedResourceType">

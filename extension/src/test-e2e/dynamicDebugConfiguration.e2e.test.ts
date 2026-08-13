@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E } from './helpers/fixtures';
+import { executeE2eControlCommand, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
 
@@ -19,7 +19,7 @@ suite('Aspire dynamic debug configuration E2E', function () {
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => restoreWorkspaceFoldersForE2E(),
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
-            () => fs.rmSync(fixtureRoot, { recursive: true, force: true }),
+            () => removePath(fixtureRoot, { recursive: true, force: true }),
         ], 'Dynamic debug configuration E2E teardown failed.');
     });
 
@@ -72,7 +72,7 @@ suite('Aspire dynamic debug configuration E2E', function () {
     });
 
     function createWorkspaceFixture(): void {
-        fs.rmSync(fixtureRoot, { recursive: true, force: true });
+        removePath(fixtureRoot, { recursive: true, force: true });
         fs.mkdirSync(firstFolderPath, { recursive: true });
         fs.mkdirSync(secondFolderPath, { recursive: true });
         const appHostSdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;

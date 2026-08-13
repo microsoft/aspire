@@ -10,7 +10,7 @@ import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { defaultConfigurationName, defaultConfigurationNameForDuplicateWorkspaceFolder, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
@@ -587,7 +587,7 @@ suite('AspireDebugConfigurationProvider', () => {
         const configs = await provider.provideDebugConfigurations(folder);
 
         assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].name, defaultConfigurationNameForWorkspaceFolder(folder.name));
+        assert.strictEqual(configs[0].name, defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString()));
         assert.strictEqual(configs[0].program, projectPath);
         assert.strictEqual(configs[0][appHostSelectionOriginConfigKey], 'default-discovery');
     });
@@ -610,24 +610,36 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.ok(!(appHostSelectionOriginConfigKey in configs[0]));
     });
 
-    test('uses unique dynamic launch config names for duplicate workspace folder aliases', async () => {
-        const firstFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), 'src', 0);
-        const secondFolder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), 'src', 1);
+    test('uses unique dynamic launch config names across unique and duplicate workspace folder aliases', async () => {
+        const firstDuplicateFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), 'src', 1);
+        const secondDuplicateFolder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), 'src', 2);
+        const uniqueFolder = createWorkspaceFolder(
+            path.join(tempDir, 'repo-unique'),
+            `src: ${firstDuplicateFolder.uri.toString()}`,
+            0);
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(tempDir, null), launchReservation);
         sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
-        sandbox.stub(vscode.workspace, 'workspaceFolders').value([firstFolder, secondFolder]);
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([uniqueFolder, firstDuplicateFolder, secondDuplicateFolder]);
 
-        const [firstConfigs, secondConfigs] = await Promise.all([
-            provider.provideDebugConfigurations(firstFolder),
-            provider.provideDebugConfigurations(secondFolder),
+        const [uniqueConfigs, firstDuplicateConfigs, secondDuplicateConfigs] = await Promise.all([
+            provider.provideDebugConfigurations(uniqueFolder),
+            provider.provideDebugConfigurations(firstDuplicateFolder),
+            provider.provideDebugConfigurations(secondDuplicateFolder),
         ]);
+        const configurationNames = [
+            uniqueConfigs[0].name,
+            firstDuplicateConfigs[0].name,
+            secondDuplicateConfigs[0].name,
+        ];
 
         assert.deepStrictEqual(
-            [firstConfigs[0].name, secondConfigs[0].name],
+            configurationNames,
             [
-                defaultConfigurationNameForDuplicateWorkspaceFolder(firstFolder.name, firstFolder.uri.toString()),
-                defaultConfigurationNameForDuplicateWorkspaceFolder(secondFolder.name, secondFolder.uri.toString()),
+                defaultConfigurationNameForWorkspaceFolder(uniqueFolder.name, uniqueFolder.uri.toString()),
+                defaultConfigurationNameForWorkspaceFolder(firstDuplicateFolder.name, firstDuplicateFolder.uri.toString()),
+                defaultConfigurationNameForWorkspaceFolder(secondDuplicateFolder.name, secondDuplicateFolder.uri.toString()),
             ]);
+        assert.strictEqual(new Set(configurationNames).size, configurationNames.length);
     });
 
     test('provides default dynamic launch config when active file is not an AppHost candidate', async () => {
