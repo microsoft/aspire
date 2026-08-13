@@ -1,18 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils;
+
 namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
+    /// <summary>
+    /// Resolves a command-line package source against the invocation directory, returning relative local sources as absolute paths so persisted mappings remain valid elsewhere.
+    /// </summary>
     public static string ResolveForWorkingDirectory(string source, DirectoryInfo workingDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentNullException.ThrowIfNull(workingDirectory);
 
-        return Uri.TryCreate(source, UriKind.Absolute, out _) || Path.IsPathFullyQualified(source)
-            ? source
-            : Path.GetFullPath(source, workingDirectory.FullName);
+        if (Path.IsPathFullyQualified(source) ||
+            UrlHelper.IsHttpUrl(source) ||
+            (Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.IsFile))
+        {
+            return source;
+        }
+
+        return Path.GetFullPath(source, workingDirectory.FullName);
     }
 
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)

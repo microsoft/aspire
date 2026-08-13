@@ -1187,13 +1187,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("https://proxy.example/v3/index.json")]
-    [InlineData("relative-feed")]
-    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery(string sourceOverride)
+    [InlineData("https://proxy.example/v3/index.json", false)]
+    [InlineData("relative-feed", true)]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery(string sourceOverride, bool isRelative)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var expectedSource = sourceOverride == "relative-feed"
-            ? Path.GetFullPath(sourceOverride, workspace.WorkspaceRoot.FullName)
+        var expectedSource = isRelative
+            ? Path.Combine(workspace.WorkspaceRoot.FullName, sourceOverride)
             : sourceOverride;
         string? discoveryCatchAllSource = null;
 
@@ -1240,6 +1240,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(expectedSource, discoveryCatchAllSource);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
     }
 
     [Theory]
