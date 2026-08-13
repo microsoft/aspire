@@ -1752,7 +1752,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 
-        using var cts = new CancellationTokenSource(timeout);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 
         try
         {
@@ -1811,7 +1811,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var cts = new CancellationTokenSource(timeout);
 
         try
         {
