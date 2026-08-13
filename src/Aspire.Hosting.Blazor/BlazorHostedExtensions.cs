@@ -197,7 +197,6 @@ public static class BlazorHostedExtensions
             "msbuild",
             [
                 "-t:ResolveWebAssemblyProjectReferences",
-                "-getProperty:MSBuildVersion",
                 "-getItem:WebAssemblyProjectReference",
                 "-nologo"
             ],
