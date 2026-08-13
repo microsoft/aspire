@@ -1,9 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+
 if (args is ["--list-sdks"])
 {
     Console.WriteLine($"13.5.0 [{Path.Combine(AppContext.BaseDirectory, "sdk")}]");
+    return;
+}
+
+if (args is ["--hang"])
+{
+    var pidPath = Environment.GetEnvironmentVariable("ASPIRE_TEST_HANG_PID_PATH")
+        ?? throw new InvalidOperationException("ASPIRE_TEST_HANG_PID_PATH is not set.");
+    File.WriteAllText(pidPath, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+    await Task.Delay(Timeout.InfiniteTimeSpan);
     return;
 }
 
