@@ -46,15 +46,15 @@
       - "--cs"
       - "Url=${PARAM0}, Secret=${PARAM1}"
     environment:
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://docker-compose-dashboard:18889"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
-      OTEL_SERVICE_NAME: "myapp"
       ASPNETCORE_ENVIRONMENT: "Development"
       PORT: "8001"
       param0: "${PARAM0}"
       param1: "${PARAM1}"
       param2: "${PARAM2}"
       ConnectionStrings__cs: "Url=${PARAM0}, Secret=${PARAM1}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://docker-compose-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "myapp"
     expose:
       - "8001"
     depends_on:
@@ -67,12 +67,12 @@
   project1:
     image: "${PROJECT1_IMAGE}"
     environment:
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://docker-compose-dashboard:18889"
-      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
-      OTEL_SERVICE_NAME: "project1"
       OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
       MYAPP_HTTP: "http://myapp:8001"
       services__myapp__http__0: "http://myapp:8001"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://docker-compose-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "project1"
     networks:
       - "aspire"
 networks:

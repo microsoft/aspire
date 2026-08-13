@@ -4,30 +4,7 @@
 from aspire_app import create_builder
 
 
-with create_builder() as builder:
-    node_app = builder.add_node_app("resource")
-    node_app.with_npm()
-    node_app.with_bun()
-    node_app.with_yarn()
-    node_app.with_pnpm()
-    node_app.with_build_script()
-    node_app.with_run_script()
-    _ = node_app.name
-    _ = node_app.command
-    _ = node_app.working_dir
-    java_script_app = builder.add_java_script_app("resource")
-    java_script_app.with_environment("KEY", "value")
-    _ = java_script_app.name
-    _ = java_script_app.command
-    _ = java_script_app.working_dir
-    vite_app = builder.add_vite_app("resource")
-    vite_app.with_vite_config()
-    vite_app.with_pnpm()
-    vite_app.with_build_script()
-    vite_app.with_run_script()
-    _ = vite_app.name
-    _ = vite_app.command
-    _ = vite_app.working_dir
+def add_deno_app(builder):
     deno_app = builder.add_deno_app("deno-app", "./deno-app", "main.ts")
     deno_app.with_deno(install=False, install_args=["--cached-only"])
     deno_app.with_deno_allow_all(enabled=False)
@@ -46,4 +23,36 @@ with create_builder() as builder:
     deno_app.with_deno_serve()
     deno_app.with_deno_script_args(["--port", "8000"])
     deno_app.with_deno_runtime_args(["--quiet"])
-    builder.run()
+
+
+def main():
+    with create_builder() as builder:
+        node_app = builder.add_node_app("resource", "./node-app", "server.js")
+        node_app.with_npm()
+        node_app.with_bun()
+        node_app.with_yarn()
+        node_app.with_pnpm()
+        node_app.with_build_script()
+        node_app.with_run_script()
+        _ = node_app.name
+        _ = node_app.command
+        _ = node_app.working_dir
+        java_script_app = builder.add_java_script_app("resource", "./javascript-app")
+        java_script_app.with_environment("KEY", "value")
+        _ = java_script_app.name
+        _ = java_script_app.command
+        _ = java_script_app.working_dir
+        vite_app = builder.add_vite_app("resource", "./vite-app")
+        vite_app.with_vite_config()
+        vite_app.with_pnpm()
+        vite_app.with_build_script()
+        vite_app.with_run_script()
+        _ = vite_app.name
+        _ = vite_app.command
+        _ = vite_app.working_dir
+        add_deno_app(builder)
+        builder.run()
+
+
+if __name__ == "__main__":
+    main()

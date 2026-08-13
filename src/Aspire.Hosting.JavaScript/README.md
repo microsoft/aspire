@@ -33,7 +33,7 @@ import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
 
-await builder.addJavaScriptApp("frontend", "../frontend", "app.js");
+await builder.addJavaScriptApp("frontend", "../frontend", { runScriptName: "app.js" });
 
 await builder.build().run();
 ```

@@ -44,7 +44,6 @@ public static partial class JavaScriptHostingExtensions
     private const string NpmHelpLink = "https://nodejs.org/en/download";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
     private const string DenoHelpLink = "https://docs.deno.com/runtime/getting_started/installation/";
-    private const string OtlpEndpointEnvironmentVariable = "OTEL_EXPORTER_OTLP_ENDPOINT";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
     private const string DenoDefaultUser = "deno";
@@ -214,20 +213,7 @@ public static partial class JavaScriptHostingExtensions
                         var copiedAllSource = false;
                         if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
-                            // Copy package files first for better layer caching
-                            if (packageManager.PackageFilesPatterns.Count > 0)
-                            {
-                                foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                                {
-                                    builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                                }
-                            }
-                            else
-                            {
-                                builderStage.Copy(".", ".");
-                                copiedAllSource = true;
-                            }
-
+                            copiedAllSource = builderStage.CopyPackageFilesForInstall(packageManager);
                             builderStage.AddInstallCommand(packageManager, installCommand);
                         }
 
@@ -562,20 +548,7 @@ public static partial class JavaScriptHostingExtensions
                         var copiedAllSource = false;
                         if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
-                            // Copy package files first for better layer caching
-                            if (packageManager.PackageFilesPatterns.Count > 0)
-                            {
-                                foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                                {
-                                    builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                                }
-                            }
-                            else
-                            {
-                                builderStage.Copy(".", ".");
-                                copiedAllSource = true;
-                            }
-
+                            copiedAllSource = builderStage.CopyPackageFilesForInstall(packageManager);
                             builderStage.AddInstallCommand(packageManager, installCommand);
                         }
 
@@ -957,20 +930,7 @@ public static partial class JavaScriptHostingExtensions
                             .EmptyLine()
                             .WorkDir("/app");
 
-                        var copiedAllSource = false;
-                        if (packageManager.PackageFilesPatterns.Count > 0)
-                        {
-                            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                            {
-                                buildStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                            }
-                        }
-                        else
-                        {
-                            buildStage.Copy(".", ".");
-                            copiedAllSource = true;
-                        }
-
+                        var copiedAllSource = buildStage.CopyPackageFilesForInstall(packageManager);
                         buildStage.AddInstallCommand(packageManager, installCommand);
 
                         if (!copiedAllSource)
@@ -1123,15 +1083,8 @@ public static partial class JavaScriptHostingExtensions
         // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
         // "true"/"false" (not "1"), which is what we emit.
         // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
-        builder.WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+        builder.WithDenoOtlpExporter()
             .WithRequiredCommandsFromPackageManager("deno")
-            .WithEnvironment(context =>
-            {
-                if (context.EnvironmentVariables.ContainsKey(OtlpEndpointEnvironmentVariable))
-                {
-                    context.EnvironmentVariables["OTEL_DENO"] = "true";
-                }
-            })
             // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifier resolution, package.json
             // "exports" conditions) the same way Node/Bun do. Mirror the Bun defaults so npm-compat behaves.
             // See https://docs.deno.com/runtime/reference/env_variables/
@@ -1163,6 +1116,21 @@ public static partial class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+        return builder;
+    }
+
+    private static IResourceBuilder<TResource> WithDenoOtlpExporter<TResource>(this IResourceBuilder<TResource> builder)
+        where TResource : IResourceWithEnvironment
+    {
+        builder.WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+
+        var exporter = builder.Resource.Annotations.OfType<OtlpExporterAnnotation>().Last();
+        builder.Resource.Annotations.Remove(exporter);
+        builder.Resource.Annotations.Add(new DenoOtlpExporterAnnotation
+        {
+            RequiredProtocol = exporter.RequiredProtocol,
+        });
 
         return builder;
     }
@@ -1374,7 +1342,7 @@ public static partial class JavaScriptHostingExtensions
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
                .WithContainerFilesSource(GetContainerFilesSourcePath(options.OutputPath))
-               .WithOtlpExporter();
+               .WithOtlpExporterIfMissing();
 
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
@@ -1432,7 +1400,7 @@ public static partial class JavaScriptHostingExtensions
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
                .WithContainerFilesSource(GetContainerFilesSourcePath(outputPath))
-               .WithOtlpExporter()
+               .WithOtlpExporterIfMissing()
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
@@ -1512,13 +1480,49 @@ public static partial class JavaScriptHostingExtensions
 
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
-               .WithOtlpExporter()
+               .WithOtlpExporterIfMissing()
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
             dockerfileBuildAnnotation.HasEntrypoint = true;
+        }
+
+        return builder;
+    }
+
+    private static bool CopyPackageFilesForInstall(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager)
+    {
+        // deno.json can reference sibling import maps, workspace members, and other files that `deno install`
+        // resolves immediately. Copy the complete build context before install because the manifest files alone
+        // are not a self-contained dependency description.
+        if (packageManager.ExecutableName == "deno")
+        {
+            builderStage.Copy(".", ".");
+            return true;
+        }
+
+        if (packageManager.PackageFilesPatterns.Count > 0)
+        {
+            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
+            {
+                builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+            }
+
+            return false;
+        }
+
+        builderStage.Copy(".", ".");
+        return true;
+    }
+
+    private static IResourceBuilder<TResource> WithOtlpExporterIfMissing<TResource>(this IResourceBuilder<TResource> builder)
+        where TResource : JavaScriptAppResource
+    {
+        if (!builder.Resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            builder.WithOtlpExporter();
         }
 
         return builder;
@@ -1691,21 +1695,7 @@ public static partial class JavaScriptHostingExtensions
                         // for the default JavaScript app builder (used by Vite and other build-less apps).
                         packageManager.InitializeDockerBuildStage?.Invoke(dockerBuilder);
 
-                        var copiedAllSource = false;
-
-                        // Copy package files first for better layer caching
-                        if (packageManager.PackageFilesPatterns.Count > 0)
-                        {
-                            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                            {
-                                dockerBuilder.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                            }
-                        }
-                        else
-                        {
-                            dockerBuilder.Copy(".", ".");
-                            copiedAllSource = true;
-                        }
+                        var copiedAllSource = dockerBuilder.CopyPackageFilesForInstall(packageManager);
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {

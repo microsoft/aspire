@@ -366,9 +366,11 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     private static void ConfigureOtlp(IResource resource, DockerComposeAspireDashboardResource dashboard)
     {
+        var otlpExporter = GetEffectiveOtlpExporterAnnotation(resource);
+
         // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
         if (resource is IResourceWithEnvironment resourceWithEnv &&
-            resource.TryGetLastAnnotation<OtlpExporterAnnotation>(out var otlpExporter))
+            otlpExporter is not null)
         {
             var (otlpEndpoint, protocol) = otlpExporter.RequiredProtocol switch
             {
@@ -377,18 +379,37 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 _ => (dashboard.OtlpGrpcEndpoint, "grpc"),
             };
 
-            // Configure OTLP environment variables
-            // Inject the endpoint before workload callbacks that conditionally enable runtime-specific
-            // telemetry exporters based on its presence.
-            resourceWithEnv.Annotations.Insert(0, new EnvironmentCallbackAnnotation(context =>
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
                 return Task.CompletedTask;
             }));
         }
     }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        foreach (var annotation in resource.Annotations.OfType<OtlpExporterAnnotation>())
+        {
+            if (annotation is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+            {
+                continue;
+            }
+
+            foreach (var (name, value) in activationEnvironmentVariables)
+            {
+                environmentVariables.TryAdd(name, value);
+            }
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     private async Task DockerComposeUpAsync(PipelineStepContext context)
     {

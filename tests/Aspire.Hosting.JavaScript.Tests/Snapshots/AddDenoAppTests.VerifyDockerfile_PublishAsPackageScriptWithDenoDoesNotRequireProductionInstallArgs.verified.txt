@@ -1,9 +1,8 @@
 ﻿FROM denoland/deno:2.9.0 AS build
 WORKDIR /app
 ENV DENO_DIR=/deno-dir
-COPY deno.json ./
-RUN deno install
 COPY . .
+RUN deno install
 RUN deno task build
 
 FROM denoland/deno:2.9.0 AS runtime

@@ -3,9 +3,8 @@
 ENV DENO_DIR=/deno-dir
 
 WORKDIR /app
-COPY deno.json ./
-RUN deno install
 COPY . .
+RUN deno install
 
 RUN deno task 'build prod'
 

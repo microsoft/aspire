@@ -5,9 +5,9 @@
 secrets: {}
 config:
   ServiceA:
-    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env1-dashboard-service:18889"
-    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
-    OTEL_SERVICE_NAME: "ServiceA"
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env1-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "ServiceA"

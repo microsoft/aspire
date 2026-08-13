@@ -1710,17 +1710,9 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         builder.AddKubernetesEnvironment("env")
             .WithDashboard(dashboardEnabled);
 
-        // Mirror Deno's endpoint-dependent environment callback without adding a JavaScript
-        // integration dependency to the Kubernetes publisher tests.
         builder.AddContainer("deno", "denoland/deno")
             .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
-            .WithEnvironment(context =>
-            {
-                if (context.EnvironmentVariables.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"))
-                {
-                    context.EnvironmentVariables["OTEL_DENO"] = "true";
-                }
-            });
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
 
         using var app = builder.Build();
         await app.RunAsync();

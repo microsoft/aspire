@@ -537,17 +537,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.AddDockerComposeEnvironment("docker-compose")
             .WithDashboard(dashboardEnabled);
 
-        // Mirror Deno's endpoint-dependent environment callback without adding a JavaScript
-        // integration dependency to the Docker publisher tests.
         builder.AddContainer("deno", "denoland/deno")
             .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
-            .WithEnvironment(context =>
-            {
-                if (context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint))
-                {
-                    context.EnvironmentVariables["OTEL_DENO"] = "true";
-                }
-            });
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
 
         using var app = builder.Build();
         await app.RunAsync();

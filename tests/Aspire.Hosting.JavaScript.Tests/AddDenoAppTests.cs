@@ -31,6 +31,29 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ManifestDoesNotActivateDenoWithoutATargetOtlpEndpoint(bool configurePublish)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithResourceCleanUp(true);
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        if (configurePublish)
+        {
+            denoApp.WithDeno()
+                .PublishAsPackageScript();
+        }
+
+        var exporter = Assert.Single(denoApp.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+        Assert.Equal(OtlpProtocol.HttpProtobuf, exporter.RequiredProtocol);
+        Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(exporter);
+
+        var manifest = await ManifestUtils.GetManifest(denoApp.Resource);
+
+        Assert.Null(manifest["env"]?["OTEL_DENO"]);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task VerifyDockerfile(bool includePackageJson)
@@ -307,6 +330,9 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithBuildScript("build prod")
             .PublishAsPackageScript("start", "--my-arg");
 
+        var exporter = Assert.Single(app.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+        Assert.Equal(OtlpProtocol.HttpProtobuf, exporter.RequiredProtocol);
+
         await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
@@ -316,6 +342,55 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             """ENTRYPOINT ["deno","task","start","--my-arg"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_DenoPackageScriptCopiesReferencedMetadataBeforeInstall()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"importMap":"import_map.json","tasks":{"start":"deno run main.ts"}}""");
+        File.WriteAllText(Path.Combine(appDir, "import_map.json"), """{"imports":{}}""");
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileLines = File.ReadAllLines(Path.Combine(workspace.Path, "js.Dockerfile"));
+        var copySourceIndex = Array.IndexOf(dockerfileLines, "COPY . .");
+        var installIndex = Array.IndexOf(dockerfileLines, "RUN deno install");
+
+        Assert.True(copySourceIndex >= 0, string.Join(Environment.NewLine, dockerfileLines));
+        Assert.True(installIndex > copySourceIndex, string.Join(Environment.NewLine, dockerfileLines));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_JavaScriptAppWithDenoCopiesReferencedMetadataBeforeInstall()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"importMap":"import_map.json","tasks":{"start":"deno run main.ts"}}""");
+        File.WriteAllText(Path.Combine(appDir, "import_map.json"), """{"imports":{}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDeno()
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileLines = File.ReadAllLines(Path.Combine(workspace.Path, "js.Dockerfile"));
+        var copySourceIndex = Array.IndexOf(dockerfileLines, "COPY . .");
+        var installIndex = Array.IndexOf(dockerfileLines, "RUN deno install");
+
+        Assert.True(copySourceIndex >= 0, string.Join(Environment.NewLine, dockerfileLines));
+        Assert.True(installIndex > copySourceIndex, string.Join(Environment.NewLine, dockerfileLines));
     }
 
     [Fact]

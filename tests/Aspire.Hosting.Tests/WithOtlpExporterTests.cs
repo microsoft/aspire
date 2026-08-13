@@ -83,6 +83,7 @@ public class WithOtlpExporterTests
 
         var container = builder.AddResource(new ContainerResource("testSource"))
             .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
             .WithEnvironment(context =>
                 endpointInjected = context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
         using var app = builder.Build();
@@ -98,20 +99,15 @@ public class WithOtlpExporterTests
     }
 
     [Fact]
-    public async Task OptionalHttpOtlpEndpointIsAvailableToLaterEnvironmentCallbacks()
+    public async Task OptionalHttpOtlpAppliesActivationWithoutCallbackOrdering()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = true);
         builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
 
         var container = builder.AddResource(new ContainerResource("testSource"))
-            .WithEnvironment(context =>
-            {
-                if (context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint))
-                {
-                    context.EnvironmentVariables["OTEL_DENO"] = "true";
-                }
-            })
-            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+            .WithEnvironment("CALLBACK_RAN", "true")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
         using var app = builder.Build();
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -119,6 +115,30 @@ public class WithOtlpExporterTests
             serviceProvider: app.Services).DefaultTimeout();
 
         Assert.Equal("http://localhost:4318", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.Equal("http/protobuf", config["OTEL_EXPORTER_OTLP_PROTOCOL"]);
+        Assert.Equal("true", config["OTEL_DENO"]);
+        Assert.Equal("true", config["CALLBACK_RAN"]);
+    }
+
+    [Fact]
+    public async Task LastOtlpExporterAnnotationControlsProtocolAndActivation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = true);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://localhost:4317";
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = null;
+
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services).DefaultTimeout();
+
+        Assert.Equal("http://localhost:4317", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.Equal("grpc", config["OTEL_EXPORTER_OTLP_PROTOCOL"]);
         Assert.Equal("true", config["OTEL_DENO"]);
     }
 
