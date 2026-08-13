@@ -169,11 +169,20 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Shows available public, inspect, and local URLs for the dev tunnel port..
+        ///   Looks up a localized string similar to Opens available public, inspect, and local URLs for the dev tunnel port..
         /// </summary>
         internal static string ShowTunnelUrlsCommandDescription {
             get {
                 return ResourceManager.GetString("ShowTunnelUrlsCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Close.
+        /// </summary>
+        internal static string ShowTunnelUrlsCommandClose {
+            get {
+                return ResourceManager.GetString("ShowTunnelUrlsCommandClose", resourceCulture);
             }
         }
 
@@ -214,11 +223,11 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Dev tunnel URLs are available..
+        ///   Looks up a localized string similar to Dev tunnel URLs can only be shown in an interactive environment..
         /// </summary>
-        internal static string ShowTunnelUrlsCommandSuccess {
+        internal static string ShowTunnelUrlsCommandInteractionUnavailable {
             get {
-                return ResourceManager.GetString("ShowTunnelUrlsCommandSuccess", resourceCulture);
+                return ResourceManager.GetString("ShowTunnelUrlsCommandInteractionUnavailable", resourceCulture);
             }
         }
 

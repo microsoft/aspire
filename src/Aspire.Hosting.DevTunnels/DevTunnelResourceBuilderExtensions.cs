@@ -606,7 +606,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
             .WithCommand(
                 DevTunnelPortResource.ShowTunnelUrlsCommandName,
                 MessageStrings.ShowTunnelUrlsCommandDisplayName,
-                _ => ShowTunnelUrlsAsync(portResource),
+                context => ShowTunnelUrlsAsync(portResource, context),
                 new CommandOptions
                 {
                     Description = MessageStrings.ShowTunnelUrlsCommandDescription,
@@ -721,6 +721,11 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 await notifications.PublishUpdateAsync(portResource, snapshot => snapshot with
                 {
                     State = KnownResourceStates.Running,
+                    Properties =
+                    [
+                        .. snapshot.Properties.Where(p => !IsDevTunnelUrlProperty(p.Name)),
+                        .. GetUrlProperties(portResource)
+                    ],
                     Urls = [.. snapshot.Urls.Select(u => u with
                         {
                             Url = raiseEndpointsAllocatedEvent
@@ -778,45 +783,89 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 {
                     State = KnownResourceStates.Finished,
                     StopTimeStamp = DateTime.UtcNow,
+                    Properties = [.. snapshot.Properties.Where(p => !IsDevTunnelUrlProperty(p.Name))],
                     Urls = [.. snapshot.Urls.Select(u => u with { IsInactive = true /* All URLs inactive */ })]
                 }).ConfigureAwait(false);
                 await eventing.PublishAsync<ResourceStoppedEvent>(new(portResource, e.Services, new(portResource, portResource.Name, stoppedSnapshot!)), ct).ConfigureAwait(false);
             });
     }
 
-    private static Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource)
+    private static async Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource, ExecuteCommandContext context)
+    {
+        var urlProperties = GetUrlProperties(portResource);
+        if (urlProperties.Count == 0)
+        {
+            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable);
+        }
+
+        var interactionService = context.Services.GetRequiredService<IInteractionService>();
+        if (!interactionService.IsAvailable)
+        {
+            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandInteractionUnavailable);
+        }
+
+        var markdown = string.Join(
+            Environment.NewLine,
+            urlProperties.Select(p => $"- **{p.DisplayName}:** <{p.Value}>"));
+
+        // This action only inspects derived resource state, so open an interaction directly instead of
+        // returning command-result data through the generic text visualizer.
+        _ = await interactionService.PromptMessageBoxAsync(
+            MessageStrings.ShowTunnelUrlsCommandResultHeading,
+            markdown,
+            new MessageBoxInteractionOptions
+            {
+                Intent = MessageIntent.Information,
+                EnableMessageMarkdown = true,
+                PrimaryButtonText = MessageStrings.ShowTunnelUrlsCommandClose,
+                ShowSecondaryButton = false
+            },
+            context.CancellationToken).ConfigureAwait(false);
+
+        return CommandResults.Success();
+    }
+
+    private static List<ResourcePropertySnapshot> GetUrlProperties(DevTunnelPortResource portResource)
     {
         if (portResource.LastKnownStatus?.PortUri is not { } portUri)
         {
-            return Task.FromResult(CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable));
+            return [];
         }
 
-        var publicUrl = NormalizeUrl(portUri);
-        var localUrl = portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString;
-        List<string> lines =
+        List<ResourcePropertySnapshot> properties =
         [
-            MessageStrings.ShowTunnelUrlsCommandResultHeading,
-            "",
-            $"{MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel}: {publicUrl}"
+            new(DevTunnelPortResource.TunnelUrlPropertyName, NormalizeUrl(portUri))
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel,
+                IsHighlighted = true
+            }
         ];
 
-        var inspectUrl = GetInspectUrl(portUri);
-        if (inspectUrl is not null)
+        if (GetInspectUrl(portUri) is { } inspectUrl)
         {
-            lines.Add($"{MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel}: {inspectUrl}");
+            properties.Add(new(DevTunnelPortResource.InspectUrlPropertyName, inspectUrl)
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel,
+                IsHighlighted = true
+            });
         }
 
-        if (!string.IsNullOrWhiteSpace(localUrl))
+        if (portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString is { Length: > 0 } localUrl)
         {
-            lines.Add($"{MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel}: {localUrl}");
+            properties.Add(new(DevTunnelPortResource.LocalEndpointUrlPropertyName, localUrl)
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel,
+                IsHighlighted = true
+            });
         }
 
-        return Task.FromResult(CommandResults.Success(
-            MessageStrings.ShowTunnelUrlsCommandSuccess,
-            string.Join(Environment.NewLine, lines),
-            CommandResultFormat.Text,
-            displayImmediately: true));
+        return properties;
     }
+
+    private static bool IsDevTunnelUrlProperty(string name) =>
+        name is DevTunnelPortResource.TunnelUrlPropertyName
+            or DevTunnelPortResource.InspectUrlPropertyName
+            or DevTunnelPortResource.LocalEndpointUrlPropertyName;
 
     private static string NormalizeUrl(Uri url) => new UriBuilder(url).Uri.ToString().TrimEnd('/');
 

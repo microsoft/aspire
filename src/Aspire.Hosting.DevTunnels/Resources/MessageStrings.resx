@@ -154,7 +154,10 @@
     <value>Login with Microsoft</value>
   </data>
   <data name="ShowTunnelUrlsCommandDescription" xml:space="preserve">
-    <value>Shows available public, inspect, and local URLs for the dev tunnel port.</value>
+    <value>Opens available public, inspect, and local URLs for the dev tunnel port.</value>
+  </data>
+  <data name="ShowTunnelUrlsCommandClose" xml:space="preserve">
+    <value>Close</value>
   </data>
   <data name="ShowTunnelUrlsCommandDisplayName" xml:space="preserve">
     <value>Show tunnel URLs</value>
@@ -168,8 +171,8 @@
   <data name="ShowTunnelUrlsCommandResultHeading" xml:space="preserve">
     <value>Dev tunnel URLs</value>
   </data>
-  <data name="ShowTunnelUrlsCommandSuccess" xml:space="preserve">
-    <value>Dev tunnel URLs are available.</value>
+  <data name="ShowTunnelUrlsCommandInteractionUnavailable" xml:space="preserve">
+    <value>Dev tunnel URLs can only be shown in an interactive environment.</value>
   </data>
   <data name="ShowTunnelUrlsCommandTunnelUrlLabel" xml:space="preserve">
     <value>Tunnel URL</value>
