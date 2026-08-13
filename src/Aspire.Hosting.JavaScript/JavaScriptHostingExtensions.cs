@@ -937,19 +937,11 @@ public static partial class JavaScriptHostingExtensions
                     // commands in deno.json, so Aspire cannot safely infer their module graph.
                     var baseBuildImage = baseImageAnnotation?.BuildImage ?? DefaultDenoImage;
                     var buildStage = dockerfileContext.Builder
-                        .From(baseBuildImage, "build")
-                        .EmptyLine()
-                        // Pin DENO_DIR to a deterministic path so the runtime stage can copy the cache
-                        // regardless of the base image's own default. The official denoland/deno image
-                        // already uses /deno-dir, but a custom build image (WithDockerfileBaseImage) may not.
-                        .Env("DENO_DIR", "/deno-dir")
-                        .EmptyLine()
-                        .WorkDir("/app")
-                        .Copy(".", ".");
+                        .From(baseBuildImage, "build");
 
-                    // Pre-cache direct run/serve entrypoints into DENO_DIR at build time. Mirror the Deno
-                    // resolution/lock flags that affect module graph resolution so cache validation sees the
-                    // same config, import map, lockfile, and node_modules mode as the runtime entrypoint.
+                    // Package-script builds install from the manifest layer before copying the remaining source.
+                    // Direct run/serve builds copy the full module graph first, then cache it with the same
+                    // resolution and lock flags used by the runtime entrypoint.
                     dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
                     if (publishMode?.Mode == JavaScriptPublishMode.PackageScript)
                     {
@@ -959,14 +951,45 @@ public static partial class JavaScriptHostingExtensions
                             throw new InvalidOperationException("PublishAsPackageScript requires a Deno package manager. Add a deno.json file or call WithDeno().");
                         }
 
+                        buildStage.EmptyLine();
+                        packageManager.InitializeDockerBuildStage?.Invoke(buildStage);
                         buildStage
                             .EmptyLine()
-                            .AddInstallCommand(packageManager, installCommand);
+                            .WorkDir("/app");
+
+                        var copiedAllSource = false;
+                        if (packageManager.PackageFilesPatterns.Count > 0)
+                        {
+                            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
+                            {
+                                buildStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+                            }
+                        }
+                        else
+                        {
+                            buildStage.Copy(".", ".");
+                            copiedAllSource = true;
+                        }
+
+                        buildStage.AddInstallCommand(packageManager, installCommand);
+
+                        if (!copiedAllSource)
+                        {
+                            buildStage.Copy(".", ".");
+                        }
                     }
                     else
                     {
                         var denoCacheCommand = BuildDenoCacheCommand(dockerfileContext.Resource, scriptPath, resource.WorkingDirectory);
                         buildStage
+                            .EmptyLine()
+                            // Pin DENO_DIR to a deterministic path so the runtime stage can copy the cache
+                            // regardless of the base image's own default. The official denoland/deno image
+                            // already uses /deno-dir, but a custom build image (WithDockerfileBaseImage) may not.
+                            .Env("DENO_DIR", "/deno-dir")
+                            .EmptyLine()
+                            .WorkDir("/app")
+                            .Copy(".", ".")
                             .EmptyLine()
                             .Run(denoCacheCommand);
                     }

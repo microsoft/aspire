@@ -310,6 +310,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        await Verify(dockerfileContents);
         Assert.Equal("RUN deno install", GetDockerfileLine(dockerfileContents, "RUN deno install"));
         Assert.Equal("RUN deno task 'build prod'", GetDockerfileLine(dockerfileContents, "RUN deno task"));
         Assert.Equal(

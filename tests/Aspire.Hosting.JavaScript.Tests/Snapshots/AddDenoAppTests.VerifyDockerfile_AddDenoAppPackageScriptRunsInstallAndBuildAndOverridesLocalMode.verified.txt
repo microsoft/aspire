@@ -1,0 +1,24 @@
+﻿FROM denoland/deno:2.9.0 AS build
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY deno.json ./
+RUN deno install
+COPY . .
+
+RUN deno task 'build prod'
+
+FROM denoland/deno:2.9.0 AS runtime
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY --from=build --chown=deno:deno /app /app
+COPY --from=build --chown=deno:deno /deno-dir /deno-dir
+
+ENV NODE_ENV=production
+
+USER deno
+
+ENTRYPOINT ["deno","task","start","--my-arg"]
