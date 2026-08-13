@@ -15,10 +15,6 @@
     <!-- Override Arcade's embedded PDBs: the WASM debugger needs separate portable PDB files
          served alongside the .wasm assemblies in _framework/ to bind breakpoints. -->
     <DebugType>portable</DebugType>
-    <!-- Workaround: monovsdbg_wasm WebCIL parser fails in hosted mode.
-         Serving plain .dll files bypasses the issue.
-         Tracking: https://github.com/microsoft/vscode-dotnettools/issues/3002 -->
-    <WasmEnableWebcil>false</WasmEnableWebcil>
     <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
     <MetricsSupport>true</MetricsSupport>
     <EventSourceSupport>true</EventSourceSupport>
