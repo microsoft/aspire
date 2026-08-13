@@ -3,15 +3,16 @@
 
 using System.Threading.Channels;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
-namespace Aspire.Hosting.Tests;
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
 public class InteractionServiceTests
@@ -172,6 +173,8 @@ public class InteractionServiceTests
             () => interactionService.PromptNotificationAsync("Are you sure?", "Confirmation")).DefaultTimeout();
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptMessageBoxAsync("Are you sure?", "Confirmation")).DefaultTimeout();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptProgressAsync("Please wait", "Working...")).DefaultTimeout();
     }
 
     [Fact]
@@ -216,7 +219,8 @@ public class InteractionServiceTests
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            configuration);
+            configuration,
+            new TestInteractionFileUploadStore());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -243,7 +247,8 @@ public class InteractionServiceTests
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            configuration);
+            configuration,
+            new TestInteractionFileUploadStore());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -265,7 +270,8 @@ public class InteractionServiceTests
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
-            configuration);
+            configuration,
+            new TestInteractionFileUploadStore());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1120,6 +1126,179 @@ public class InteractionServiceTests
         Assert.NotNull(ex);
     }
 
+    [Fact]
+    public async Task PromptProgressAsync_WithWork_CompletesSuccessfully()
+    {
+        var interactionService = CreateInteractionService();
+
+        var workExecuted = false;
+        var result = await interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            Work = async ctx =>
+            {
+                await Task.Delay(10, ctx.CancellationToken);
+                workExecuted = true;
+            }
+        }).DefaultTimeout();
+
+        Assert.True(workExecuted);
+        Assert.True(result.Data);
+        Assert.False(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithWork_CancelledViaButton_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        var tcs = new TaskCompletionSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel",
+            Work = async ctx =>
+            {
+                tcs.SetResult();
+                // Wait indefinitely until canceled
+                await Task.Delay(Timeout.Infinite, ctx.CancellationToken);
+            }
+        });
+
+        // Wait for work to start
+        await tcs.Task.DefaultTimeout();
+
+        // Simulate button click from dashboard
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithWorkThatHandlesCancellation_CancelledViaButton_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        // Run continuations asynchronously so the rest of the test never resumes inline on the work callback's
+        // thread. Inlining would run the cancellation below before the callback returns, so the prompt task could
+        // never complete and the test would deadlock until the timeout.
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel",
+            Work = async ctx =>
+            {
+                tcs.SetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ctx.CancellationToken);
+                }
+                catch (OperationCanceledException) when (ctx.CancellationToken.IsCancellationRequested)
+                {
+                }
+            }
+        });
+
+        await tcs.Task.DefaultTimeout();
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithWorkThatHandlesCancellation_ExternallyCancelled_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        using var cts = new CancellationTokenSource();
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            Work = async ctx =>
+            {
+                tcs.SetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ctx.CancellationToken);
+                }
+                catch (OperationCanceledException) when (ctx.CancellationToken.IsCancellationRequested)
+                {
+                }
+            }
+        }, cancellationToken: cts.Token);
+
+        await tcs.Task.DefaultTimeout();
+
+        // External cancellation completes the interaction with a null state, unlike the cancel button which
+        // sends false. Both must still surface as canceled even though the work returned normally.
+        cts.Cancel();
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithoutWork_Cancellation_ClosesDialog()
+    {
+        var interactionService = CreateInteractionService();
+
+        var cts = new CancellationTokenSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", cancellationToken: cts.Token);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        Assert.Equal(Interaction.InteractionState.InProgress, interaction.State);
+
+        cts.Cancel();
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithoutWork_ButtonClick_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel"
+        });
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        // Simulate button click from dashboard (result = false means cancel button)
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_NullTitle_CreatesInteraction()
+    {
+        var interactionService = CreateInteractionService();
+
+        var cts = new CancellationTokenSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait...", cancellationToken: cts.Token);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        Assert.Equal(string.Empty, interaction.Title);
+        Assert.Equal("Please wait...", interaction.Message);
+        Assert.IsType<Interaction.ProgressInteractionInfo>(interaction.InteractionInfo);
+
+        cts.Cancel();
+        await resultTask.DefaultTimeout();
+    }
+
     private static async Task CompleteInteractionAsync(InteractionService interactionService, int interactionId, InteractionCompletionState state, List<DashboardServiceData.InputDto>? inputs = null)
     {
         await interactionService.ProcessInteractionFromClientAsync(
@@ -1146,15 +1325,220 @@ public class InteractionServiceTests
             CancellationToken.None);
     }
 
-    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null)
+    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null)
     {
         var configuration = new ConfigurationBuilder().Build();
         return new InteractionService(
             NullLogger<InteractionService>.Instance,
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            configuration);
+            configuration,
+            fileUploadStore ?? new TestInteractionFileUploadStore());
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileWithValue_PassesValidation()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
+        var resultTask = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        fileUploadStore.CompleteInteractionCallback = _ => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "file-content-here", InputType.File, Files: [new InputFileDto("file1", "test.txt", "/tmp/test.txt")])]);
+
+        var result = await resultTask;
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CompletedInteractions));
+        var resultInput = Assert.IsType<InteractionInput>(result.Data);
+        Assert.Single(resultInput.Files!);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_Canceled_CancelsFileUploads()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File };
+        var resultTask = interactionService.PromptInputAsync("Select file", "please", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        fileUploadStore.CancelInteractionCallback = _ => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true },
+            inputs: []);
+
+        var result = await resultTask;
+
+        Assert.True(result.Canceled);
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CanceledInteractions));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileInputCancellationToken_CancelsFileUploadsBeforeCompletion()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File };
+        var resultTask = interactionService.PromptInputAsync("Select file", "please", input, cancellationToken: cancellationTokenSource.Token);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        fileUploadStore.CancelInteractionCallback = _ => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        await cancellationTokenSource.CancelAsync();
+        var result = await resultTask;
+
+        Assert.True(result.Canceled);
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CanceledInteractions));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_TextInputComplete_DoesNotUseFileUploadStore()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+
+        var input = new InteractionInput { Name = "Text", InputType = InputType.Text };
+        var resultTask = interactionService.PromptInputAsync("Enter text", "please", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("Text", "value", InputType.Text)]);
+
+        var result = await resultTask;
+
+        Assert.False(result.Canceled);
+        Assert.Empty(fileUploadStore.StartedInteractions);
+        Assert.Empty(fileUploadStore.CompletedInteractions);
+        Assert.Empty(fileUploadStore.CanceledInteractions);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_TextInputCanceled_DoesNotUseFileUploadStore()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+
+        var input = new InteractionInput { Name = "Text", InputType = InputType.Text };
+        var resultTask = interactionService.PromptInputAsync("Enter text", "please", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true },
+            inputs: []);
+
+        var result = await resultTask;
+
+        Assert.True(result.Canceled);
+        Assert.Empty(fileUploadStore.StartedInteractions);
+        Assert.Empty(fileUploadStore.CompletedInteractions);
+        Assert.Empty(fileUploadStore.CanceledInteractions);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileRequiredEmpty_ReturnErrors()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
+
+        // The interaction should still be in progress due to required field being empty
+        Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        Assert.Collection(input.ValidationErrors,
+            error => Assert.Equal("Value is required.", error));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileOptionalEmpty_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = false };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_RejectsInvalidValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = 0
+        });
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = -1
+        });
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_AcceptsValidValues()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = 1024 * 1024
+        };
+
+        Assert.Equal(1024 * 1024, input.MaxFileSize);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_DefaultsToNull()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File
+        };
+
+        Assert.Null(input.MaxFileSize);
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

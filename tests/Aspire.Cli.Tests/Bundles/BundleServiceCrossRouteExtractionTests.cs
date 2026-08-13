@@ -12,8 +12,8 @@ namespace Aspire.Cli.Tests.Bundles;
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
 /// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
-/// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, or unknown sidecars fall
-/// through to the default Aspire home.
+/// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, unknown, or read-only
+/// package-manager sidecars fall through to the default Aspire home.
 /// </summary>
 public class BundleServiceCrossRouteExtractionTests
 {
@@ -40,22 +40,25 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
     // 6) localhive canonical: local dev hive with the same bin layout as script.
     [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
-    // 7) Cross-route smuggle case: a brew-source sidecar dropped into a
+    // 7) Nix canonical: package output under /nix/store is read-only, so the
+    //    bundle payload must extract into the user-owned default Aspire home.
+    [InlineData("nix", "nix/store/abcd1234-aspire-cli-13.4.6/bin/aspire", DefaultAspireHome)]
+    // 8) Cross-route smuggle case: a brew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
     //    producer side correctly suppresses the smuggled sidecar, this row's
     //    input condition never arises in practice; the test verifies the
     //    reader's behavior is well-defined and consistent for all inputs.
     [InlineData("brew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
-    // 8) script source dropped at a flat-cellar layout (misuse, but defined):
+    // 9) script source dropped at a flat-cellar layout (misuse, but defined):
     //    script maps to parent-of-binary, so the result is one level above the
     //    cask version dir. Not a real install pattern; locks in determinism.
     [InlineData("script", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire")]
-    // 9) No sidecar at all: fallback to default Aspire home.
+    // 10) No sidecar at all: fallback to default Aspire home.
     [InlineData(null, ".aspire/bin/aspire", DefaultAspireHome)]
-    // 10) Sidecar with invalid JSON: parser throws, treated as no sidecar.
+    // 11) Sidecar with invalid JSON: parser throws, treated as no sidecar.
     [InlineData("__invalid__", ".aspire/bin/aspire", DefaultAspireHome)]
-    // 11) Sidecar with an unknown source value: switch default arm, same as
+    // 12) Sidecar with an unknown source value: switch default arm, same as
     //     missing sidecar — default Aspire home.
     [InlineData("github-actions", ".aspire/bin/aspire", DefaultAspireHome)]
     public void ComputeDefaultExtractDir_RouteAndPrefixCombinations_ProduceExpectedExtractDir(

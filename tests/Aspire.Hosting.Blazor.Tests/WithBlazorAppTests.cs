@@ -255,7 +255,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
                 Properties = [],
                 State = resourceState
             },
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         };
 
         Assert.Equal(expectedDebugState, commands["debug-in-browser"].UpdateState(context));
@@ -263,7 +263,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithClient_CreatesBrowserLaunchConfiguration()
+    public async Task WithClient_CreatesBrowserLaunchConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
@@ -278,7 +278,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         gateway.WithBlazorClientApp(wasmApp);
 
         var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
-        var launchConfiguration = InvokeLaunchConfigurationAnnotator(debuggerResource);
+        var launchConfiguration = await InvokeLaunchConfigurationAnnotatorAsync(debuggerResource);
 
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
         Assert.Equal("https://localhost:7443/store/", launchConfiguration.Url);
@@ -414,12 +414,12 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             name => Assert.Equal("public", name));
     }
 
-    private static BrowserLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<BrowserLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var executable = Executable.Create("test", "browser");
-        supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug);
+        await supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug, CancellationToken.None);
 
         Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

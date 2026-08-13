@@ -21,3 +21,4 @@ ASPIREEXPORT013 | Design | Warning | AspireExportAnalyzer, [Documentation](https
 ASPIREEXPORT014 | Design | Error | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT014)
 ASPIREEXPORT015 | Design | Error | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT015)
 ASPIREEXPORT016 | Design | Warning | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT016)
+ASPIREEXPORT017 | Design | Error | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT017)

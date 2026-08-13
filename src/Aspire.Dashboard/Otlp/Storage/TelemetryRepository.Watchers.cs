@@ -57,7 +57,7 @@ public sealed partial class TelemetryRepository
             // (resource, traceId, hasError, telemetry filters, text fragments) at the query level.
             var existingSpans = GetSpans(new GetSpansRequest
             {
-                ResourceKey = request.ResourceKey,
+                ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
                 Filters = request.Filters,
@@ -148,7 +148,7 @@ public sealed partial class TelemetryRepository
             // Get existing logs snapshot (capped to prevent OOM)
             var existingLogs = GetLogs(new GetLogsContext
             {
-                ResourceKey = request.ResourceKey,
+                ResourceKeys = request.ResourceKeys,
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
                 Filters = request.Filters,
@@ -224,7 +224,7 @@ public sealed partial class TelemetryRepository
                 var request = watcher.Request;
 
                 // Check if watcher is filtering by resource
-                if (request.ResourceKey is { } key && !key.Equals(resourceKey))
+                if (request.ResourceKeys is { Count: > 0 } keys && !keys.Contains(resourceKey))
                 {
                     continue;
                 }
@@ -269,7 +269,7 @@ public sealed partial class TelemetryRepository
                 var request = watcher.Request;
 
                 // Check if watcher is filtering by resource
-                if (request.ResourceKey is { } key && !key.Equals(resourceKey))
+                if (request.ResourceKeys is { Count: > 0 } keys && !keys.Contains(resourceKey))
                 {
                     continue;
                 }

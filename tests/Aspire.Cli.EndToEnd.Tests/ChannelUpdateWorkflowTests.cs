@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -41,7 +40,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_TypeScript_PreviewsStablePackagesAndPreservesChannel()
+    public async Task UpdateToStable_TypeScript_PreviewsStablePkgsAndKeepsChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -116,7 +115,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             ? "./.aspire/modules/aspire.mjs"
             : "./.aspire/modules/aspire.js";
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         // Step 3: Add the first package on the non-stable channel. Don't pass --non-interactive — the
         // helper handles both direct success and the "based on NuGet.config" version picker that
@@ -227,7 +226,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_CSharpSingleFileInit_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_CSharpSingleFileInit_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -256,7 +255,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateCsharpInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.AspireInitAsync(counter);
 
@@ -270,7 +269,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_CSharpEmptyAppHost_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_CSharpEmptyAppHost_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -304,13 +303,13 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
         }
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
     }
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task UpdateProjectChannelToStable_TypeScriptSingleFileInit_PreservesAspireConfigChannel()
+    public async Task UpdateToStable_TypeScriptSingleFileInit_KeepsConfigChannel()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -339,7 +338,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateTsInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
@@ -415,6 +414,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         var updatePrompt = new CellPatternSearcher().Find("Perform updates?");
         var upToDateMessage = new CellPatternSearcher().Find("Project is up to date! (no updates necessary)");
         var channelUpdateLine = new CellPatternSearcher().Find("aspire.config.json#channel");
+        var cliUpdatePrompt = new CellPatternSearcher().Find("Update the Aspire CLI now and re-run");
         var expectedPackageLine = expectedPackageInPlan is not null
             ? new CellPatternSearcher().Find(expectedPackageInPlan)
             : null;
@@ -422,20 +422,41 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         var sawChannelUpdateLine = false;
         var sawExpectedPackageLine = expectedPackageLine is null;
         var sawUpdatePrompt = false;
+        var sawUpToDateMessage = false;
+        var sawCliUpdatePrompt = false;
 
         await auto.TypeAsync("aspire update --channel stable --nuget-config-dir .");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            sawChannelUpdateLine |= channelUpdateLine.Search(snapshot).Count > 0;
-            if (expectedPackageLine is not null && expectedPackageLine.Search(snapshot).Count > 0)
-            {
-                sawExpectedPackageLine = true;
-            }
-            sawUpdatePrompt |= updatePrompt.Search(snapshot).Count > 0;
 
-            return sawUpdatePrompt || upToDateMessage.Search(snapshot).Count > 0;
-        }, TimeSpan.FromMinutes(3), description: "waiting for stable update preview");
+        async Task WaitForStableUpdatePreviewAsync(bool allowCliUpdatePrompt)
+        {
+            await auto.WaitUntilAsync(snapshot =>
+            {
+                sawChannelUpdateLine |= channelUpdateLine.Search(snapshot).Count > 0;
+                if (expectedPackageLine is not null && expectedPackageLine.Search(snapshot).Count > 0)
+                {
+                    sawExpectedPackageLine = true;
+                }
+                sawUpdatePrompt |= updatePrompt.Search(snapshot).Count > 0;
+                sawUpToDateMessage |= upToDateMessage.Search(snapshot).Count > 0;
+                var foundCliUpdatePrompt = cliUpdatePrompt.Search(snapshot).Count > 0;
+                sawCliUpdatePrompt |= foundCliUpdatePrompt;
+
+                return sawUpdatePrompt || sawUpToDateMessage || (allowCliUpdatePrompt && foundCliUpdatePrompt);
+            }, TimeSpan.FromMinutes(3), description: "waiting for stable update preview");
+        }
+
+        await WaitForStableUpdatePreviewAsync(allowCliUpdatePrompt: true);
+
+        if (sawCliUpdatePrompt && !sawUpdatePrompt && !sawUpToDateMessage)
+        {
+            // Stable release versions sort higher than same-base PR prerelease versions
+            // (for example, 13.4.3 > 13.4.3-pr.18093.g...). Decline the CLI self-update
+            // prompt so the project update preview can continue. The prompt remains in the
+            // terminal snapshot after the key is accepted, so the second wait must ignore it.
+            await auto.TypeAsync("n");
+            await WaitForStableUpdatePreviewAsync(allowCliUpdatePrompt: false);
+        }
 
         Assert.False(sawChannelUpdateLine, "Stable channel updates should not enqueue an aspire.config.json#channel rewrite.");
         Assert.True(sawExpectedPackageLine, $"Expected the stable update preview to include '{expectedPackageInPlan}'.");

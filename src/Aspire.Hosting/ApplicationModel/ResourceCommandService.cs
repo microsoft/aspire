@@ -2,12 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
+#pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
 
 /// <summary>
 /// A service to execute resource commands.
@@ -365,7 +366,7 @@ public class ResourceCommandService
                 var context = new ExecuteCommandContext
                 {
                     ResourceName = resourceId,
-                    ServiceProvider = _serviceProvider,
+                    Services = _serviceProvider,
                     CancellationToken = cancellationToken,
                     Logger = logger,
                     Arguments = arguments
@@ -376,7 +377,7 @@ public class ResourceCommandService
                 // not attempt to prompt the user.
                 using var _ = nonInteractive ? InteractionService.StartNonInteractiveScope() : default;
 
-                var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);
+                var result = await ExecuteCommandWithOptionalProgressAsync(annotation, context, cancellationToken).ConfigureAwait(false);
                 if (result.Success)
                 {
                     logger.LogInformation("Successfully executed command '{CommandName}'.", commandName);
@@ -407,6 +408,60 @@ public class ResourceCommandService
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
+    }
+
+    private async Task<ExecuteCommandResult> ExecuteCommandWithOptionalProgressAsync(
+        ResourceCommandAnnotation annotation,
+        ExecuteCommandContext context,
+        CancellationToken cancellationToken)
+    {
+        if (annotation.Progress is not { Message: { Length: > 0 } } progressOptions)
+        {
+            return await annotation.ExecuteCommand(context).ConfigureAwait(false);
+        }
+
+        var interactionService = _serviceProvider.GetRequiredService<IInteractionService>();
+        if (!interactionService.IsAvailable)
+        {
+            // No interactive UI available — execute without progress dialog.
+            return await annotation.ExecuteCommand(context).ConfigureAwait(false);
+        }
+
+        ExecuteCommandResult? commandResult = null;
+
+        var options = new ProgressInteractionOptions
+        {
+            Work = async progress =>
+            {
+                // Use a linked token so that clicking Cancel in the progress dialog
+                // cancels the command execution.
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(progress.CancellationToken, cancellationToken);
+                var linkedContext = new ExecuteCommandContext
+                {
+                    ResourceName = context.ResourceName,
+                    Services = context.Services,
+                    CancellationToken = linkedCts.Token,
+                    Logger = context.Logger,
+                    Arguments = context.Arguments
+                };
+
+                commandResult = await annotation.ExecuteCommand(linkedContext).ConfigureAwait(false);
+            }
+        };
+
+        if (!progressOptions.HideCancelButton)
+        {
+            options.PrimaryButtonText = InteractionStrings.CommandProgressCancelButtonText;
+        }
+
+        var progressResult = await interactionService.PromptProgressAsync(progressOptions.Message, title: progressOptions.Title, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (progressResult.Canceled)
+        {
+            return CommandResults.Canceled();
+        }
+
+        return commandResult ?? CommandResults.Canceled();
     }
 
     internal async Task<(ExecuteCommandResult Result, InteractionInputCollection? Arguments)> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
@@ -535,12 +590,12 @@ public class ResourceCommandService
 
             if (argument.Disabled)
             {
-                // Dynamic loading can leave a dependent input disabled after it has normalized a
-                // harmless default/sentinel value, such as Browser Logs using the default profile
-                // while Shared mode is off. Only report submitted values for dynamic inputs that
-                // never loaded because their dependencies were incomplete, for example
-                // priority=express without a selected item.
-                if (!string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && loadedDynamicArgumentNames?.Contains(argument.Name) != true)
+                // Interactive prompts own disabled-input handling, so loadedDynamicArgumentNames is
+                // null for arguments they accept. For non-interactive requests, reject a value only
+                // when the dynamic callback could not run because its dependencies were incomplete.
+                // A callback that ran may intentionally retain a harmless default while leaving the
+                // input disabled, such as Browser Logs keeping the default profile when Shared mode is off.
+                if (loadedDynamicArgumentNames is not null && !string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
                 }
@@ -784,4 +839,3 @@ internal sealed class ResourceCommandExecutionOptions
     public bool NonInteractive { get; init; }
 }
 
-#pragma warning restore ASPIREINTERACTION001

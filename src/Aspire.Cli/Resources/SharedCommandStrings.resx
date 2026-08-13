@@ -152,7 +152,7 @@
     <value>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</value>
   </data>
   <data name="LsStreamOptionDescription" xml:space="preserve">
-    <value>Stream newline-delimited JSON discovery events. Requires --format json</value>
+    <value>Output discovered AppHosts as newline-delimited JSON. Requires --format json</value>
   </data>
   <data name="LsStreamRequiresJson" xml:space="preserve">
     <value>The --stream option requires --format json.</value>
@@ -182,6 +182,9 @@
   <data name="MultipleInScopeAppHosts" xml:space="preserve">
     <value>Multiple running AppHosts found in the current directory. Select from running AppHosts.</value>
   </data>
+  <data name="MultipleAppHostsNonInteractive" xml:space="preserve">
+    <value>Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</value>
+  </data>
   <data name="PromptRunAgentInit" xml:space="preserve">
     <value>Would you like to configure AI agent environments for this project?</value>
   </data>
@@ -206,5 +209,9 @@
   <data name="NonInteractiveRequiresYesFormat" xml:space="preserve">
     <value>The {0} command requires --yes when the --non-interactive option is specified.</value>
     <comment>{0} is the command name.</comment>
+  </data>
+  <data name="UnrecognizedOptionDidYouMeanFormat" xml:space="preserve">
+    <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
+    <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
   </data>
 </root>

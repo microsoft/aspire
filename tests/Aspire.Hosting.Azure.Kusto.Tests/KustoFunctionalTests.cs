@@ -39,7 +39,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task KustoEmulator_Starts()
     {
@@ -89,7 +89,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithDatabase_CanReadIngestedData()
@@ -168,7 +168,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task KustoEmulator_WithDatabaseThatAlreadyExists_ErrorIsIgnored()
     {
@@ -195,7 +195,7 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithInvalidDatabase_LogsErrorAndContinues()
@@ -228,14 +228,14 @@ public class KustoFunctionalTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15509", typeof(PlatformDetection), nameof(PlatformDetection.IsLinux))]
     public async Task KustoEmulator_WithBindMount_IsUsedForPersistence()
     {
         using var timeout = new CancellationTokenSource(TestConstants.ExtraLongTimeoutTimeSpan);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, TestContext.Current.CancellationToken);
-        using var temp = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(_testOutputHelper);
 
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
 
@@ -244,7 +244,7 @@ public class KustoFunctionalTests
         var script = AzureKustoEmulatorContainerDefaults.DefaultCreateDatabaseCommand(dbName, dbPath);
         var kusto = builder.AddAzureKustoCluster("kusto").RunAsEmulator(configureContainer: container =>
         {
-            container.WithBindMount(temp.Path, dbPath);
+            container.WithBindMount(workspace.Path, dbPath);
         });
         var kustoDb = kusto.AddReadWriteDatabase(dbName).WithCreationScript(script);
 
@@ -268,7 +268,7 @@ public class KustoFunctionalTests
                 RecurseSubdirectories = true,
             };
 
-            return Directory.GetFileSystemEntries(temp.Path, searchPattern, enumerationOptions);
+            return Directory.GetFileSystemEntries(workspace.Path, searchPattern, enumerationOptions);
         }
     }
 

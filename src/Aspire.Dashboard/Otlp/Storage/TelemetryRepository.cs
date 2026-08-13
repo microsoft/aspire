@@ -442,9 +442,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key));
+            }
 
             if (resources.Count == 0)
             {
@@ -512,7 +516,7 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         var logsContext = new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters =
@@ -543,7 +547,7 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         var logsContext = new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters =
@@ -616,9 +620,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetTracesResponse GetTraces(GetTracesRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {
@@ -708,9 +716,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetSpansResponse GetSpans(GetSpansRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {
@@ -969,10 +981,17 @@ public sealed partial class TelemetryRepository : IDisposable
             }
         }
 
-        // A trace matches when one of its spans matches all non-duration filters.
+        // Single pass over spans handles both filter polarities:
+        // - Negative filters (not-equal, not-contains) use ALL-span semantics: the trace is
+        //   excluded if ANY span violates the condition.
+        // - Positive filters use ANY-span semantics: the trace matches when at least one span
+        //   satisfies all positive filters.
+        var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
-            var match = true;
+            // Once a positive match has been found on an earlier span, skip re-evaluating
+            // positive filters on subsequent spans (only negative filters still need checking).
+            var positiveMatch = !hasPositiveMatch;
             foreach (var filter in filters)
             {
                 if (filter.IsTraceDurationFilter())
@@ -980,20 +999,29 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (!filter.Apply(span))
+                if (filter.IsNegativeFilter)
                 {
-                    match = false;
-                    break;
+                    if (!filter.Apply(span))
+                    {
+                        return false;
+                    }
+                }
+                else if (positiveMatch)
+                {
+                    if (!filter.Apply(span))
+                    {
+                        positiveMatch = false;
+                    }
                 }
             }
 
-            if (match)
+            if (positiveMatch)
             {
-                return true;
+                hasPositiveMatch = true;
             }
         }
 
-        return false;
+        return hasPositiveMatch;
     }
 
     private static bool MatchesFilters(OtlpTrace trace, List<TraceFilter> optimizedFilters)
@@ -1007,10 +1035,15 @@ public sealed partial class TelemetryRepository : IDisposable
             }
         }
 
-        // A trace matches when one of its spans matches all non-duration filters.
+        // Single pass over spans handles both filter polarities:
+        // - Negative filters use ALL-span semantics (any violation excludes the trace).
+        // - Positive filters use ANY-span semantics (one span matching all suffices).
+        var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
-            var match = true;
+            // Once a positive match has been found on an earlier span, skip re-evaluating
+            // positive filters on subsequent spans (only negative filters still need checking).
+            var positiveMatch = !hasPositiveMatch;
             foreach (var filter in optimizedFilters)
             {
                 if (filter.IsDurationFilter)
@@ -1018,25 +1051,36 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (!filter.Apply(span))
+                if (filter.IsNegativeFilter)
                 {
-                    match = false;
-                    break;
+                    if (!filter.Apply(span))
+                    {
+                        return false;
+                    }
+                }
+                else if (positiveMatch)
+                {
+                    if (!filter.Apply(span))
+                    {
+                        positiveMatch = false;
+                    }
                 }
             }
 
-            if (match)
+            if (positiveMatch)
             {
-                return true;
+                hasPositiveMatch = true;
             }
         }
 
-        return false;
+        return hasPositiveMatch;
     }
 
     private readonly record struct TraceFilter(TelemetryFilter Filter, DurationFilter? OptimizedDurationFilter, StringFilter? OptimizedStringFilter)
     {
         public bool IsOptimized => OptimizedDurationFilter is not null || OptimizedStringFilter is not null;
+
+        public bool IsNegativeFilter => Filter.IsNegativeFilter;
 
         public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsTraceDurationFilter();
 
@@ -1132,6 +1176,7 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             if (filter is FieldTelemetryFilter fieldFilter &&
                 !FieldTelemetryFilter.IsNumericField(fieldFilter.Field) &&
+                !FieldTelemetryFilter.IsDateField(fieldFilter.Field) &&
                 IsSupportedCondition(fieldFilter.Condition))
             {
                 stringFilter = new StringFilter(fieldFilter.Field, fieldFilter.Condition, fieldFilter.Value);
@@ -1161,7 +1206,14 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             else
             {
-                if (fieldValue.Value1 is not null && IsMatch(fieldValue.Value1))
+                // And — both values must satisfy the not-equal/not-contains condition.
+                // When the field is absent (Value1 is null), the span trivially satisfies the
+                // negative condition — a span without the field cannot contain/equal the value.
+                if (fieldValue.Value1 is null)
+                {
+                    return true;
+                }
+                if (IsMatch(fieldValue.Value1))
                 {
                     if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2))
                     {

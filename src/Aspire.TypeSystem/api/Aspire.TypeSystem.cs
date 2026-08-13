@@ -39,6 +39,8 @@ namespace Aspire.TypeSystem
 
     public sealed partial class AtsCallbackParameterInfo
     {
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required AtsTypeRef Type { get { throw null; } init { } }
@@ -51,6 +53,8 @@ namespace Aspire.TypeSystem
         public AtsCapabilityKind CapabilityKind { get { throw null; } init { } }
 
         public string? Description { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public System.Collections.Generic.IReadOnlyList<AtsTypeRef> ExpandedTargetTypes { get { throw null; } set { } }
 
@@ -185,9 +189,28 @@ namespace Aspire.TypeSystem
         Error = 2
     }
 
+    public sealed partial class AtsDocumentationInfo
+    {
+        public System.Collections.Generic.IReadOnlyList<AtsParameterDocumentationInfo> Parameters { get { throw null; } init { } }
+
+        public string? Remarks { get { throw null; } init { } }
+
+        public string? Returns { get { throw null; } init { } }
+
+        public string? Summary { get { throw null; } init { } }
+    }
+
     public sealed partial class AtsDtoPropertyInfo
     {
+        public System.Collections.Generic.IReadOnlyList<AtsCallbackParameterInfo>? CallbackParameters { get { throw null; } init { } }
+
+        public AtsTypeRef? CallbackReturnType { get { throw null; } init { } }
+
         public string? Description { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        public bool IsCallback { get { throw null; } init { } }
 
         public bool IsOptional { get { throw null; } init { } }
 
@@ -202,6 +225,8 @@ namespace Aspire.TypeSystem
 
         public string? Description { get { throw null; } init { } }
 
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required System.Collections.Generic.IReadOnlyList<AtsDtoPropertyInfo> Properties { get { throw null; } init { } }
@@ -213,16 +238,29 @@ namespace Aspire.TypeSystem
     {
         public System.Type? ClrType { get { throw null; } init { } }
 
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
         public required string Name { get { throw null; } init { } }
 
         public required string TypeId { get { throw null; } init { } }
 
+        public System.Collections.Generic.IReadOnlyList<AtsEnumValueInfo> ValueInfos { get { throw null; } init { } }
+
         public required System.Collections.Generic.IReadOnlyList<string> Values { get { throw null; } init { } }
+    }
+
+    public sealed partial class AtsEnumValueInfo
+    {
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
+
+        public required string Name { get { throw null; } init { } }
     }
 
     public sealed partial class AtsExportedValueInfo
     {
         public string? Description { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public required string OwningAssemblyName { get { throw null; } init { } }
 
@@ -233,6 +271,13 @@ namespace Aspire.TypeSystem
         public required System.Text.Json.Nodes.JsonNode? Value { get { throw null; } init { } }
     }
 
+    public sealed partial class AtsParameterDocumentationInfo
+    {
+        public required string Description { get { throw null; } init { } }
+
+        public required string Name { get { throw null; } init { } }
+    }
+
     public sealed partial class AtsParameterInfo
     {
         public System.Collections.Generic.IReadOnlyList<AtsCallbackParameterInfo>? CallbackParameters { get { throw null; } init { } }
@@ -240,6 +285,8 @@ namespace Aspire.TypeSystem
         public AtsTypeRef? CallbackReturnType { get { throw null; } init { } }
 
         public object? DefaultValue { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public bool IsCallback { get { throw null; } init { } }
 
@@ -274,6 +321,8 @@ namespace Aspire.TypeSystem
 
         [System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.Interfaces)]
         public System.Type? ClrType { get { throw null; } init { } }
+
+        public AtsDocumentationInfo? Documentation { get { throw null; } init { } }
 
         public bool HasExposeMethods { get { throw null; } init { } }
 
@@ -311,6 +360,9 @@ namespace Aspire.TypeSystem
         public bool IsDistributedApplicationBuilder { get { throw null; } }
 
         public bool IsInterface { get { throw null; } init { } }
+
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public bool? IsNullable { get { throw null; } init { } }
 
         public bool IsReadOnly { get { throw null; } init { } }
 

@@ -17,6 +17,7 @@
     <!-- Source-share browser debugger types with Aspire.Hosting.Blazor via the shared source directory -->
     <Compile Include="$(SharedDir)BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
     <Compile Include="$(SharedDir)BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
+    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
   </ItemGroup>
 
   <ItemGroup>

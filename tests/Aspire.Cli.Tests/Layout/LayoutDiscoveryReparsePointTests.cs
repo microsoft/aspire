@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.Acquisition;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,7 +31,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var realLayoutRoot = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "WinGet",
@@ -48,7 +47,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(linksDir, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -65,7 +64,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var rawLayoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "custom-layout");
         CreateValidBundleLayout(rawLayoutRoot);
 
@@ -77,7 +76,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(rawLayoutRoot, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -91,7 +90,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DiscoverLayout_ResolvesThroughReparsePoints()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
 
         var versionsDir = Path.Combine(layoutRoot, "versions", "v1");
@@ -113,7 +112,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         try
         {
             Environment.SetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar, layoutRoot);
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment());
             var layout = discovery.DiscoverLayout();
 
             Assert.NotNull(layout);
@@ -133,7 +132,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         // Simulates a sidecar-less install where the CLI binary lives somewhere
         // unrelated to the extracted bundle (e.g. a Nix store / read-only path)
         // and the bundle is extracted to $ASPIRE_HOME.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var binaryDir = Path.Combine(workspace.WorkspaceRoot.FullName, "opt", "aspire", "bin");
         Directory.CreateDirectory(binaryDir);
@@ -148,7 +147,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };
@@ -174,7 +173,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         // layout left over in $HOME/.aspire from an earlier sidecar-less run.
         // This regression test pins that ordering: when both layouts exist, the
         // relative-to-CLI layout wins.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Colocated (relative) layout: CLI in {layoutRoot}/bin/aspire with the
         // bundle as a sibling of bin/.
@@ -194,7 +193,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };

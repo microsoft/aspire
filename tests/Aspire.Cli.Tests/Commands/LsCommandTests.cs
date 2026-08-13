@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -24,7 +25,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -39,7 +40,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_WhenNoCandidates_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -57,7 +58,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [InlineData("JSON")]
     public async Task LsCommand_FormatOption_IsCaseInsensitive(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -72,7 +73,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_FormatOption_RejectsInvalidValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -87,7 +88,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_ReturnsCandidateAppHosts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
@@ -136,7 +137,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_WhenNoCandidates_ReturnsEmptyArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
 
@@ -167,7 +168,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_IncludesConfiguredAppHostOutsideWorkingDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("WorkingDir");
         var configuredAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "ConfiguredAppHost.csproj"));
@@ -207,7 +208,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
@@ -250,7 +251,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_NoResults_OnlyJsonOnStdout_StatusMessagesOnStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
 
@@ -282,7 +283,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_Stream_ReturnsNewlineDelimitedCandidates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
@@ -333,7 +334,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_Stream_WhenNoCandidates_DoesNotWriteStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
 
@@ -357,9 +358,61 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LsCommand_JsonFormat_Stream_EmitsCandidatesInArrivalOrder()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17621.
+        // `aspire ls --format json --stream` must emit each candidate in the order it
+        // arrives from parallel discovery — it must NOT sort the stream output. Without
+        // this contract, the streaming option offers no latency benefit over the buffered
+        // snapshot, and consumers that rely on prompt arrival are silently broken.
+        //
+        // Use names in non-alphabetical arrival order (Z, A, M) so any incidental
+        // alphabetical sort would fail this assertion.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+        var appHostPathZ = Path.Combine(workspace.WorkspaceRoot.FullName, "ZApp", "Z.AppHost.csproj");
+        var appHostPathA = Path.Combine(workspace.WorkspaceRoot.FullName, "AApp", "A.AppHost.csproj");
+        var appHostPathM = Path.Combine(workspace.WorkspaceRoot.FullName, "MApp", "M.AppHost.csproj");
+        var appHostZ = new AppHostProjectCandidate(new FileInfo(appHostPathZ), KnownLanguageId.CSharp);
+        var appHostA = new AppHostProjectCandidate(new FileInfo(appHostPathA), KnownLanguageId.CSharp);
+        var appHostM = new AppHostProjectCandidate(new FileInfo(appHostPathM), KnownLanguageId.CSharp);
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _) => ToAsyncEnumerable(appHostZ, appHostA, appHostM)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json --stream");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var lines = textWriter.Logs.ToArray();
+        Assert.Equal(3, lines.Length);
+
+        using var first = JsonDocument.Parse(lines[0]);
+        using var second = JsonDocument.Parse(lines[1]);
+        using var third = JsonDocument.Parse(lines[2]);
+        Assert.Equal(appHostPathZ, first.RootElement.GetProperty("path").GetString());
+        Assert.Equal(appHostPathA, second.RootElement.GetProperty("path").GetString());
+        Assert.Equal(appHostPathM, third.RootElement.GetProperty("path").GetString());
+        Assert.Equal(string.Empty, errorWriter.ToString());
+    }
+
+    [Fact]
     public async Task LsCommand_JsonFormat_Stream_FlushesCandidateBeforeDiscoveryCompletes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var candidateReported = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var allowDiscoveryToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -406,7 +459,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_JsonFormat_Stream_WhenCancelled_DoesNotWriteProtocolEvent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellationTokenSource = new CancellationTokenSource();
         var textWriter = new TestOutputTextWriter(outputHelper);
         var projectLocator = new TestProjectLocator
@@ -442,7 +495,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_StreamOption_RequiresJsonFormat()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -462,7 +515,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_TableFormat_ColorsStatus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
@@ -498,7 +551,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_TableFormat_InteractiveMode_ShowsSearchStatusAndFinalTable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
@@ -547,7 +600,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_TableFormat_InteractiveMode_RefreshesSearchStatusWithTimeProvider()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var timeProvider = new FakeTimeProvider();
         var interactionService = new TestInteractionService();
         var statusRefreshed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -613,7 +666,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_WhenCancelled_ReturnsSuccessAndDisplaysCancellation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellationTokenSource = new CancellationTokenSource();
         var interactionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
@@ -644,7 +697,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_DefaultsToFilteredScope()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         AppHostDiscoveryScope? capturedScope = null;
         var projectLocator = new TestProjectLocator
         {
@@ -673,7 +726,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_AllFlag_PassesAllFilesScope()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         AppHostDiscoveryScope? capturedScope = null;
         var projectLocator = new TestProjectLocator
         {
@@ -702,13 +755,9 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task LsCommand_EmitsProfilingActivities()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        // ActivitySource listeners are process-wide, so this test can observe profiling spans
-        // from other tests running in parallel. Use a unique session id and filter by it instead
-        // of assuming every observed activity belongs to this command invocation.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sessionId = $"ls-{Guid.NewGuid():N}";
         var startedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App", "App.AppHost.csproj");
         var projectLocator = new TestProjectLocator
@@ -729,6 +778,8 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
+        var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ls --format json --all");
@@ -752,18 +803,6 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     {
         return activity.OperationName == operationName &&
             Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static string RenderToPlainConsole(IRenderable renderable)

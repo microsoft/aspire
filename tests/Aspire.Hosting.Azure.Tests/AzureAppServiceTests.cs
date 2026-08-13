@@ -3,9 +3,11 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -16,7 +18,7 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
+public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddContainerAppEnvironmentAddsDeploymentTargetWithContainerAppToProjectResources()
@@ -77,13 +79,125 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task AddAppServiceWithDelegatedSubnet()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDeploymentSlot("stage");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appServiceEnvironment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, virtualNetworkBicep) = await GetManifestWithBicep(vnet.Resource);
+        var (_, environmentBicep) = await GetManifestWithBicep(appServiceEnvironment);
+        var (_, websiteBicep) = await GetManifestWithBicep(website);
+
+        await Verify($"""
+            // Virtual network
+            {virtualNetworkBicep}
+
+            // App Service environment
+            {environmentBicep}
+
+            // App Service website
+            {websiteBicep}
+            """, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithDelegatedSubnetWithoutDeploymentSlot()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appServiceEnvironment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, virtualNetworkBicep) = await GetManifestWithBicep(vnet.Resource);
+        var (_, environmentBicep) = await GetManifestWithBicep(appServiceEnvironment);
+        var (_, websiteBicep) = await GetManifestWithBicep(website);
+
+        await Verify($"""
+            // Virtual network
+            {virtualNetworkBicep}
+
+            // App Service environment
+            {environmentBicep}
+
+            // App Service website
+            {websiteBicep}
+            """, "bicep");
+    }
+
+    [Fact]
+    public async Task PublishAsAzureAppServiceWebsite_CanOverrideEnvironmentDelegatedSubnet()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDeploymentSlot("stage");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureAppServiceWebsite(
+                configure: (_, website) => website.VirtualNetworkSubnetId = new global::Azure.Core.ResourceIdentifier("/subscriptions/subscription/resourceGroups/resource-group/providers/Microsoft.Network/virtualNetworks/vnet/subnets/website-subnet"),
+                configureSlot: (_, slot) => slot.VirtualNetworkSubnetId = new global::Azure.Core.ResourceIdentifier("/subscriptions/subscription/resourceGroups/resource-group/providers/Microsoft.Network/virtualNetworks/vnet/subnets/slot-subnet"));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task PublishToAppService_WithDashedConnectionStringName_FailsValidationInPipeline()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "validate-appservice-config-env");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
 
-        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         builder.AddAzureAppServiceEnvironment("env");
@@ -120,11 +234,11 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task PublishToAppService_WithDashedConnectionStringName_CanBeIgnored()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "validate-appservice-config-env");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
 
-        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         builder.AddAzureAppServiceEnvironment("env");
@@ -223,6 +337,59 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var appServiceEnv = builder.AddAzureAppServiceEnvironment("env");
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
+        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        // The web app is deployed to App Service and references the Foundry hosted agent. The App
+        // Service publisher must delegate endpoint resolution to the Foundry compute environment
+        // rather than looking the agent up in its own (App Service) endpoint map. See issue #17749.
+        // WithReference(agent) exercises the bare EndpointReference branch; the explicit
+        // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(appServiceEnv)
+            .WithReference(agent)
+            .WithEnvironment("AGENT_URL", agent.GetEndpoint("http").Property(EndpointProperty.Url));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        SetFoundryProjectOutputs(project.Resource);
+
+        web.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     [Fact]
@@ -372,9 +539,9 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AzureAppServiceEnvironmentCanPublishExistingAppServicePlan()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
         var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
@@ -390,15 +557,15 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await app.RunAsync();
 
-        var mainBicepPath = Path.Combine(tempDir.Path, "main.bicep");
+        var mainBicepPath = Path.Combine(workspace.Path, "main.bicep");
         Assert.True(File.Exists(mainBicepPath), $"Expected publish to produce '{mainBicepPath}'.");
         var mainBicep = await File.ReadAllTextAsync(mainBicepPath);
 
-        var envBicepPath = Path.Combine(tempDir.Path, "env", "env.bicep");
+        var envBicepPath = Path.Combine(workspace.Path, "env", "env.bicep");
         Assert.True(File.Exists(envBicepPath), $"Expected publish to produce '{envBicepPath}'.");
         var envBicep = await File.ReadAllTextAsync(envBicepPath);
 
-        var apiBicepPath = Path.Combine(tempDir.Path, "api", "api.bicep");
+        var apiBicepPath = Path.Combine(workspace.Path, "api", "api.bicep");
         Assert.True(File.Exists(apiBicepPath), $"Expected publish to produce '{apiBicepPath}'.");
         var apiBicep = await File.ReadAllTextAsync(apiBicepPath);
 
@@ -568,9 +735,9 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleAzureAppServiceEnvironmentsSupported()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "publish-manifest");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
 
         var env1 = builder.AddAzureAppServiceEnvironment("env1");
         var env2 = builder.AddAzureAppServiceEnvironment("env2");
@@ -591,16 +758,16 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         var verifySettings = new VerifySettings();
         verifySettings.ScrubLines(line => line.Contains("\"path\"") && line.Contains(".csproj"));
         await VerifyFile(
-            Path.Combine(tempDir.Path, "aspire-manifest.json"),
+            Path.Combine(workspace.Path, "aspire-manifest.json"),
             verifySettings);
     }
 
     [Fact]
     public async Task ResourceWithProbes()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var env1 = builder.AddAzureAppServiceEnvironment("env");
 

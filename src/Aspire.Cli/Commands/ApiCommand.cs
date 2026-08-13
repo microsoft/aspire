@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -22,21 +18,13 @@ internal sealed class ApiCommand : ParentCommand
     /// <param name="listCommand">The scoped browse command.</param>
     /// <param name="searchCommand">The search command.</param>
     /// <param name="getCommand">The content retrieval command.</param>
-    /// <param name="interactionService">The interaction service.</param>
-    /// <param name="features">The feature flag service.</param>
-    /// <param name="updateNotifier">The update notifier.</param>
-    /// <param name="executionContext">The CLI execution context.</param>
-    /// <param name="telemetry">The telemetry service.</param>
+    /// <param name="services">Common command services.</param>
     public ApiCommand(
         ApiListCommand listCommand,
         ApiSearchCommand searchCommand,
         ApiGetCommand getCommand,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("api", ApiCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("api", ApiCommandStrings.Description, services)
     {
         Subcommands.Add(listCommand);
         Subcommands.Add(searchCommand);

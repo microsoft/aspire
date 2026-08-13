@@ -13,7 +13,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateGuestAppHostSocketPath_UsesRandomizedIdentifier()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var socketPath1 = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
         var socketPath2 = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
@@ -40,7 +40,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateUnixDomainSocketPath_UsesRandomizedIdentifier()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var socketPath1 = CliPathHelper.CreateUnixDomainSocketPath("apphost.sock");
         var socketPath2 = CliPathHelper.CreateUnixDomainSocketPath("apphost.sock");
@@ -55,11 +55,99 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n")]
+    public void ComputeStagingFeedCacheKey_ReturnsNull_ForNullOrWhitespace(string? feedUrl)
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey(feedUrl));
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DefaultsToEightLowercaseHexChars()
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+
+        Assert.NotNull(key);
+        Assert.Matches("^[0-9a-f]{8}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_IsDeterministic_ForSameInput()
+    {
+        const string feedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var first = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DifferentUrls_ProduceDifferentKeys()
+    {
+        var a = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+        var b = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-cafef00d/nuget/v3/index.json");
+
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NormalizesWhitespaceAndCasing()
+    {
+        // Trim + lowercase normalization keeps the cache from fragmenting when the same feed
+        // shows up with stray whitespace from a config file or with a mixed-case hostname.
+        const string baseUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var baseKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl);
+        var spacedKey = CliPathHelper.ComputeStagingFeedCacheKey("  " + baseUrl + "\t\n");
+        var upperKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl.ToUpperInvariant());
+
+        Assert.Equal(baseKey, spacedKey);
+        Assert.Equal(baseKey, upperKey);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(16)]
+    public void ComputeStagingFeedCacheKey_RespectsExplicitLength(int length)
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json",
+            length);
+
+        Assert.NotNull(key);
+        Assert.Equal(length, key.Length);
+        Assert.Matches($"^[0-9a-f]{{{length}}}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_LengthAboveHashWidth_ReturnsFullHash()
+    {
+        // XxHash3 is 64 bits -> 16 hex chars. Asking for more than 16 must not crash and must
+        // return all available hash chars rather than padding with garbage.
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 999);
+
+        Assert.NotNull(key);
+        Assert.Equal(16, key.Length);
+        Assert.Matches("^[0-9a-f]{16}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NonZeroLength_RejectsZeroOrNegative()
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 0));
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: -1));
+    }
+
+    [Theory]
     [InlineData("script")]
     [InlineData("localhive")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_SharedPrefixRoute_ReturnsInstallPrefix(string source)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         var binDir = Path.Combine(installPrefix, "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, source);
@@ -72,7 +160,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryGetAspireHomeDirectoryFromInstallRoute_PrRoute_ReturnsOuterInstallPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");
@@ -86,10 +174,11 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [InlineData("brew")]
     [InlineData("winget")]
     [InlineData("dotnet-tool")]
+    [InlineData("nix")]
     [InlineData("unknown")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_PackageManagerOrUnknownRoute_ReturnsNull(string source)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binaryPath = WriteBinaryWithSidecar(workspace.WorkspaceRoot.FullName, source);
 
         var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallRoute(binaryPath);
@@ -100,7 +189,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetAspireHomeDirectory_PrRoute_UsesOuterInstallPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");
@@ -161,7 +250,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
     public void ResolveSymlinkHelpers_Link_ReturnsTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var target = Path.Combine(workspace.WorkspaceRoot.FullName, "target-aspire");
         File.WriteAllText(target, string.Empty);
 
@@ -232,7 +321,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkToFullPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Place a real file under the workspace (which sits on /var/folders on macOS),
         // then construct the firmlinked-form input by prepending /private. Both forms
         // resolve to the same physical file at the kernel level, so File.Exists
@@ -252,7 +341,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkOrOriginalPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var realPath = Path.Combine(workspace.WorkspaceRoot.FullName, "binary-under-test");
         File.WriteAllText(realPath, string.Empty);
 
@@ -272,7 +361,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         // inherits the /private/ form and lands in nuget.config in a shape NuGet's packageSourceMapping
         // lookup silently drops. The fix lives in the resolve helpers; this test pins the propagation
         // so a future refactor doesn't reintroduce the asymmetry.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17105", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");

@@ -8,6 +8,7 @@
     <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
     <!-- Browser debugger support is experimental and only compiled into builds that explicitly opt in. -->
     <DefineConstants Condition="'$(AspireWasmDebuggerEnabled)' == 'true'">$(DefineConstants);ASPIRE_WASM_DEBUGGER_ENABLED</DefineConstants>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -29,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
   </ItemGroup>
 
   <ItemGroup>

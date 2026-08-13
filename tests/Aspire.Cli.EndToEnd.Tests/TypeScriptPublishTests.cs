@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -143,7 +142,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish -o artifacts --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts");
         var composeContent = await File.ReadAllTextAsync(Path.Combine(artifactsPath, "docker-compose.yaml"));
@@ -262,7 +261,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var dockerComposePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-output", "docker-compose.yaml");
         Assert.True(File.Exists(dockerComposePath), $"Expected docker-compose output at {dockerComposePath}");
@@ -340,7 +339,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish -o artifacts --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var envFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", ".env");
         Assert.True(File.Exists(envFilePath), $"Expected env file at {envFilePath}");

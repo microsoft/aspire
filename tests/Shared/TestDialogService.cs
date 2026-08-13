@@ -53,7 +53,10 @@ public class TestDialogService : IDialogService
         return reference;
     }
 
-    public Task<IDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters) where TDialog : IDialogContentComponent => throw new NotImplementedException();
+    public async Task<IDialogReference> ShowDialogAsync<TDialog>(DialogParameters parameters) where TDialog : IDialogContentComponent
+    {
+        return await RunShowDialogCallbackAsync(typeof(TDialog), new object(), parameters).ConfigureAwait(false);
+    }
     public Task<IDialogReference> ShowDialogAsync(RenderFragment renderFragment, DialogParameters dialogParameters) => throw new NotImplementedException();
     public Task<IDialogReference> ShowDialogAsync<TDialog, TData>(DialogParameters<TData> parameters) where TDialog : IDialogContentComponent<TData> where TData : class => throw new NotImplementedException();
     public void ShowError(string message, string? title = null, string? primaryText = null) => throw new NotImplementedException();
@@ -74,9 +77,18 @@ public class TestDialogService : IDialogService
     }
     public void ShowPanel<TDialog, TData>(DialogParameters<TData> parameters) where TDialog : IDialogContentComponent<TData> where TData : class => throw new NotImplementedException();
     public void ShowPanel<TData>(Type dialogComponent, DialogParameters<TData> parameters) where TData : class => throw new NotImplementedException();
-    public Task<IDialogReference> ShowPanelAsync<TData>(Type dialogComponent, TData data, DialogParameters parameters) where TData : class => throw new NotImplementedException();
-    public Task<IDialogReference> ShowPanelAsync<TDialog>(object data, DialogParameters parameters) where TDialog : IDialogContentComponent => throw new NotImplementedException();
-    public Task<IDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters) where TDialog : IDialogContentComponent => throw new NotImplementedException();
+    public async Task<IDialogReference> ShowPanelAsync<TData>(Type dialogComponent, TData data, DialogParameters parameters) where TData : class
+    {
+        return await RunShowDialogCallbackAsync(dialogComponent, data, parameters).ConfigureAwait(false);
+    }
+    public async Task<IDialogReference> ShowPanelAsync<TDialog>(object data, DialogParameters parameters) where TDialog : IDialogContentComponent
+    {
+        return await RunShowDialogCallbackAsync(typeof(TDialog), data, parameters).ConfigureAwait(false);
+    }
+    public async Task<IDialogReference> ShowPanelAsync<TDialog>(DialogParameters parameters) where TDialog : IDialogContentComponent
+    {
+        return await RunShowDialogCallbackAsync(typeof(TDialog), new object(), parameters).ConfigureAwait(false);
+    }
     public Task<IDialogReference> ShowPanelAsync<TDialog, TData>(DialogParameters<TData> parameters) where TDialog : IDialogContentComponent<TData> where TData : class => throw new NotImplementedException();
     public Task<IDialogReference> ShowPanelAsync<TData>(Type dialogComponent, DialogParameters<TData> parameters) where TData : class => throw new NotImplementedException();
     public void ShowSplashScreen(object receiver, Func<DialogResult, Task> callback, DialogParameters<SplashScreenContent> parameters) => throw new NotImplementedException();

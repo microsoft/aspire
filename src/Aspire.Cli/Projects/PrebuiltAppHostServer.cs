@@ -13,6 +13,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -44,6 +45,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
@@ -66,6 +69,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="sdkInstaller">The SDK installer for checking .NET SDK availability.</param>
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
+    /// <param name="processExecutionFactory">The factory used to spawn and manage the AppHost server child process.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
@@ -77,6 +82,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         CliExecutionContext executionContext,
+        IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger logger,
         BundleLayoutLease? layoutLease = null)
     {
@@ -88,6 +95,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _sdkInstaller = sdkInstaller;
         _packagingService = packagingService;
         _executionContext = executionContext;
+        _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _layoutLease = layoutLease;
 
@@ -635,11 +644,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             // Mirror the temp NuGet.config's catch-all decision: it adds `* -> NuGet.org`
             // only when the matched channel did not supply its own AllPackages mapping. The
             // --source argument list must agree so non-Aspire transitives have the same
-            // catch-all source in both views.
+            // catch-all source in both views. Honor the runtime nuget service-index
+            // override here too — see docs/specs/cli-identity-sidecar.md.
+            var nugetOrg = _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
             if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(PackageSources.NuGetOrg, StringComparer.OrdinalIgnoreCase))
+                !sources.Contains(nugetOrg, StringComparer.OrdinalIgnoreCase))
             {
-                sources.Add(PackageSources.NuGetOrg);
+                sources.Add(nugetOrg);
             }
         }
         catch (Exception ex)
@@ -688,8 +699,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             }
 
             return await TemporaryNuGetConfig.CreateAsync(
-                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel),
-                configureGlobalPackagesFolder);
+                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel, _executionContext.NuGetServiceIndexOverride),
+                configureGlobalPackagesFolder,
+                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
         }
 
         if (string.IsNullOrEmpty(requestedChannel))
@@ -745,7 +757,69 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         // restore honors the channel's package source mappings. Let IO/XML failures
         // surface instead of silently falling back to the caller's unmapped sources,
         // which could otherwise restore from an unintended feed.
-        return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
+        return await TemporaryNuGetConfig.CreateAsync(
+            channel.Mappings,
+            channel.ConfigureGlobalPackagesFolder,
+            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(GetPrimaryFeedUrl(channel.Mappings)) : null);
+    }
+
+    /// <summary>
+    /// Returns the absolute <c>globalPackagesFolder</c> path to write into a temporary NuGet.config
+    /// when the resolved channel asks for per-build cache isolation (today: <c>staging</c>).
+    /// </summary>
+    /// <remarks>
+    /// The default <see cref="NuGetConfigMerger.DefaultGlobalPackagesFolderValue"/> is a relative
+    /// <c>.nugetpackages</c> path that NuGet resolves next to the nuget.config it came from. For
+    /// the <see cref="NuGetConfigMerger"/> workspace-merge flow that's fine — the merged config is
+    /// persistent. For <see cref="PrebuiltAppHostServer"/>'s <see cref="TemporaryNuGetConfig"/>
+    /// the config file lives in a Directory.CreateTempSubdirectory("aspire-nuget-config") folder
+    /// that <see cref="TemporaryNuGetConfig.Dispose"/> recursively deletes after restore. NuGet
+    /// would have just populated <c>&lt;temp&gt;/.nugetpackages/&lt;id&gt;/&lt;version&gt;/</c>
+    /// with the staging assemblies, <see cref="NuGet.BundleNuGetService"/> would have baked those
+    /// paths into <c>integration-package-probe-manifest.json</c>, and aspire-managed would then
+    /// try to load assemblies the dispose just removed — observed as a hang during DI / assembly
+    /// loading on macOS osx-arm64 polyglot staging builds. Anchoring the override at a stable
+    /// per-build location keeps the cached packages alive for as long as any manifest references
+    /// them.
+    ///
+    /// The cache lives under <see cref="CliExecutionContext.AspireHomeDirectory"/> (i.e. the
+    /// <c>ASPIRE_HOME</c> override when set, otherwise <c>~/.aspire</c>) rather than under
+    /// <see cref="_workingDirectory"/> so that two AppHosts running on the same machine against
+    /// the same staging build can share a single restore — the unit of cache isolation here is
+    /// the staging build, not the individual restore command.
+    ///
+    /// The cache subdirectory is keyed by a truncated hash of the resolved feed URL (first 8
+    /// hex chars of <see cref="System.IO.Hashing.XxHash3"/> over the trimmed/lower-cased URL).
+    /// Two staging builds of the same release branch — which share the same stable-shaped semver
+    /// (e.g. <c>13.4.0</c>) but ship from different darc feeds — therefore each get their own
+    /// cache. A user pointing the same CLI at multiple <c>overrideStagingFeed</c> values during
+    /// dev/test also gets a distinct cache per feed, instead of one bucket silently shared across
+    /// feeds. NuGet identifies packages by <c>(id, version)</c> only, so without that per-feed
+    /// key the second feed's restore would silently reuse the first feed's now-stale
+    /// <c>13.4.0</c> assemblies. When <paramref name="feedUrl"/> is null or empty (defensive —
+    /// both call sites currently always pass a real URL) the key falls back to <c>"default"</c>
+    /// so the path is still well-formed.
+    /// </remarks>
+    private string ResolveStableGlobalPackagesFolder(string? feedUrl)
+    {
+        var cacheKey = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl) ?? "default";
+        return Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(_executionContext.AspireHomeDirectory),
+            cacheKey);
+    }
+
+    /// <summary>
+    /// Returns the URL we use as the cache-key input when materializing a temp nuget.config from
+    /// a <see cref="PackageChannel"/>. Prefers the explicit <c>Aspire*</c> mapping (the staging
+    /// channel's primary feed and the one whose restored assemblies actually need cache
+    /// isolation), falling back to the first mapping for forward compatibility with channel
+    /// shapes we don't yet emit.
+    /// </summary>
+    private static string GetPrimaryFeedUrl(PackageMapping[] mappings)
+    {
+        var aspire = mappings.FirstOrDefault(m =>
+            string.Equals(m.PackageFilter, "Aspire*", StringComparison.OrdinalIgnoreCase));
+        return aspire?.Source ?? mappings[0].Source;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
@@ -846,48 +920,69 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     internal static string RedactSourceForDisplay(string source) => PackageSourceRedactor.RedactForDisplay(source);
 
     /// <inheritdoc />
-    public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
-
-        var process = Process.Start(startInfo)!;
-
         var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (_, e) =>
+
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line (ProcessInvocationOptions.StandardOutputCallback is line-only). The
+        // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
+        // this server's per-line behavior in one place. ProcessExecution publishes the child pid before
+        // it starts stdout/stderr pumps so immediate output can read ProcessId.
+        IProcessExecution execution = null!;
+
+        void OnStdout(string line)
         {
-            if (e.Data is not null)
-            {
-                // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
-                // CLI's on-disk log under the default file-logger filter (Debug). Previously
-                // these lines were dropped entirely, which made apphost-side warnings
-                // (for example, "LoaderExceptions" from the type-discovery path) invisible to
-                // anyone diagnosing a "no code generator found" / "no language support found"
-                // error. See https://github.com/microsoft/aspire/issues/16729.
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
+            // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
+            // CLI's on-disk log under the default file-logger filter (Debug). Previously
+            // these lines were dropped entirely, which made apphost-side warnings
+            // (for example, "LoaderExceptions" from the type-discovery path) invisible to
+            // anyone diagnosing a "no code generator found" / "no language support found"
+            // error. See https://github.com/microsoft/aspire/issues/16729.
+            _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            outputCollector.AppendOutput(line);
+        }
+
+        void OnStderr(string line)
         {
-            if (e.Data is not null)
-            {
-                // Promoted from LogTrace to LogInformation so that apphost-server stderr is
-                // visible at the default console log level (Information). Stderr is reserved
-                // for genuine problems in well-behaved server processes, so surfacing it
-                // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
-                _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
+            // Promoted from LogTrace to LogInformation so that apphost-server stderr is
+            // visible at the default console log level (Information). Stderr is reserved
+            // for genuine problems in well-behaved server processes, so surfacing it
+            // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
+            _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            outputCollector.AppendError(line);
+        }
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
 
-        return (_socketPath, process, outputCollector);
+        try
+        {
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     internal ProcessStartInfo CreateStartInfo(
@@ -923,9 +1018,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         // Configure environment
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         if (_integrationLibsPath is not null)
         {
@@ -980,6 +1080,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
         }
 
+        startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 

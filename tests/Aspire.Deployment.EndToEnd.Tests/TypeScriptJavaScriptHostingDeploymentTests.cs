@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -64,21 +63,21 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             await auto.PrepareEnvironmentAsync(workspace, counter);
             await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
-            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
 
             await AddPackageAsync(auto, counter, "Aspire.Hosting.JavaScript");
             await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppContainers");
 
             WriteStaticWebsiteWithNodeApiAppHost(workspace);
 
-            await auto.RunCommandFailFastAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}", counter);
+            await auto.RunCommandAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}", counter);
 
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.RunCommandFailFastAsync(BuildEndpointVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(10));
+            await auto.RunCommandAsync(BuildEndpointVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(10));
 
             await auto.TypeAsync("exit");
             await auto.EnterAsync();

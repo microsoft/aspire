@@ -7,18 +7,18 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
-public sealed class TypeScriptLanguageSupportTests
+public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelper)
 {
     private readonly TypeScriptLanguageSupport _languageSupport = new();
 
     [Fact]
     public void Scaffold_CreatesAppHostSpecificScriptsAndTsConfig_ForNewProject()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "BrownfieldApp"
         });
 
@@ -66,9 +66,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_BrownfieldOutput_ContainsOnlyAspireEntries()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """
             {
               "name": "vite-brownfield",
               "version": "2.0.0",
@@ -91,7 +91,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "Ignored"
         });
 
@@ -132,9 +132,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_NestedBrownfieldPackage_UsesStableAppHostPackageName()
     {
-        using var testDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """{ "name": "existing-app" }""");
-        var appHostDirectory = Directory.CreateDirectory(Path.Combine(testDir.Path, "aspire-apphost"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """{ "name": "existing-app" }""");
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "aspire-apphost"));
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
@@ -153,9 +153,9 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_AlwaysOutputsAspireVersions_RegardlessOfExistingDependencies()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), """
             {
               "dependencies": {
                 "vscode-jsonrpc": "^8.1.0"
@@ -171,7 +171,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "Ignored"
         });
 
@@ -191,8 +191,8 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_DoesNotEmitRootTsConfig_WhenOneAlreadyExists()
     {
-        using var testDir = new TestTempDirectory();
-        var existingTsConfigPath = Path.Combine(testDir.Path, "tsconfig.json");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var existingTsConfigPath = Path.Combine(workspace.Path, "tsconfig.json");
         var existingTsConfig = """
             {
               "compilerOptions": {
@@ -205,7 +205,7 @@ public sealed class TypeScriptLanguageSupportTests
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "BrownfieldApp"
         });
 
@@ -222,11 +222,11 @@ public sealed class TypeScriptLanguageSupportTests
     [InlineData(55571)]
     public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int? portSeed)
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "PortsApp",
             PortSeed = portSeed
         });
@@ -265,11 +265,11 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "SnapshotApp"
         });
 
@@ -285,11 +285,11 @@ public sealed class TypeScriptLanguageSupportTests
     [Fact]
     public void Scaffold_EmitsScaffoldedAppHostTsConfigVerbatim()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "SnapshotApp"
         });
 

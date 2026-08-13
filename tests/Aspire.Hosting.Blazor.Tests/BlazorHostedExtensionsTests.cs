@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -153,7 +153,8 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ProxyMethods_AddOneDebuggerResourceAndCommandPair()
     {
-        using var tempDirectory = new TestTempDirectory();
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var (serverProjectPath, _) = CreateBlazorHostedProjects(tempDirectory);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
@@ -189,9 +190,10 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ProxyService_WithWasmClient_UsesResolvedClientProjectAsWebRoot()
+    public async Task ProxyService_WithWasmClient_UsesResolvedClientProjectAsWebRoot()
     {
-        using var tempDirectory = new TestTempDirectory();
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
         var (serverProjectPath, clientProjectPath) = CreateBlazorHostedProjects(tempDirectory);
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -203,7 +205,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             .ProxyBlazorService(weatherApi);
 
         var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
-        var launchConfiguration = InvokeLaunchConfigurationAnnotator(debuggerResource);
+        var launchConfiguration = await InvokeLaunchConfigurationAnnotatorAsync(debuggerResource);
 
         Assert.Equal(clientProjectPath, launchConfiguration.WebRoot);
     }
@@ -456,12 +458,12 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         return (string)value;
     }
 
-    private static BrowserLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<BrowserLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var executable = Executable.Create("test", "browser");
-        supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug);
+        await supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug, CancellationToken.None);
 
         Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,
@@ -469,7 +471,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         return Assert.Single(launchConfigurations);
     }
 
-    private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TestTempDirectory tempDirectory)
+    private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TempDirectory tempDirectory)
     {
         var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
         var clientDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Client"));

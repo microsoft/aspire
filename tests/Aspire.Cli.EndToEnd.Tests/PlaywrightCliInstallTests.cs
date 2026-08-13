@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
@@ -84,7 +83,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// to be dropped in the CLI process's current working directory.
     /// </summary>
     [Fact]
-    public async Task AgentInit_WhenCwdDiffersFromWorkspaceRoot_PlacesSkillFilesInWorkspaceRoot()
+    public async Task AgentInit_CwdDiffersFromRoot_PlacesSkillsInWorkspaceRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -106,7 +105,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Crucially, do NOT cd into the project — stay in the parent directory.
         await auto.TypeAsync("mkdir -p TestProject/.claude");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Run aspire agent init from the PARENT directory for Playwright
         // only. When provided as options, the workspace root and skill selection
@@ -115,18 +114,18 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify skill file exists in the workspace root (project subdirectory).
         await auto.TypeAsync("ls TestProject/.claude/skills/playwright-cli/SKILL.md");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 5: Verify no stray skill files were created in the CWD (parent directory).
         await auto.TypeAsync("test -d .claude/skills/playwright-cli && echo 'STRAY_FILES_FOUND' || echo 'NO_STRAY_FILES'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("NO_STRAY_FILES", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

@@ -1,12 +1,10 @@
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREUSERSECRETS001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
@@ -17,7 +15,6 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Handles processing of parameter resources during application orchestration.
 /// </summary>
-[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ParameterProcessor(
     ResourceNotificationService notificationService,
     ResourceLoggerService loggerService,
@@ -668,7 +665,7 @@ public sealed class ParameterProcessor(
         {
             return s with
             {
-                Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, value, parameterResource.Secret),
+                Properties = s.Properties.SetResourcePropertyRange([parameterResource.CreateValueSnapshotProperty(value)]),
                 State = state
             };
         }).ConfigureAwait(false);

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -46,6 +47,10 @@ internal static partial class ConnectionStringParser
     };
 
     private static readonly string[] s_hostAliases = ["host", "server", "data source", "addr", "address", "endpoint", "contact points"];
+
+    private static readonly string[] s_databaseAliases = ["database", "initial catalog", "database name", "databasename"];
+
+    private static readonly string[] s_databaseUriSchemes = ["mongodb", "mongodb+srv", "mssql", "mysql", "postgres", "postgresql"];
 
     private static readonly string[] s_knownProtocols = ["tcp", "udp", "ssl", "tls", "http", "https", "ftp", "ssh"];
 
@@ -119,6 +124,86 @@ internal static partial class ConnectionStringParser
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Attempts to extract a database name from a URI or key-value connection string.
+    /// </summary>
+    /// <param name="connectionString">The connection string to parse. Examples: "Host=localhost;Database=catalogdb" and "Server=localhost;Initial Catalog=Catalog".</param>
+    /// <param name="databaseName">When this method returns <c>true</c>, contains the database name; otherwise, <c>null</c>.</param>
+    /// <returns><c>true</c> if a database name was found; otherwise, <c>false</c>.</returns>
+    public static bool TryDetectDatabaseName(string connectionString, [NotNullWhen(true)] out string? databaseName)
+    {
+        databaseName = null;
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        if (TryParseDatabaseNameAsUri(connectionString, out databaseName))
+        {
+            return true;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            foreach (var alias in s_databaseAliases)
+            {
+                if (builder.TryGetValue(alias, out var value) && Convert.ToString(value, CultureInfo.InvariantCulture) is { Length: > 0 } parsedDatabaseName)
+                {
+                    databaseName = parsedDatabaseName;
+                    return true;
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Some providers allow connection-string values that DbConnectionStringBuilder rejects.
+            // Fall back to the same tolerant parser used for host and port extraction.
+        }
+
+        var keyValuePairs = SplitIntoDictionary(connectionString);
+        foreach (var alias in s_databaseAliases)
+        {
+            if (keyValuePairs.TryGetValue(alias, out var value))
+            {
+                databaseName = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryParseDatabaseNameAsUri(string connectionString, [NotNullWhen(true)] out string? databaseName)
+    {
+        const string jdbcPrefix = "jdbc:";
+
+        databaseName = null;
+
+        // Database URI paths use these shapes:
+        //   mongodb://PlaceholderUser:PlaceholderPassword@localhost:27017/catalogdb
+        //   jdbc:postgresql://localhost:5432/catalogdb
+        // Restrict parsing to database schemes so paths in endpoint URLs aren't treated as database names.
+        var uriValue = connectionString.StartsWith(jdbcPrefix, StringComparison.OrdinalIgnoreCase)
+            ? connectionString[jdbcPrefix.Length..]
+            : connectionString;
+        if (!Uri.TryCreate(uriValue, UriKind.Absolute, out var uri) ||
+            !s_databaseUriSchemes.Contains(uri.Scheme, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var escapedDatabaseName = uri.AbsolutePath.Trim('/');
+        if (escapedDatabaseName.Length == 0 || escapedDatabaseName.Contains('/'))
+        {
+            return false;
+        }
+
+        databaseName = Uri.UnescapeDataString(escapedDatabaseName);
+        return databaseName.Length > 0;
     }
 
     /// <summary>
@@ -484,7 +569,7 @@ internal static partial class ConnectionStringParser
 
         // Reject obvious file path indicators
         if (connectionString.StartsWith('/') || connectionString.StartsWith('\\') ||
-            connectionString.StartsWith("./") || connectionString.StartsWith("../") ||
+            connectionString.StartsWith("./", StringComparison.Ordinal) || connectionString.StartsWith("../", StringComparison.Ordinal) ||
             (connectionString.Length > 2 && connectionString[1] == ':' && char.IsLetter(connectionString[0])))
         {
             return false;

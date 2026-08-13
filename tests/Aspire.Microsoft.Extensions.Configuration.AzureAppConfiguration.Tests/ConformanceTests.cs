@@ -20,7 +20,7 @@ public class ConformanceTests : ConformanceTests<IConfigurationRefresherProvider
 
     protected override string ActivitySourceName => "Microsoft.Extensions.Configuration.AzureAppConfiguration";
 
-    protected override string[] RequiredLogCategories => new string[] { "Microsoft.Extensions.Configuration.AzureAppConfiguration.Refresh" };
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Microsoft.Extensions.Configuration.AzureAppConfiguration.Refresh")];
 
     protected override bool SupportsKeyedRegistrations => false;
 

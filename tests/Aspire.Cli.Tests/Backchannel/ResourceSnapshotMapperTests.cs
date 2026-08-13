@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Shared.Model.Serialization;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -75,6 +76,7 @@ public class ResourceSnapshotMapperTests
                     ]
                 },
                 new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
+                new ResourceSnapshotCommand { Name = "save", State = "Hidden", Description = "Save parameter" },
                 new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "UI only", Visibility = KnownCommandVisibility.UI },
                 new ResourceSnapshotCommand { Name = "missing-visibility", State = "Enabled", Description = "Missing visibility", Visibility = null! }
             ],
@@ -93,11 +95,14 @@ public class ResourceSnapshotMapperTests
         Assert.Single(result.Urls!);
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);
 
-        // Only enabled commands should be included
+        // Enabled commands with API visibility should be included by default.
         var command = Assert.Single(result.Commands!);
         Assert.Equal("stop", command.Key);
-        Assert.Equal(KnownCommandVisibility.Api, command.Value.Visibility);
-        var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
+
+        var stopCommand = command.Value;
+        Assert.Equal("Enabled", stopCommand.State);
+        Assert.Equal(KnownCommandVisibility.Api, stopCommand.Visibility);
+        var argumentInput = Assert.Single(stopCommand.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);
         Assert.Equal("CSS selector to click.", argumentInput.Description);
@@ -120,6 +125,154 @@ public class ResourceSnapshotMapperTests
         // Dashboard URL should be generated
         Assert.NotNull(result.DashboardUrl);
         Assert.Contains("localhost:18080", result.DashboardUrl);
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithIncludeDisabledCommands_IncludesDisabledAndExcludesHidden()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "restart", State = KnownCommandState.Enabled, Description = "Restart" },
+                new ResourceSnapshotCommand { Name = "start", State = KnownCommandState.Disabled, Description = "Start" },
+                new ResourceSnapshotCommand { Name = "save", State = KnownCommandState.Hidden, Description = "Save parameter" }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        Assert.Equal(["restart", "start"], result.Commands!.Keys);
+        Assert.Equal(KnownCommandState.Enabled, result.Commands["restart"].State);
+        Assert.Equal(KnownCommandState.Disabled, result.Commands["start"].State);
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithIncludeDisabledCommands_IncludesUiOnlyCommands()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "api-only", State = KnownCommandState.Enabled, Description = "API only", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "ui-only", State = KnownCommandState.Enabled, Description = "UI only", Visibility = KnownCommandVisibility.UI },
+                new ResourceSnapshotCommand { Name = "ui-disabled", State = KnownCommandState.Disabled, Description = "UI disabled", Visibility = KnownCommandVisibility.UI }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        Assert.Equal(["api-only", "ui-disabled", "ui-only"], result.Commands!.Keys);
+        Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-only"].Visibility);
+        Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-disabled"].Visibility);
+    }
+
+    [Fact]
+    public void MapToResourceJson_IncludeDisabledStream_StampsSortOrderOnCommands()
+    {
+        // Commands are provided in non-alphabetical order so SortOrder must reflect
+        // registration (set-parameter before delete-parameter), not key order.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        // SortOrder reflects the registration order the dashboard uses.
+        // Keys are sorted alphabetically for a stable JSON shape.
+        Assert.Equal(["custom-action", "delete-parameter", "set-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
+        Assert.Equal(1, result.Commands["custom-action"].SortOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
+    }
+
+    [Fact]
+    public void MapToResourceJson_DefaultStream_StampsSortOrder()
+    {
+        // The default/API stream stamps SortOrder just like the include-disabled stream.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        // SortOrder reflects the registration order even on the default stream.
+        // Keys are sorted alphabetically for a stable JSON shape.
+        Assert.Equal(["custom-action", "delete-parameter", "set-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
+        Assert.Equal(1, result.Commands["custom-action"].SortOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithSecretCommandArgument_OmitsValue()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand
+                {
+                    Name = "login",
+                    State = KnownCommandState.Enabled,
+                    Description = "Log in",
+                    Visibility = KnownCommandVisibility.Api,
+                    ArgumentInputs =
+                    [
+                        new ResourceSnapshotCommandArgument
+                        {
+                            Name = "password",
+                            InputType = "SecretText",
+                            Value = "super-secret"
+                        },
+                        new ResourceSnapshotCommandArgument
+                        {
+                            Name = "environment",
+                            InputType = "Text",
+                            Value = "Development"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        var argumentInputs = Assert.Single(result.Commands!).Value.ArgumentInputs!;
+        Assert.Null(argumentInputs[0].Value);
+        Assert.Equal("Development", argumentInputs[1].Value);
     }
 
     [Fact]

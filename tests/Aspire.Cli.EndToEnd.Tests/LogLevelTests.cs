@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
@@ -59,13 +58,13 @@ public sealed class LogLevelTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Check for trace-level AppHost log entry (format: [TRCE] [AppHost/...])
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
                 "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[AppHost/' \"$DETACH_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));
 
         // Check for trace-level CLI log entry from the Features category
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
                 "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[Features\\]' \"$DETACH_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));

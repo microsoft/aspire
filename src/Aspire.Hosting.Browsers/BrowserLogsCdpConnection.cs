@@ -38,10 +38,10 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
     // budget because it runs during disposal, while the websocket keep-alive stays comfortably below common proxy idle
     // timers without sending frequent pings during normal local development.
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(30);
     // Screenshot capture asks the browser to rasterize and encode the current surface. Real browsers can take longer
-    // than lightweight lifecycle/enable commands, especially under CI or agent load, so give this command a larger
-    // protocol budget without slowing down ordinary command failures.
+    // than lightweight lifecycle/enable commands, especially under CI or agent load, so keep a dedicated timeout even
+    // though it currently matches the general command budget.
     private static readonly TimeSpan s_screenshotCommandTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_keepAliveInterval = TimeSpan.FromSeconds(15);
 

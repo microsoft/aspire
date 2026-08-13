@@ -22,7 +22,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     private static readonly MySqlServerVersion s_serverVersion = new(new Version(MySqlContainerImageTags.Tag));
     private static readonly string s_serverVersionString = s_serverVersion.ToString();
     private readonly MySqlContainerFixture _containerFixture;
-    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
+    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers)
                                             ? _containerFixture.GetConnectionString()
                                             : "Server=localhost;User ID=root;Password=pass;Database=test";
 

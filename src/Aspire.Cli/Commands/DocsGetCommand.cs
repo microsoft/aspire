@@ -4,12 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -38,14 +35,10 @@ internal sealed class DocsGetCommand : BaseCommand
     };
 
     public DocsGetCommand(
-        IInteractionService interactionService,
         IDocsIndexService docsIndexService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<DocsGetCommand> logger)
-        : base("get", DocsCommandStrings.GetDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DocsGetCommand> logger,
+        CommonCommandServices services)
+        : base("get", DocsCommandStrings.GetDescription, services)
     {
         _docsIndexService = docsIndexService;
         _logger = logger;

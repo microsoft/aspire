@@ -165,6 +165,21 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testUnionEnumParameter", StringComparison.Ordinal));
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(AtsTypeCategory.Union, parameter.Type?.Category);
+        Assert.Contains(parameter.Type!.UnionTypes!, type => type.ClrType == typeof(TestUnionEnum));
+        Assert.Contains(parameter.Type.UnionTypes!, type => type.TypeId == AtsConstants.String);
+        Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
+    }
+
     #endregion
 
     #region DeriveMethodName Tests
@@ -364,16 +379,37 @@ public class AtsCapabilityScannerTests
 
         var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
         Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
+        var commandOptionsProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandOptions));
+        Assert.True(commandOptionsProperty.IsOptional);
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
+        var prepareRequestProperty = Assert.Single(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.PrepareRequest));
+        Assert.True(prepareRequestProperty.IsCallback);
+        Assert.True(prepareRequestProperty.IsOptional);
+
+        var callbackParameter = Assert.Single(prepareRequestProperty.CallbackParameters!);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandPrepareRequestContext)), callbackParameter.Type.TypeId);
+        Assert.Equal(AtsTypeCategory.Handle, callbackParameter.Type.Category);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)), prepareRequestProperty.CallbackReturnType?.TypeId);
+        Assert.Equal(AtsTypeCategory.Dto, prepareRequestProperty.CallbackReturnType?.Category);
+
         Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
-        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/withHttpCommandPrepareRequest");
+
+        var requestDataDto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandRequestExportData)));
+        Assert.Equal(nameof(HttpCommandRequestExportData), requestDataDto.Name);
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.MethodName));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Headers));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.Content));
+        Assert.Contains(requestDataDto.Properties, p => p.Name == nameof(HttpCommandRequestExportData.ContentType));
     }
 
     [Fact]
@@ -559,6 +595,35 @@ public class AtsCapabilityScannerTests
         Assert.True(capability.RunSyncOnBackgroundThread);
     }
 
+    [Fact]
+    public void ScanAssembly_HostingAssembly_CallbackBearingInteractionPrompts_UseBackgroundThreadOptIn()
+    {
+        // These prompts accept option/handle types that carry user callbacks (progress work, dynamic input
+        // loading, validation). The callbacks re-enter the remote host over the same JSON-RPC connection, so the
+        // synchronous invocation path has to run on a background thread or the RPC loop deadlocks waiting on itself.
+        // AspireExportAnalyzer only detects delegates passed *directly* as parameters, so it cannot enforce the
+        // opt-in when the delegate is reached through an options object or builder handle. This test is the guard.
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        string[] expectedCapabilityIds =
+        [
+            "Aspire.Hosting/promptProgress",
+            "Aspire.Hosting/promptInput",
+            "Aspire.Hosting/promptInputs"
+        ];
+
+        foreach (var expectedCapabilityId in expectedCapabilityIds)
+        {
+            var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == expectedCapabilityId);
+
+            Assert.True(
+                capability.RunSyncOnBackgroundThread,
+                $"'{expectedCapabilityId}' invokes polyglot callbacks and must set RunSyncOnBackgroundThread = true.");
+        }
+    }
+
     #endregion
 
     #region Exported Value Tests
@@ -702,6 +767,12 @@ public class AtsCapabilityScannerTests
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
+    private enum TestUnionEnum
+    {
+        First,
+        Second
+    }
+
     [AspireDto]
     private sealed class NullableScalarDto
     {
@@ -763,6 +834,13 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        [AspireExport]
+        public static void TestUnionEnumParameter(IDistributedApplicationBuilder builder, [AspireUnion(typeof(TestUnionEnum), typeof(string))] object value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         /// <param name="value">The fallback value.</param>

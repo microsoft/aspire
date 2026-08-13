@@ -117,7 +117,7 @@ internal static class BrowserDebuggerHelper
                     // StartResourceAsync expects the DCP metadata name (e.g., "gateway-app-debugger-abc123"),
                     // not the model resource name (e.g., "gateway-app-debugger").
                     var dcpInstanceName = GetDcpInstanceName(debuggerResource);
-                    var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                    var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
                     await orchestrator.StartResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
                     debugSessionActive = true;
 
@@ -130,12 +130,12 @@ internal static class BrowserDebuggerHelper
 
                     // Publish a no-op update on the command target to force the dashboard to
                     // re-evaluate UpdateState callbacks and toggle command visibility.
-                    var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                    var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
                     await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
 
                     // Watch for the debugger resource to stop (e.g., user closes the browser)
                     // so we can flip the flag and re-show the "Debug in Browser" command.
-                    _ = WatchForDebuggerStopAsync(context.ServiceProvider, commandTarget.Resource, debuggerResource, watcherCts.Token, () => debugSessionActive = false);
+                    _ = WatchForDebuggerStopAsync(context.Services, commandTarget.Resource, debuggerResource, watcherCts.Token, () => debugSessionActive = false);
 
                     return CommandResults.Success();
                 }
@@ -180,12 +180,12 @@ internal static class BrowserDebuggerHelper
                     await watcherCts.CancelAsync().ConfigureAwait(false);
 
                     var dcpInstanceName = GetDcpInstanceName(debuggerResource);
-                    var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                    var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
                     await orchestrator.StopResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
                     debugSessionActive = false;
 
                     // Force dashboard to re-evaluate command visibility.
-                    var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                    var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
                     await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
 
                     return CommandResults.Success();

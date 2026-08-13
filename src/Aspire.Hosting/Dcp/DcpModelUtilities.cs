@@ -16,6 +16,36 @@ namespace Aspire.Hosting.Dcp;
 internal static class DcpModelUtilities
 {
     /// <summary>
+    /// Determines whether DCP object creation should be deferred until an explicit manual start.
+    /// </summary>
+    internal static bool ShouldDeferCreateForExplicitStart(IResource modelResource, bool? start)
+    {
+        // Explicit-start, non-persistent resources use manual snapshots for dashboard visibility.
+        // Do not create corresponding DCP objects until the manual start path flips Spec.Start=true; creation
+        // evaluates callbacks that can prompt for input or depend on start-time state.
+        return start == false &&
+            modelResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
+            modelResource.GetLifetimeType() != Lifetime.Persistent;
+    }
+
+    internal static void ValidateEndpointPorts(IResource modelResource, EndpointAnnotation endpoint)
+    {
+        var modelResourceName = modelResource.Name ?? "(unknown)";
+
+        if (modelResource.IsContainer())
+        {
+            if (EndpointAnnotation.NormalizePort(endpoint.TargetPort) is null)
+            {
+                throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+            }
+        }
+        else if (!endpoint.IsProxied && endpoint.Port is int && endpoint.Port != endpoint.TargetPort)
+        {
+            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
+        }
+    }
+
+    /// <summary>
     /// Examines the Aspire resource annotations and adds equivalent ServiceProducerAnnotations to the corresponding DCP resource.
     /// </summary>
     internal static void AddServicesProducedInfo<TDcpResource>(
@@ -30,40 +60,32 @@ internal static class DcpModelUtilities
         foreach (var sp in servicesProduced)
         {
             var ea = sp.EndpointAnnotation;
+            ValidateEndpointPorts(modelResource, ea);
 
-            if (modelResource.IsContainer())
+            if (!modelResource.IsContainer())
             {
-                if (ea.TargetPort is null)
+                if (!ea.IsProxied)
                 {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+                    if (HasMultipleReplicas(appResource.DcpResource))
+                    {
+                        throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
+                    }
                 }
-            }
-            else if (!ea.IsProxied)
-            {
-                if (HasMultipleReplicas(appResource.DcpResource))
+                else
                 {
-                    throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
-                }
+                    Debug.Assert(ea.IsProxied);
 
-                if (ea.Port is int && ea.Port != ea.TargetPort)
-                {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
-                }
-            }
-            else
-            {
-                Debug.Assert(ea.IsProxied);
+                    if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
+                    {
+                        throw new InvalidOperationException(
+                            $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
+                    }
 
-                if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
-                {
-                    throw new InvalidOperationException(
-                        $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
-                }
-
-                if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
-                {
-                    throw new InvalidOperationException(
-                        $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    }
                 }
             }
 
@@ -92,22 +114,19 @@ internal static class DcpModelUtilities
     {
         foreach (var res in resources)
         {
-            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName, allowPendingDynamicProxylessContainerEndpoints: false);
+            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName);
         }
     }
 
     internal static bool TryAddWorkloadAllocatedEndpoints<TDcpResource>(
         RenderedModelResource<TDcpResource> resource,
         bool enableAspireContainerTunnel,
-        string containerHostName,
-        bool allowPendingDynamicProxylessContainerEndpoints)
+        string containerHostName)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         foreach (var sp in resource.ServicesProduced)
         {
-            if (TryAddLocalhostAllocatedEndpoint(
-                sp,
-                allowPending: allowPendingDynamicProxylessContainerEndpoints && IsDynamicProxylessContainerEndpoint(resource, sp)))
+            if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false))
             {
                 AddContainerNetworkAllocatedEndpoint(resource, sp);
                 AddExecutableContainerNetworkAllocatedEndpoint(resource, sp, enableAspireContainerTunnel, containerHostName);
@@ -117,25 +136,20 @@ internal static class DcpModelUtilities
         return AreResourceEndpointsAllocated(resource.ModelResource);
     }
 
-    internal static bool TryApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources, [NotNullWhen(true)] out IResource? modelResource)
+    internal static void ApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources)
     {
         var serviceResource = appResources.OfType<ServiceWithModelResource>()
             .FirstOrDefault(swr => string.Equals(swr.DcpResource.Metadata.Name, observedService.Metadata.Name, StringComparison.Ordinal));
 
         if (serviceResource is null)
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         serviceResource.Service.ApplyAddressInfoFrom(observedService);
-        var isDynamicProxylessContainerEndpoint = appResources.OfType<RenderedModelResource<Container>>()
-            .Any(resource => ReferenceEquals(resource.ModelResource, serviceResource.ModelResource) &&
-                IsDynamicProxylessContainerEndpoint(resource, serviceResource));
         if (!TryAddLocalhostAllocatedEndpoint(serviceResource, allowPending: true))
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         foreach (var containerResource in appResources.OfType<RenderedModelResource<Container>>()
@@ -143,14 +157,12 @@ internal static class DcpModelUtilities
         {
             AddContainerNetworkAllocatedEndpoint(containerResource, serviceResource);
         }
-
-        modelResource = serviceResource.ModelResource;
-        return isDynamicProxylessContainerEndpoint && AreResourceEndpointsAllocated(modelResource);
     }
 
-    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending)
+    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending, int? fallbackPort = null)
     {
         var svc = sp.DcpResource;
+        var allocatedPort = svc.AllocatedPort ?? fallbackPort;
 
         if (sp.EndpointAnnotation.AllocatedEndpoint is not null)
         {
@@ -169,7 +181,7 @@ internal static class DcpModelUtilities
             throw new InvalidDataException($"Service {svc.Metadata.Name} should have valid address at this point");
         }
 
-        if (!sp.EndpointAnnotation.IsProxied && svc.AllocatedPort is null)
+        if (!sp.EndpointAnnotation.IsProxied && allocatedPort is null)
         {
             if (allowPending)
             {
@@ -179,7 +191,7 @@ internal static class DcpModelUtilities
             throw new InvalidOperationException($"Service '{svc.Metadata.Name}' needs to specify a port for endpoint '{sp.EndpointAnnotation.Name}' since it isn't using a proxy.");
         }
 
-        if (!svc.HasCompleteAddress)
+        if (allocatedPort is null || string.IsNullOrEmpty(svc.AllocatedAddress))
         {
             if (allowPending)
             {
@@ -194,7 +206,7 @@ internal static class DcpModelUtilities
         sp.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(
             sp.EndpointAnnotation,
             targetHost,
-            (int)svc.AllocatedPort!,
+            allocatedPort.Value,
             bindingMode,
             targetPortExpression: $$$"""{{- portForServing "{{{svc.Metadata.Name}}}" -}}""",
             KnownNetworkIdentifiers.LocalhostNetwork);
@@ -257,14 +269,6 @@ internal static class DcpModelUtilities
         return !resource.TryGetEndpoints(out var endpoints) || endpoints.All(e => e.AllocatedEndpoint is not null);
     }
 
-    private static bool IsDynamicProxylessContainerEndpoint<TDcpResource>(RenderedModelResource<TDcpResource> resource, ServiceWithModelResource sp)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        return resource.DcpResource is Container &&
-            !sp.EndpointAnnotation.IsProxied &&
-            sp.EndpointAnnotation.SpecifiedPort is null;
-    }
-
     internal static void AddContainerTunnelAllocatedEndpoints(
         IEnumerable<IResource> affectedResources,
         DcpAppResourceStore allAppResources,
@@ -312,7 +316,7 @@ internal static class DcpModelUtilities
                     throw new InvalidDataException($"The '{endpoint.Name}' on resource '{ts.ResourceName}' should have an associated DCP Service resource already set up");
                 }
 
-                var networkID = new NetworkIdentifier(ts.ContainerNetworkName!);
+                var networkId = new NetworkIdentifier(ts.ContainerNetworkName!);
                 var address = string.IsNullOrEmpty(ts.TunnelInstanceName) ? containerHostName : KnownHostNames.DefaultContainerTunnelHostName;
                 var port = (int)ts.Service!.AllocatedPort!;
 
@@ -322,9 +326,9 @@ internal static class DcpModelUtilities
                     port,
                     EndpointBindingMode.SingleAddress,
                     targetPortExpression: $$$"""{{- portForServing "{{{ts.Service.Metadata.Name}}}" -}}""",
-                    networkID
+                    networkId
                 );
-                endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(networkID, tunnelAllocatedEndpoint);
+                endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(networkId, tunnelAllocatedEndpoint);
             }
         }
     }

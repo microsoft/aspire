@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -85,6 +85,11 @@ var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("str
        .WithUrl("https://someotherplace.com/some-path", "Some other place")
        .WithUrl("https://extremely-long-url.com/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz//abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmno");
 
+for (var i = 0; i < 500; i++)
+{
+    telemetryBuilder.WithUrl($"https://example.com/service-{i.ToString(CultureInfo.InvariantCulture)}", $"Service {i}");
+}
+
 builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 
 #if !SKIP_DASHBOARD_REFERENCE
@@ -100,9 +105,6 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 builder.AddExecutable("executableWithSingleArg", "dotnet", Environment.CurrentDirectory, "--version");
 builder.AddExecutable("executableWithSingleEscapedArg", "dotnet", Environment.CurrentDirectory, "one two");
 builder.AddExecutable("executableWithMultipleArgs", "dotnet", Environment.CurrentDirectory, "--version", "one two");
-var stressEmptyProjectPath = new Projects.Stress_Empty().ProjectPath;
-builder.AddExecutable("persistentExecutable", "dotnet", Environment.CurrentDirectory, "run", "--project", stressEmptyProjectPath, "--no-build")
-    .WithPersistentLifetime();
 
 IResourceBuilder<IResource>? previousResourceBuilder = null;
 
@@ -126,5 +128,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
+builder.AddPropertyStressResource("property-stress-resource");
 
 builder.Build().Run();

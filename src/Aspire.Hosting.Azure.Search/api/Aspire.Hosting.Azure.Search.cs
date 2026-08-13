@@ -10,7 +10,7 @@ namespace Aspire.Hosting
 {
     public static partial class AzureSearchExtensions
     {
-        [AspireExport(Description = "Adds an Azure AI Search service resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSearchResource> AddAzureSearch(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExportIgnore(Reason = "SearchBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureSearchRole-based overload instead.")]

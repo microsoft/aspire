@@ -142,9 +142,24 @@
         <target state="translated">   Сопоставление: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="MigrateOptionDescription">
+        <source>Apply any pending migrations to the project after updating its packages.</source>
+        <target state="new">Apply any pending migrations to the project after updating its packages.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
         <source>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</source>
         <target state="translated">Перенесено в новый формат проекта: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigrationApplyFailedWarning">
+        <source>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</source>
+        <target state="new">The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NixSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</source>
+        <target state="new">To update the Aspire CLI when installed from Nix, update the profile package or flake input:</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
@@ -172,6 +187,11 @@
         <target state="translated">Не удается записать в каталог установки "{0}". Запустите обновление с повышенными правами (например, используя sudo в Linux или macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NuGetConfigDirOptionDescription">
         <source>Directory to create or update the NuGet.config file in</source>
         <target state="new">Directory to create or update the NuGet.config file in</target>
@@ -190,6 +210,16 @@
       <trans-unit id="PackageReferenceNoVersion">
         <source>Package reference does not have Version.</source>
         <target state="translated">Ссылка на пакет не содержит версию.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PendingMigrationsHeader">
+        <source>This project has pending migrations:</source>
+        <target state="new">This project has pending migrations:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PendingMigrationsHint">
+        <source>Run 'aspire update --migrate' to apply them.</source>
+        <target state="new">Run 'aspire update --migrate' to apply them.</target>
         <note />
       </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">

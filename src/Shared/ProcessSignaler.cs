@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,22 @@ internal static partial class ProcessSignaler
             return; // Process is not running or does not match the expected start time
         }
 
+        RequestGracefulShutdown(pid, logger);
+    }
+
+    public static void RequestGracefulShutdownWithRuntimeStartTime(int pid, DateTimeOffset expectedStartTime, TimeSpan tolerance, ILogger logger)
+    {
+        using var process = TryGetRunningProcessWithRuntimeStartTime(pid, expectedStartTime, tolerance, logger);
+        if (process is null)
+        {
+            return; // Process is not running or does not match the expected start time
+        }
+
+        RequestGracefulShutdown(pid, logger);
+    }
+
+    private static void RequestGracefulShutdown(int pid, ILogger logger)
+    {
         logger.LogDebug("Requesting graceful shutdown of process {Pid}...", pid);
 
         if (OperatingSystem.IsWindows())
@@ -30,15 +47,15 @@ internal static partial class ProcessSignaler
         }
     }
 
-    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
+    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger, bool killEntireProcessTree = false)
     {
         using var process = TryGetRunningProcess(pid, expectedStartTime, logger);
         if (process is { })
         {
-            logger.LogDebug("Killing process {Pid}...", pid);
+            logger.LogDebug("Killing process {Pid} (entireProcessTree={EntireProcessTree})...", pid, killEntireProcessTree);
             try
             {
-                process.Kill(entireProcessTree: false);
+                process.Kill(entireProcessTree: killEntireProcessTree);
             }
             catch (InvalidOperationException)
             {
@@ -49,14 +66,85 @@ internal static partial class ProcessSignaler
 
     public static Process? TryGetRunningProcess(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
     {
+        Process? process = null;
         try
         {
-            var process = Process.GetProcessById(pid);
-            if (expectedStartTime is not null && !AreClose(expectedStartTime, process.StartTime))
+            process = Process.GetProcessById(pid);
+            if (process.HasExited)
             {
-                logger.LogDebug("Process {Pid} start time {ProcessStartTime} does not match expected start time {ExpectedStartTime}", pid, process.StartTime, expectedStartTime);
                 process.Dispose();
-                return null; // Do not return processes that do not match the expected start time
+                return null;
+            }
+
+            if (expectedStartTime is not null)
+            {
+                var actualStartTimeUnixMilliseconds = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(pid);
+                if (actualStartTimeUnixMilliseconds is null)
+                {
+                    logger.LogDebug("Could not inspect process {Pid} start time. Treating it as not running.", pid);
+                    process.Dispose();
+                    return null;
+                }
+
+                var expectedStartTimeUnixMilliseconds = expectedStartTime.Value.ToUnixTimeMilliseconds();
+                if (!ProcessStartTimeHelper.AreCloseMilliseconds(expectedStartTimeUnixMilliseconds, actualStartTimeUnixMilliseconds.Value))
+                {
+                    logger.LogDebug("Process {Pid} start time {ProcessStartTimeMs}ms does not match expected start time {ExpectedStartTimeMs}ms", pid, actualStartTimeUnixMilliseconds, expectedStartTimeUnixMilliseconds);
+                    process.Dispose();
+                    return null; // Do not return processes that do not match the expected start time
+                }
+
+                if (process.HasExited)
+                {
+                    process.Dispose();
+                    return null;
+                }
+            }
+
+            return process;
+        }
+        catch (ArgumentException)
+        {
+            // Process doesn't exist - already terminated.
+            process?.Dispose();
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // Process has already exited.
+            process?.Dispose();
+            return null;
+        }
+        catch (Win32Exception ex)
+        {
+            // Process inspection can race with process exit. On macOS, StartTime can throw:
+            //   Win32Exception (3): Unable to retrieve the specified information about the process or thread. It may have exited or may be privileged.
+            // If we cannot inspect the process enough to prove it is the expected target, do
+            // not signal or kill it.
+            logger.LogDebug(ex, "Could not inspect process {Pid}. Treating it as not running.", pid);
+            process?.Dispose();
+            return null;
+        }
+    }
+
+    public static Process? TryGetRunningProcessWithRuntimeStartTime(int pid, DateTimeOffset expectedStartTime, TimeSpan tolerance, ILogger logger)
+    {
+        Process? process = null;
+        try
+        {
+            process = Process.GetProcessById(pid);
+            if (process.HasExited)
+            {
+                process.Dispose();
+                return null;
+            }
+
+            var expectedStartTimeUnix = expectedStartTime.ToUnixTimeSeconds();
+            if (!ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, tolerance))
+            {
+                logger.LogDebug("Process {Pid} legacy start time does not match expected start time {ExpectedStartTime}.", pid, expectedStartTime);
+                process.Dispose();
+                return null;
             }
 
             if (process.HasExited)
@@ -70,24 +158,25 @@ internal static partial class ProcessSignaler
         catch (ArgumentException)
         {
             // Process doesn't exist - already terminated.
+            process?.Dispose();
             return null;
         }
         catch (InvalidOperationException)
         {
             // Process has already exited.
+            process?.Dispose();
             return null;
         }
-    }
-
-    private static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
-    {
-        if (expectedStartTime is null)
+        catch (Win32Exception ex)
         {
-            return true;
+            // Process inspection can race with process exit. On macOS, StartTime can throw:
+            //   Win32Exception (3): Unable to retrieve the specified information about the process or thread. It may have exited or may be privileged.
+            // If we cannot inspect the process enough to prove it is the expected target, do
+            // not signal or kill it.
+            logger.LogDebug(ex, "Could not inspect process {Pid}. Treating it as not running.", pid);
+            process?.Dispose();
+            return null;
         }
-
-        tolerance ??= TimeSpan.FromSeconds(1);
-        return ((DateTimeOffset)expectedStartTime - new DateTimeOffset(processStartTime)).Duration() <= tolerance;
     }
 
     private const int SigTerm = 15;

@@ -17,8 +17,9 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
     public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
     public Func<CertificateCleanResult>? CleanHttpCertificateCallback { get; set; }
 
-    public CertificateTrustResult CheckHttpCertificate()
+    public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (CheckHttpCertificateCallback is not null)
         {
             return CheckHttpCertificateCallback();

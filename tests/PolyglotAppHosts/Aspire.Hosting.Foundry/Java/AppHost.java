@@ -1,4 +1,5 @@
 import aspire.*;
+import java.util.Map;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -79,13 +80,7 @@ void main() throws Exception {
         var builderProject = builderProjectFoundry.addProject("builder-project");
         var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", new AddModelDeploymentOptions().modelVersion("1").format("Microsoft"));
         var _projectModel = project.addModelDeployment("project-model", FoundryModels.Microsoft.Phi4);
-        var hostedAgent = builder.addExecutable(
-            "hosted-agent",
-            "node",
-            ".",
-            new String[] {
-                "-e",
-                """
+        var hostedAgentScript = """
 const http = require('node:http');
 const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
 const server = http.createServer((req, res) => {
@@ -99,22 +94,45 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
 server.listen(port, '127.0.0.1');
-"""
+""";
+        var hostedAgent = builder.addExecutable(
+            "hosted-agent",
+            "node",
+            ".",
+            new String[] {
+                "-e",
+                hostedAgentScript
             });
 
-        hostedAgent.withComputeEnvironment(new WithComputeEnvironmentOptions()
-            .project(project)
-            .configure((configuration) -> {
-                configuration.setDescription("Validation hosted agent");
-                configuration.setCpu(1);
-                configuration.setMemory(2);
-                configuration.metadata().put("scenario", "validation");
-                configuration.environmentVariables().put("VALIDATION_MODE", "true");
-            }));
+        var hostedAgentOptions = new HostedAgentOptions();
+        hostedAgentOptions.setDescription("Validation hosted agent");
+        hostedAgentOptions.setCpu(1.0);
+        hostedAgentOptions.setMemory(2.0);
+        hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
+        hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
+        hostedAgent.asHostedAgent(project, hostedAgentOptions);
+
+        var hostedAgentWithProtocol = builder.addExecutable(
+            "hosted-agent-with-protocol",
+            "node",
+            ".",
+            new String[] {
+                "-e",
+                hostedAgentScript
+            });
+        // Both hosted agents run as plain host processes (not containers), so they must not share the
+        // default 8088 target port or the second process fails to bind with EADDRINUSE.
+        hostedAgentWithProtocol.withHttpEndpoint(new WithHttpEndpointOptions().targetPort(8089.0));
+        hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.INVOCATIONS, "1.0.0");
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {

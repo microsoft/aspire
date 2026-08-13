@@ -25,7 +25,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
     public void Configure(DashboardOptions options)
     {
         options.DashboardPath = dcpOptions.Value.DashboardPath;
-        options.DashboardUrl = configuration[KnownConfigNames.AspNetCoreUrls];
+        options.DashboardUrl = configuration[KnownAspNetCoreConfigNames.Urls];
         options.DashboardToken = configuration["AppHost:BrowserToken"];
 
         options.OtlpGrpcEndpointUrl = NormalizeUrl(configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl));
@@ -34,7 +34,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
         options.OtlpApiKey = configuration["AppHost:OtlpApiKey"];
         options.ApiKey = configuration["AppHost:DashboardApiKey"];
 
-        options.AspNetCoreEnvironment = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
+        options.AspNetCoreEnvironment = configuration[KnownAspNetCoreConfigNames.Environment] ?? "Production";
 
         options.TelemetryOptOut = bool.TryParse(configuration["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"], out var telemetryOptOut)
             ? telemetryOptOut

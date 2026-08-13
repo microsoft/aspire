@@ -425,6 +425,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning..
+        /// </summary>
+        public static string LegacyTypeScriptAppHostWarning {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostWarning", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to {0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again..
@@ -450,6 +459,33 @@ namespace Aspire.Cli.Resources {
         public static string CodegenDebugHeader {
             get {
                 return ResourceManager.GetString("CodegenDebugHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path..
+        /// </summary>
+        public static string ConfiguredAppHostPathHasInvalidCharacters {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathHasInvalidCharacters", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') must be a JSON string..
+        /// </summary>
+        public static string ConfiguredAppHostPathMustBeString {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathMustBeString", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration file '{0}' must contain a JSON object..
+        /// </summary>
+        public static string ConfigurationFileMustBeJsonObject {
+            get {
+                return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
             }
         }
     }

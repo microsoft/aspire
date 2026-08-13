@@ -29,7 +29,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtractAsync_FreshExtraction_CreatesVersionedLayoutAndLinks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var payload = CreateFakeBundlePayload();
         var provider = new TestBundlePayloadProvider(payload);
@@ -77,7 +77,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtractAsync_AlreadyUpToDate_SkipsExtraction()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var payload = CreateFakeBundlePayload();
         var provider = new TestBundlePayloadProvider(payload);
@@ -108,7 +108,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtractAsync_Upgrade_FlipsLinksAndCleansUpOldVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
 
@@ -166,7 +166,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtractAsync_CleansUpStaleVersionDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var versionsDir = Path.Combine(layoutRoot, BundleService.VersionsDirectoryName);
         Directory.CreateDirectory(versionsDir);
@@ -197,9 +197,38 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Windows file sharing semantics are required.")]
+    public async Task MoveDirectoryWithRetryAsync_FileTemporarilyLocked_RetriesUntilReleased()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourcePath = workspace.CreateDirectory("source").FullName;
+        var destinationPath = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
+        var lockedFilePath = Path.Combine(sourcePath, "locked.dll");
+        File.WriteAllText(lockedFilePath, "locked");
+
+        var service = CreateService(
+            new TestBundlePayloadProvider(CreateFakeBundlePayload()),
+            new TestLayoutDiscovery(workspace.WorkspaceRoot.FullName));
+
+        using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var moveTask = service.MoveDirectoryWithRetryAsync(
+            sourcePath,
+            destinationPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(moveTask.IsCompleted);
+
+        lockedFile.Dispose();
+        await moveTask;
+
+        Assert.False(Directory.Exists(sourcePath));
+        Assert.True(Directory.Exists(destinationPath));
+    }
+
+    [Fact]
     public async Task EnsureExtractedAndAcquireLayoutAsync_ReturnsVersionRootedLayoutAndSkipsLeasedCleanup()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
 
@@ -251,7 +280,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCleanupStaleVersions_SkipsVersionWithActiveLease()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionsDir = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
         var staleVersionDir = Path.Combine(versionsDir, "stale-version");
         Directory.CreateDirectory(staleVersionDir);
@@ -266,7 +295,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCleanupStaleVersions_RemovesOrphanLeaseFilesBeforeDeletingVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionsDir = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
         var staleVersionDir = Path.Combine(versionsDir, "stale-version");
         var leasesDir = Path.Combine(staleVersionDir, BundleVersionLease.LeasesDirectoryName);
@@ -281,7 +310,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public void BundleVersionLease_AllowsConcurrentReadersForSameVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionDir = workspace.CreateDirectory("version").FullName;
 
         using var lease1 = BundleVersionLease.Acquire(versionDir, "test", "reader1");
@@ -294,7 +323,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToRidDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // RID-specific dotnet-tool layout: the native binary lives in the
         // RID-scoped directory inside the tool store. The sidecar declares
         // source=dotnet-tool so extraction stays at that same RID directory
@@ -351,7 +380,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         // Individual pieces are covered by ComputeDefaultExtractDir tests and
         // LayoutDiscovery_FallsBackToAspireHomeWhenLayoutIsNotRelativeToCli; this test
         // locks in the combined behavior end-to-end through EnsureExtractedAndAcquireLayoutAsync.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // CLI lives in a directory unrelated to any layout, with no .aspire-install.json
         // sidecar. This simulates an installation in an arbitrary location such as a
@@ -372,7 +401,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         // probe must actually find the freshly extracted bundle via the Aspire-home
         // fallback. Relative-to-CLI discovery must fail (binary lives outside any
         // layout) for the home probe to be exercised.
-        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = processPath
         };
@@ -429,18 +458,18 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Verifies that the static <see cref="BundleService.ExtractPayloadAsync(Stream, string, CancellationToken)"/>
+    /// Verifies that the static <see cref="BundleService.ExtractPayloadAsync(Stream, string, IEnvironment, CancellationToken)"/>
     /// overload correctly extracts a tar.gz stream with strip-components=1 behavior.
     /// </summary>
     [Fact]
     public async Task ExtractPayloadAsync_Static_ExtractsTarGzWithStripComponents()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dest = workspace.WorkspaceRoot.FullName;
         var payload = CreateFakeBundlePayload("test-content");
 
         using var stream = new MemoryStream(payload);
-        await BundleService.ExtractPayloadAsync(stream, dest, CancellationToken.None);
+        await BundleService.ExtractPayloadAsync(stream, dest, new TestEnvironment(), CancellationToken.None);
 
         // Verify strip-components=1 removed the wrapper directory.
         var managedExe = Path.Combine(dest, BundleDiscovery.ManagedDirectoryName,
@@ -460,7 +489,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtractAsync_ReplacesReparsePointsOnUpgrade()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
 
@@ -548,7 +577,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
     private static BundleService CreateService(TestBundlePayloadProvider provider, ILayoutDiscovery layoutDiscovery, string? processPathOverride = null)
     {
-        return new BundleService(provider, layoutDiscovery, NullLogger<BundleService>.Instance)
+        return new BundleService(provider, layoutDiscovery, new TestEnvironment(), NullLogger<BundleService>.Instance)
         {
             ProcessPathOverride = processPathOverride
         };

@@ -45,7 +45,11 @@ internal enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input. Allows the user to select a file.
+    /// </summary>
+    File
 }
 
 internal sealed class EnvVar
@@ -75,4 +79,10 @@ internal sealed class DebugSessionOptions
     /// </summary>
     [JsonPropertyName("args")]
     public string[]? Args { get; set; }
+
+    /// <summary>
+    /// Gets or sets environment variables to pass to the CLI process started by the debug session.
+    /// </summary>
+    [JsonPropertyName("env")]
+    public Dictionary<string, string>? EnvironmentVariables { get; set; }
 }

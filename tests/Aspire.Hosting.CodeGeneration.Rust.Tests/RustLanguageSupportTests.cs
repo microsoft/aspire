@@ -5,18 +5,18 @@ using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Rust.Tests;
 
-public class RustLanguageSupportTests
+public class RustLanguageSupportTests(ITestOutputHelper outputHelper)
 {
     private readonly RustLanguageSupport _languageSupport = new();
 
     [Fact]
     public void Scaffold_CreatesRustAppHostFilesOnly()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var files = _languageSupport.Scaffold(new ScaffoldRequest
         {
-            TargetPath = testDir.Path,
+            TargetPath = workspace.Path,
             ProjectName = "RustApp"
         });
 
@@ -31,12 +31,12 @@ public class RustLanguageSupportTests
     [Fact]
     public void Detect_ReturnsRustAppHostWhenMarkerAndCargoExist()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "apphost.rs"), "// marker");
-        File.WriteAllText(Path.Combine(testDir.Path, "Cargo.toml"), "[package]");
+        File.WriteAllText(Path.Combine(workspace.Path, "apphost.rs"), "// marker");
+        File.WriteAllText(Path.Combine(workspace.Path, "Cargo.toml"), "[package]");
 
-        var result = _languageSupport.Detect(testDir.Path);
+        var result = _languageSupport.Detect(workspace.Path);
 
         Assert.True(result.IsValid);
         Assert.Equal("rust", result.Language);
@@ -46,12 +46,12 @@ public class RustLanguageSupportTests
     [Fact]
     public void Detect_DoesNotTreatTypeScriptAppHostAsRust()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "apphost.ts"), "// typescript");
-        File.WriteAllText(Path.Combine(testDir.Path, "Cargo.toml"), "[package]");
+        File.WriteAllText(Path.Combine(workspace.Path, "apphost.ts"), "// typescript");
+        File.WriteAllText(Path.Combine(workspace.Path, "Cargo.toml"), "[package]");
 
-        var result = _languageSupport.Detect(testDir.Path);
+        var result = _languageSupport.Detect(workspace.Path);
 
         Assert.False(result.IsValid);
     }
@@ -59,11 +59,11 @@ public class RustLanguageSupportTests
     [Fact]
     public void Detect_RequiresCargoManifest()
     {
-        using var testDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(testDir.Path, "apphost.rs"), "// marker");
+        File.WriteAllText(Path.Combine(workspace.Path, "apphost.rs"), "// marker");
 
-        var result = _languageSupport.Detect(testDir.Path);
+        var result = _languageSupport.Detect(workspace.Path);
 
         Assert.False(result.IsValid);
     }

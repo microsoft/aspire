@@ -24,9 +24,6 @@ internal sealed class FakeNpmRunner : INpmRunner
     public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
         => Task.FromResult<string?>(null);
 
-    public Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-        => Task.FromResult(true);
-
     public Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
         => Task.FromResult(true);
 }
@@ -36,7 +33,7 @@ internal sealed class FakeNpmRunner : INpmRunner
 /// </summary>
 internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 {
-    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         => Task.FromResult(new ProvenanceVerificationResult
         {
             Outcome = ProvenanceVerificationOutcome.Verified,
@@ -49,6 +46,10 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 /// </summary>
 internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 {
+    internal const string AspireInitSkillName = "aspire-init";
+    internal const string AspireMonitoringSkillName = "aspire-monitoring";
+    internal const string AspireOrchestrationSkillName = "aspire-orchestration";
+
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
 
@@ -113,7 +114,34 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
                 # Aspire Deployment
                 """,
-            [(CommonAgentApplicators.AspireDeploymentSkillName, Path.Combine("references", "preflight.md"))] = "# Preflight"
+            [(CommonAgentApplicators.AspireDeploymentSkillName, Path.Combine("references", "preflight.md"))] = "# Preflight",
+            [(AspireInitSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-init
+                description: "First-run flow for adding Aspire to a repo"
+                ---
+
+                # Aspire Init
+                """,
+            [(AspireMonitoringSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-monitoring
+                description: "Observe Aspire apps with logs, traces, metrics, and resource state"
+                ---
+
+                # Aspire Monitoring
+                """,
+            [(AspireOrchestrationSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-orchestration
+                description: "Manage Aspire AppHost lifecycle and resource commands"
+                ---
+
+                # Aspire Orchestration
+                """
         };
 
         foreach (var ((skillName, relativePath), content) in files)
@@ -133,9 +161,12 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             },
             Skills =
             [
-                CreateSkill(CommonAgentApplicators.AspireSkillName, isDefault: true, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, isDefault: true, [], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, isDefault: true, [], files)
+                CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
+                CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
+                CreateSkill(AspireInitSkillName, ["evals"], files),
+                CreateSkill(AspireMonitoringSkillName, ["evals"], files),
+                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
             ]
         };
 
@@ -143,13 +174,12 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleSkill CreateSkill(string skillName, bool isDefault, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private SkillBundleSkill CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
     {
         return new SkillBundleSkill
         {
             Name = skillName,
             Description = $"{skillName} skill",
-            IsDefault = isDefault,
             InstallExcludedRelativePaths = installExcludedRelativePaths,
             Files = files
                 .Where(entry => string.Equals(entry.Key.SkillName, skillName, StringComparison.Ordinal))

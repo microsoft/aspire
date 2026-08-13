@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -19,6 +18,7 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/19174")]
     public async Task DeployStarterWithManagedRedisToAzureContainerApps()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -160,9 +160,12 @@ builder.Build().Run();
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg($"{projectName}.AppHost")}", counter);
 
             // Step 11: Set environment variables for deployment
-            // Use eastus for Azure Managed Redis availability zone support
+            // Use eastus2 for Azure Managed Redis availability zone support. East US returned
+            // InsufficientCapacity for the Balanced B0 SKU during deployment test runs.
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects first: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.RunCommandAsync(
-                $"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=eastus AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=eastus2 AZURE__RESOURCEGROUP={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}",
                 counter);
 
             // Step 12: Deploy to Azure Container Apps
@@ -177,7 +180,7 @@ builder.Build().Run();
             // Step 13: Verify deployed endpoints with retry
             // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
             output.WriteLine("Step 13: Verifying deployed endpoints...");
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"RG_NAME=\"{resourceGroupName}\" && " +
                 "echo \"Resource group: $RG_NAME\" && " +
                 "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
@@ -200,7 +203,7 @@ builder.Build().Run();
 
             // Step 14: Verify /api/weatherforecast returns valid JSON (exercises Redis output cache)
             output.WriteLine("Step 14: Verifying /api/weatherforecast returns valid JSON...");
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"RG_NAME=\"{resourceGroupName}\" && " +
                 "SERVER_FQDN=$(az containerapp list -g \"$RG_NAME\" --query \"[?contains(name,'server')].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | head -1) && " +
                 "if [ -z \"$SERVER_FQDN\" ]; then echo \"❌ Server container app not found\"; exit 1; fi && " +

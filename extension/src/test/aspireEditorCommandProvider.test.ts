@@ -8,6 +8,8 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import * as cliPathModule from '../utils/cliPath';
 
 function createEditor(filePath: string): vscode.TextEditor {
     return {
@@ -28,6 +30,9 @@ suite('AspireEditorCommandProvider', () => {
     let onDidChangeWorkspaceFoldersStub: sinon.SinonStub;
     let onDidChangeActiveTextEditorStub: sinon.SinonStub;
     let executeCommandStub: sinon.SinonStub;
+    let startDebuggingStub: sinon.SinonStub;
+    let showErrorMessageStub: sinon.SinonStub;
+    let resolveCliPathStub: sinon.SinonStub;
 
     setup(() => {
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-editor-command-provider-'));
@@ -45,9 +50,19 @@ suite('AspireEditorCommandProvider', () => {
         onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders').returns({ dispose: () => { } } as vscode.Disposable);
         onDidChangeActiveTextEditorStub = sinon.stub(vscode.window, 'onDidChangeActiveTextEditor').returns({ dispose: () => { } } as vscode.Disposable);
         executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        // AppHostLaunchService.launch gates on CLI availability before starting the debug
+        // session, so stub resolution to "available" here. Otherwise the gate resolves to
+        // not-found on hosts without the Aspire CLI and the launch path throws a
+        // CancellationError before vscode.debug.startDebugging is ever called.
+        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
     });
 
     teardown(() => {
+        resolveCliPathStub.restore();
+        showErrorMessageStub.restore();
+        startDebuggingStub.restore();
         executeCommandStub.restore();
         onDidChangeActiveTextEditorStub.restore();
         onDidChangeWorkspaceFoldersStub.restore();
@@ -67,7 +82,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(projectPath, '<Project Sdk="Microsoft.NET.Sdk" />');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath));
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), projectPath);
         }
@@ -81,7 +96,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, '#:sdk Aspire.AppHost.Sdk\nvar builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath));
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -95,7 +110,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'));
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -109,7 +124,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
         try {
             await provider.processDocument(activeEditor.document);
 
@@ -126,9 +141,35 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), null);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('run command uses resolved AppHost path from discovery', async () => {
+        const appHostDirectory = path.join(tempDir, 'ResolvedAppHost');
+        fs.mkdirSync(appHostDirectory);
+
+        const appHostPath = path.join(appHostDirectory, 'ResolvedAppHost.csproj');
+        const programPath = path.join(appHostDirectory, 'Program.cs');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Microsoft.NET.Sdk" />');
+        fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
+        activeEditor = createEditor(programPath);
+
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
+        try {
+            await provider.tryExecuteRunAppHost(true);
+
+            assert.ok(startDebuggingStub.calledOnce);
+            const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(launchConfiguration.program, appHostPath);
+            assert.strictEqual(launchConfiguration.command, 'run');
+            assert.strictEqual(launchConfiguration.noDebug, true);
+            assert.strictEqual(showErrorMessageStub.called, false);
         }
         finally {
             provider.dispose();

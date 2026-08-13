@@ -73,5 +73,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StagingChannelUnavailableOnDailyCli", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.
+        /// </summary>
+        internal static string PackagesOverrideDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("PackagesOverrideDirectoryNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.
+        /// </summary>
+        internal static string PackagesOverrideDirectoryHasDuplicateVersions {
+            get {
+                return ResourceManager.GetString("PackagesOverrideDirectoryHasDuplicateVersions", resourceCulture);
+            }
+        }
     }
 }
