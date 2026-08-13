@@ -161,9 +161,13 @@
     The .cat is signed by Arcade (FileExtensionSignInfo in eng/Signing.props) and included in
     the NuGet so it flows through dotnet-project-system -> Aspire.vsix -> VS.
     Only runs on Windows (makecat.exe requires Windows SDK).
+
+    Runs after ReplacePackageVersionOnTemplates (not just after the copy) so the catalog always
+    hashes the final shipped bytes. Version replacement doesn't touch the current .js files, but
+    binding here keeps the hashes correct if a cataloged file ever carries a version token.
   -->
   <Target Name="GenerateCatalogFiles"
-          AfterTargets="CopyTemplatesToIntermediateOutputPath"
+          AfterTargets="ReplacePackageVersionOnTemplates"
           BeforeTargets="AddTemplatesToPackageAsContent"
           Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PropertyGroup>
