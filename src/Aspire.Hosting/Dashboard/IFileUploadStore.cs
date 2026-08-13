@@ -24,9 +24,9 @@ internal interface IFileUploadStore
     void CompleteUpload(string fileId);
 
     /// <summary>
-    /// Gets the file path for a given file ID and input name.
+    /// Gets the file path for a given file ID, interaction ID, and input name.
     /// </summary>
-    string? GetFilePath(string fileId, string inputName);
+    string? GetFilePath(string fileId, int interactionId, string inputName);
 
     /// <summary>
     /// Gets the original file name for a given file ID.

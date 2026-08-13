@@ -11,13 +11,18 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 internal sealed class TestFileSystemService : IFileSystemService, IDisposable
 {
-    private readonly TestTempFileSystemService _tempDirectory = new();
+    private readonly TestTempFileSystemService _tempDirectory;
+
+    public TestFileSystemService(bool createDirectoryAtTempFilePath = false)
+    {
+        _tempDirectory = new TestTempFileSystemService(createDirectoryAtTempFilePath);
+    }
 
     public ITempFileSystemService TempDirectory => _tempDirectory;
 
     public void Dispose() => _tempDirectory.Dispose();
 
-    private sealed class TestTempFileSystemService : ITempFileSystemService, IDisposable
+    private sealed class TestTempFileSystemService(bool createDirectoryAtTempFilePath) : ITempFileSystemService, IDisposable
     {
         private readonly List<string> _directories = [];
 
@@ -34,7 +39,14 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
             _directories.Add(tempDir.FullName);
             var resolvedName = fileName ?? System.IO.Path.GetRandomFileName();
             var filePath = System.IO.Path.Combine(tempDir.FullName, resolvedName);
-            File.Create(filePath).Dispose();
+            if (createDirectoryAtTempFilePath)
+            {
+                Directory.CreateDirectory(filePath);
+            }
+            else
+            {
+                File.Create(filePath).Dispose();
+            }
             return new TestTempFile(filePath, tempDir.FullName);
         }
 

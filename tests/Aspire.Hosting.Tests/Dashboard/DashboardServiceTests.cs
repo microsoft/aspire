@@ -849,11 +849,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.NotNull(response.FileId);
         Assert.NotEmpty(response.FileId);
-        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, "File"));
+        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
 
         fileUploadStore.CancelInteraction(1);
 
-        Assert.Null(fileUploadStore.GetFilePath(response.FileId, "File"));
+        Assert.Null(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
         Assert.False(File.Exists(filePath));
     }
 
@@ -980,7 +980,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         // Resolve the file reference using the same store
         var json = $"[{{\"Id\":\"{uploadResponse.FileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "CertInput", NullLogger.Instance);
+        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "CertInput", NullLogger.Instance);
 
         Assert.NotNull(resolvedFiles);
         var file = Assert.Single(resolvedFiles);
@@ -1000,7 +1000,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -1012,7 +1012,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
