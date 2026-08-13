@@ -452,6 +452,18 @@ public class DevTunnelResourceBuilderExtensionsTests
             },
             Services = serviceProvider
         });
+        interactionService.IsAvailable = false;
+        var unavailableState = command.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new()
+            {
+                ResourceType = "DevTunnelPort",
+                Properties = [],
+                State = KnownResourceStates.Running
+            },
+            Services = serviceProvider
+        });
+        interactionService.IsAvailable = true;
         var commandTask = command.ExecuteCommand(new ExecuteCommandContext
         {
             ResourceName = port.Name,
@@ -468,6 +480,7 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         Assert.Equal(ResourceCommandState.Enabled, enabledState);
         Assert.Equal(ResourceCommandState.Disabled, stoppedState);
+        Assert.Equal(ResourceCommandState.Disabled, unavailableState);
         Assert.Equal(InteractionType.MessageBox, interaction.Type);
         Assert.Equal("Dev tunnel URLs", interaction.Title);
         Assert.Equal(

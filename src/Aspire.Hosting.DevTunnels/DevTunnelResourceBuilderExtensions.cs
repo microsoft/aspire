@@ -615,10 +615,14 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     IsHighlighted = true,
                     Visibility = ResourceCommandVisibility.UI,
                     UpdateState = context =>
-                        context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
-                        portResource.LastKnownStatus?.PortUri is not null
-                        ? ResourceCommandState.Enabled
-                        : ResourceCommandState.Disabled
+                    {
+                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
+                        return interactionService.IsAvailable &&
+                            context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
+                            portResource.LastKnownStatus?.PortUri is not null
+                            ? ResourceCommandState.Enabled
+                            : ResourceCommandState.Disabled;
+                    }
                 })
             // NOTE:
             // The endpoint target full host is set by the dev tunnels service and is not known in advance, but the suffix is always devtunnels.ms
