@@ -22,6 +22,7 @@ public sealed class ResourceViewModel
     private readonly ImmutableArray<HealthReportViewModel> _healthReports = [];
     private readonly KnownResourceState? _knownState;
     private Lazy<ImmutableArray<string>>? _cachedAddresses;
+    private Lazy<string?>? _cachedDatabaseName;
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
@@ -59,6 +60,9 @@ public sealed class ResourceViewModel
     /// </summary>
     public ImmutableArray<string> CachedAddresses => (_cachedAddresses ??= new Lazy<ImmutableArray<string>>(ExtractResourceAddresses)).Value;
 
+    /// <summary>Gets the database name from resource metadata or the parsed connection string.</summary>
+    internal string? CachedDatabaseName => (_cachedDatabaseName ??= new Lazy<string?>(ExtractDatabaseName)).Value;
+
     private ImmutableArray<string> ExtractResourceAddresses()
     {
         var addresses = new List<string>();
@@ -89,6 +93,51 @@ public sealed class ResourceViewModel
         }
 
         return addresses.ToImmutableArray();
+    }
+
+    private string? ExtractDatabaseName()
+    {
+        if (TryGetConnectionProperty("DatabaseName", out var databaseNameProperty) &&
+            databaseNameProperty.TryConvertToString(out var databaseName))
+        {
+            return databaseName;
+        }
+
+        if (Properties.TryGetValue(KnownProperties.Resource.ConnectionString, out var connectionStringProperty) &&
+            connectionStringProperty.Value.TryConvertToString(out var connectionString) &&
+            ConnectionStringParser.TryDetectDatabaseName(connectionString, out databaseName))
+        {
+            return databaseName;
+        }
+
+        return null;
+    }
+
+    private bool TryGetConnectionProperty(string propertyName, [NotNullWhen(true)] out Value? propertyValue)
+    {
+        if (!Properties.TryGetValue(KnownProperties.Resource.ConnectionProperties, out var connectionPropertiesProperty) ||
+            connectionPropertiesProperty.Value.StructValue is not { } connectionProperties)
+        {
+            propertyValue = null;
+            return false;
+        }
+
+        if (connectionProperties.Fields.TryGetValue(propertyName, out propertyValue))
+        {
+            return true;
+        }
+
+        foreach (var (name, value) in connectionProperties.Fields)
+        {
+            if (string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                propertyValue = value;
+                return true;
+            }
+        }
+
+        propertyValue = null;
+        return false;
     }
 
     public required ImmutableArray<HealthReportViewModel> HealthReports

@@ -11,7 +11,6 @@ using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Spectre.Console;
@@ -22,7 +21,7 @@ namespace Aspire.Cli.Commands;
 /// Command that initializes agent environment configuration for detected agents.
 /// This is the new command under 'aspire agent init'.
 /// </summary>
-internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCommand
+internal sealed class AgentInitCommand : BaseCommand
 {
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
     private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
@@ -30,16 +29,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private readonly IGitRepository _gitRepository;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
-
-    /// <summary>
-    /// AgentInitCommand does not need template package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => false;
-
-    /// <summary>
-    /// AgentInitCommand does not need CLI package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => false;
 
     public AgentInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,

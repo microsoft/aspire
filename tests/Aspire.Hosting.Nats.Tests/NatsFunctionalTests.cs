@@ -22,7 +22,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     private const string SubjectName = "test-subject";
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyNatsResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -60,7 +60,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(null, null)]
     [InlineData("nats", null)]
     [InlineData(null, "password")]
@@ -104,7 +104,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData("user", "wrong-password")]
     [InlineData("wrong-user", "password")]
     [InlineData(null, null)]
@@ -154,7 +154,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         string? volumeName = null;
@@ -324,7 +324,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnNatsBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -361,7 +361,7 @@ public class NatsFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StopAsync();
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task Nats_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(

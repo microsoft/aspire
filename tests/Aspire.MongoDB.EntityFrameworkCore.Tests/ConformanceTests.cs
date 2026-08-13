@@ -20,7 +20,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, MongoDBEntityFra
     protected string DatabaseName { get; private set; }
     protected override ServiceLifetime ServiceLifetime { get; }
     protected override string ActivitySourceName => "MongoDB.Driver.Core.Extensions.DiagnosticSources";
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override RequiredLogCategory[] RequiredLogCategories =>
     [
@@ -68,7 +68,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, MongoDBEntityFra
     public ConformanceTests(MongoDbContainerFixture? containerFixture)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
             ? _containerFixture.GetConnectionString()
             : "mongodb://localhost:27017/test_aspire_mongodb";
         DatabaseName = "test_db";

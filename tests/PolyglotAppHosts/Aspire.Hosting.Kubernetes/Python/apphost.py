@@ -10,6 +10,8 @@ with create_builder() as builder:
     helm_chart_name = builder.add_parameter("helm-chart-name")
     helm_chart_version = builder.add_parameter("helm-chart-version")
     helm_chart_description = builder.add_parameter("helm-chart-description")
+    persistent_volume_storage_class = builder.add_parameter("persistent-volume-storage-class")
+    persistent_volume_capacity = builder.add_parameter("persistent-volume-capacity")
     kubernetes = builder.add_kubernetes_environment("resource")
 
     def configure_helm(helm):
@@ -34,6 +36,13 @@ with create_builder() as builder:
     ingress = kubernetes.add_ingress("public-ingress")
     ingress.with_hostname("ingress.example.com")
     ingress.with_tls("ingress-tls")
+    persistent_volume = kubernetes.add_persistent_volume("data")
+    persistent_volume.with_storage_class("fast-storage")
+    persistent_volume.with_capacity("5Gi")
+    _persistent_volume_resource_name = persistent_volume.get_resource_name()
+    parameterized_persistent_volume = kubernetes.add_persistent_volume("parameterized-data")
+    parameterized_persistent_volume.with_storage_class_param(persistent_volume_storage_class)
+    parameterized_persistent_volume.with_capacity_param(persistent_volume_capacity)
     service_container = builder.add_container("resource", "image")
     service_container.with_compute_environment(kubernetes)
 

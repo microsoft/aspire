@@ -749,6 +749,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             throw new CertificateServiceException("Failed to trust certificates");
         }
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     [Fact]
@@ -1458,6 +1460,44 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs")));
+    }
+
+    [Fact]
+    public async Task NewCommandWaitsForBundleExtractionAfterCreatingAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var extractionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowExtraction = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            EnsureExtractedAsyncCallback = async cancellationToken =>
+            {
+                extractionStarted.SetResult();
+                await allowExtraction.Task.WaitAsync(cancellationToken);
+            }
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.BundleServiceFactory = _ => bundleService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld false --suppress-agent-init");
+        var invocationTask = result.InvokeAsync();
+
+        await extractionStarted.Task.DefaultTimeout();
+
+        var appHostCreated = File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs"));
+        var commandCompletedBeforeExtraction = invocationTask.IsCompleted;
+
+        allowExtraction.SetResult();
+        var exitCode = await invocationTask.DefaultTimeout();
+
+        Assert.True(appHostCreated);
+        Assert.False(commandCompletedBeforeExtraction);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]

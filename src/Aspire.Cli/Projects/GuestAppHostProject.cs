@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.IO.Hashing;
 using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -30,6 +31,9 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
+    private const string DevCertificateCacheDirectoryName = "dev-certs";
+    private const string CertificateBundleCacheDirectoryName = "bundles";
+
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -458,6 +462,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
@@ -618,6 +623,24 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
                 environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
+                if (_guestRuntime is null)
+                {
+                    _interactionService.DisplayError("GuestRuntime not initialized.");
+                    return CliExitCodes.FailedToDotnetRunAppHost;
+                }
+
+                if (_guestRuntime.CertificateBundleEnvironmentVariable is { } certificateBundleEnvironmentVariable)
+                {
+                    var devCertPemPath = _certificateService.ExportDevCertificatePem(cancellationToken);
+                    await ConfigureCertificateBundleEnvironmentAsync(
+                        environmentVariables,
+                        directory,
+                        devCertPemPath,
+                        certificateBundleEnvironmentVariable,
+                        _guestRuntime.Language.Replace('/', '-'),
+                        cancellationToken);
+                }
+
                 // Pass debug flag to the guest process
                 if (context.Debug)
                 {
@@ -628,12 +651,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
                 // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
                 // only use the extension launcher when the runtime requests it and the extension supports it.
-                if (_guestRuntime is null)
-                {
-                    _interactionService.DisplayError("GuestRuntime not initialized.");
-                    return CliExitCodes.FailedToDotnetRunAppHost;
-                }
-
                 if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
                     && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
                     && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
@@ -1039,6 +1056,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
+            launchSettingsEnvVars[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
 
             // Generate a backchannel socket path for CLI to connect to AppHost server
             var backchannelSocketPath = GetBackchannelSocketPath();
@@ -1143,6 +1161,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                     includeLaunchProfileEnvironmentVariables: false,
                     args: context.Arguments);
+                environmentVariables[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
                 environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
                 environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
                 environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
@@ -1297,13 +1316,24 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // See https://github.com/dotnet/runtime/issues/45003.
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
-                var exitCode = serverSession.TryGetServerExitCode() ?? -1;
+                var exitCode = serverSession.TryGetServerExitCode();
                 // Log at Debug level - this is expected when AppHost crashes during startup.
                 // The real error is in the AppHost output, not this connection-level detail.
-                _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
-                var message = exitCode == CliExitCodes.Success
-                    ? "The AppHost server process exited"
-                    : $"The AppHost server process exited unexpectedly with exit code {exitCode}";
+                if (exitCode is { } knownExitCode)
+                {
+                    _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", knownExitCode, socketPath);
+                }
+                else
+                {
+                    _logger.LogDebug("AppHost server process has exited before its exit code was available. Unable to connect to backchannel at {SocketPath}", socketPath);
+                }
+
+                var message = exitCode switch
+                {
+                    CliExitCodes.Success => "The AppHost server process exited",
+                    { } nonZeroExitCode => $"The AppHost server process exited unexpectedly with exit code {nonZeroExitCode}",
+                    null => "The AppHost server process exited unexpectedly"
+                };
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 activity.SetError(backchannelException);
                 backchannelCompletionSource.TrySetException(backchannelException);
@@ -2003,4 +2033,109 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var id = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
         return Task.FromResult<string?>(id);
     }
+
+    /// <summary>
+    /// Configures a language runtime's certificate bundle to trust the ASP.NET Core development certificate.
+    /// </summary>
+    internal async Task ConfigureCertificateBundleEnvironmentAsync(
+        IDictionary<string, string> environmentVariables,
+        DirectoryInfo workingDirectory,
+        string? devCertPemPath,
+        string environmentVariableName,
+        string cacheFilePrefix,
+        CancellationToken cancellationToken)
+    {
+        if (devCertPemPath is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(environmentVariableName))
+        {
+            throw new InvalidOperationException("The certificate bundle environment variable name cannot be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(cacheFilePrefix) ||
+            cacheFilePrefix.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
+        {
+            throw new InvalidOperationException("The certificate bundle cache file prefix contains invalid characters.");
+        }
+
+        // Explicit AppHost configuration takes precedence over the inherited environment.
+        // Environment variable names are case-insensitive on Windows.
+        var configuredKeys = _environment.IsWindows()
+            ? environmentVariables.Keys
+                .Where(key => string.Equals(key, environmentVariableName, StringComparison.OrdinalIgnoreCase))
+                .ToArray()
+            : environmentVariables.ContainsKey(environmentVariableName)
+                ? [environmentVariableName]
+                : [];
+        var existingCertificateBundle = configuredKeys.LastOrDefault() is { } configuredKey
+            ? environmentVariables[configuredKey]
+            : _environment.GetEnvironmentVariable(environmentVariableName);
+        var certificateBundlePath = devCertPemPath;
+
+        if (!string.IsNullOrWhiteSpace(existingCertificateBundle))
+        {
+            try
+            {
+                var existingBundlePath = Path.GetFullPath(existingCertificateBundle, workingDirectory.FullName);
+                var pathComparison = _environment.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+
+                if (!string.Equals(existingBundlePath, devCertPemPath, pathComparison))
+                {
+                    var devCertificateContents = await File.ReadAllBytesAsync(devCertPemPath, cancellationToken);
+                    var existingBundleContents = await File.ReadAllBytesAsync(existingBundlePath, cancellationToken);
+
+                    // Place the Aspire certificate first because OpenSSL may select the first matching self-signed certificate.
+                    byte[] bundleContents = [.. devCertificateContents, (byte)'\n', .. existingBundleContents];
+
+                    // Cache by the final contents so unchanged inputs reuse the same immutable bundle.
+                    var bundleHash = Convert.ToHexString(XxHash128.Hash(bundleContents)).ToLowerInvariant();
+                    var bundleDirectory = Path.Combine(
+                        _executionContext.AspireHomeDirectory.FullName,
+                        DevCertificateCacheDirectoryName,
+                        CertificateBundleCacheDirectoryName);
+                    var bundlePath = Path.Combine(bundleDirectory, $"{cacheFilePrefix}-{bundleHash}.pem");
+
+                    if (!File.Exists(bundlePath))
+                    {
+                        CertificateCacheWriter.WriteFile(bundlePath, bundleContents, _logger);
+                    }
+
+                    certificateBundlePath = bundlePath;
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                _logger.LogWarning(ex, "Failed to combine {EnvironmentVariableName} bundle {ExistingBundlePath} with the Aspire development certificate", environmentVariableName, existingCertificateBundle);
+                _interactionService.DisplayMessage(
+                    KnownEmojis.Warning,
+                    $"Unable to add the Aspire development certificate to {environmentVariableName} '{existingCertificateBundle}'. The existing certificate bundle will be used unchanged.");
+                certificateBundlePath = existingCertificateBundle;
+            }
+        }
+
+        SetCertificateBundleEnvironmentVariable(environmentVariables, configuredKeys, environmentVariableName, certificateBundlePath);
+    }
+
+    private static void SetCertificateBundleEnvironmentVariable(
+        IDictionary<string, string> environmentVariables,
+        IEnumerable<string> configuredKeys,
+        string environmentVariableName,
+        string value)
+    {
+        foreach (var configuredKey in configuredKeys)
+        {
+            if (!string.Equals(configuredKey, environmentVariableName, StringComparison.Ordinal))
+            {
+                environmentVariables.Remove(configuredKey);
+            }
+        }
+
+        environmentVariables[environmentVariableName] = value;
+    }
+
 }

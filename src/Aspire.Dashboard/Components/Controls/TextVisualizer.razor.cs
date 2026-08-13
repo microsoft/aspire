@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 using System.Net;
 
@@ -24,6 +26,9 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    [Inject]
+    public required IStringLocalizer<ControlsStrings> Loc { get; init; }
+
     [Parameter]
     public required TextVisualizerViewModel ViewModel { get; set; }
 
@@ -35,6 +40,8 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
 
     [Parameter]
     public bool Virtualize { get; set; } = true;
+
+    private bool IsUnformatted => DisplayUnformatted || ViewModel.FormatKind is DashboardUIHelpers.PlaintextFormat;
 
     private Virtualize<StringLogLine>? VirtualizeRef
     {

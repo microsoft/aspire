@@ -2,6 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+using static Aspire.Hosting.Kubernetes.Tests.PipelineStepTestHelpers;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -107,6 +111,9 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
         Assert.Contains("api.example.com", content);
         // Should also have HTTP listener
         Assert.Contains("HTTP", content);
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Equal(["gateway-field-cleanup-env", "tls-bootstrap-env"], GatewayOrTlsStepNames(steps));
     }
 
     [Fact]
@@ -167,23 +174,70 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, routeFiles.Length);
     }
 
-    [Fact]
-    public async Task AddGateway_NoRoutes_DoesNotGenerateYaml()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AddGateway_NoRoutes_DoesNotGenerateYamlOrTlsSteps(bool hasTls, bool hasHostname)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        k8s.AddGateway("empty");
+        var gateway = k8s.AddGateway("empty");
+
+        if (hasTls)
+        {
+            gateway.WithTls("my-tls-secret");
+        }
+
+        if (hasHostname)
+        {
+            gateway.WithHostname("api.example.com");
+        }
 
         builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
-        var app = builder.Build();
+        using var app = builder.Build();
         app.Run();
 
         var gatewayDir = Path.Combine(workspace.Path, "templates", "empty");
         Assert.False(Directory.Exists(gatewayDir), $"Gateway directory should not exist at {gatewayDir}");
+
+        // Assert on the whole filtered set rather than probing known step names one by one, so a
+        // future gateway/TLS step added without the route-eligibility filter also fails here.
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Empty(GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddGateway_NoRoutes_WarnsThatGatewayAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Gateway (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddGateway("empty").WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Gateway 'empty' has no routes configured. The Gateway, routes, TLS certificate, and load-balancer frontend will not be created.",
+            warning.Message);
     }
 
     [Fact]
@@ -275,6 +329,9 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
         var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex);
         Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:") || l.StartsWith("hostname "));
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Equal(["gateway-field-cleanup-env", "tls-fqdn-discovery-env"], GatewayOrTlsStepNames(steps));
     }
 
     [Fact]

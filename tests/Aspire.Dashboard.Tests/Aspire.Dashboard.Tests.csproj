@@ -20,6 +20,8 @@
     <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <!-- axe-core accessibility scanning for the Playwright integration tests (AccessibilityTests). -->
+    <PackageReference Include="Deque.AxeCore.Playwright" />
   </ItemGroup>
 
   <!-- The following package references need to be lifted because MEAI depends on older versions -->

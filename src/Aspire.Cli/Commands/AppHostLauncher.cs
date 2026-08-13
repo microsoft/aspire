@@ -17,6 +17,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -37,6 +38,7 @@ internal sealed class AppHostLauncher(
     FileLoggerProvider fileLoggerProvider,
     ProcessTreeGracefulShutdownService processShutdownService,
     IProcessExecutionFactory processExecutionFactory,
+    IConfiguration configuration,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -352,7 +354,16 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity)
+    /// <summary>
+    /// Builds the environment for the detached child CLI.
+    /// </summary>
+    /// <param name="activity">The spawn activity whose profiling context the child should join.</param>
+    /// <param name="appHostSelectionOrigin">
+    /// How this invocation's AppHost target was selected (<see cref="KnownConfigNames.CliAppHostSelectionOrigin"/>),
+    /// or <see langword="null"/> when nothing selected it explicitly. The detached child continues
+    /// the same invocation, so it must make the same workspace-default persistence decision.
+    /// </param>
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity, string? appHostSelectionOrigin)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
 
@@ -361,6 +372,11 @@ internal sealed class AppHostLauncher(
         // reaches readiness. Without this, killing `aspire start`/`aspire run --detach` mid-start (for
         // example a test runner timing it out) leaks the AppHost + dashboard as orphaned processes.
         OrphanDetectionEnvironment.ApplyCurrentProcess(environment, KnownConfigNames.CliLauncherProcessId, KnownConfigNames.CliLauncherProcessStarted);
+
+        if (!string.IsNullOrEmpty(appHostSelectionOrigin))
+        {
+            environment[KnownConfigNames.CliAppHostSelectionOrigin] = appHostSelectionOrigin;
+        }
 
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
         ProfileCaptureEnvironment.AddCurrentToEnvironment(environment);
@@ -393,7 +409,7 @@ internal sealed class AppHostLauncher(
                 childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
                     childArgs.ToArray(),
-                    CreateDetachedChildEnvironment(Activity.Current),
+                    CreateDetachedChildEnvironment(Activity.Current, configuration[KnownConfigNames.CliAppHostSelectionOrigin]),
                     executionContext.WorkingDirectory,
                     options);
 

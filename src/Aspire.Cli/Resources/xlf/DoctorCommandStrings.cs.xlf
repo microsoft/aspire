@@ -222,6 +222,11 @@
         <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
+      <trans-unit id="DevCertsInstallOpenSslCleanAndTrustFixFormat">
+        <source>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</source>
+        <target state="new">Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</target>
+        <note>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</note>
+      </trans-unit>
       <trans-unit id="DevCertsMissingCertUtilDetails">
         <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
         <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
@@ -287,6 +292,36 @@
         <target state="new">HTTPS development certificate has an older version ({0})</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingCurrentCertificateMessage">
+        <source>OpenSSL HTTPS development certificate cache is missing the current certificate</source>
+        <target state="new">OpenSSL HTTPS development certificate cache is missing the current certificate</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingDetailsFormat">
+        <source>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
+        <target state="new">The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingHashLinkDetailsFormat">
+        <source>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</source>
+        <target state="new">The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingHashLinkMessage">
+        <source>OpenSSL HTTPS development certificate cache is missing subject-hash links</source>
+        <target state="new">OpenSSL HTTPS development certificate cache is missing subject-hash links</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheUnreadableFilesDetailsFormat">
+        <source>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
+        <target state="new">Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheUnreadableMessage">
+        <source>OpenSSL HTTPS development certificate cache contains unreadable certificate files</source>
+        <target state="new">OpenSSL HTTPS development certificate cache contains unreadable certificate files</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
         <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
         <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
@@ -337,6 +372,16 @@
         <target state="translated">Kontrola prostředí Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="EnvironmentCheckTimedOutMessageFormat">
+        <source>Environment check '{0}' timed out after {1} seconds.</source>
+        <target state="new">Environment check '{0}' timed out after {1} seconds.</target>
+        <note>{0} is the environment check name. {1} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="EnvironmentChecksTimedOutMessageFormat">
+        <source>Environment checks timed out after {0} seconds.</source>
+        <target state="new">Environment checks timed out after {0} seconds.</target>
+        <note>{0} is the total timeout in seconds.</note>
+      </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
         <target state="new">Aspire CLI Installations</target>
@@ -346,6 +391,11 @@
         <source>Install discovery failed. See the Aspire CLI logs for details.</source>
         <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
+        <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>

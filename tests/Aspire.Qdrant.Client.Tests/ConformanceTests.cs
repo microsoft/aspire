@@ -21,7 +21,7 @@ public class ConformanceTests : ConformanceTests<QdrantClient, QdrantClientSetti
 
     protected override bool CanCreateClientWithoutConnectingToServer => false;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
@@ -34,7 +34,7 @@ public class ConformanceTests : ConformanceTests<QdrantClient, QdrantClientSetti
     public ConformanceTests(QdrantContainerFixture containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        _connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker) ?
+        _connectionString = RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers) ?
             $"{_containerFixture.GetConnectionString()}" :
             "Endpoint=http://localhost:6334;Key=pass";
     }

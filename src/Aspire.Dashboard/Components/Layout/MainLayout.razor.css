@@ -5,28 +5,36 @@
         display: grid;
         grid-template-columns: auto 1fr;
         grid-template-rows: auto auto 1fr;
+        /* The header spans BOTH columns ("head head") so it is a full-width top bar rather than a cell
+           confined to the column beside the rail. This lets the logo + app name + page title live in the
+           header as one brand lockup whose left edge is fixed, independent of the nav rail width below —
+           so the title no longer slides right/left when the rail collapses/expands. The rail ("nav") now
+           starts under the header in column 1. */
         grid-template-areas:
-            "icon head"
+            "head head"
             "nav messagebar"
             "nav main";
         background-color: var(--fill-color);
         color: var(--neutral-foreground-rest);
     }
 
-    ::deep.layout > .aspire-icon {
-        grid-area: icon;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: var(--neutral-layer-4);
-    }
-
     ::deep.layout > header {
         grid-area: head;
     }
 
-    ::deep.layout > .fluent-appbar {
+    ::deep.layout > .desktop-nav-rail {
         grid-area: nav;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--neutral-layer-4);
+    }
+
+    /* Tab list fills the rail and scrolls if it ever overflows; the bottom toggle (a sibling below)
+       stays pinned because it is flex-shrink:0. min-height:0 lets the scroll container shrink. */
+    ::deep.layout > .desktop-nav-rail > .fluent-appbar {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
         background: var(--neutral-layer-4);
     }
@@ -60,20 +68,33 @@
         font-size: var(--type-ramp-plus-2-font-size);
     }
 
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
+    /* The Aspire logo now leads the full-width header as a brand mark. Strip the anchor's default
+       control padding/border and pin it to the 24px glyph so it renders bare, exactly like the old
+       logo cell did. */
+    ::deep .header-gutters fluent-anchor.brand-logo::part(control) {
         padding: 0;
         border: none;
     }
 
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
+    ::deep .header-gutters fluent-anchor.brand-logo,
+    ::deep .header-gutters fluent-anchor.brand-logo::part(control),
+    ::deep .header-gutters fluent-anchor.brand-logo::part(content) {
         height: 24px;
         width: 24px;
     }
 
+    /* A small gap between the logo glyph and the app name so they read as one lockup. The header
+       flex row only sets a 2px column-gap, which is too tight for a logo + wordmark. */
+    ::deep .header-gutters fluent-anchor.brand-logo {
+        margin-inline-end: var(--aspire-space-sm, 8px);
+    }
+
+    /* Inset the brand from the header's left edge by the same 20px the nav rail uses for its icon
+       gutter (see .desktop-nav-menu / .nav-toggle-content padding-left in app.css), so the logo sits
+       directly above the nav rail icons below it — one continuous left edge down the whole rail. */
     ::deep.layout > header > .header-gutters {
         margin: 0;
+        padding-left: 20px;
     }
 }
 

@@ -915,6 +915,7 @@ internal sealed class PublishingPromptInput
 
     /// <summary>
     /// Gets the file type filter for File inputs. Uses the same format as the HTML accept attribute.
+    /// The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
     /// </summary>
     public string? FileFilter { get; init; }
 
@@ -966,6 +967,8 @@ internal sealed class UploadFileRequest
 {
     public required byte[] Data { get; set; }
     public required string FileName { get; set; }
+    public required int InteractionId { get; set; }
+    public required string InputName { get; set; }
 }
 
 internal sealed class UploadFileResponse

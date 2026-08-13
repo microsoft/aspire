@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -19,6 +20,17 @@ internal abstract class BaseCommand : Command
     private static readonly TimeSpan s_extensionInteractionFlushTimeout = TimeSpan.FromSeconds(10);
 
     protected virtual bool UpdateNotificationsEnabled { get; }
+
+    internal virtual bool PrefetchesTemplatePackageMetadata => false;
+
+    // JSON output cannot display update notifications, so apply this invocation-level gate outside
+    // the overridable command policy to prevent metadata-only consumers from bypassing it.
+    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
+
+    internal virtual bool RequiresCliPackageMetadata => false;
+
+    internal bool ShouldPrefetchCliPackageMetadata(bool updateNotificationsEnabled)
+        => PrefetchesCliPackageMetadata && (updateNotificationsEnabled || RequiresCliPackageMetadata);
 
     /// <summary>
     /// Gets the help group for this command.
@@ -36,12 +48,20 @@ internal abstract class BaseCommand : Command
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
     private readonly CliExecutionContext _executionContext;
+    private bool _isJsonFormatRequested;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
 
     protected IInteractionService InteractionService { get; }
 
     protected AspireCliTelemetry Telemetry { get; }
+
+    protected virtual string? CancellationMessage => null;
+
+    private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    {
+        InteractionService.DisplayCancellationMessage(CancellationMessage, consoleOverride);
+    }
 
     protected BaseCommand(string name, string description, CommonCommandServices services) : base(name, description)
     {
@@ -50,8 +70,7 @@ internal abstract class BaseCommand : Command
         Telemetry = services.Telemetry;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
-            // Set the command on the execution context so background services can access it
-            _executionContext.Command = this;
+            SelectForExecution(parseResult);
 
             // Route human-readable output to stderr when JSON is requested so
             // that only machine-readable data appears on stdout.
@@ -69,6 +88,17 @@ internal abstract class BaseCommand : Command
                 await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             }
         }));
+    }
+
+    internal void SelectForExecution(ParseResult parseResult)
+    {
+        _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
+        PrepareForExecution(parseResult);
+        _executionContext.Command = this;
+    }
+
+    internal virtual void PrepareForExecution(ParseResult parseResult)
+    {
     }
 
     private async Task<int> HandleCommandAsync(ParseResult parseResult, CancellationToken cancellationToken, CommonCommandServices services)
@@ -130,7 +160,7 @@ internal abstract class BaseCommand : Command
                 {
                     // 200ms elapsed after cancellation — show stopping message and continue waiting.
                     stoppingMessageShown = true;
-                    InteractionService.DisplayCancellationMessage();
+                    DisplayCancellationMessage();
                     tasksToAwait.Remove(stoppingMessageTcs.Task);
                 }
             }
@@ -143,6 +173,10 @@ internal abstract class BaseCommand : Command
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex is ExtensionOperationCanceledException)
         {
             result = CommandResult.Cancelled();
+        }
+        catch (PackageMetadataPrefetchingValidationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -166,7 +200,7 @@ internal abstract class BaseCommand : Command
 
         if (result.ShouldDisplayCancellationMessage && !stoppingMessageShown)
         {
-            InteractionService.DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
+            DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
         }
 
         // Display the CLI log file path on non-zero exit codes so the user knows
@@ -192,11 +226,15 @@ internal abstract class BaseCommand : Command
             }
         }
 
-        if (UpdateNotificationsEnabled && !IsJsonFormatRequested(parseResult) && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        if (UpdateNotificationsEnabled && !_isJsonFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
             {
                 services.UpdateNotifier.NotifyIfUpdateAvailable();
+            }
+            catch (PackageMetadataPrefetchingValidationException)
+            {
+                throw;
             }
             catch
             {

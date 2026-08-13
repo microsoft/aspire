@@ -25,15 +25,14 @@ public partial class StructuredLogActions : ComponentBase
     [Parameter]
     public required OtlpLogEntry LogEntry { get; set; }
 
-    private readonly List<MenuButtonItem> _menuItems = new();
-
-    protected override void OnParametersSet()
+    private IList<MenuButtonItem> GetMenuItems()
     {
-        _menuItems.Clear();
-
+        var menuItems = new List<MenuButtonItem>();
         StructuredLogMenuBuilder.AddMenuItems(
-            _menuItems,
+            menuItems,
             LogEntry,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)));
+
+        return menuItems;
     }
 }

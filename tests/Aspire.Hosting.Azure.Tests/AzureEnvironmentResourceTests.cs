@@ -200,7 +200,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 
             output value string = 'subscription'
             """);
-        subscriptionScoped.Resource.Scope = AzureBicepResourceScope.ForSubscription(subscription.Resource);
+        subscriptionScoped.Resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscription.Resource);
 
         var tenantScoped = builder.AddBicepTemplateString("tenantScoped",
             """
@@ -210,7 +210,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 
             output value string = 'tenant'
             """);
-        tenantScoped.Resource.Scope = AzureBicepResourceScope.ForTenant();
+        tenantScoped.Resource.Scope = AzureBicepResourceScope.CreateForTenant();
 
         var app = builder.Build();
         app.Run();

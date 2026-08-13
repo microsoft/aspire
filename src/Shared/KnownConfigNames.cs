@@ -61,6 +61,7 @@ internal static class KnownConfigNames
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
+    public const string AspireHome = "ASPIRE_HOME";
     public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
     public const string MaxFileUploadSize = "ASPIRE_MAX_FILE_UPLOAD_SIZE";
 
@@ -89,6 +90,9 @@ internal static class KnownConfigNames
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
     public const string CliBackchannelConnectTimeoutSeconds = "ASPIRE_CLI_BACKCHANNEL_CONNECT_TIMEOUT_SECONDS";
 
+    // Internal extension-to-CLI handoff used to preserve AppHost selection ownership.
+    public const string CliAppHostSelectionOrigin = "ASPIRE_CLI_APPHOST_SELECTION_ORIGIN";
+
     // DCP owns these profiling variables. Aspire maps its profiling state to these names when
     // spawning DCP because DCP intentionally does not read ASPIRE_* configuration names.
     public const string DcpOtelStartupProfilingEnabled = "DCP_OTEL_STARTUP_PROFILING_ENABLED";
@@ -114,6 +118,7 @@ internal static class KnownConfigNames
     public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
     public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
     public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
+    public const string DcpWorkloadId = "DCP_WORKLOAD_ID";
 
     public static class Legacy
     {

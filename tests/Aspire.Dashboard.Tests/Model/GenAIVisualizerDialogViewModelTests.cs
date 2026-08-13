@@ -8,7 +8,6 @@ using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
-using Microsoft.OpenApi;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -1095,7 +1094,8 @@ public sealed class GenAIVisualizerDialogViewModelTests
         // Arrange
         var repository = CreateRepository();
 
-        // Create tool definitions JSON manually since OpenApiSchema doesn't serialize well with System.Text.Json
+        // Create the telemetry JSON manually because JSON Schema represents types as strings,
+        // while the dashboard model uses a flags enum.
         var toolDefinitionsJson = """
         [
           {

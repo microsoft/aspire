@@ -105,7 +105,22 @@ export interface AspireExtensionE2EStateFile {
     debugLaunches: readonly AspireExtensionE2EDebugLaunch[];
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
     stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
+    taskProcessEvents: readonly AspireExtensionE2ETaskProcessEvent[];
+    browserDebugSessions: readonly AspireExtensionE2EBrowserDebugSession[];
     control?: AspireExtensionE2EControlStatus;
+}
+
+/**
+ * A browser debug session (`pwa-chrome`, `pwa-msedge`, or `firefox`) that VS Code currently
+ * reports as active. Browser sessions are not part of the extension's own state snapshot, so
+ * E2E tests use this to observe whether a launched dashboard browser actually terminated.
+ */
+export interface AspireExtensionE2EBrowserDebugSession {
+    id: string;
+    type: string;
+    name: string;
+    parentSessionId?: string;
+    parentSessionType?: string;
 }
 
 export interface AspireExtensionE2ESequence {
@@ -123,6 +138,16 @@ export type AspireExtensionE2EDebugConsoleOutput = AspireDebugConsoleOutputEvent
 export interface AspireExtensionE2EStoppingPathEvent extends AspireExtensionE2ESequence {
     appHostPath: string;
     state: 'entered' | 'left';
+}
+
+export interface AspireExtensionE2ETaskProcessEvent extends AspireExtensionE2ESequence {
+    executionId: number;
+    state: 'started' | 'ended';
+    taskName: string;
+    taskSource: string;
+    taskDefinitionType: string;
+    processId?: number;
+    exitCode?: number;
 }
 
 export interface AspireDebugConsoleOutputEvent {
@@ -185,11 +210,20 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
+    | { name: 'getRegisteredLanguageModelTools' }
+    | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
+    | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
-    | { name: 'readClipboard' }
+    | { name: 'snapshotClipboard' }
+    | { name: 'restoreClipboardSnapshot' }
+    | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
+    | { name: 'assertClipboardMatchesLastExpectation' }
+    | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
+    | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }

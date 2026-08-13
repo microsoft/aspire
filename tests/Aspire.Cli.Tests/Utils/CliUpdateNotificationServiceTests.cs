@@ -49,16 +49,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = (sp) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-
-                // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0-dev");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -102,16 +93,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = (sp) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-
-                // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0-dev");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -155,16 +137,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = (sp) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-
-                // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -194,14 +167,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -233,14 +199,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var service = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -278,14 +237,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var service = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -321,14 +273,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var service = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -365,14 +310,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var service = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -412,16 +350,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
 
-            configure.CliUpdateNotifierFactory = (sp) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
-                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
-
-                // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
-            };
+            configure.CliUpdateNotifierFactory = sp => CreateCliUpdateNotifier(sp, "9.4.0");
         });
 
         using var provider = services.BuildServiceProvider();
@@ -517,6 +446,17 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     {
         options.ProcessPathProviderFactory = _ => new TestProcessPathProvider(processPath);
     }
+
+    private static CliUpdateNotifierWithPackageVersionOverride CreateCliUpdateNotifier(IServiceProvider serviceProvider, string currentVersion)
+    {
+        return new CliUpdateNotifierWithPackageVersionOverride(
+            currentVersion,
+            serviceProvider.GetRequiredService<ILogger<CliUpdateNotifier>>(),
+            serviceProvider.GetRequiredService<INuGetPackageCache>(),
+            serviceProvider.GetRequiredService<IInteractionService>(),
+            serviceProvider.GetRequiredService<IProcessPathProvider>(),
+            serviceProvider.GetRequiredService<CliExecutionContext>());
+    }
 }
 
 internal sealed class CliUpdateNotifierWithPackageVersionOverride(
@@ -524,7 +464,8 @@ internal sealed class CliUpdateNotifierWithPackageVersionOverride(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
     IInteractionService interactionService,
-    IProcessPathProvider processPathProvider) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider)
+    IProcessPathProvider processPathProvider,
+    CliExecutionContext executionContext) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider, executionContext)
 {
     protected override SemVersion? GetCurrentVersion()
     {

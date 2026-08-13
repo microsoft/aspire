@@ -142,6 +142,7 @@ public static class MySqlBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(mySqlDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 

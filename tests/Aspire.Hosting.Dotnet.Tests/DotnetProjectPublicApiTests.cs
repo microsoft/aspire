@@ -3,13 +3,45 @@
 
 #pragma warning disable ASPIREDOTNETPROJECT001
 
-using Aspire.Hosting.ApplicationModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetProjectPublicApiTests
 {
+    // ---- Experimental tagging ------------------------------------------------------
+
+    [Fact]
+    public void DotnetProjectResourceIsTaggedWithExpectedExperimentalDiagnostic()
+    {
+        var attribute = Assert.Single(typeof(DotnetProjectResource).GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIREDOTNETPROJECT001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
+    [Fact]
+    public void EveryPublicAddDotnetProjectOverloadIsTaggedWithExpectedExperimentalDiagnostic()
+    {
+        var overloads = typeof(DotnetProjectHostingExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == nameof(DotnetProjectHostingExtensions.AddDotnetProject))
+            .ToList();
+
+        // Guards against silently losing coverage if an overload is added or removed.
+        Assert.Equal(2, overloads.Count);
+
+        foreach (var method in overloads)
+        {
+            var attribute = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+
+            Assert.Equal("ASPIREDOTNETPROJECT001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
     // ---- DotnetProjectResource constructor guards --------------------------------
 
     [Theory]

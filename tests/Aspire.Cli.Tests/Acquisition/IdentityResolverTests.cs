@@ -447,6 +447,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         return Program.BuildCliExecutionContext(
             debugMode: false,
+            consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "test.log"),
             identityResolver: resolver);

@@ -13,7 +13,7 @@ namespace Aspire.MySqlConnector.Tests;
 public class AspireMySqlConnectorExtensionsTests : IClassFixture<MySqlContainerFixture>
 {
     private readonly MySqlContainerFixture _containerFixture;
-    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker)
+    private string ConnectionString => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers)
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;Database=test_aspire_mysql";
     private string NormalizedConnectionString => new MySqlConnectionStringBuilder(ConnectionString).ConnectionString;

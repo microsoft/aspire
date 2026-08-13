@@ -148,6 +148,62 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_BundleAvailableWithinDelay_DoesNotDisplayBundleStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        var (services, _, _) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal([DashboardCommandStrings.StartingDashboard], testInteractionService.ShownStatuses);
+    }
+
+    [Fact]
+    public async Task DashboardRunCommand_BundleUnavailableAfterDelay_DisplaysBundleStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var releaseBundle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bundleStatusDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var testInteractionService = new TestInteractionService
+        {
+            ShowStatusCallback = status =>
+            {
+                if (status == DashboardCommandStrings.EnsuringDashboardBundle)
+                {
+                    bundleStatusDisplayed.TrySetResult();
+                }
+            }
+        };
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            EnsureExtractedAndAcquireLayoutAsyncCallback = cancellationToken => releaseBundle.Task.WaitAsync(cancellationToken)
+        };
+        var (services, _, _) = CreateServicesWithLayout(workspace, testInteractionService, bundleService);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var pendingRun = result.InvokeAsync();
+        await bundleStatusDisplayed.Task.DefaultTimeout();
+        releaseBundle.TrySetResult();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [DashboardCommandStrings.EnsuringDashboardBundle, DashboardCommandStrings.StartingDashboard],
+            testInteractionService.ShownStatuses);
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_DefaultOptions_PassesDefaultArgsToProcess()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -326,13 +382,25 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedMessage, errorMessage);
     }
 
-    [Fact]
-    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess(bool slowShutdown)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var expectedMessage = DashboardCommandStrings.StoppingDashboard;
+        testInteractionService.DisplayCancellationMessageCallback = (message, _) =>
+        {
+            if (message == expectedMessage)
+            {
+                stoppingMessageDisplayedTcs.TrySetResult();
+            }
+        };
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
         executionFactory.CreateExecutionCallback = (_, _, _, options) =>
             new TestProcessExecution("fake", [], null, options, (_, _, _) => Task.FromResult((0, (string?)null)), () => 0)
@@ -341,7 +409,20 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
                 {
                     processOptions.StandardOutputCallback?.Invoke("Now listening on: http://localhost:18888");
                     readyTcs.TrySetResult();
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (slowShutdown)
+                        {
+                            await shutdownTcs.Task.ConfigureAwait(false);
+                        }
+
+                        throw;
+                    }
+
                     return 0;
                 }
             };
@@ -356,10 +437,26 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         await readyTcs.Task.DefaultTimeout();
         await cts.CancelAsync();
 
+        if (slowShutdown)
+        {
+            try
+            {
+                var firstCompletedTask = await Task.WhenAny(stoppingMessageDisplayedTcs.Task, pendingRun).DefaultTimeout();
+                Assert.Same(stoppingMessageDisplayedTcs.Task, firstCompletedTask);
+            }
+            finally
+            {
+                shutdownTcs.TrySetResult();
+            }
+        }
+
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Empty(testInteractionService.DisplayedMessages);
+        var stoppingMessage = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Equal(expectedMessage, stoppingMessage.Message);
+        Assert.Null(stoppingMessage.ConsoleOverride);
     }
 
     [Theory]
@@ -499,7 +596,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
-        TestInteractionService? interactionService = null)
+        TestInteractionService? interactionService = null,
+        TestBundleService? bundleService = null)
     {
         var layoutDir = Path.Combine(workspace.WorkspaceRoot.FullName, "layout");
         var managedDir = Path.Combine(layoutDir, "managed");
@@ -512,6 +610,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             LayoutPath = layoutDir,
             Components = new LayoutComponents { Managed = "managed" }
         };
+        bundleService ??= new TestBundleService(isBundle: true);
+        bundleService.Layout = layout;
 
         var executionFactory = new TestProcessExecutionFactory
         {
@@ -521,7 +621,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.LayoutDiscoveryFactory = _ => new FakeLayoutDiscovery(layout);
-            options.BundleServiceFactory = _ => new TestBundleService(true) { Layout = layout };
+            options.BundleServiceFactory = _ => bundleService;
             options.DotNetCliExecutionFactoryFactory = _ => executionFactory;
             if (interactionService is not null)
             {

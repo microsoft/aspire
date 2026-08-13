@@ -51,7 +51,7 @@ public static class GoHostingExtensions
     /// Use <see cref="WithModTidy{T}"/>, <see cref="WithModVendor{T}"/>, or <see cref="WithModDownload{T}"/>
     /// to manage module dependencies before startup, and <see cref="WithVetTool{T}"/> to run static analysis.
     /// Use <see cref="WithAppArgs{T}"/> to pass runtime program arguments, and
-    /// <see cref="WithDelveServer{T}"/> to enable remote debugging via a headless Delve server.
+    /// <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/> to enable remote debugging via a headless Delve server.
     /// </para>
     /// </remarks>
     /// <example>
@@ -88,92 +88,71 @@ public static class GoHostingExtensions
         var resource = new GoAppResource(name, appDirectory);
 
         var rb = builder.AddResource(resource)
+            .WithIconName("Code")
             .WithArgs(ctx =>
             {
                 var programArgs = ctx.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var argsAnnotation)
                     ? argsAnnotation.Args
                     : [];
 
-                var hasDelve = ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation);
+                if (!ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation))
+                {
+                    // Normal run mode. The `go run [build flags] <pkg>` prefix is contributed as entrypoint
+                    // arguments by WithVSCodeDebugging(), so only the program's own arguments belong here.
+                    foreach (var arg in programArgs)
+                    {
+                        ctx.Args.Add(arg);
+                    }
+
+                    return;
+                }
+
+                // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
+                //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
+                // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
+                // WithDelveServer removes the debug launch annotation, so this whole command line is a plain
+                // process invocation and stays in the regular argument callback.
                 var pkg = ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
                     ? pkgAnnotation.PackagePath
                     : ".";
 
-                if (hasDelve)
+                ctx.Args.Add("--headless=true");
+                ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation.Port}");
+                ctx.Args.Add("--api-version=2");
+                if (delveAnnotation.AcceptMultiClient)
                 {
-                    // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
-                    // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
-                    ctx.Args.Add("--headless=true");
-                    ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
-                    ctx.Args.Add("--api-version=2");
-                    if (delveAnnotation.AcceptMulticlient)
+                    ctx.Args.Add("--accept-multiclient");
+                }
+                if (delveAnnotation.OnlySameUser.HasValue)
+                {
+                    ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
+                }
+                if (delveAnnotation.Log)
+                {
+                    ctx.Args.Add("--log");
+                    if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
                     {
-                        ctx.Args.Add("--accept-multiclient");
-                    }
-                    if (delveAnnotation.OnlySameUser.HasValue)
-                    {
-                        ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
-                    }
-                    if (delveAnnotation.Log)
-                    {
-                        ctx.Args.Add("--log");
-                        if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
-                        {
-                            ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
-                        }
-                    }
-
-                    ctx.Args.Add("debug");
-                    if (delveAnnotation.ContinueOnStart)
-                    {
-                        ctx.Args.Add("--continue");
-                    }
-
-                    var buildFlags = BuildFlagsString(ctx.Resource);
-                    if (buildFlags.Length > 0)
-                    {
-                        ctx.Args.Add($"--build-flags={buildFlags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
-                    if (programArgs.Length > 0)
-                    {
-                        ctx.Args.Add("--");
-                        foreach (var arg in programArgs)
-                        {
-                            ctx.Args.Add(arg);
-                        }
+                        ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
                     }
                 }
-                else
+
+                ctx.Args.Add("debug");
+                if (delveAnnotation.ContinueOnStart)
                 {
-                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [args]
-                    ctx.Args.Add("run");
+                    ctx.Args.Add("--continue");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
-                    {
-                        ctx.Args.Add("-race");
-                    }
+                var delveBuildFlags = BuildFlagsString(ctx.Resource);
+                if (delveBuildFlags.Length > 0)
+                {
+                    ctx.Args.Add($"--build-flags={delveBuildFlags}");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
-                    {
-                        ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
-                    }
+                ctx.Args.Add(pkg);
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
-                    }
-
-                    if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
+                if (programArgs.Length > 0)
+                {
+                    ctx.Args.Add("--");
                     foreach (var arg in programArgs)
                     {
                         ctx.Args.Add(arg);
@@ -618,21 +597,13 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Starts a headless Delve debug server so that any DAP-compatible client can attach remotely.
-    /// The application is launched as
-    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 --accept-multiclient debug .</c>
-    /// instead of <c>go run .</c>. Delve must be available on the PATH.
+    /// Starts a headless Delve debug server so that a DAP-compatible client can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
-    /// <param name="acceptMulticlient">Whether Delve accepts multiple debugger clients with <c>--accept-multiclient</c>. Defaults to <see langword="true"/>.</param>
-    /// <param name="onlySameUser">Whether Delve allows connections only from the same operating system user. When <see langword="null"/>, the <c>--only-same-user</c> flag is not passed.</param>
-    /// <param name="continueOnStart">Whether Delve passes <c>--continue</c> to continue the debuggee immediately after startup. Defaults to <see langword="false"/>.</param>
-    /// <param name="log">Whether Delve debug server logging is enabled with <c>--log</c>. Defaults to <see langword="false"/>.</param>
-    /// <param name="logOutput">The Delve logging components passed with <c>--log-output</c> when <paramref name="log"/> is <see langword="true"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Delve is the only Go debugger; both GoLand and VS Code use it under the hood, just in
@@ -660,21 +631,73 @@ public static class GoHostingExtensions
     /// <example>
     /// <code lang="csharp">
     /// builder.AddGoApp("api", "../go-api")
-    ///        .WithDelveServer(port: 2345);
+    ///        .WithDelveServer();
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "This C# convenience overload uses default options. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions());
+
+    /// <summary>
+    /// Starts a headless Delve debug server on the specified port.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for binary compatibility. Use <see cref="WithDelveServer{T}(IResourceBuilder{T})"/>
+    /// for the default port or <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/>
+    /// to configure the port and other Delve server options.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions { Port = 3456 });
+    /// </code>
+    /// </example>
+    [Obsolete("Use WithDelveServer() or WithDelveServer(DelveServerOptions) instead.")]
+    [AspireExportIgnore(Reason = "This obsolete compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions { Port = port });
+
+    /// <summary>
+    /// Starts a configurable headless Delve debug server so that DAP-compatible clients can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="options">The options that configure the Delve server. When <see langword="null"/>, the default options are used.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// The server listens on <c>127.0.0.1</c> and accepts a single debugger client by default.
+    /// Set <see cref="DelveServerOptions.AcceptMultiClient"/> to <see langword="true"/> only when
+    /// multiple clients or reconnections are required.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions
+    ///        {
+    ///            Port = 2345,
+    ///            ContinueOnStart = true,
+    ///            Log = true,
+    ///            LogOutput = "rpc,dap,debugger"
+    ///        });
     /// </code>
     /// </example>
     [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(
         this IResourceBuilder<T> builder,
-        int port = 2345,
-        bool acceptMulticlient = true,
-        bool? onlySameUser = null,
-        bool continueOnStart = false,
-        bool log = false,
-        string logOutput = "")
+        DelveServerOptions? options = null)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+        options ??= new DelveServerOptions();
 
         // WithDelveServer changes the resource into a headless Delve process that IDEs attach to
         // manually. Leaving the VS Code launch annotation in place would make DCP hand execution to
@@ -691,7 +714,15 @@ public static class GoHostingExtensions
             .WithAnnotation(
                 new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
                 ResourceAnnotationMutationBehavior.Replace)
-            .WithAnnotation(new GoDelveServerAnnotation(port, acceptMulticlient, onlySameUser, continueOnStart, log, logOutput), ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(
+                new GoDelveServerAnnotation(
+                    options.Port,
+                    options.AcceptMultiClient,
+                    options.OnlySameUser,
+                    options.ContinueOnStart,
+                    options.Log,
+                    options.LogOutput),
+                ResourceAnnotationMutationBehavior.Replace)
             .WithRequiredCommand("dlv", "https://github.com/go-delve/delve");
     }
 
@@ -722,37 +753,48 @@ public static class GoHostingExtensions
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
                 };
             },
-            "go",
-            static ctx =>
+            "go")
+            .WithLaunchToolArgs(static ctx =>
             {
                 // The executable resource normally starts as:
                 //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]
-                // In IDE mode VS Code's Go debugger owns the tool/build/package portion via
-                // program/buildFlags, so only the user program arguments should remain.
-                if (ctx.Args is not [string runCommand, ..] || runCommand != "run")
+                // Everything up to and including <pkg> is the tool invocation: in IDE mode VS Code's Go debugger
+                // performs it via program/buildFlags, so it is not passed to the launched program.
+                if (ctx.Resource.HasAnnotationOfType<GoDelveServerAnnotation>())
                 {
+                    // WithDelveServer replaces the whole command line with a headless `dlv debug ...` invocation and
+                    // removes the debug launch annotation, so there is no `go run` prefix to contribute.
                     return;
                 }
 
-                ctx.Args.RemoveAt(0);
+                ctx.Args.Add("run");
 
-                while (ctx.Args is [string arg, ..] && IsGoRunBuildFlag(arg))
+                if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
                 {
-                    ctx.Args.RemoveAt(0);
+                    ctx.Args.Add("-race");
                 }
 
-                if (ctx.Args.Count > 0)
+                if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
                 {
-                    ctx.Args.RemoveAt(0);
+                    ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
                 }
-            });
+
+                if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+                }
+
+                if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+                }
+
+                ctx.Args.Add(ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
+                    ? pkgAnnotation.PackagePath
+                    : ".");
+            },
+            ownedByLaunchConfigurationType: "go");
     }
-
-    private static bool IsGoRunBuildFlag(string arg) =>
-        arg == "-race" ||
-        arg.StartsWith("-tags=", StringComparison.Ordinal) ||
-        arg.StartsWith("-ldflags=", StringComparison.Ordinal) ||
-        arg.StartsWith("-gcflags=", StringComparison.Ordinal);
 
     /// <summary>
     /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any

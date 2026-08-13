@@ -46,15 +46,16 @@ foreach (var filePath in FilePaths)
 
   <ItemGroup>
     <!--
-      Map each supported runtime major version to the package version that supplies its blazor.web.js.
+      Map each supported runtime major version to the package version and asset path that supplies
+      its blazor.web.js. Preview 6 moved package static web assets under the staticwebassets directory.
       Adding a new runtime: add a row here and a matching version property in eng/Versions.props.
     -->
-    <BlazorAssetPackage Include="10" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet10Version)" />
-    <BlazorAssetPackage Include="11" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet11Version)" />
+    <BlazorAssetPackage Include="10" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet10Version)" PackageAssetPath="_framework\blazor.web.js" />
+    <BlazorAssetPackage Include="11" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet11Version)" PackageAssetPath="staticwebassets\_framework\blazor.web.js" />
   </ItemGroup>
 
   <Target Name="CopyBlazorWebJs" BeforeTargets="BeforeBuild;PrepareForPublish">
-    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets\%(BlazorAssetPackage.PackageVersion)\_framework\blazor.web.js"
+    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets\%(BlazorAssetPackage.PackageVersion)\%(BlazorAssetPackage.PackageAssetPath)"
           DestinationFiles="$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(BlazorAssetPackage.Identity).js"
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true" />

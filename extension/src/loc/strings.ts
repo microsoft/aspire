@@ -28,6 +28,12 @@ export const installCliDailyBuild = vscode.l10n.t('Daily build (dev)');
 export const installCliDailyBuildDescription = vscode.l10n.t('Latest build from main via the install script');
 export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
 export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
+export const azureFunctionsUnsupportedTaskShell = vscode.l10n.t('The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.');
+export const azureFunctionsCmdPercentArgument = vscode.l10n.t('Azure Functions launch arguments containing "%" are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
+export const azureFunctionsCmdDelayedExpansion = vscode.l10n.t('Azure Functions launch arguments containing "!" are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
+export const azureFunctionsTaskExitedBeforeStartup = (exitCode: number) => vscode.l10n.t('Azure Functions task exited with code {0} before startup completed.', exitCode);
+export const azureFunctionsHostStartupTimedOut = (timeoutSeconds: number, port: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.', timeoutSeconds, port);
+export const azureFunctionsWorkerStartupTimedOut = (timeoutSeconds: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions worker process to start.', timeoutSeconds);
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
@@ -43,8 +49,12 @@ export const rpcServerNotInitialized = vscode.l10n.t('RPC server is not initiali
 export const extensionContextNotInitialized = vscode.l10n.t('Extension context is not initialized.');
 export const aspireDebugSessionNotInitialized = vscode.l10n.t('Aspire debug session is not initialized');
 export const errorRetrievingAppHosts = vscode.l10n.t('Error retrieving AppHosts in the current workspace. Debug options may be incomplete.');
-export const launchingWithDirectory = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
-export const launchingWithAppHost = (appHostPath: string) => vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
+export const launchingWithDirectory = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session using directory {0}: attempting to determine effective AppHost...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...', appHostPath);
+export const launchingWithAppHost = (sessionType: 'run' | 'debug', appHostPath: string) => sessionType === 'run'
+    ? vscode.l10n.t('Launching Aspire run session for AppHost {0}...', appHostPath)
+    : vscode.l10n.t('Launching Aspire debug session for AppHost {0}...', appHostPath);
 export const disconnectingFromSession = vscode.l10n.t('Disconnecting from Aspire debug session... Child processes will be stopped.');
 export const processExitedWithCode = (code: number | string) => vscode.l10n.t('Process exited with code {0}.', code);
 export const failedToStartPythonProgram = (errorMessage: string) => vscode.l10n.t('Failed to start Python program: {0}.', errorMessage);
@@ -52,6 +62,9 @@ export const csharpSupportNotEnabled = vscode.l10n.t('C# support is not enabled 
 export const failedToStartProject = (errorMessage: string) => vscode.l10n.t('Failed to start project: {0}.', errorMessage);
 export const dcpServerNotInitialized = vscode.l10n.t('DCP server not initialized - cannot forward debug output.');
 export const appHostSessionTerminated = vscode.l10n.t('The AppHost process has terminated. To view console output, select the AppHost session from the debug console dropdown.');
+export const debugSessionsFailedToStop = (count: number, reasons: string) => vscode.l10n.t('{0} debug sessions failed to stop: {1}', count, reasons);
+export const debugSessionStartTimedOut = (sessionName: string, seconds: number) => vscode.l10n.t("Timed out after {1} seconds waiting for debug session '{0}' to start.", sessionName, seconds);
+export const debugSessionStopTimedOut = (sessionName: string, seconds: number) => vscode.l10n.t("Timed out after {1} seconds waiting for debug session '{0}' to stop.", sessionName, seconds);
 export const invalidTokenProvided = vscode.l10n.t('Invalid token provided.');
 export const noWorkspaceFolder = vscode.l10n.t('No workspace folder found.');
 export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration already exists in launch.json.');
@@ -122,8 +135,11 @@ export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source')
 export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
 export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
 export const appHostPathLabel = vscode.l10n.t('Path');
+export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied to clipboard.');
+export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
+export const appHostDiscoveryProgress = vscode.l10n.t('Discovering AppHosts...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
 export const workspaceViewSelectedSingleAppHost = (language?: string) => language
@@ -143,9 +159,12 @@ export const failedToStartDebugSession = vscode.l10n.t('Failed to start debug se
 export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update', exitCode);
 export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
 export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
+export const configInfoTimedOut = (seconds: number) => vscode.l10n.t('Aspire config info timed out after {0} seconds.', seconds);
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
+export const unsupportedBrowserDebugTarget = (browser: string, url: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.", browser, url, supportedBrowsers);
+export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged. Supported browsers are: {1}.", browser, supportedBrowsers);
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
@@ -169,8 +188,12 @@ export const testRunSessionManagerNotInitialized = vscode.l10n.t('Test run sessi
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
 export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
 export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
+export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string, projectPath: string) => vscode.l10n.t('The default launch profile \'{0}\' is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', profileName, projectPath);
+export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
+export const hotReloadDisabledNotice = vscode.l10n.t('C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.');
+export const openSettingsLabel = vscode.l10n.t('Open Settings');
 export const dismissLabel = vscode.l10n.t('Dismiss');
 export const openCliInstallInstructions = vscode.l10n.t('See CLI installation instructions');
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
@@ -208,7 +231,9 @@ export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A St
 export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
 export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
 export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensResourceFailedToStart = vscode.l10n.t('$(warning)\u200A Failed to start');
+export const codeLensResourceFailedToStartError = vscode.l10n.t('$(error)\u200A Failed to start');
+export const codeLensResourceRuntimeUnhealthy = vscode.l10n.t('$(warning)\u200A Runtime unhealthy');
 export const codeLensResourceValueMissing = vscode.l10n.t('$(warning)\u200A Value missing');
 export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');
 export const codeLensStop = vscode.l10n.t('$(debug-stop)\u200A Stop');
@@ -217,3 +242,14 @@ export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
 export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
 export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
 export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');
+
+export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspire AppHost');
+export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');
+export const appHostLifecycleStartConfirmationMessage = (appHostPath: string, mode: string) => vscode.l10n.t('Start the Aspire AppHost {0} in {1} mode?', appHostPath, mode);
+export const appHostLifecycleStopConfirmationMessage = (appHostPath: string) => vscode.l10n.t('Stop the Aspire AppHost {0}?', appHostPath);
+export const appHostLifecycleStartInvocationMessage = (appHostPath: string) => vscode.l10n.t('Starting Aspire AppHost {0}...', appHostPath);
+export const appHostLifecycleStopInvocationMessage = (appHostPath: string) => vscode.l10n.t('Stopping Aspire AppHost {0}...', appHostPath);
+export const appHostLifecycleUnspecifiedMode = vscode.l10n.t('unspecified');
+export const appHostLifecycleUnresolvedPath = vscode.l10n.t('an unresolved path');
+export const appHostLifecycleBusy = vscode.l10n.t('Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.');
+export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');

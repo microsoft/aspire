@@ -116,6 +116,7 @@ public static class AzureOpenAIExtensions
 
         var resource = new AzureOpenAIResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("BrainCircuit")
             .WithDefaultRoleAssignments(CognitiveServicesBuiltInRole.GetBuiltInRoleName,
                 CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
     }
@@ -197,7 +198,8 @@ public static class AzureOpenAIExtensions
         var deployment = new AzureOpenAIDeploymentResource(name, modelName, modelVersion, builder.Resource);
         builder.Resource.AddDeployment(deployment);
 
-        return builder.ApplicationBuilder.AddResource(deployment);
+        return builder.ApplicationBuilder.AddResource(deployment)
+            .WithIconName("BrainCircuit");
     }
 
     /// <summary>

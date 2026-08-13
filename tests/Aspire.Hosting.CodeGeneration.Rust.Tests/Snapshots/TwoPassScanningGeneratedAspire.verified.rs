@@ -728,6 +728,23 @@ impl InteractionInput {
     }
 }
 
+/// RunConfiguration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RunConfiguration {
+    #[serde(rename = "WatchEnabled", skip_serializing_if = "Option::is_none")]
+    pub watch_enabled: Option<bool>,
+}
+
+impl RunConfiguration {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.watch_enabled {
+            map.insert("WatchEnabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// AddContainerOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AddContainerOptions {
@@ -6435,6 +6452,14 @@ impl DistributedApplicationExecutionContext {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.operation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+    pub fn run_configuration(&self) -> Result<RunConfiguration, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

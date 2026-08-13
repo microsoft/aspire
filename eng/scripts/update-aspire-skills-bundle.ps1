@@ -126,7 +126,7 @@ try {
     Write-Host "Verifying GitHub artifact attestation for '$($asset.name)'..."
     Invoke-GitHubCli attestation verify $archivePath --repo $Repository --cert-identity $certIdentity --cert-oidc-issuer 'https://token.actions.githubusercontent.com'
 
-    $hash = (Get-FileHash -Algorithm SHA256 $archivePath).Hash.ToLowerInvariant()
+    $hash = (Get-FileHash -Algorithm SHA512 $archivePath).Hash.ToLowerInvariant()
     $targetArchivePath = Join-Path $embeddedDir $asset.name
 
     Get-ChildItem -Path $embeddedDir -File -Force |
@@ -156,7 +156,7 @@ try {
             Write-Host "Syncing hook script '$hookFileName' from '$Repository' at commit '$hookCommitSha'..."
             $hookBytes = Get-AspireSkillsHookContent -Repository $Repository -CommitSha $hookCommitSha -FileName $hookFileName
             $hookContents[$hookFileName] = $hookBytes
-            $hookHashes[$hookFileName] = Get-AspireSkillsSha256Hex -Bytes $hookBytes
+            $hookHashes[$hookFileName] = Get-AspireSkillsSha512Hex -Bytes $hookBytes
         }
 
         foreach ($hookFileName in $hookContents.Keys) {
@@ -185,7 +185,7 @@ try {
         repository = $Repository
         tag = $release.tagName
         assetName = $asset.name
-        sha256 = $hash
+        sha512 = $hash
     }
     if ($null -ne $hookMetadata) {
         $metadata['hooks'] = $hookMetadata
@@ -206,7 +206,7 @@ try {
         "Agents\AspireSkills\Embedded\$($asset.name)")
     Set-TextFile -Path $cliProjectPath -Content $cliProjectContent
 
-    Write-Host "Embedded Aspire skills bundle updated to '$($asset.name)' with SHA-256 '$hash'."
+    Write-Host "Embedded Aspire skills bundle updated to '$($asset.name)' with SHA-512 '$hash'."
 }
 finally {
     if (Test-Path $tempDir) {

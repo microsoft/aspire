@@ -244,6 +244,7 @@ internal static class CliTestHelper
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
         services.AddTransient<AppHostLauncher>();
+        services.AddTransient<DcpWorkloadCleanupService>();
         services.AddTransient<RunCommand>();
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();
@@ -400,7 +401,8 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var processPathProvider = serviceProvider.GetRequiredService<IProcessPathProvider>();
-        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider);
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider, executionContext);
     };
 
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -452,7 +454,8 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
             ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry, configuration);
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -508,7 +511,10 @@ internal sealed class CliServiceCollectionTestOptions
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>());
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var logger = serviceProvider.GetRequiredService<ILogger<CertificateService>>();
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, environment, executionContext, logger);
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -794,13 +800,32 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Layout.LayoutConfiguration? Layout { get; set; }
 
-    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Exception? EnsureExtractedException { get; set; }
+
+    public Func<CancellationToken, Task>? EnsureExtractedAsyncCallback { get; set; }
+
+    public Func<CancellationToken, Task>? EnsureExtractedAndAcquireLayoutAsyncCallback { get; set; }
+
+    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        => EnsureExtractedAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
-    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
+    public async Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+    {
+        if (EnsureExtractedException is not null)
+        {
+            throw EnsureExtractedException;
+        }
+
+        if (EnsureExtractedAndAcquireLayoutAsyncCallback is not null)
+        {
+            await EnsureExtractedAndAcquireLayoutAsyncCallback(cancellationToken);
+        }
+
+        return Layout is null ? null : new BundleLayoutLease(Layout, lease: null);
+    }
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

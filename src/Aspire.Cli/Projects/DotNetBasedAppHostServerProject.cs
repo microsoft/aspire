@@ -486,6 +486,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 
+        startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 

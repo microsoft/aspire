@@ -114,7 +114,7 @@ public class CommandOptions
 /// Options for displaying a progress dialog while a command is executing.
 /// </summary>
 [AspireDto]
-public class CommandProgressOptions
+public sealed class CommandProgressOptions
 {
     /// <summary>
     /// Gets or sets the message to display in the progress dialog.

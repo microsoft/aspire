@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="Verify.XunitV3" />
     <!-- Provides FakeLogCollector/FakeLogger. Previously inherited transitively via

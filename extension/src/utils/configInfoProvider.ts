@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
+import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { extensionLogOutputChannel } from './logging';
 import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+
+const configInfoTimeoutMs = 30_000;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -39,50 +42,86 @@ export async function getConfigInfo(terminalProvider: AspireTerminalProvider): P
     return new ConfigInfoProvider(terminalProvider).getConfigInfo();
 }
 
+interface ConfigInfoOptions {
+    suppressErrors?: boolean;
+    forceRefresh?: boolean;
+    cliPath?: string;
+}
+
 /**
  * Wraps `aspire config info --json` and exposes the parsed {@link ConfigInfo} plus capability
  * negotiation helpers. This is the authoritative, locale-independent source for what the installed
  * CLI supports: features and capabilities are reported as structured data rather than parsed from
  * (potentially localized) command output.
  *
- * The provider caches the first successful read for its lifetime and de-duplicates concurrent
- * probes so callers (e.g. the resource view warming capabilities on startup while a command handler
- * reads settings paths) share a single CLI invocation. Failures are intentionally NOT cached: an
- * older CLI that can't answer, or a transient spawn error, should be retried on the next call.
+ * Successful reads and concurrent probes are cached by CLI executable path. This lets callers share
+ * one invocation while ensuring that changing `aspire.aspireCliExecutablePath` cannot reuse
+ * capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that can't
+ * answer, or a transient spawn error, should be retried on the next call.
  */
 export class ConfigInfoProvider {
-    private _cachedConfigInfo: ConfigInfo | undefined;
-    private _inFlight: Promise<ConfigInfo | null> | undefined;
+    private readonly _cachedConfigInfoByCliPath = new Map<string, ConfigInfo>();
+    private readonly _inFlightByCliPath = new Map<string, Promise<ConfigInfo | null>>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
 
     /**
-     * Gets configuration information from the Aspire CLI, returning a cached result when available.
+     * Gets configuration information from the Aspire CLI, returning a cached result for the selected
+     * CLI executable when available.
      *
      * @param options.suppressErrors When true, failures are logged but not surfaced to the user via
      *   error notifications. Use this for background/best-effort probes (e.g. capability detection)
      *   where a missing or older CLI should degrade silently rather than nag the user.
-     * @param options.forceRefresh When true, bypasses and clears the cache so the CLI is queried again.
+     * @param options.forceRefresh When true, bypasses cached and in-flight results for the selected
+     *   CLI path so the executable is queried again.
+     * @param options.cliPath The already-resolved CLI executable path. Supplying this guarantees the
+     *   probe describes the same executable the caller is about to invoke.
      */
-    async getConfigInfo(options?: { suppressErrors?: boolean; forceRefresh?: boolean }): Promise<ConfigInfo | null> {
+    async getConfigInfo(options?: ConfigInfoOptions): Promise<ConfigInfo | null> {
+        const suppressErrors = options?.suppressErrors ?? false;
+        const startTime = Date.now();
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors);
+        if (!cliPath) {
+            return null;
+        }
+
         if (options?.forceRefresh) {
-            this._cachedConfigInfo = undefined;
+            this._cachedConfigInfoByCliPath.delete(cliPath);
+        }
+        else {
+            const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cliPath);
+            if (cachedConfigInfo) {
+                return cachedConfigInfo;
+            }
         }
 
-        if (this._cachedConfigInfo) {
-            return this._cachedConfigInfo;
+        const remainingTimeoutMs = configInfoTimeoutMs - (Date.now() - startTime);
+        if (remainingTimeoutMs <= 0) {
+            this._reportTimeout(suppressErrors);
+            return null;
         }
 
-        this._inFlight ??= this._fetchConfigInfo(options?.suppressErrors ?? false);
+        if (!options?.forceRefresh) {
+            const existingProbe = this._inFlightByCliPath.get(cliPath);
+            if (existingProbe) {
+                return await this._awaitProbe(existingProbe, remainingTimeoutMs, suppressErrors);
+            }
+        }
+
+        const probe = this._fetchConfigInfo(cliPath, suppressErrors, remainingTimeoutMs);
+        this._inFlightByCliPath.set(cliPath, probe);
         try {
-            const result = await this._inFlight;
-            if (result) {
-                this._cachedConfigInfo = result;
+            const result = await probe;
+            if (result && this._inFlightByCliPath.get(cliPath) === probe) {
+                this._cachedConfigInfoByCliPath.set(cliPath, result);
             }
             return result;
-        } finally {
-            this._inFlight = undefined;
+        }
+        finally {
+            if (this._inFlightByCliPath.get(cliPath) === probe) {
+                this._inFlightByCliPath.delete(cliPath);
+            }
         }
     }
 
@@ -90,22 +129,117 @@ export class ConfigInfoProvider {
      * Returns whether the CLI advertises the given capability token via `config info`. Capability
      * tokens are stable, locale-independent identifiers (see {@link ConfigInfo.capabilities}).
      */
-    async hasCapability(capability: string, options?: { suppressErrors?: boolean }): Promise<boolean> {
+    async hasCapability(capability: string, options?: ConfigInfoOptions): Promise<boolean> {
         const configInfo = await this.getConfigInfo(options);
         return configInfo?.capabilities?.includes(capability) ?? false;
     }
 
-    private _fetchConfigInfo(suppressErrors: boolean): Promise<ConfigInfo | null> {
-        return new Promise<ConfigInfo | null>((resolve) => {
-            // Resolve the cli path here (not in the constructor) so a missing CLI is handled by the
-            // same error path as a failed spawn rather than throwing during construction.
-            this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
-                const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-                const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
-                    let output = '';
-                    let stderr = '';
+    private async _awaitProbe(probe: Promise<ConfigInfo | null>, timeoutMs: number, suppressErrors: boolean): Promise<ConfigInfo | null> {
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<null>(resolve => {
+            timeout = setTimeout(() => {
+                this._reportTimeout(suppressErrors);
+                resolve(null);
+            }, timeoutMs);
+        });
 
-                    spawnCliProcess(this._terminalProvider, cliPath, args, {
+        try {
+            // This timeout belongs to the caller, not the shared process. A caller that spent most of
+            // its budget resolving the CLI path must be allowed to leave without cancelling the probe
+            // for subscribers that joined later with a fresh budget.
+            return await Promise.race([probe, timeoutPromise]);
+        }
+        finally {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        }
+    }
+
+    private _resolveCliPath(suppressErrors: boolean): Promise<string | null> {
+        return new Promise<string | null>((resolve) => {
+            let settled = false;
+            const settle = (result: string | null) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                clearTimeout(timeout);
+                resolve(result);
+            };
+            const reportError = (error: unknown) => {
+                if (settled) {
+                    return;
+                }
+
+                this._reportError(error, suppressErrors);
+                settle(null);
+            };
+            const timeout = setTimeout(() => {
+                this._reportTimeout(suppressErrors);
+                settle(null);
+            }, configInfoTimeoutMs);
+
+            try {
+                this._terminalProvider.getAspireCliExecutablePath().then(
+                    cliPath => settle(cliPath),
+                    reportError);
+            }
+            catch (error) {
+                reportError(error);
+            }
+        });
+    }
+
+    private _fetchConfigInfo(cliPath: string, suppressErrors: boolean, timeoutMs: number): Promise<ConfigInfo | null> {
+        return new Promise<ConfigInfo | null>((resolve) => {
+            let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            const settle = (result: ConfigInfo | null) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                resolve(result);
+            };
+            const reportError = (error: unknown) => {
+                if (settled) {
+                    return;
+                }
+
+                this._reportError(error, suppressErrors);
+                settle(null);
+            };
+
+            // The timeout passed here is the remainder of the same 30-second budget that covered
+            // executable-path lookup, so a wedged startup probe cannot block callers indefinitely.
+            timeout = setTimeout(() => {
+                this._reportTimeout(suppressErrors);
+                settle(null);
+
+                if (childProcess) {
+                    terminateCliProcess(childProcess, 'timed-out aspire config info command');
+                }
+            }, timeoutMs);
+
+            const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
+                if (settled) {
+                    return;
+                }
+
+                let output = '';
+                let stderr = '';
+
+                try {
+                    childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                        createProcessGroup: true,
                         stdoutCallback: (data) => {
                             output += data;
                         },
@@ -113,6 +247,10 @@ export class ConfigInfoProvider {
                             stderr += data;
                         },
                         exitCallback: (code) => {
+                            if (settled) {
+                                return;
+                            }
+
                             if (code !== 0) {
                                 if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
                                     extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying config info without it.`);
@@ -127,15 +265,16 @@ export class ConfigInfoProvider {
                                 if (!suppressErrors) {
                                     vscode.window.showErrorMessage(strings.failedToGetConfigInfo(code ?? -1));
                                 }
-                                resolve(null);
+                                settle(null);
                                 return;
                             }
 
                             try {
                                 const configInfo = parseConfigInfoOutput(output);
                                 extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
-                                resolve(configInfo);
-                            } catch (error) {
+                                settle(configInfo);
+                            }
+                            catch (error) {
                                 if (stderr) {
                                     extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
                                 }
@@ -143,30 +282,36 @@ export class ConfigInfoProvider {
                                 if (!suppressErrors) {
                                     vscode.window.showErrorMessage(strings.failedToParseConfigInfo(error));
                                 }
-                                resolve(null);
+                                settle(null);
                             }
                         },
-                        errorCallback: (error) => {
-                            extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
-                            if (!suppressErrors) {
-                                vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
-                            }
-                            resolve(null);
-                        },
+                        errorCallback: reportError,
                         workingDirectory,
                         noExtensionVariables: true
                     });
-                };
-
-                runConfigInfo(['config', 'info', '--json', noLogoOption], true);
-            }, error => {
-                extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
-                if (!suppressErrors) {
-                    vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
                 }
-                resolve(null);
-            });
+                catch (error) {
+                    reportError(error);
+                }
+            };
+
+            runConfigInfo(['config', 'info', '--json', noLogoOption], true);
         });
+    }
+
+    private _reportError(error: unknown, suppressErrors: boolean): void {
+        extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
+        if (!suppressErrors) {
+            vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
+        }
+    }
+
+    private _reportTimeout(suppressErrors: boolean): void {
+        const message = strings.configInfoTimedOut(configInfoTimeoutMs / 1000);
+        extensionLogOutputChannel.warn(message);
+        if (!suppressErrors) {
+            vscode.window.showErrorMessage(message);
+        }
     }
 }
 

@@ -52,6 +52,23 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public async Task Render_SecretRevealButton_IsKeyboardFocusable()
+    {
+        var cut = SetUpDialog(out var dialogService);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateSecretTextViewModel(), new DialogParameters
+        {
+            Title = "Credentials"
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var revealButton = cut.Find(".secret-text-toggle-button");
+            Assert.Null(revealButton.GetAttribute("tabindex"));
+        });
+    }
+
     private IRenderedFragment SetUpDialog(out IDialogService dialogService)
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
@@ -69,5 +86,27 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         dialogService = Services.GetRequiredService<IDialogService>();
         return cut;
+    }
+
+    private static InteractionsInputsDialogViewModel CreateSecretTextViewModel()
+    {
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        interaction.InputsDialog.InputItems.Add(new InteractionInput
+        {
+            Name = "password",
+            Label = "Password",
+            InputType = InputType.SecretText
+        });
+
+        return new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
     }
 }

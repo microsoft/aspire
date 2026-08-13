@@ -104,6 +104,14 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="EnvironmentCheckTimedOutMessageFormat" xml:space="preserve">
+    <value>Environment check '{0}' timed out after {1} seconds.</value>
+    <comment>{0} is the environment check name. {1} is the timeout in seconds.</comment>
+  </data>
+  <data name="EnvironmentChecksTimedOutMessageFormat" xml:space="preserve">
+    <value>Environment checks timed out after {0} seconds.</value>
+    <comment>{0} is the total timeout in seconds.</comment>
+  </data>
   <data name="OperatingSystemMessageFormat" xml:space="preserve">
     <value>Operating system: {0}</value>
     <comment>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</comment>
@@ -155,6 +163,10 @@
     <value>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</value>
     <comment>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</comment>
   </data>
+  <data name="DevCertsInstallOpenSslCleanAndTrustFixFormat" xml:space="preserve">
+    <value>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</value>
+    <comment>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</comment>
+  </data>
   <data name="DevCertsMultipleNoneTrustedMessageFormat" xml:space="preserve">
     <value>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</value>
   </data>
@@ -199,6 +211,27 @@
   </data>
   <data name="DevCertsMissingCertUtilFix" xml:space="preserve">
     <value>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingCurrentCertificateMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing the current certificate</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache contains unreadable certificate files</value>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableFilesDetailsFormat" xml:space="preserve">
+    <value>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing subject-hash links</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
   </data>
   <data name="DcpBundleNotFoundMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>
@@ -331,6 +364,10 @@
   </data>
   <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
     <value>Install discovery failed. See the Aspire CLI logs for details.</value>
+  </data>
+  <data name="InstallationDiscoveryTimedOutReasonFormat" xml:space="preserve">
+    <value>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</value>
+    <comment>{0} is the timeout in seconds.</comment>
   </data>
   <data name="LegacySettingsDetectedMessageFormat" xml:space="preserve">
     <value>Legacy .aspire/settings.json detected at {0}</value>

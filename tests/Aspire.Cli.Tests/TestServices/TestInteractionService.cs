@@ -27,6 +27,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
+    public Action<string?, ConsoleOutput?>? DisplayCancellationMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -57,7 +58,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<string> DisplayedSuccess { get; } = [];
     public List<string> ShownStatuses { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
-    public List<ConsoleOutput?> DisplayedCancellations { get; } = [];
+    public List<(string? Message, ConsoleOutput? ConsoleOverride)> DisplayedCancellations { get; } = [];
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -273,12 +274,14 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         lock (_displayLock)
         {
-            DisplayedCancellations.Add(consoleOverride);
+            DisplayedCancellations.Add((message, consoleOverride));
         }
+
+        DisplayCancellationMessageCallback?.Invoke(message, consoleOverride);
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
