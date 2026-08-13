@@ -2817,10 +2817,20 @@ public static partial class JavaScriptHostingExtensions
                 // Compute at run time so the launch config reflects the final annotation state
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
-                var isDenoTask = launchConfigType == "deno" &&
-                    resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno) &&
-                    deno.Mode == DenoCommandMode.Task;
-                var isPackageManagerScript = (hasRunScript && hasPackageManager) || isDenoTask;
+                var denoCommandLine = launchConfigType == "deno" &&
+                    resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno)
+                    ? deno
+                    : null;
+                var isDenoTask = denoCommandLine?.Mode == DenoCommandMode.Task;
+                var isExplicitDenoDirectLaunch = denoCommandLine is
+                {
+                    ModeSet: true,
+                    Mode: DenoCommandMode.Run or DenoCommandMode.Serve
+                };
+                // WithRunScript annotations remain after an explicit Deno mode changes the emitted command.
+                // Match BuildDenoArgs precedence so launch metadata describes the final command.
+                var isPackageManagerScript = isDenoTask ||
+                    (hasRunScript && hasPackageManager && !isExplicitDenoDirectLaunch);
                 var effectiveLaunchConfigType = launchConfigType == "deno" && hasRunScript && hasPackageManager
                     ? GetJavaScriptPackageManagerLaunchConfigurationType(pmAnnotation!.ExecutableName)
                     : launchConfigType;

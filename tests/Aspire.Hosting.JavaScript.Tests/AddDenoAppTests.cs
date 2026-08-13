@@ -2565,6 +2565,44 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DenoApp_WithRunScriptAndExplicitDenoRun_ProducesDirectLaunchMethod()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithRunScript("dev")
+            .WithDenoRun();
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+
+        Assert.Equal("deno", launchConfig.Type);
+        Assert.Equal("deno", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+    }
+
+    [Fact]
+    public async Task DenoApp_WithRunScriptAndExplicitDenoServe_ProducesDirectLaunchMethod()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithRunScript("dev")
+            .WithDenoServe();
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
+
+        Assert.Equal("deno", launchConfig.Type);
+        Assert.Equal("deno", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+    }
+
+    [Fact]
     public async Task DenoApp_WithDenoTask_ProducesPackageManagerLaunchMethod()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
