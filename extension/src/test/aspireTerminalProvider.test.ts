@@ -179,6 +179,36 @@ suite('AspireTerminalProvider tests', () => {
                 terminalsStub.restore();
             }
         });
+
+        test('stops reusing a terminal with stale environment without disposing it', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                (terminalProvider as unknown as { invalidateSharedAspireTerminal(): void }).invalidateSharedAspireTerminal();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, false);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {

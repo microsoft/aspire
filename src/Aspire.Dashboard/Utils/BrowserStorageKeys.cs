@@ -25,6 +25,8 @@ internal static class BrowserStorageKeys
     public const string DashboardTelemetrySettings = "Aspire_Settings_DashboardTelemetry";
     public const string ResourcesShowHiddenResources = "Aspire_Resources_ShowHiddenResources";
 
+    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
+
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";
     public const string SplitterSizeKeyPrefix = "Aspire_SplitterSize_";

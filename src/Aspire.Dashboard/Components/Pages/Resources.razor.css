@@ -79,10 +79,6 @@
     overflow: hidden;
 }
 
-::deep .resource-tabs fluent-tabs {
-    margin-left: calc(var(--design-unit) * 3px);
-}
-
 ::deep .resources-tab-header {
     max-width: 100%;
     min-width: 0;
@@ -93,6 +89,56 @@
 ::deep .resources-tab-header[orientation="horizontal"] {
     overflow-x: auto;
     overflow-y: hidden;
+}
+
+/* On desktop the tabs row also hosts the filter controls on the right, so the toolbar shares a
+   single row with the tabs instead of taking its own band above the grid. The row wraps (controls
+   drop below the tabs) when horizontal space is tight, keeping it responsive. */
+::deep .resource-tabs-header-row {
+    grid-area: resources-tab-header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: calc(var(--design-unit) * 1.5px);
+    min-width: 0;
+    padding-top: 0.5rem;
+    padding-left: var(--layout-left-padding);
+    padding-right: var(--layout-right-padding);
+    container-type: inline-size;
+}
+
+/* Let the tabs take their content width and shrink/scroll (see the overflow rule above) instead
+   of pushing the toolbar off the row. */
+::deep .resource-tabs-header-row .resources-tab-header {
+    flex: 0 1 auto;
+}
+
+::deep .resource-tabs-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    /* Match the control/icon-button spacing used on every other page toolbar (Structured, Console,
+       Traces, Metrics). Those render a Fluent FluentToolbar, which spaces adjacent items with a 4px
+       margin on each side = 8px (2 design units) between controls. Resources merges its controls into
+       the tabs row with a plain flex gap, so pin that gap to the same 2-design-unit rhythm instead of
+       the previous 1 unit (4px) so the filter / view-option icon buttons sit the same distance apart
+       as the icon buttons on the log/trace/metric pages. */
+    gap: calc(var(--design-unit) * 2px);
+}
+
+@container (max-width: 500px) {
+    ::deep .resource-tabs-toolbar {
+        flex: 1 0 100%;
+        justify-content: flex-end;
+        box-sizing: border-box;
+        padding-left: var(--layout-left-padding);
+    }
+}
+
+/* Keep the search box usable but compact so the tabs stay on the same row at typical widths. */
+::deep .resource-tabs-toolbar fluent-search {
+    min-width: 160px;
 }
 
 ::deep .resources-grid-container {

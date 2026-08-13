@@ -12,6 +12,18 @@ public class MenuButtonItem
     public string? Text { get; set; }
     public string? Tooltip { get; set; }
     public Icon? Icon { get; set; }
+    /// <summary>
+    /// Optional ARIA role for the item. Set to <see cref="MenuItemRole.MenuItemCheckbox"/> or
+    /// <see cref="MenuItemRole.MenuItemRadio"/> to expose an accessible checked state (via
+    /// <see cref="Checked"/>) that assistive technology can announce; leave <see langword="null"/>
+    /// for an ordinary menu item.
+    /// </summary>
+    public MenuItemRole? Role { get; set; }
+    /// <summary>
+    /// Whether the item is currently checked. Only meaningful when <see cref="Role"/> is a
+    /// checkable role, in which case it drives the reflected <c>aria-checked</c> state.
+    /// </summary>
+    public bool Checked { get; set; }
     public Func<Task>? OnClick { get; set; }
     public bool IsDisabled { get; set; }
     public string Id { get; set; } = Identifier.NewId();

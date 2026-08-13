@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRERADIUS006 // Secret-store validation/apply steps are experimental; consumed internally by the integration.
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -54,6 +55,23 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             var publishStep = new RadiusBicepPublishingContext(this).CreatePipelineStep();
             var deployStep = new RadiusDeploymentPipelineStep(this).CreatePipelineStep();
 
+            // Fail-fast Radius secret-store validation gate: RequiredBy this environment's
+            // publish and deploy steps so type/mode/key/encoding/duplicate-name failures
+            // surface before any Bicep is emitted or kubectl/rad is contacted. It is a no-op
+            // when the model declares no secret stores, keeping the default path unchanged.
+            var validateSecretStoresStep = new PipelineStep
+            {
+                Name = $"validate-radius-secret-stores-{Name}",
+                Description = $"Validates Radius secret stores for {Name}.",
+                Action = Secrets.RadiusSecretStoreValidation.ValidateAsync,
+                RequiredBySteps = [publishStep.Name, deployStep.Name],
+            };
+
+            // Sealed-secrets apply/wait gate: applies each SealedSecret manifest to the workspace's
+            // cluster and waits for the underlying Secret to materialize before rad deploy. Scheduled
+            // after publish and RequiredBy deploy; a no-op when no sealed store is declared.
+            var applySealedSecretsStep = new SealedSecretApplyStep(this).CreatePipelineStep();
+
             // Only schedule the credential-register step when the environment
             // has cloud-provider configuration attached. Apps without the new
             // WithAzure/WithAws extensions emit byte-identical pipelines.
@@ -63,10 +81,10 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             if (hasCloudProviders)
             {
                 var registerStep = new RadCredentialRegisterStep(this).CreatePipelineStep();
-                return [prepareStep, publishStep, registerStep, deployStep];
+                return [validateSecretStoresStep, prepareStep, publishStep, registerStep, applySealedSecretsStep, deployStep];
             }
 
-            return [prepareStep, publishStep, deployStep];
+            return [validateSecretStoresStep, prepareStep, publishStep, applySealedSecretsStep, deployStep];
         }));
     }
 
@@ -111,6 +129,76 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         // environment: the single-environment and AKS-wrap cases share this environment's
         // namespace, so the fallback is correct there.
         var targetNamespace = (resource.GetComputeEnvironment() as RadiusEnvironmentResource)?.Namespace ?? Namespace;
-        return ReferenceExpression.Create($"{resource.Name}.{targetNamespace}.svc.cluster.local");
+
+        // The Radius Kubernetes container recipe names the ClusterIP Service `{name}-{name}` (see
+        // RadiusServiceDiscovery), not the bare resource name, so service discovery must address
+        // that Service — otherwise the FQDN never resolves and cross-container calls fail.
+        var serviceName = RadiusServiceDiscovery.GetServiceName(resource);
+        return ReferenceExpression.Create($"{serviceName}.{targetNamespace}.svc.cluster.local");
     }
+
+    // Explicit interface implementation: this override customizes only the *port source* for Radius
+    // peers (Service/container port instead of the proxy/host port) and is reached solely through
+    // IComputeEnvironmentResource. Keeping it off the public RadiusEnvironmentResource surface
+    // matches the other publishers (Kubernetes/Docker), which don't expose this member at all.
+    ReferenceExpression IComputeEnvironmentResource.GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = endpoint.UriScheme;
+
+        // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
+        // port), a Radius peer is reachable on the recipe Service's port, which equals the container
+        // port (port == targetPort == containerPort). Resolve the service port from the same helper
+        // the Bicep container-port emission uses so the emitted URL and the generated Service agree.
+        var resolvedServicePort = RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name);
+        var port = resolvedServicePort ?? GetDefaultPort(scheme, endpoint);
+        var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
+
+        return property switch
+        {
+            EndpointProperty.Url => IsDefaultPort(scheme, port)
+                ? ReferenceExpression.Create($"{scheme}://{host.Value}")
+                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host.Value,
+            EndpointProperty.Port => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            // The Radius recipe Service targets the container port, which equals the Service port
+            // (port == targetPort == containerPort). Use the same resolved value as Port/Url so the
+            // TargetPort property can't disagree with the container port ResolvePorts emits. Fall back
+            // to the container's port reference only when no Service port is resolved (e.g. an
+            // unallocated HTTPS endpoint that is dropped from service discovery anyway).
+            EndpointProperty.TargetPort => resolvedServicePort is int targetPort
+                ? ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(targetPort)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
+    }
+
+    // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the
+    // default port semantics (only the port *source* differs — Radius uses the Service/container
+    // port instead of the proxy/host port).
+    private static int GetDefaultPort(string scheme, EndpointAnnotation endpoint)
+    {
+        if (string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase))
+        {
+            return 80;
+        }
+
+        if (string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase))
+        {
+            return 443;
+        }
+
+        throw new InvalidOperationException($"Endpoint '{endpoint.Name}' must specify a port for scheme '{scheme}'.");
+    }
+
+    private static bool IsDefaultPort(string scheme, int port) =>
+        string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) && port == 80 ||
+        string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) && port == 443;
 }

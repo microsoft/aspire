@@ -38,7 +38,10 @@ export class TestRunSessionManager {
     private readonly leases = new Map<string, TestRunSessionLease>();
     private connectionInfo?: DcpServerConnectionInfo;
     private debugSessionSubscription?: vscode.Disposable;
-    private readonly leasedDebugSessionDisposers = new Map<string, () => void>();
+    private readonly leasedDebugSessions = new Map<string, AspireDebugSession>();
+    // VS Code's termination event can race the test API's explicit release. Both callers must join
+    // the same ordered stop so the API does not report completion while session removal is pending.
+    private readonly leaseReleasePromises = new Map<string, Promise<TestRunSessionLease | undefined>>();
 
     constructor(
         connectionInfo?: DcpServerConnectionInfo,
@@ -67,13 +70,16 @@ export class TestRunSessionManager {
                 lease.sessionId);
 
             options.addAspireDebugSession(aspireDebugSession);
-            this.leasedDebugSessionDisposers.set(lease.id, () => aspireDebugSession.dispose());
+            this.leasedDebugSessions.set(lease.id, aspireDebugSession);
             extensionLogOutputChannel.info(`Registered leased Aspire debug session ${lease.sessionId} for VS Code debug session ${session.id}.`);
         });
         const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
             const lease = this.tryGetLeaseForDebugSession(session);
             if (lease) {
-                this.releaseLease(lease.id);
+                this.leasedDebugSessions.get(lease.id)?.recordParentDebugSessionTermination();
+                void this.releaseLease(lease.id).catch(error => {
+                    extensionLogOutputChannel.warn(`Failed to stop leased Aspire debug session ${lease.sessionId}: ${String(error)}`);
+                });
             }
         });
         this.debugSessionSubscription = vscode.Disposable.from(startSubscription, terminateSubscription);
@@ -118,23 +124,43 @@ export class TestRunSessionManager {
         };
     }
 
-    releaseTestRunSession(id: string): Promise<void> {
-        this.releaseLease(id);
-
-        return Promise.resolve();
+    async releaseTestRunSession(id: string): Promise<void> {
+        await this.releaseLease(id);
     }
 
-    private releaseLease(id: string): TestRunSessionLease | undefined {
+    private releaseLease(id: string): Promise<TestRunSessionLease | undefined> {
+        const existingRelease = this.leaseReleasePromises.get(id);
+        if (existingRelease) {
+            return existingRelease;
+        }
+
+        // Defer the stop until the single-flight promise is registered. A stop can synchronously
+        // raise the parent termination event, which re-enters releaseLease and must join this
+        // release rather than starting another stop.
+        const release = Promise.resolve().then(() => this.releaseLeaseCore(id));
+        this.leaseReleasePromises.set(id, release);
+        const clearRelease = () => {
+            if (this.leaseReleasePromises.get(id) === release) {
+                this.leaseReleasePromises.delete(id);
+            }
+        };
+        void release.then(clearRelease, clearRelease);
+
+        return release;
+    }
+
+    private async releaseLeaseCore(id: string): Promise<TestRunSessionLease | undefined> {
         const lease = this.leases.get(id);
+        await this.stopLeasedDebugSession(id);
         this.leases.delete(id);
-        this.removeLeasedDebugSession(id);
+
         return lease;
     }
 
-    private removeLeasedDebugSession(id: string): void {
-        const dispose = this.leasedDebugSessionDisposers.get(id);
-        this.leasedDebugSessionDisposers.delete(id);
-        dispose?.();
+    private async stopLeasedDebugSession(id: string): Promise<void> {
+        const debugSession = this.leasedDebugSessions.get(id);
+        await debugSession?.stopDebugging();
+        this.leasedDebugSessions.delete(id);
     }
 
     private tryGetLeaseForSessionId(sessionId: string): TestRunSessionLease | undefined {

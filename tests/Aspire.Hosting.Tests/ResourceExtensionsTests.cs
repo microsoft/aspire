@@ -669,4 +669,23 @@ public class ResourceExtensionsTests
 
         Assert.Equal(["test-abc123", "test-def456"], result);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    public void ResolveEndpointsTreatsZeroPublicPortAsUnspecified(int? port)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("container", "image")
+            .WithEndpoint(name: "tcp", port: port, targetPort: 1234);
+
+        var endpoint = Assert.Single(resource.Resource.ResolveEndpoints());
+
+        Assert.Equal(1234, endpoint.TargetPort.Value);
+        Assert.False(endpoint.TargetPort.IsAllocated);
+        Assert.False(endpoint.TargetPort.IsImplicit);
+        Assert.Equal(1234, endpoint.ExposedPort.Value);
+        Assert.False(endpoint.ExposedPort.IsAllocated);
+        Assert.True(endpoint.ExposedPort.IsImplicit);
+    }
 }

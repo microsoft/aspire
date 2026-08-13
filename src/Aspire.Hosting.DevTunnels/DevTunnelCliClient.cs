@@ -8,12 +8,26 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
 
-internal sealed class DevTunnelCliClient(IConfiguration configuration) : IDevTunnelClient
+internal sealed class DevTunnelCliClient : IDevTunnelClient
 {
-    private readonly int _maxCliAttempts = configuration.GetValue<int?>("ASPIRE_DEVTUNNEL_CLI_MAX_ATTEMPTS") ?? 3;
+    private readonly int _maxCliAttempts;
     private readonly TimeSpan _cliRetryOnErrorDelay = TimeSpan.FromSeconds(2);
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
-    private readonly DevTunnelCli _cli = new(DevTunnelCli.GetCliPath(configuration));
+    private readonly DevTunnelCli _cli;
+
+    public DevTunnelCliClient(IConfiguration configuration)
+        : this(configuration, new DevTunnelCli(DevTunnelCli.GetCliPath(configuration)))
+    {
+    }
+
+    internal DevTunnelCliClient(IConfiguration configuration, DevTunnelCli cli)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(cli);
+
+        _maxCliAttempts = configuration.GetValue<int?>("ASPIRE_DEVTUNNEL_CLI_MAX_ATTEMPTS") ?? 3;
+        _cli = cli;
+    }
 
     public async Task<Version> GetVersionAsync(ILogger? logger = default, CancellationToken cancellationToken = default)
     {
@@ -77,9 +91,24 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration) : IDevTun
             {
                 // Update the tunnel as it already exists
                 logger?.LogTrace("Dev tunnel '{TunnelId}' already exists, will update it instead.", tunnelId);
+                var createError = error;
                 (tunnel, exitCode, error) = await CallCliAsJsonAsync<DevTunnelStatus>(
                     (stdout, stderr, log, ct) => _cli.UpdateTunnelAsync(resolvedTunnelId, options, stdout, stderr, log, ct),
                     logger, cancellationToken).ConfigureAwait(false);
+                if (exitCode == DevTunnelCli.ResourceNotFoundExitCode)
+                {
+                    // A service ghost can produce:
+                    //   create <id>: exit 1, "Conflict with existing entity"
+                    //   update <id>: exit 2, "Tunnel not found"
+                    // Retrying the same candidate cannot resolve that contradictory service state.
+                    throw new DistributedApplicationException(
+                        $"Dev tunnel '{resolvedTunnelId}' could not be created because the dev tunnels service reported that it already exists, " +
+                        "but then reported it was not found when Aspire tried to update it. This tunnel ID is in an inconsistent service state " +
+                        $"and retrying it cannot recover. Specify a different tunnel ID with {nameof(DevTunnelsResourceBuilderExtensions.AddDevTunnel)}" +
+                        "(name, tunnelId: \"new-id\") and restart " +
+                        $"the AppHost. Create error: '{createError}'. Update error: '{error}'.");
+                }
+
                 if (exitCode == 0 && tunnel is not null)
                 {
                     logger?.LogTrace("Dev tunnel '{TunnelId}' updated successfully.", resolvedTunnelId);

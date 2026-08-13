@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
@@ -10,6 +12,23 @@ namespace Aspire.Hosting.Tests;
 
 public class WithTerminalTests
 {
+    [Fact]
+    public void TerminalImplementationTypesAreInternal()
+    {
+        Assert.True(typeof(TerminalAnnotation).IsNotPublic);
+        Assert.True(typeof(TerminalHostResource).IsNotPublic);
+        Assert.True(typeof(TerminalHostLayout).IsNotPublic);
+    }
+
+    [Fact]
+    public void TerminalOptionsIsExperimental()
+    {
+        var attribute = Assert.Single(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+
+        Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
+        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
     [Fact]
     public async Task WithTerminalAddsTerminalAnnotation()
     {
@@ -22,7 +41,6 @@ public class WithTerminalTests
         Assert.NotNull(annotation);
         Assert.Equal(120, annotation.Options.Columns);
         Assert.Equal(30, annotation.Options.Rows);
-        Assert.Null(annotation.Options.Shell);
 
         // Until BeforeStartEvent fires the per-replica hosts are not yet materialized:
         // TerminalHosts is empty and IsInitialized is false. This deferral is what
@@ -51,14 +69,59 @@ public class WithTerminalTests
         {
             options.Columns = 200;
             options.Rows = 50;
-            options.Shell = "/bin/bash";
         });
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal(200, annotation.Options.Columns);
         Assert.Equal(50, annotation.Options.Rows);
-        Assert.Equal("/bin/bash", annotation.Options.Shell);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithTerminalRejectsNonPositiveColumns(int columns)
+    {
+        // Aspire.TerminalHost rejects a PTY width below 1, so an invalid Columns value must
+        // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
+        // failure that can block the parent resource.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => resource.WithTerminal(options => options.Columns = columns));
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithTerminalRejectsNonPositiveRows(int rows)
+    {
+        // Aspire.TerminalHost rejects a PTY height below 1, so an invalid Rows value must
+        // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
+        // failure that can block the parent resource.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => resource.WithTerminal(options => options.Rows = rows));
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Fact]
+    public void TerminalOptionsRejectNonPositiveDimensions()
+    {
+        var options = new TerminalOptions();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Columns = 0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Rows = -5);
+
+        // A valid assignment still succeeds, and the boundary value 1 is accepted.
+        options.Columns = 1;
+        options.Rows = 1;
+        Assert.Equal(1, options.Columns);
+        Assert.Equal(1, options.Rows);
     }
 
     [Fact]
@@ -461,7 +524,6 @@ public class WithTerminalTests
         {
             options.Columns = 200;
             options.Rows = 50;
-            options.Shell = "/bin/bash";
         });
 
         await PublishBeforeStartAsync(builder);
@@ -487,8 +549,9 @@ public class WithTerminalTests
             Assert.Contains("200", args);
             Assert.Contains("--rows", args);
             Assert.Contains("50", args);
-            Assert.Contains("--shell", args);
-            Assert.Contains("/bin/bash", args);
+            // DCP allocates the PTY for the resource's own process, and its TerminalSpec
+            // has no shell field. The terminal host therefore receives no shell argument.
+            Assert.DoesNotContain("--shell", args);
         }
     }
 

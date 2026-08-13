@@ -67,6 +67,11 @@
         <target state="new">Manage the Aspire dashboard (Preview)</target>
         <note />
       </trans-unit>
+      <trans-unit id="EnsuringDashboardBundle">
+        <source>Preparing dashboard bits...</source>
+        <target state="new">Preparing dashboard bits...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
         <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>

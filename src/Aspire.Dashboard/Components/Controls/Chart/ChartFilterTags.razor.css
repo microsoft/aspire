@@ -5,6 +5,8 @@
     background: var(--neutral-fill-secondary-rest);
     font-size: var(--type-ramp-minus-1-font-size);
     line-height: var(--type-ramp-minus-1-line-height);
+    color: inherit;
+    font-family: inherit;
 }
 
 ::deep .dimension-overflow {

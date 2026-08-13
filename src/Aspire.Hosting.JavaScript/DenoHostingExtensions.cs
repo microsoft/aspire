@@ -377,24 +377,15 @@ public static partial class JavaScriptHostingExtensions
             {
                 builder.Resource.Annotations.Remove(endpoint);
             }
-            else
+            else if (annotation.ServeAssignedTargetPort is { } assignedTargetPort &&
+                endpoint.TargetPort == assignedTargetPort)
             {
-                if (string.Equals(endpoint.TargetPortEnvironmentVariable, "PORT", StringComparison.Ordinal))
-                {
-                    endpoint.TargetPortEnvironmentVariable = annotation.ServePreviousTargetPortEnvironmentVariable;
-                }
-
-                if (annotation.ServeAssignedTargetPort is { } assignedTargetPort &&
-                    endpoint.TargetPort == assignedTargetPort)
-                {
-                    endpoint.TargetPort = null;
-                }
+                endpoint.TargetPort = null;
             }
 
             annotation.ServeEndpoint = null;
             annotation.ServeEndpointCreated = false;
             annotation.ServeEnvironmentCallback = null;
-            annotation.ServePreviousTargetPortEnvironmentVariable = null;
             annotation.ServeAssignedTargetPort = null;
         }
     }
@@ -419,21 +410,29 @@ public static partial class JavaScriptHostingExtensions
 
         var existingEndpoint = builder.Resource.Annotations
             .OfType<EndpointAnnotation>()
-            .FirstOrDefault(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName));
-        var previousTargetPortEnvironmentVariable = existingEndpoint?.TargetPortEnvironmentVariable;
-        var environmentCallbacks = builder.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().ToHashSet();
+            .FirstOrDefault(e => string.Equals(e.Name, "http", StringComparison.OrdinalIgnoreCase));
 
-        builder.WithHttpEndpoint(env: "PORT");
+        if (existingEndpoint is null)
+        {
+            builder.WithHttpEndpoint();
+        }
+
         var serveEndpoint = builder.Resource.Annotations
             .OfType<EndpointAnnotation>()
-            .First(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName));
+            .First(e => string.Equals(e.Name, "http", StringComparison.OrdinalIgnoreCase));
+        var endpointReference = new EndpointReference(
+            builder.Resource,
+            serveEndpoint,
+            KnownNetworkIdentifiers.LocalhostNetwork);
+        var environmentCallback = new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables["PORT"] = endpointReference.Property(EndpointProperty.TargetPort);
+        });
+        builder.WithAnnotation(environmentCallback);
 
         annotation.ServeEndpoint = serveEndpoint;
         annotation.ServeEndpointCreated = existingEndpoint is null;
-        annotation.ServePreviousTargetPortEnvironmentVariable = previousTargetPortEnvironmentVariable;
-        annotation.ServeEnvironmentCallback = builder.Resource.Annotations
-            .OfType<EnvironmentCallbackAnnotation>()
-            .FirstOrDefault(callback => !environmentCallbacks.Contains(callback));
+        annotation.ServeEnvironmentCallback = environmentCallback;
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {

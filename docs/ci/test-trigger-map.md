@@ -178,9 +178,6 @@ Highlights:
   **both** `job:typescript-api-compat` (baseline diff) and `job:polyglot`,
   because the polyglot playground regenerates and compiles that exported surface
   in every language.
-- **linked source with no owning project directory** — `src/Aspire/Cli/**`
-  carries explicit targets because it is linked into another project but is not
-  itself a project directory.
 - **loose-file deps** — `eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
   `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,
   and `eng/Bundle.proj`.

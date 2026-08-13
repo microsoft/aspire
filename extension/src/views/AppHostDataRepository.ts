@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { ChildProcessWithoutNullStreams } from 'child_process';
+import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry, isSameFileSystemEntryDescriptor } from '../utils/appHostDiscovery';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
@@ -98,6 +98,21 @@ interface DescribeSnapshotJson {
     resources?: ResourceJson[];
 }
 
+interface WorkspaceFolderAppHostCandidates {
+    readonly workspaceFolder: vscode.WorkspaceFolder;
+    candidates: CandidateAppHostDisplayInfo[];
+}
+
+interface WorkspaceFolderDiscoveryError {
+    readonly workspaceFolder: vscode.WorkspaceFolder;
+    readonly error: unknown;
+}
+
+interface CombinedWorkspaceAppHostCandidates {
+    appHostCandidates: AppHostCandidate[];
+    selectedAppHostPath: string | null;
+}
+
 export class AspireCliNotInstalledError extends Error {
     constructor(message: string) {
         super(message);
@@ -185,11 +200,13 @@ interface RunCliCommandOptions {
 }
 
 export class AppHostDataRepository {
-    private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
+    private static readonly _streamedCandidateUpdateDebounceMs = 50;
+    private static readonly _streamedCandidateUpdateMaxWaitMs = 250;
+    private static readonly _workspaceAppHostDiscoveryConcurrency = 4;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -246,11 +263,14 @@ export class AppHostDataRepository {
     private _workspaceAppHostName: string | undefined;
     private _workspaceAppHostPath: string | undefined;
     private _workspaceAppHostCandidatePaths: string[] = [];
+    private readonly _workspaceFolderAppHostCandidates = new Map<string, CandidateAppHostDisplayInfo[]>();
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
     private _workspaceAppHostDiscoveryRefreshQueued = false;
+    private _workspaceAppHostDiscoveryForceRefreshQueued = false;
+    private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
@@ -273,25 +293,28 @@ export class AppHostDataRepository {
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
-        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
+        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
-        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
-            const rootFolder = vscode.workspace.workspaceFolders?.[0];
-            if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders?.some(currentWorkspaceFolder =>
+                currentWorkspaceFolder.uri.toString() === workspaceFolder.uri.toString())) {
+                this._markWorkspaceAppHostDiscoveryPending();
                 this._fetchWorkspaceAppHost();
             }
         });
-        this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            this._stopAllDescribes();
-            this._stopPolling();
-            this._workspaceAppHostDiscoveryComplete = false;
-            this._clearWorkspaceAppHostDiscovery();
+        this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
+            this._removeWorkspaceFolderCandidates(event.removed);
+            for (const workspaceFolder of event.removed) {
+                this._appHostDiscoveryService.forgetWorkspaceFolder?.(workspaceFolder);
+            }
+            const forceRefresh = this._cancelWorkspaceAppHostDiscovery();
+            this._markWorkspaceAppHostDiscoveryPending({ preserveCandidates: true });
             this._clearErrors();
-            this._updateWorkspaceContext();
             this._syncPolling();
-            this._fetchWorkspaceAppHost({ forceRefresh: true });
+            this._fetchWorkspaceAppHost(forceRefresh ? { forceRefresh: true } : undefined);
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
@@ -374,6 +397,11 @@ export class AppHostDataRepository {
             return;
         }
         this._viewMode = mode;
+        if (mode === 'workspace') {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
         this._clearErrors();
         // Re-scope the current `aspire ps` snapshot for the new view
@@ -388,6 +416,11 @@ export class AppHostDataRepository {
         }
         const wasDataActive = this._dataActive;
         this._panelVisible = visible;
+        if (visible) {
+            this._showWorkspaceAppHostDiscoveryProgress();
+        } else {
+            this._hideWorkspaceAppHostDiscoveryProgress();
+        }
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
@@ -428,15 +461,16 @@ export class AppHostDataRepository {
 
     refresh(): void {
         this._clearErrors();
-        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
-        // A user-triggered refresh should observe AppHost/config files written by tools
-        // even when the file watcher has not delivered an invalidation event yet.
-        // Refresh only needs to re-pull discovery + the authoritative `ps` snapshot and let
-        // reconcile preserve streams for still-rendered hosts.
-        this._workspaceAppHostDiscoveryComplete = false;
-        this._clearWorkspaceAppHostDiscovery();
-        this._updateWorkspaceContext();
-        this._fetchWorkspaceAppHost({ forceRefresh: true });
+        this._setGlobalLoading(true);
+        if (this._viewMode === 'workspace') {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
+            // A workspace refresh should observe AppHost/config files written by tools even when
+            // the file watcher has not delivered an invalidation event yet.
+            this._markWorkspaceAppHostDiscoveryPending();
+            this._fetchWorkspaceAppHost({ forceRefresh: true });
+        } else {
+            this._loadingWorkspace = true;
+        }
         this._reconcileDescribes();
         if (this._dataActive) {
             this._refreshAppHostsFromAuthoritativeSnapshot();
@@ -694,6 +728,7 @@ export class AppHostDataRepository {
 
         if (this._workspaceAppHostDiscoveryInProgress) {
             this._workspaceAppHostDiscoveryRefreshQueued = true;
+            this._workspaceAppHostDiscoveryForceRefreshQueued ||= options?.forceRefresh === true;
             // Let the current discovery finish so we don't start overlapping CLI work, but
             // prevent its now-stale result from briefly restoring old AppHost candidates.
             this._workspaceAppHostDiscoveryVersion++;
@@ -701,27 +736,126 @@ export class AppHostDataRepository {
         }
 
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
-        const rootFolder = workspaceFolders[0];
+        const workspaceFolderSnapshot = [...workspaceFolders];
+        const workspaceFolderCandidates: WorkspaceFolderAppHostCandidates[] = workspaceFolderSnapshot.map(workspaceFolder => ({
+            workspaceFolder,
+            candidates: [],
+        }));
 
-        extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
+        extensionLogOutputChannel.info('Fetching workspace apphosts via shared AppHost discovery');
 
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
-
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token).then(appHosts => {
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+        this._showWorkspaceAppHostDiscoveryProgress();
+        let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+        let incrementalCandidateMaxWaitTimer: ReturnType<typeof setTimeout> | undefined;
+        const cancelIncrementalCandidateUpdate = (): void => {
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+                incrementalCandidateUpdateTimer = undefined;
+            }
+            if (incrementalCandidateMaxWaitTimer) {
+                clearTimeout(incrementalCandidateMaxWaitTimer);
+                incrementalCandidateMaxWaitTimer = undefined;
+            }
+        };
+        const applyIncrementalCandidateUpdates = (): void => {
+            cancelIncrementalCandidateUpdate();
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, appHosts);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
+            if (buildableAppHostCandidates.length > 0) {
+                this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+                this._updateWorkspaceContext();
+            }
+        };
+        const onIncrementalCandidate = (folderCandidates: WorkspaceFolderAppHostCandidates, candidate: CandidateAppHostDisplayInfo): void => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
+                return;
+            }
+
+            const existingCandidateIndex = folderCandidates.candidates.findIndex(existingCandidate => isMatchingAppHostPath(existingCandidate.path, candidate.path));
+            if (existingCandidateIndex >= 0) {
+                folderCandidates.candidates[existingCandidateIndex] = candidate;
+            } else {
+                folderCandidates.candidates.push(candidate);
+            }
+            this._workspaceFolderAppHostCandidates.set(
+                folderCandidates.workspaceFolder.uri.toString(),
+                [...folderCandidates.candidates]);
+
+            // Use a trailing debounce to coalesce short bursts, but start the maximum-wait timer
+            // only for the first candidate so a dense stream cannot postpone every tree update.
+            if (!incrementalCandidateMaxWaitTimer) {
+                incrementalCandidateMaxWaitTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateMaxWaitMs);
+            }
+            if (incrementalCandidateUpdateTimer) {
+                clearTimeout(incrementalCandidateUpdateTimer);
+            }
+            incrementalCandidateUpdateTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateDebounceMs);
+        };
+
+        const discoverWorkspaceFolders = async (): Promise<WorkspaceFolderDiscoveryError[]> => {
+            const errors: Array<WorkspaceFolderDiscoveryError | undefined> = new Array(workspaceFolderCandidates.length);
+            let nextWorkspaceFolderIndex = 0;
+            const discoverNextWorkspaceFolder = async (): Promise<void> => {
+                while (nextWorkspaceFolderIndex < workspaceFolderCandidates.length) {
+                    const workspaceFolderIndex = nextWorkspaceFolderIndex++;
+                    const folderCandidates = workspaceFolderCandidates[workspaceFolderIndex];
+                    try {
+                        folderCandidates.candidates = await this._appHostDiscoveryService.discover(
+                            folderCandidates.workspaceFolder,
+                            options?.forceRefresh,
+                            cancellationSource.token,
+                            candidate => onIncrementalCandidate(folderCandidates, candidate));
+                    } catch (error) {
+                        folderCandidates.candidates = [];
+                        errors[workspaceFolderIndex] = {
+                            workspaceFolder: folderCandidates.workspaceFolder,
+                            error,
+                        };
+                    }
+                }
+            };
+            const workerCount = Math.min(
+                AppHostDataRepository._workspaceAppHostDiscoveryConcurrency,
+                workspaceFolderCandidates.length);
+            await Promise.all(Array.from({ length: workerCount }, () => discoverNextWorkspaceFolder()));
+            return errors.filter((error): error is WorkspaceFolderDiscoveryError => error !== undefined);
+        };
+
+        discoverWorkspaceFolders().then(errors => {
+            cancelIncrementalCandidateUpdate();
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
+                return;
+            }
+
+            this._setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
+            if (errors.length > 0 && buildableAppHostCandidates.length === 0) {
+                throw new Error(formatWorkspaceFolderDiscoveryError(errors[0]));
+            }
+            for (const error of errors) {
+                extensionLogOutputChannel.warn(`Failed to fetch workspace apphost from one workspace folder: ${formatWorkspaceFolderDiscoveryError(error)}`);
+            }
             this._workspaceAppHostDiscoveryComplete = true;
-            this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
+            this._handleWorkspaceAppHostCandidates(result.appHostCandidates, result.selectedAppHostPath);
         }).catch(error => {
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+            cancelIncrementalCandidateUpdate();
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
+            if (error instanceof vscode.CancellationError) {
+                return;
+            }
+
+            cancellationSource.cancel();
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
             this._runtimeSnapshotAfterWorkspaceDiscovery = false;
@@ -730,6 +864,7 @@ export class AppHostDataRepository {
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
         }).finally(() => {
+            cancelIncrementalCandidateUpdate();
             cancellationSource.dispose();
             if (this._workspaceAppHostDiscoveryCancellationSource !== cancellationSource) {
                 return;
@@ -737,20 +872,72 @@ export class AppHostDataRepository {
 
             this._workspaceAppHostDiscoveryCancellationSource = undefined;
             this._workspaceAppHostDiscoveryInProgress = false;
+            this._hideWorkspaceAppHostDiscoveryProgress();
             if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
+                const forceRefresh = this._workspaceAppHostDiscoveryForceRefreshQueued;
                 this._workspaceAppHostDiscoveryRefreshQueued = false;
-                this._fetchWorkspaceAppHost({ forceRefresh: true });
+                this._workspaceAppHostDiscoveryForceRefreshQueued = false;
+                this._fetchWorkspaceAppHost({ forceRefresh });
             }
         });
     }
 
-    private _cancelWorkspaceAppHostDiscovery(): void {
+    private _cancelWorkspaceAppHostDiscovery(): boolean {
+        const forceRefresh = this._workspaceAppHostDiscoveryForceRefreshQueued;
         this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._workspaceAppHostDiscoveryForceRefreshQueued = false;
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
+        this._hideWorkspaceAppHostDiscoveryProgress();
+        return forceRefresh;
+    }
+
+    private _showWorkspaceAppHostDiscoveryProgress(): void {
+        if (this._viewMode !== 'workspace'
+            || !this._panelVisible
+            || !this._workspaceAppHostDiscoveryInProgress
+            || this._workspaceAppHostDiscoveryProgressResolve) {
+            return;
+        }
+
+        // `Window` rather than `Notification`: discovery runs for as long as the workspace scan
+        // takes and a progress notification cannot be dismissed while it is active, so it covers
+        // the editor for the whole scan (https://github.com/microsoft/aspire/issues/19036).
+        void vscode.window.withProgress({
+            location: vscode.ProgressLocation.Window,
+            title: appHostDiscoveryProgress,
+            cancellable: false,
+        }, () => new Promise<void>(resolve => {
+            if (this._viewMode !== 'workspace'
+                || !this._panelVisible
+                || !this._workspaceAppHostDiscoveryInProgress) {
+                resolve();
+                return;
+            }
+
+            this._workspaceAppHostDiscoveryProgressResolve = resolve;
+        }));
+    }
+
+    private _hideWorkspaceAppHostDiscoveryProgress(): void {
+        const resolve = this._workspaceAppHostDiscoveryProgressResolve;
+        this._workspaceAppHostDiscoveryProgressResolve = undefined;
+        resolve?.();
+    }
+
+    private _markWorkspaceAppHostDiscoveryPending(options?: { preserveCandidates?: boolean }): void {
+        this._workspaceAppHostDiscoveryComplete = false;
+        if (!options?.preserveCandidates) {
+            this._clearWorkspaceAppHostDiscovery();
+        }
+        this._loadingWorkspace = true;
+        if (this._viewMode === 'workspace') {
+            this._updateLoadingContext();
+            this._updateWorkspaceContext({ clearLoading: false });
+        }
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
@@ -783,42 +970,46 @@ export class AppHostDataRepository {
             }
             this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
             extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts`);
-            this._syncPolling();
-            // Re-scope the current `aspire ps` snapshot now that discovery has resolved the workspace
-            // candidate paths. This refreshes the view AND clears the workspace "Searching…" loading
-            // state immediately (discovery is now complete). Without it, loading would linger until the
-            // next `aspire ps --follow` change, which may never arrive when the running set is already
-            // stable — leaving the workspace view stuck on "Searching…" until the user toggles view mode.
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
-        }
+        } else {
+            const selectedAppHostCandidate = selectedAppHostPath
+                ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
+                : buildableAppHostCandidates[0];
+            if (!selectedAppHostCandidate) {
+                this._clearWorkspaceAppHostDiscovery();
+                this._syncPolling();
+                this._updateWorkspaceContext({ clearLoading: true });
+                return;
+            }
 
-        const selectedAppHostCandidate = selectedAppHostPath
-            ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
-            : buildableAppHostCandidates[0];
-        if (selectedAppHostCandidate) {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
             this._setWorkspaceAppHostPath(selectedAppHostCandidate.path, buildableAppHostCandidates);
             this._workspaceAppHostDescription = workspaceViewSelectedSingleAppHost(formatAppHostLanguage(selectedAppHostCandidate.language));
             extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
-            this._syncPolling();
-            // Force a re-scope so the workspace view refreshes and the loading state clears immediately
-            // once discovery resolves the candidate, without waiting for the next ps change (see the
-            // multi-candidate branch above for the full rationale).
-            this._handlePsSnapshot(this._appHosts, { force: true });
-            return;
         }
 
-        this._clearWorkspaceAppHostDiscovery();
         this._syncPolling();
-        this._updateWorkspaceContext({ clearLoading: true });
+        const workspaceLoadingChanged = this._loadingWorkspace;
+        this._loadingWorkspace = false;
+        if (this._viewMode === 'workspace') {
+            // Re-scope the stable ps snapshot now that discovery has resolved the candidates.
+            this._handlePsSnapshot(this._appHosts, { force: true });
+            if (workspaceLoadingChanged) {
+                this._updateLoadingContext();
+            }
+        }
     }
 
-    private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
-        const rootFolder = vscode.workspace.workspaceFolders?.[0];
-        return !this._disposed
-            && discoveryVersion === this._workspaceAppHostDiscoveryVersion
-            && rootFolder?.uri.toString() === workspaceFolder.uri.toString();
+    private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolders: readonly vscode.WorkspaceFolder[]): boolean {
+        const currentWorkspaceFolders = vscode.workspace.workspaceFolders;
+        if (this._disposed
+            || discoveryVersion !== this._workspaceAppHostDiscoveryVersion
+            || !currentWorkspaceFolders
+            || currentWorkspaceFolders.length !== workspaceFolders.length) {
+            return false;
+        }
+
+        return workspaceFolders.every((workspaceFolder, index) =>
+            currentWorkspaceFolders[index].uri.toString() === workspaceFolder.uri.toString());
     }
 
     private _setWorkspaceAppHostPath(appHostPath: string, appHostCandidates: readonly AppHostCandidate[]): void {
@@ -837,7 +1028,9 @@ export class AppHostDataRepository {
     }
 
     private _setWorkspaceAppHostCandidatePaths(appHostCandidates: readonly AppHostCandidate[]): void {
-        this._workspaceAppHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+        this._workspaceAppHostCandidatePaths = appHostCandidates
+            .map(candidate => candidate.path)
+            .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
     }
 
     private _clearWorkspaceAppHostSelection(): void {
@@ -848,7 +1041,42 @@ export class AppHostDataRepository {
     private _clearWorkspaceAppHostDiscovery(): void {
         this._clearWorkspaceAppHostSelection();
         this._workspaceAppHostCandidatePaths = [];
+        this._workspaceFolderAppHostCandidates.clear();
         this._workspaceAppHostDescription = undefined;
+    }
+
+    private _removeWorkspaceFolderCandidates(removedWorkspaceFolders: readonly vscode.WorkspaceFolder[]): void {
+        for (const workspaceFolder of removedWorkspaceFolders) {
+            this._workspaceFolderAppHostCandidates.delete(workspaceFolder.uri.toString());
+        }
+
+        const workspaceFolderCandidates = (vscode.workspace.workspaceFolders ?? []).map(workspaceFolder => ({
+            workspaceFolder,
+            candidates: this._workspaceFolderAppHostCandidates.get(workspaceFolder.uri.toString()) ?? [],
+        }));
+        const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+        this._setWorkspaceAppHostCandidatePaths(result.appHostCandidates.filter(isBuildableAppHostCandidate));
+
+        const selectedAppHostPath = this._workspaceAppHostPath;
+        if (selectedAppHostPath) {
+            if (this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(candidatePath, selectedAppHostPath))) {
+                this._setWorkspaceAppHostPathFromCurrentCandidates(selectedAppHostPath);
+            } else {
+                this._clearWorkspaceAppHostSelection();
+            }
+        }
+        this._workspaceAppHostDescription = this._workspaceAppHostCandidatePaths.length > 1
+            ? workspaceViewSelectedMultipleAppHosts(this._workspaceAppHostCandidatePaths.length)
+            : undefined;
+    }
+
+    private _setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[]): void {
+        this._workspaceFolderAppHostCandidates.clear();
+        for (const folderCandidates of workspaceFolderCandidates) {
+            this._workspaceFolderAppHostCandidates.set(
+                folderCandidates.workspaceFolder.uri.toString(),
+                [...folderCandidates.candidates]);
+        }
     }
 
     // ── describe --follow ──
@@ -923,6 +1151,7 @@ export class AppHostDataRepository {
 
             stream.receivedData = false;
             const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 lineCallback: (line) => {
                     if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
@@ -1277,7 +1506,7 @@ export class AppHostDataRepository {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        this._terminateProcess(cliProcess, command);
+                        terminateCliProcess(cliProcess, command);
                     }
                 }
                 callback();
@@ -1294,6 +1523,7 @@ export class AppHostDataRepository {
             });
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
@@ -1329,7 +1559,7 @@ export class AppHostDataRepository {
 
     private _stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            this._terminateProcess(process, 'one-shot aspire command');
+            terminateCliProcess(process, 'one-shot aspire command');
         }
         this._oneShotProcesses.clear();
     }
@@ -1348,7 +1578,7 @@ export class AppHostDataRepository {
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;
-            this._terminateProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
+            terminateCliProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
         }
     }
 
@@ -1370,11 +1600,19 @@ export class AppHostDataRepository {
             || selectedResources.some(resource => Boolean(resource.dashboardUrl))
             || workspaceAppHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
+
+        if (this._viewMode !== 'workspace') {
+            if (clearLoading) {
+                this._loadingWorkspace = false;
+            }
+            return;
+        }
+
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
         // candidates that have no live dashboard URL.
         vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
@@ -1385,7 +1623,11 @@ export class AppHostDataRepository {
     // ── ps polling ──
 
     private _startPsPolling(): void {
-        this._stopPolling();
+        // Restarting `ps` polling is routine while the workspace AppHost discovery result settles, the
+        // polling interval changes, or the view resumes. Keep explicit post-stop refreshes alive across
+        // those restarts; otherwise a debug-session stop can lose the authoritative `aspire ps` snapshot
+        // that clears a stale global AppHost row.
+        this._stopPolling({ clearPostStopRefreshTimers: false });
         if (this._supportsPsFollow) {
             this._startPsFollow();
             return;
@@ -1411,7 +1653,9 @@ export class AppHostDataRepository {
         }, intervalMs);
     }
 
-    private _stopPolling(): void {
+    // Most callers are leaving the polling lifecycle and should cancel post-stop refreshes. Internal
+    // restarts keep those timers so a pending AppHost-stop reconciliation is not lost.
+    private _stopPolling(options?: { clearPostStopRefreshTimers?: boolean }): void {
         this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
@@ -1420,14 +1664,16 @@ export class AppHostDataRepository {
         this._authoritativeSnapshotPending = false;
         this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
-        this._clearPostStopRefreshTimers();
+        if (options?.clearPostStopRefreshTimers ?? true) {
+            this._clearPostStopRefreshTimers();
+        }
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
         for (const psProcess of this._psProcesses) {
-            this._terminateProcess(psProcess, 'aspire ps');
+            terminateCliProcess(psProcess, 'aspire ps');
         }
         this._psProcesses.clear();
     }
@@ -1452,7 +1698,7 @@ export class AppHostDataRepository {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
                 this._setPsError(errorMessage);
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._supportsPsFollow = false;
                 this._startPsIntervalPolling(false);
             }
@@ -1478,6 +1724,7 @@ export class AppHostDataRepository {
         const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
@@ -1488,7 +1735,7 @@ export class AppHostDataRepository {
                 }
 
                 this._setPsError(undefined);
-                this._handlePsOutput(line);
+                this._handlePsOutput(line, false);
             },
             stderrCallback: (data) => {
                 psFollowStderr.append(data);
@@ -1537,7 +1784,12 @@ export class AppHostDataRepository {
         }
 
         this._psFollowStartPending = false;
-        this._clearGlobalLoading();
+        this._setGlobalLoading(false);
+        if (this._viewMode === 'global') {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
+            vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
+        }
     }
 
     private _fetchAppHosts(): void {
@@ -1551,9 +1803,9 @@ export class AppHostDataRepository {
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
-                this._handlePsOutput(stdout);
+                this._handlePsOutput(stdout, true);
             } else {
-                this._clearLoadingForCurrentView();
+                this._clearLoading();
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
@@ -1593,9 +1845,9 @@ export class AppHostDataRepository {
             if (!this._disposed && (force || this._dataActive)) {
                 if (code === 0) {
                     this._setPsError(undefined);
-                    this._handlePsOutput(stdout);
+                    this._handlePsOutput(stdout, true);
                 } else {
-                    this._clearLoadingForCurrentView();
+                    this._clearLoading();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
                 }
             }
@@ -1620,23 +1872,27 @@ export class AppHostDataRepository {
         vscode.commands.executeCommand('setContext', 'aspire.loading', isLoading);
     }
 
-    private _clearGlobalLoading(): void {
-        if (this._viewMode !== 'global' || !this._loadingGlobal) {
+    private _setGlobalLoading(isLoading: boolean): void {
+        const loadingChanged = this._loadingGlobal !== isLoading;
+        this._loadingGlobal = isLoading;
+        if (this._viewMode !== 'global') {
             return;
         }
 
-        const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
-        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
+        }
         this._updateLoadingContext();
-        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
     }
 
-    private _clearLoadingForCurrentView(): void {
-        if (this._viewMode === 'workspace') {
-            this._loadingWorkspace = false;
-        } else {
-            this._loadingGlobal = false;
+    private _clearLoading(): void {
+        const loadingChanged = this._viewMode === 'workspace'
+            ? this._loadingWorkspace
+            : this._loadingGlobal;
+        this._loadingWorkspace = false;
+        this._loadingGlobal = false;
+        if (loadingChanged) {
+            this._onDidChangeData.fire();
         }
         this._updateLoadingContext();
     }
@@ -1696,16 +1952,36 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string): void {
+    private _handlePsOutput(stdout: string, canCompleteGlobalLoading: boolean): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
             const appHosts = Array.isArray(parsed)
                 ? parsed
                 : this._applyPsDelta(parsed);
 
-            this._handlePsSnapshot(appHosts);
+            const completesGlobalLoading = canCompleteGlobalLoading && this._loadingGlobal;
+            // A fresh ps result wins the workspace loading race when it finds a workspace host,
+            // or when discovery has finished and an empty result is therefore authoritative.
+            const completesWorkspaceLoading = this._loadingWorkspace
+                && (this._workspaceAppHostDiscoveryComplete || appHosts.some(appHost => this._isWorkspaceAppHost(appHost)));
+            if (completesWorkspaceLoading) {
+                this._loadingWorkspace = false;
+            }
+            this._handlePsSnapshot(appHosts, { force: completesWorkspaceLoading && this._viewMode === 'workspace' });
+            if (completesWorkspaceLoading && this._viewMode === 'workspace') {
+                this._updateLoadingContext();
+            }
+            if (completesGlobalLoading) {
+                // Clear the loading context only after the tree has been invalidated with the fresh
+                // snapshot, otherwise VS Code can briefly render a blank global view.
+                this._setGlobalLoading(false);
+            }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse aspire ps output: ${e}`);
+            if (canCompleteGlobalLoading) {
+                this._clearLoading();
+                this._setPsError(errorFetchingAppHosts(String(e)));
+            }
         }
     }
 
@@ -1767,15 +2043,10 @@ export class AppHostDataRepository {
         this._appHostsSnapshot = appHostsSnapshot;
 
         if (this._viewMode === 'workspace') {
-            const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
             if (appHostsChanged || workspaceAppHostChanged || force || this._loadingWorkspace) {
-                this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
+                this._updateWorkspaceContext({ clearLoading: false });
             }
         } else {
-            if (this._loadingGlobal) {
-                this._loadingGlobal = false;
-                this._updateLoadingContext();
-            }
             if (appHostsChanged || force) {
                 const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
@@ -1838,6 +2109,7 @@ export class AppHostDataRepository {
         };
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            createProcessGroup: true,
             noExtensionVariables: true,
             stdoutCallback: (data) => { stdout += data; },
             stderrCallback: (data) => { stderr += data; },
@@ -1874,89 +2146,150 @@ export class AppHostDataRepository {
         }
     }
 
-    private _terminateProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
-        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-        const cleanup = () => {
-            exited = true;
-            childProcess.off('close', cleanup);
-            childProcess.off('exit', cleanup);
-            if (forceKillTimer) {
-                clearTimeout(forceKillTimer);
-                forceKillTimer = undefined;
-            }
-        };
-
-        if (!exited) {
-            childProcess.once('close', cleanup);
-            childProcess.once('exit', cleanup);
-        } else {
-            return;
-        }
-
-        try {
-            if (!childProcess.killed) {
-                const signalSent = this._terminateProcessTree(childProcess, false);
-                if (!signalSent) {
-                    cleanup();
-                    return;
-                }
-            }
-        } catch (error) {
-            extensionLogOutputChannel.warn(`Failed to stop ${description}: ${error}`);
-            cleanup();
-            return;
-        }
-
-        if (!exited) {
-            forceKillTimer = setTimeout(() => {
-                if (exited) {
-                    return;
-                }
-
-                if (!options?.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} did not exit within ${AppHostDataRepository._processShutdownGracePeriodMs}ms; forcing termination.`);
-                }
-                try {
-                    const signalSent = this._terminateProcessTree(childProcess, true);
-                    if (!signalSent) {
-                        cleanup();
-                    }
-                } catch (error) {
-                    extensionLogOutputChannel.warn(`Failed to force stop ${description}: ${error}`);
-                    cleanup();
-                }
-            }, AppHostDataRepository._processShutdownGracePeriodMs);
-            forceKillTimer.unref();
-        }
-    }
-
-    private _terminateProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
-        if (process.platform !== 'win32' || childProcess.pid === undefined) {
-            return childProcess.kill(force ? 'SIGKILL' : undefined);
-        }
-
-        const args = ['/pid', String(childProcess.pid), '/t'];
-        if (force) {
-            args.push('/f');
-        }
-
-        const taskkill = spawnProcess('taskkill.exe', args, {
-            stdio: 'ignore',
-            windowsHide: true,
-        });
-        taskkill.on('error', error => {
-            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
-            childProcess.kill();
-        });
-        taskkill.unref();
-
-        return true;
-    }
 }
 
 export function shortenPath(filePath: string): string {
     return shortenPaths([filePath])[0] ?? filePath;
+}
+
+function formatWorkspaceFolderDiscoveryError(error: WorkspaceFolderDiscoveryError): string {
+    return `${error.workspaceFolder.uri.fsPath}: ${String(error.error)}`;
+}
+
+function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[]): CombinedWorkspaceAppHostCandidates {
+    const appHostCandidates: Array<{ candidate: AppHostCandidate; descriptor: FileSystemEntryDescriptor; workspaceFolderDepth: number }> = [];
+    const appHostCandidateIndex = new FileSystemEntryDescriptorIndex();
+    const explicitlySelectedPaths: string[] = [];
+    const explicitlySelectedPathIndex = new FileSystemEntryDescriptorIndex();
+    const descriptorByResolvedPath = new Map<string, FileSystemEntryDescriptor>();
+    const getDescriptor = (candidatePath: string): FileSystemEntryDescriptor => {
+        const resolvedPath = path.resolve(candidatePath);
+        let descriptor = descriptorByResolvedPath.get(resolvedPath);
+        if (!descriptor) {
+            descriptor = getFileSystemEntryDescriptor(resolvedPath);
+            descriptorByResolvedPath.set(resolvedPath, descriptor);
+        }
+
+        return descriptor;
+    };
+
+    for (const folderCandidates of workspaceFolderCandidates) {
+        const result = getWorkspaceAppHostProjectSearchResult(folderCandidates.workspaceFolder, folderCandidates.candidates);
+        const workspaceFolderDepth = path.resolve(folderCandidates.workspaceFolder.uri.fsPath).length;
+        for (const candidate of result.app_host_candidates) {
+            const descriptor = getDescriptor(candidate.path);
+            const existingIndex = appHostCandidateIndex.find(descriptor);
+            if (existingIndex === undefined) {
+                appHostCandidates.push({ candidate, descriptor, workspaceFolderDepth });
+                appHostCandidateIndex.add(descriptor);
+            } else if (appHostCandidates[existingIndex].workspaceFolderDepth < workspaceFolderDepth) {
+                appHostCandidates[existingIndex] = { candidate, descriptor, workspaceFolderDepth };
+                appHostCandidateIndex.replace(existingIndex, descriptor);
+            }
+        }
+        for (const candidate of folderCandidates.candidates) {
+            const descriptor = getDescriptor(candidate.path);
+            if (candidate.selected === true
+                && candidate.status === 'buildable'
+                && explicitlySelectedPathIndex.find(descriptor) === undefined) {
+                explicitlySelectedPaths.push(candidate.path);
+                explicitlySelectedPathIndex.add(descriptor);
+            }
+        }
+    }
+
+    const combinedAppHostCandidates = appHostCandidates.map(({ candidate }) => candidate);
+    const buildableAppHostCandidates = combinedAppHostCandidates.filter(isBuildableAppHostCandidate);
+    const selectedAppHostPath = explicitlySelectedPaths.length === 1
+        ? combinedAppHostCandidates[appHostCandidateIndex.find(getDescriptor(explicitlySelectedPaths[0])) ?? -1]?.path
+        : explicitlySelectedPaths.length === 0 && buildableAppHostCandidates.length === 1
+            ? buildableAppHostCandidates[0].path
+            : null;
+
+    return {
+        appHostCandidates: combinedAppHostCandidates,
+        selectedAppHostPath: selectedAppHostPath ?? null,
+    };
+}
+
+class FileSystemEntryDescriptorIndex {
+    private readonly _descriptors: FileSystemEntryDescriptor[] = [];
+    private readonly _exactPathBuckets = new Map<string, number[]>();
+    private readonly _identityBuckets = new Map<string, number[]>();
+    private readonly _fallbackPathBuckets = new Map<string, number[]>();
+    private readonly _unstableFallbackPathBuckets = new Map<string, number[]>();
+
+    find(descriptor: FileSystemEntryDescriptor): number | undefined {
+        const identityKey = getStableIdentityKey(descriptor);
+        const candidateBuckets = [
+            this._exactPathBuckets.get(descriptor.resolvedPath),
+            identityKey === undefined ? undefined : this._identityBuckets.get(identityKey),
+            identityKey === undefined
+                ? this._fallbackPathBuckets.get(getFallbackPathKey(descriptor))
+                : this._unstableFallbackPathBuckets.get(getFallbackPathKey(descriptor)),
+        ];
+        const checkedIndexes = new Set<number>();
+
+        for (const bucket of candidateBuckets) {
+            for (const index of bucket ?? []) {
+                if (!checkedIndexes.has(index)
+                    && isSameFileSystemEntryDescriptor(this._descriptors[index], descriptor)) {
+                    return index;
+                }
+
+                checkedIndexes.add(index);
+            }
+        }
+
+        return undefined;
+    }
+
+    add(descriptor: FileSystemEntryDescriptor): void {
+        const index = this._descriptors.length;
+        this._descriptors.push(descriptor);
+        this.addToBuckets(index, descriptor);
+    }
+
+    replace(index: number, descriptor: FileSystemEntryDescriptor): void {
+        this._descriptors[index] = descriptor;
+        this.addToBuckets(index, descriptor);
+    }
+
+    private addToBuckets(index: number, descriptor: FileSystemEntryDescriptor): void {
+        addToBucket(this._exactPathBuckets, descriptor.resolvedPath, index);
+
+        const fallbackPathKey = getFallbackPathKey(descriptor);
+        addToBucket(this._fallbackPathBuckets, fallbackPathKey, index);
+
+        const identityKey = getStableIdentityKey(descriptor);
+        if (identityKey === undefined) {
+            addToBucket(this._unstableFallbackPathBuckets, fallbackPathKey, index);
+        } else {
+            addToBucket(this._identityBuckets, identityKey, index);
+        }
+    }
+}
+
+function getStableIdentityKey(descriptor: FileSystemEntryDescriptor): string | undefined {
+    const identity = descriptor.identity;
+    return identity !== undefined && identity.ino !== 0n
+        ? `${identity.dev}:${identity.ino}`
+        : undefined;
+}
+
+function getFallbackPathKey(descriptor: FileSystemEntryDescriptor): string {
+    return process.platform === 'win32'
+        ? descriptor.resolvedPath.toLowerCase()
+        : descriptor.resolvedPath;
+}
+
+function addToBucket(buckets: Map<string, number[]>, key: string, index: number): void {
+    const bucket = buckets.get(key);
+    if (!bucket) {
+        buckets.set(key, [index]);
+    } else if (bucket[bucket.length - 1] !== index) {
+        bucket.push(index);
+    }
 }
 
 const projectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
@@ -1966,7 +2299,7 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
     const stateByPath = new Map<string, ShortenedPathState>();
 
     for (const filePath of filePaths) {
-        const pathKey = getComparisonKey(filePath);
+        const pathKey = filePath;
         let state = stateByPath.get(pathKey);
         if (!state) {
             state = createShortenedPathState(filePath);
@@ -1980,7 +2313,7 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
         const seenLabels = new Set<string>();
 
         for (const state of states) {
-            const labelKey = getComparisonKey(state.label);
+            const labelKey = state.label;
             if (seenLabels.has(labelKey)) {
                 duplicateLabels.add(labelKey);
             } else {
@@ -1993,13 +2326,13 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
         }
 
         for (const state of states) {
-            if (duplicateLabels.has(getComparisonKey(state.label))) {
+            if (duplicateLabels.has(state.label)) {
                 expandShortenedPathState(state);
             }
         }
     }
 
-    return filePaths.map(filePath => stateByPath.get(getComparisonKey(filePath))?.label ?? filePath);
+    return filePaths.map(filePath => stateByPath.get(filePath)?.label ?? filePath);
 }
 
 interface ShortenedPathState {
@@ -2227,15 +2560,12 @@ function parseCliJsonOutput<T>(stdout: string): T {
 }
 
 function isPathInWorkspace(filePath: string): boolean {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        return false;
-    }
-
-    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-    return relativePath !== ''
-        && !relativePath.startsWith('..')
-        && !path.isAbsolute(relativePath);
+    return vscode.workspace.workspaceFolders?.some(workspaceFolder => {
+        const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+        return relativePath !== ''
+            && !relativePath.startsWith('..')
+            && !path.isAbsolute(relativePath);
+    }) ?? false;
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
@@ -2293,17 +2623,18 @@ export function isMatchingAppHostPath(left: string | undefined, right: string | 
         return false;
     }
 
-    const normalizedLeft = getComparisonKey(path.normalize(left));
-    const normalizedRight = getComparisonKey(path.normalize(right));
-    if (normalizedLeft === normalizedRight) {
+    if (isSameFileSystemEntry(left, right)) {
         return true;
     }
+
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
 
     // `aspire extension get-apphosts` resolves a project file while `aspire ps`
     // can report the AppHost source file. Match by directory only for that
     // project/source-file shape so sibling AppHost projects don't collapse into
     // the same workspace AppHost.
-    return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight))
+    return isSameFileSystemEntry(path.dirname(normalizedLeft), path.dirname(normalizedRight))
         && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
 }
 

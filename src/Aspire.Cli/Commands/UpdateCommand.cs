@@ -24,6 +24,10 @@ internal sealed class UpdateCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    // CLI package metadata is required for this command's core update workflow, independently of
+    // whether the generic update notification is enabled.
+    internal override bool RequiresCliPackageMetadata => true;
+
     private readonly IProjectLocator _projectLocator;
     private readonly IPackagingService _packagingService;
     private readonly IAppHostProjectFactory _projectFactory;

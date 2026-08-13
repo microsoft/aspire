@@ -11,7 +11,7 @@
 namespace Aspire.Dashboard.Resources {
     using System;
     
-    
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -31,7 +31,7 @@ namespace Aspire.Dashboard.Resources {
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Layout() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -204,6 +204,24 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Expand navigation labels.
+        /// </summary>
+        public static string NavMenuToggleExpand {
+            get {
+                return ResourceManager.GetString("NavMenuToggleExpand", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Collapse navigation to icons.
+        /// </summary>
+        public static string NavMenuToggleCollapse {
+            get {
+                return ResourceManager.GetString("NavMenuToggleCollapse", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Resources.
         /// </summary>

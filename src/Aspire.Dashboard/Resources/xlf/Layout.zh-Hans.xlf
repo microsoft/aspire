@@ -97,6 +97,16 @@
         <target state="translated">结构化</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuToggleCollapse">
+        <source>Collapse navigation to icons</source>
+        <target state="new">Collapse navigation to icons</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuToggleExpand">
+        <source>Expand navigation labels</source>
+        <target state="new">Expand navigation labels</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTracesTab">
         <source>Traces</source>
         <target state="translated">跟踪</target>

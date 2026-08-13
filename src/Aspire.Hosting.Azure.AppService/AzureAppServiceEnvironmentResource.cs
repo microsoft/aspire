@@ -35,7 +35,7 @@ public class AzureAppServiceEnvironmentResource :
 #pragma warning restore ASPIREAZURE003
 {
     /// <inheritdoc />
-    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.Web/serverFarms";
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.AppServiceEnvironments;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.

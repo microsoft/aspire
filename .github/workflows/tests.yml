@@ -584,7 +584,7 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: '20.x'
+          node-version: '22.x'
       - name: Install Corepack
         run: |
           # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
@@ -643,7 +643,21 @@ jobs:
         if: ${{ inputs.extensionVersionOverride != '' }}
         run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
       - name: Package VSIX
+        env:
+          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
+      - name: Assert E2E VSIX contains bridge
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
+      # Packaged separately (not reusing out/aspire-extension.vsix) because the step above already
+      # proved that VSIX contains the bridge on purpose; asserting Absent against it would be
+      # self-contradictory. No env override here is the point: webpack.config.js only stubs the
+      # bridge in `--mode production` when ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE isn't 'true', and
+      # GitHub Actions step `env:` blocks don't leak into later steps, so this reproduces exactly
+      # what Extension.proj's shipping build packages, with no ability to inherit the opt-in above.
+      - name: Package production VSIX
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
+      - name: Assert production VSIX excludes bridge
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
       - name: Upload VSIX
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -674,7 +688,7 @@ jobs:
       - name: Setup Node.js environment
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: '20.x'
+          node-version: '22.x'
       - name: Install Corepack
         run: |
           set -euo pipefail
@@ -708,12 +722,7 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    # Temporarily disabled: the VS Code extension E2E shards are flaky and currently failing in CI
-    # (intermittent teardown AggregateError, see https://github.com/microsoft/aspire/issues/18098),
-    # so they block unrelated PRs. Keep the job defined (it stays in the aggregate gate's needs) but
-    # force it to skip until the flakiness is fixed. Re-enable by removing the `false &&` guard below.
-    # Tracked by https://github.com/microsoft/aspire/issues/18412.
-    if: ${{ false && needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
@@ -831,10 +840,8 @@ jobs:
         #   bucket actually had work. Before selective CI these were always populated on a full run.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
-        # - extension_e2e_tests: temporarily disabled (always skipped) because the E2E shards are
-        #   flaky/failing; see https://github.com/microsoft/aspire/issues/18412. While
-        #   disabled, a 'skipped' result must NOT fail this gate, so the run_extension_e2e skip checks
-        #   were removed below. Restore them when re-enabling the job.
+        # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
+        #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
@@ -844,6 +851,8 @@ jobs:
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
@@ -868,6 +877,8 @@ jobs:
                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
                (github.event_name != 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||

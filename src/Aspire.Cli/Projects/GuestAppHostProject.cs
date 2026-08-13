@@ -1016,6 +1016,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                 includeLaunchProfileEnvironmentVariables: false,
                 args: context.Arguments);
+            launchSettingsEnvVars[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
 
             // Generate a backchannel socket path for CLI to connect to AppHost server
             var backchannelSocketPath = GetBackchannelSocketPath();
@@ -1120,6 +1121,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
                     includeLaunchProfileEnvironmentVariables: false,
                     args: context.Arguments);
+                environmentVariables[KnownConfigNames.AspireHome] = _executionContext.AspireHomeDirectory.FullName;
                 environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
                 environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
                 environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
@@ -1264,13 +1266,24 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // See https://github.com/dotnet/runtime/issues/45003.
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
-                var exitCode = serverSession.TryGetServerExitCode() ?? -1;
+                var exitCode = serverSession.TryGetServerExitCode();
                 // Log at Debug level - this is expected when AppHost crashes during startup.
                 // The real error is in the AppHost output, not this connection-level detail.
-                _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
-                var message = exitCode == CliExitCodes.Success
-                    ? "The AppHost server process exited"
-                    : $"The AppHost server process exited unexpectedly with exit code {exitCode}";
+                if (exitCode is { } knownExitCode)
+                {
+                    _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", knownExitCode, socketPath);
+                }
+                else
+                {
+                    _logger.LogDebug("AppHost server process has exited before its exit code was available. Unable to connect to backchannel at {SocketPath}", socketPath);
+                }
+
+                var message = exitCode switch
+                {
+                    CliExitCodes.Success => "The AppHost server process exited",
+                    { } nonZeroExitCode => $"The AppHost server process exited unexpectedly with exit code {nonZeroExitCode}",
+                    null => "The AppHost server process exited unexpectedly"
+                };
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 activity.SetError(backchannelException);
                 backchannelCompletionSource.TrySetException(backchannelException);

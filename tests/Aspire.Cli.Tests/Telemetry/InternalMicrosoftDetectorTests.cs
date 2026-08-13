@@ -1,15 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.Net;
+using System.Text;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Diagnostics;
-using System.Net;
-using System.Text;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -485,15 +485,78 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             probeStages: [],
             environmentVariables: environmentVariables,
             gitHubHttpMessageHandler: handler,
-            gitHubCandidateTimeout: TimeSpan.FromMilliseconds(100));
+            gitHubCandidateTimeout: TimeSpan.FromMilliseconds(100),
+            // HttpClient.Timeout defaults to 3 seconds here, which would independently cancel every
+            // probe well inside the assertion bound below and make this test pass even with no candidate
+            // budget at all. Disabling the per-request timeout leaves the overall budget as the only
+            // thing that can stop the handler's one-minute delay, so the assertion measures what it claims.
+            gitHubHttpTimeout: Timeout.InfiniteTimeSpan);
 
         var stopwatch = Stopwatch.StartNew();
         var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
         stopwatch.Stop();
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2));
+
+        // The handler blocks for a minute per request and HttpClient.Timeout is disabled above, so an
+        // unenforced candidate budget takes at least a minute. Ten seconds leaves ample cancellation,
+        // drain, and scheduler headroom while still proving the overall budget stops the probes. The
+        // previous two-second bound failed at 2.064s on a loaded windows-latest runner:
+        // https://github.com/microsoft/aspire/issues/19181.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"Elapsed {stopwatch.Elapsed} exceeded the overall candidate timeout budget.");
         Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
+    }
+
+    [Fact]
+    public async Task CheckCopilotCliAsync_ProbesGitHubTokenCandidatesConcurrently()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const int candidateCount = 5;
+        var allCandidatesEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCandidates = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var enteredCandidates = 0;
+        var handler = new TestGitHubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            if (Interlocked.Increment(ref enteredCandidates) == candidateCount)
+            {
+                allCandidatesEntered.TrySetResult();
+            }
+
+            await releaseCandidates.Task.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        });
+        var environmentVariables = Enumerable.Range(0, 7)
+            .ToDictionary(index => $"COPILOT_GH_ACCOUNT_{index}", index => (string?)CreateGitHubToken(index));
+        environmentVariables["PATH"] = workspace.Path;
+        environmentVariables["PATHEXT"] = ".EXE";
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: environmentVariables,
+            gitHubHttpMessageHandler: handler,
+            gitHubCandidateTimeout: Timeout.InfiniteTimeSpan,
+            gitHubHttpTimeout: Timeout.InfiniteTimeSpan);
+
+        using var safetyTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var checkTask = detector.CheckCopilotCliAsync(safetyTimeout.Token);
+
+        // The test releases the handlers only after all five have entered. A serial implementation
+        // cannot reach that point; the independent timeout keeps that regression from hanging the suite.
+        try
+        {
+            await allCandidatesEntered.Task.WaitAsync(safetyTimeout.Token);
+        }
+        finally
+        {
+            releaseCandidates.TrySetResult();
+        }
+
+        var result = await checkTask.WaitAsync(safetyTimeout.Token);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(candidateCount, enteredCandidates);
+        Assert.Equal(candidateCount, handler.GetRequestPaths().Count(path => path == "/user"));
     }
 
     private static InternalMicrosoftDetector CreateDetector(
@@ -503,7 +566,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         TestProcessExecutionFactory? processFactory = null,
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
-        TimeSpan? gitHubCandidateTimeout = null)
+        TimeSpan? gitHubCandidateTimeout = null,
+        TimeSpan? gitHubHttpTimeout = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory));
@@ -517,7 +581,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             processFactory ?? new TestProcessExecutionFactory(),
             probeStages,
             gitHubHttpMessageHandler,
-            gitHubCandidateTimeout);
+            gitHubCandidateTimeout,
+            gitHubHttpTimeout);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)

@@ -8,49 +8,78 @@ using Aspire.Hosting.Dcp.Model;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents an annotation that specifies that the resource can be debugged by the Aspire Extension.
+/// Indicates that a resource can be launched by an IDE or extension host so it can be debugged,
+/// instead of being started as a plain process by Aspire.
 /// </summary>
+/// <remarks>
+/// Added by a <c>WithDebugSupport</c> overload on <see cref="ResourceBuilderExtensions"/>.
+/// The annotation is only honored while a debug session is active; use
+/// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that.
+/// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, RequiredExtensionId = {LaunchConfigurationType,nq}")]
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-internal sealed class SupportsDebuggingAnnotation : IResourceAnnotation
+public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 {
-    private SupportsDebuggingAnnotation(string launchConfigurationType, Action<Executable, string> launchConfigurationAnnotator, bool rewritesArgumentsForDebugging)
+    private SupportsDebuggingAnnotation(
+        string launchConfigurationType,
+        Func<Executable, LaunchConfigurationCallbackContext, Task> launchConfigurationAnnotator,
+        Func<LaunchConfigurationCallbackContext, Task<object>> launchConfigurationProducer)
     {
         LaunchConfigurationType = launchConfigurationType;
         LaunchConfigurationAnnotator = launchConfigurationAnnotator;
-        RewritesArgumentsForDebugging = rewritesArgumentsForDebugging;
+        LaunchConfigurationProducer = launchConfigurationProducer;
     }
 
-    public string LaunchConfigurationType { get; }
-    public Action<Executable, string> LaunchConfigurationAnnotator { get; }
-
     /// <summary>
-    /// Indicates that the debug support rewrites the resource's command-line arguments while a debug
-    /// session is active (via the <c>argsCallback</c> passed to <c>WithDebugSupport</c>).
+    /// Gets the launch configuration type identifier, for example <see cref="KnownLaunchConfigurationTypes.Project"/>.
     /// </summary>
     /// <remarks>
-    /// Integrations such as Go and Python strip the process entrypoint tokens 
-    /// (e.g. <c>go run &lt;pkg&gt;</c>, <c>python -m &lt;mod&gt;</c>)
-    /// so the IDE debugger can own them, which leaves the executable's <c>Spec.Args</c> valid 
-    /// only for IDE execution. When this is <see langword="true"/>, a Process fallback 
-    /// (either the DCP-level <c>FallbackExecutionTypes</c> or the in-process fallback when the launch configuration fails) 
-    /// would attempt to run <c>ExecutablePath + Args</c> with the entrypoint stripped — a broken command — 
-    /// so a process fallback must NOT be offered.
+    /// The IDE advertises the launch configuration types it can handle; a resource whose type is not
+    /// advertised is started as a plain process instead.
     /// <para>
-    /// This is set based purely on the presence of an <c>argsCallback</c> in <c>WithDebugSupport</c>,
-    /// not on whether that callback actually rewrites anything for a given resource configuration. This is a
-    /// deliberate, conservative rule: a resource that supplies an args callback forgoes the process fallback
-    /// even when the callback happens to be a no-op (e.g. a Python "Executable" entrypoint), keeping the rule
-    /// simple and predictable.
+    /// Exception: when the active debug session does not
+    /// advertise any launch configuration types at all (for example Visual Studio, which does not send a
+    /// capability list), <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly
+    /// supported rather than falling back to plain process execution.
     /// </para>
     /// </remarks>
-    public bool RewritesArgumentsForDebugging { get; }
+    public string LaunchConfigurationType { get; }
 
-    internal static SupportsDebuggingAnnotation Create<T>(string launchConfigurationType, Func<string, T> launchProfileProducer, bool rewritesArgumentsForDebugging = false)
+    // Takes the internal DCP Executable object, so it stays internal even though the annotation is public.
+    internal Func<Executable, LaunchConfigurationCallbackContext, Task> LaunchConfigurationAnnotator { get; }
+
+    // The producer callback supplied to WithDebugSupport, with the launch configuration boxed as object.
+    // Internal because only Aspire constructs LaunchConfigurationCallbackContext values and because the
+    // untyped object is consumed by internal launch-configuration plumbing.
+    internal Func<LaunchConfigurationCallbackContext, Task<object>> LaunchConfigurationProducer { get; }
+
+    internal static SupportsDebuggingAnnotation Create<T>(
+        string resourceName,
+        string launchConfigurationType,
+        Func<LaunchConfigurationCallbackContext, Task<T>> launchConfigurationProducer)
     {
-        return new SupportsDebuggingAnnotation(launchConfigurationType, (exe, mode) =>
+        // The annotator stays generic over T so the DCP annotation is serialized against the concrete
+        // launch configuration type rather than a boxed object, which would change the emitted JSON.
+        return new SupportsDebuggingAnnotation(
+            launchConfigurationType,
+            async (exe, context) => exe.AnnotateAsObjectList(
+                Executable.LaunchConfigurationsAnnotation,
+                await ProduceAsync(context).ConfigureAwait(false)),
+            // The suppression is safe because ProduceAsync throws rather than returning null; the
+            // compiler cannot see that because T is unconstrained and so may be a nullable type.
+            async context => (await ProduceAsync(context).ConfigureAwait(false))!);
+
+        async Task<T> ProduceAsync(LaunchConfigurationCallbackContext context)
         {
-            exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, launchProfileProducer(mode));
-        }, rewritesArgumentsForDebugging);
+            var launchConfiguration = await launchConfigurationProducer(context).ConfigureAwait(false);
+            if (launchConfiguration is null)
+            {
+                throw new InvalidOperationException(
+                    $"The \"{launchConfigurationType}\" launch configuration producer for resource '{resourceName}' returned null. " +
+                    $"The producer owns the complete launch configuration, so it must always return one.");
+            }
+
+            return launchConfiguration;
+        }
     }
 }

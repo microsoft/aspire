@@ -1289,6 +1289,78 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_InteractiveDisabledDynamicArgumentWithDefaultValue_Succeeds()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "generateTraces",
+                        InputType = InputType.Boolean,
+                        Required = true,
+                        Value = "true"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "traceCount",
+                        InputType = InputType.Number,
+                        Required = true,
+                        Value = "50000",
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["generateTraces"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Disabled = !context.AllInputs.GetBoolean("generateTraces");
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.Inputs["generateTraces"].Value = "false";
+        interaction.Inputs["traceCount"].Disabled = true;
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.False(capturedArguments.GetBoolean("generateTraces"));
+        Assert.Equal(50000, capturedArguments.GetInt32("traceCount"));
+        Assert.True(capturedArguments["traceCount"].Disabled);
+        Assert.Empty(capturedArguments["traceCount"].ValidationErrors);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
     {
         using var builder = CreateBuilder();
@@ -1669,6 +1741,56 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(testInteractionService.PromptProgressCalled);
         Assert.False(result.Success);
         Assert.True(result.Canceled);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_ReturnsCanceledWhenCommandHandlesProgressCancellation()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (e.CancellationToken.IsCancellationRequested)
+                    {
+                        return CommandResults.Success("Cleanup completed.");
+                    }
+
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        await commandStarted.Task.DefaultTimeout();
+
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+        Assert.Null(result.Message);
     }
 
     [Fact]

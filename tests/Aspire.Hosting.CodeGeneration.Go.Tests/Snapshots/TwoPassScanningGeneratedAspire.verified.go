@@ -318,6 +318,18 @@ func (d *InteractionInput) ToMap() map[string]any {
 	return m
 }
 
+// RunConfiguration represents RunConfiguration.
+type RunConfiguration struct {
+	WatchEnabled *bool `json:"WatchEnabled,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *RunConfiguration) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.WatchEnabled != nil { m["WatchEnabled"] = serializeValue(d.WatchEnabled) }
+	return m
+}
+
 // AddContainerOptions represents AddContainerOptions.
 type AddContainerOptions struct {
 	Image string `json:"Image,omitempty"`
@@ -10431,6 +10443,7 @@ type DistributedApplicationExecutionContext interface {
 	IsRunMode() (bool, error)
 	Operation() (DistributedApplicationOperation, error)
 	PublisherName() (string, error)
+	RunConfiguration() (*RunConfiguration, error)
 	ServiceProvider() ServiceProvider
 	Services() ServiceProvider
 	SetPublisherName(value string) DistributedApplicationExecutionContext
@@ -10505,6 +10518,21 @@ func (s *distributedApplicationExecutionContext) PublisherName() (string, error)
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// RunConfiguration describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+func (s *distributedApplicationExecutionContext) RunConfiguration() (*RunConfiguration, error) {
+	if s.err != nil { var zero *RunConfiguration; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs)
+	if err != nil {
+		var zero *RunConfiguration
+		return zero, err
+	}
+	return decodeAs[*RunConfiguration](result)
 }
 
 // ServiceProvider the `IServiceProvider` for the AppHost.

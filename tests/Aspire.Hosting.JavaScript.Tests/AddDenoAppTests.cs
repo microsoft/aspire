@@ -1025,7 +1025,6 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var endpoint = Assert.Single(denoApp.Resource.Annotations.OfType<EndpointAnnotation>());
         Assert.Equal("http", endpoint.Name);
-        Assert.Equal("PORT", endpoint.TargetPortEnvironmentVariable);
 
         var environment = await EnvironmentVariableEvaluator
             .GetEnvironmentVariablesAsync(denoApp.Resource, DistributedApplicationOperation.Publish)
@@ -1078,7 +1077,6 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var endpoint = Assert.Single(denoApp.Resource.Annotations.OfType<EndpointAnnotation>());
         Assert.Same(callerEndpoint, endpoint);
         Assert.Equal(4321, endpoint.TargetPort);
-        Assert.Equal("APP_PORT", endpoint.TargetPortEnvironmentVariable);
         Assert.Equal(initialEnvironmentCallbackCount, denoApp.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().Count());
 
         var environment = await EnvironmentVariableEvaluator
@@ -2175,7 +2173,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     [OuterloopTest("Builds and runs a Docker image to verify the generated Deno Dockerfile serves HTTP")]
     public async Task VerifyDenoDockerfileBuildsAndRunsHttpEndpoint()
     {
@@ -2383,14 +2381,14 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DenoApp_DirectFile_ProducesDenoRuntimeExecutable()
+    public async Task DenoApp_DirectFile_ProducesDenoRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2399,7 +2397,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DenoApp_WithRunScriptAndPackageManager_ProducesDenoRuntimeExecutable()
+    public async Task DenoApp_WithRunScriptAndPackageManager_ProducesDenoRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2411,7 +2409,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithRunScript("dev");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2419,7 +2417,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DenoApp_WithDenoTask_ProducesPackageManagerLaunchMethod()
+    public async Task DenoApp_WithDenoTask_ProducesPackageManagerLaunchMethod()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2427,7 +2425,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithDenoTask("dev");
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
@@ -2435,7 +2433,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DenoApp_WithRunScriptAndNpm_ProducesNodeLaunchConfiguration()
+    public async Task DenoApp_WithRunScriptAndNpm_ProducesNodeLaunchConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2444,19 +2442,38 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithRunScript("dev")
             .WithNpm();
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource);
 
         Assert.Equal("node", launchConfig.Type);
         Assert.Equal("npm", launchConfig.RuntimeExecutable);
         Assert.Equal("package-manager", launchConfig.LaunchMethod);
     }
 
-    private static JavaScriptLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    [Fact]
+    public async Task DenoApp_LaunchConfigurationHonorsCancellation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => InvokeLaunchConfigurationAnnotatorAsync(denoApp.Resource, cancellationTokenSource.Token));
+    }
+
+    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(
+        IResource resource,
+        CancellationToken cancellationToken = default)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "deno");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            resource,
+            cancellationToken: cancellationToken);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

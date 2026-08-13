@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -22,7 +23,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("{DebuggerToString(),nq}")]
 public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWithArgs, IResourceWithServiceDiscovery, IResourceWithWaitSupport, IResourceWithProbes,
-    IComputeResource, IContainerFilesDestinationResource, IProjectLaunchDefaultsResource
+    IComputeResource, IContainerFilesDestinationResource
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ProjectResource"/> class.
@@ -30,6 +31,12 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
     /// <param name="name">The name of the resource.</param>
     public ProjectResource(string name) : base(name)
     {
+        // Every ProjectResource is launched through the .NET SDK, so it always carries the project-launch
+        // defaults marker — even when constructed directly via AddResource rather than AddProject. Core
+        // uses the annotation (not the type) to recognize .NET-launched resources so that resources from
+        // language integration packages, such as DotnetProjectResource, get the same treatment.
+        Annotations.Add(new ProjectLaunchDefaultsAnnotation());
+
         // Add pipeline step annotation to create build and push steps for this project
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
@@ -97,23 +104,6 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
             pushSteps.DependsOn(WellKnownPipelineSteps.PushPrereq);
         }));
     }
-    // Keep track of the config host for each Kestrel endpoint annotation
-    private readonly Dictionary<EndpointAnnotation, string> _kestrelEndpointAnnotationHosts = new();
-
-    // Track the https endpoint that was added as a default, and should be excluded from the port & kestrel environment
-    private EndpointAnnotation? _defaultHttpsEndpoint;
-
-    // IProjectLaunchDefaultsResource state is implemented explicitly so the project-defaults plumbing
-    // is reused by Aspire.Hosting.Dotnet's DotnetProjectResource without becoming public surface here.
-    // HasKestrelEndpoints and ShouldInjectEndpointEnvironment come from the interface's default members.
-    Dictionary<EndpointAnnotation, string> IProjectLaunchDefaultsResource.KestrelEndpointAnnotationHosts => _kestrelEndpointAnnotationHosts;
-
-    EndpointAnnotation? IProjectLaunchDefaultsResource.DefaultHttpsEndpoint
-    {
-        get => _defaultHttpsEndpoint;
-        set => _defaultHttpsEndpoint = value;
-    }
-
     private async Task BuildProjectImage(PipelineStepContext ctx)
     {
         var containerImageBuilder = ctx.Services.GetRequiredService<IResourceContainerImageManager>();
@@ -285,7 +275,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
     private string DebuggerToString()
     {
         var path = "<unknown>";
-        if (this.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (this.TryGetProjectMetadata(out var metadata))
         {
             path = metadata.ProjectPath;
         }

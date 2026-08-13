@@ -2014,6 +2014,9 @@ class ResourceUrlAnnotation(typing.TypedDict, total=False):
     Endpoint: EndpointReference
     DisplayLocation: UrlDisplayLocation
 
+class RunConfiguration(typing.TypedDict, total=False):
+    WatchEnabled: bool
+
 class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
@@ -4408,6 +4411,15 @@ class DistributedApplicationExecutionContext:
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationOperation, result)
+
+    @_cached_property
+    def run_config(self) -> RunConfiguration:
+        """Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration',
+            {'context': self._handle}
+        )
+        return typing.cast(RunConfiguration, result)
 
     @_cached_property
     def service_provider(self) -> AbstractServiceProvider:

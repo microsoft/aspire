@@ -81,6 +81,20 @@ jobs:
           fetch-depth: 0  # Full history for diff generation
           persist-credentials: false
 
+      - name: Checkout workflow helper scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The workflow file can be dispatched from an extension-release branch
+          # before its helper scripts exist on main. Pin this checkout to the
+          # exact commit GitHub used to load the workflow definition so helper
+          # execution stays in sync with the YAML that references it.
+          ref: ${{ github.workflow_sha }}
+          path: .extension-release-workflow-source
+          sparse-checkout: |
+            .github/workflows/extension-release
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Resolve commit range
         id: resolve-sha
         env:
@@ -308,45 +322,11 @@ jobs:
 
           WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RELEASE_NOTES="$WORK_DIR/release_notes.md"
-          : > "$RELEASE_NOTES"
-
-          NOTE_COUNT=0
-          while IFS= read -r line; do
-            if [ -n "$line" ]; then
-              # Commit lines are emitted as: "<short-sha>\t<subject>".
-              MSG=$(printf '%s\n' "$line" | cut -f2-)
-              MSG=$(printf '%s\n' "$MSG" | sed -E 's/^[A-Za-z]+(\([^)]*\))?!?:[[:space:]]*//; s/[[:space:]]*\(#[0-9]+\)$//')
-              MSG=$(printf '%s\n' "$MSG" | perl -0pe 's/\r//g; s/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]//g; s/!\[[^\]]*\]\([^)]+\)//g; s/<[^>\n]*>//g')
-
-              case "$MSG" in
-                ""|Merge\ *|merge\ *|Release\ *|release\ *|Bump\ *|bump\ *|Update\ package-lock*|Update\ yarn.lock*)
-                  continue
-                  ;;
-              esac
-
-              if [ "$NOTE_COUNT" -eq 0 ]; then
-                echo "### Changes (auto-generated from commits)" >> "$RELEASE_NOTES"
-              fi
-
-              printf -- '- %s\n' "$MSG" >> "$RELEASE_NOTES"
-              NOTE_COUNT=$((NOTE_COUNT + 1))
-              if [ "$NOTE_COUNT" -ge 8 ]; then
-                break
-              fi
-            fi
-          done < "$WORK_DIR/commits.txt"
-
-          if [ "$NOTE_COUNT" -eq 0 ]; then
-            {
-              echo "### Maintenance"
-              echo "- No user-facing extension changes were detected."
-            } > "$RELEASE_NOTES"
-          fi
+          python3 .extension-release-workflow-source/.github/workflows/extension-release/generate_deterministic_release_notes.py \
+            "$WORK_DIR/commits.txt" \
+            "$RELEASE_NOTES"
 
           echo "✓ Release notes generated"
-
-          RELEASE_NOTES_CONTENT=$(printf '%.8000s' "$(cat "$RELEASE_NOTES")")
-          printf '%s\n' "$RELEASE_NOTES_CONTENT" > "$RELEASE_NOTES"
 
           # The changelog entry committed to the PR is a PLACEHOLDER, not the
           # deterministic commit list. A separate agentic workflow
@@ -472,18 +452,23 @@ jobs:
             echo "   | \`IsPrerelease\` | \`false\` for a stable release, \`true\` for a pre-release |"
             echo "   | \`DryRun\` | \`false\` |"
             echo "   | \`SkipNuGetPublish\` | \`true\` |"
+            echo "   | \`SkipNpmRidPublish\` | \`true\` |"
+            echo "   | \`SkipNpmPointerPublish\` | \`true\` |"
             echo "   | \`SkipChannelPromotion\` | \`true\` |"
             echo "   | \`SkipWinGetPublish\` | \`true\` |"
             echo "   | \`SkipHomebrewValidation\` | \`true\` |"
             echo "   | \`SkipGitHubTasks\` | \`true\` |"
             echo "   | \`SkipReleaseAssets\` | \`true\` |"
+            echo "   | \`SkipNixPackageUpdate\` | \`true\` |"
             echo "   | \`SkipVSCodeExtensionPublish\` | \`false\` |"
             echo ""
             echo "5. For a full Aspire release, keep the normal NuGet/channel/GitHub task settings and additionally set \`SkipVSCodeExtensionPublish=false\`. For a pre-release extension, also use a source build queued with \`Package VS Code Extension as Pre-Release=true\` and set \`IsPrerelease=true\`."
-            echo "6. To validate without publishing, run the same pipeline with \`DryRun=true\` and \`SkipVSCodeExtensionPublish=false\`; the release job validates the VSIX/manifest/signature triplet and Marketplace PAT but skips \`vsce publish\`."
+            echo "6. To validate without publishing, run the same pipeline with \`DryRun=true\` and \`SkipVSCodeExtensionPublish=false\`; the release job validates the VSIX/manifest/signature triplet and verifies the Marketplace service connection can acquire an Azure credential and read publisher role assignments, but skips \`vsce publish\`. Separately confirm the service connection identity is a Contributor on the \`microsoft-aspire\` Marketplace publisher before live publishing."
             echo ""
             echo "> **Note:** This preparation workflow can also be tested from a fork with \`dry_run=true\`. Dry-run mode resolves the Marketplace baseline, generates the changelog entry, uploads the proposed files as a workflow artifact, and skips bot-token branch/PR creation."
           } > "$WORK_DIR/pr_body.md"
+
+          python3 .extension-release-workflow-source/.github/workflows/extension-release/validate_github_pr_body.py "$WORK_DIR/pr_body.md"
 
       - name: Dry-run summary
         if: ${{ inputs.dry_run }}
@@ -600,14 +585,11 @@ jobs:
             --color BFD4F2 \
             --description "Bot-created VS Code extension release PR; triggers the extension-changelog agentic workflow." \
             --force >/dev/null 2>&1 || true
-          # Remove then re-add the label so a fresh `labeled` event always fires,
-          # even on a re-run where the label is already present (adding a label
-          # that already exists on the PR is a no-op that fires no event). On a
-          # re-run the release workflow has just force-pushed a new placeholder,
-          # so the downstream changelog workflow must run again. The remove is a
-          # harmless no-op (with `|| true`) when the label isn't present yet, and
-          # the resulting `unlabeled` event is ignored by extension-changelog
-          # (which only triggers on `labeled`).
-          gh pr edit "$PR_NUMBER" --remove-label vscode-extension-release >/dev/null 2>&1 || true
-          gh pr edit "$PR_NUMBER" --add-label vscode-extension-release
+          # Remove then re-add the label only when it is already present so a
+          # re-run emits a fresh `labeled` event. If the label exists but
+          # removal fails, abort instead of silently continuing with a stale
+          # label: adding an already-present label is a no-op that emits no
+          # event, which would leave the new placeholder changelog entry
+          # unprocessed.
+          bash .extension-release-workflow-source/.github/workflows/extension-release/apply_extension_release_trigger_label.sh "$PR_NUMBER"
           echo "✓ Applied 'vscode-extension-release' label to PR #${PR_NUMBER}"

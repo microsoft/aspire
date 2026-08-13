@@ -7,9 +7,23 @@
 // github.mjs; durable preferences in state.mjs.
 
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
-import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor } from "./server.mjs";
-import { loadPrefs, savePrefs } from "./state.mjs";
+import {
+  addAzurePipelineSource,
+  forceRefresh,
+  getDashboard,
+  removeAzurePipelineSource,
+  rescanAccounts,
+  setAgentSend,
+  setBrowserOpen,
+  setDashboardMode,
+  setReposFor,
+  startInstance,
+  stopInstance,
+  toggleAccount,
+} from "./server.mjs";
 import { accountId } from "./accounts.mjs";
+import { azurePipelineIdFromRemovalKey } from "./azure-devops.mjs";
+import { azurePipelineReferencesForAgent, healthSummaryForAgent } from "./health.mjs";
 
 function resolveAccountId(ref) {
   if (!ref) return null;
@@ -27,11 +41,11 @@ const session = await joinSession({
       id: "aspire-team-app",
       displayName: "Aspire Team App",
       description:
-        "Cross-repo PR review queue for the logged-in GitHub user: Review, Issues, and Ship modes with signal pills and notifications.",
+        "Cross-repo team dashboard for reviews, issues, shipping, and GitHub/Azure DevOps health with actionable signals.",
       actions: [
         {
           name: "refresh",
-          description: "Reload the review queue from GitHub and push the update to the open dashboard.",
+          description: "Reload the active dashboard mode and push the update to the open canvas.",
           handler: async () => {
             const { dashboard } = await forceRefresh();
             return {
@@ -46,18 +60,15 @@ const session = await joinSession({
           description: "Switch the dashboard mode.",
           inputSchema: {
             type: "object",
-            properties: { mode: { type: "string", enum: ["review", "issues", "ship"] } },
+            properties: { mode: { type: "string", enum: ["review", "issues", "ship", "health"] } },
             required: ["mode"],
           },
           handler: async (ctx) => {
             const mode = ctx.input?.mode;
-            if (!["review", "issues", "ship"].includes(mode)) {
-              throw new CanvasError("invalid_mode", "mode must be review, issues, or ship");
+            if (!["review", "issues", "ship", "health"].includes(mode)) {
+              throw new CanvasError("invalid_mode", "mode must be review, issues, ship, or health");
             }
-            const prefs = await loadPrefs();
-            prefs.mode = mode;
-            await savePrefs(prefs);
-            const { dashboard } = await forceRefresh();
+            const { dashboard } = await setDashboardMode(mode);
             return { mode: dashboard.mode, counts: dashboard.counts ?? null };
           },
         },
@@ -84,8 +95,62 @@ const session = await joinSession({
           },
         },
         {
+          name: "add_azure_pipeline",
+          description: "Add an Azure DevOps pipeline to Health mode from a definition or build URL. Uses existing Azure CLI authentication and stores no token.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              url: { type: "string" },
+              branch: { type: "string" },
+            },
+            required: ["url"],
+          },
+          handler: async (ctx) => {
+            try {
+              const { dashboard, prefs } = await addAzurePipelineSource(ctx.input?.url, ctx.input?.branch);
+              return {
+                mode: dashboard.mode,
+                pipelines: azurePipelineReferencesForAgent(prefs.azurePipelines),
+                counts: dashboard.health?.counts ?? null,
+              };
+            } catch (error) {
+              throw new CanvasError(error.code ?? "azure_pipeline_error", error.message);
+            }
+          },
+        },
+        {
+          name: "remove_azure_pipeline",
+          description: "Remove a configured Azure DevOps pipeline using an opaque removal key returned by add_azure_pipeline or the Health summary.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              removalKey: {
+                type: "string",
+                description: "Opaque key returned for a configured pipeline by add_azure_pipeline or the Health summary.",
+              },
+            },
+            required: ["removalKey"],
+          },
+          handler: async (ctx) => {
+            const id = azurePipelineIdFromRemovalKey(ctx.input?.removalKey);
+            if (!id) {
+              throw new CanvasError("invalid_pipeline_removal_key", "A valid Azure DevOps pipeline removal key is required.");
+            }
+            try {
+              const { dashboard, prefs } = await removeAzurePipelineSource(id);
+              return {
+                mode: dashboard.mode,
+                pipelines: azurePipelineReferencesForAgent(prefs.azurePipelines),
+                counts: dashboard.health?.counts ?? null,
+              };
+            } catch (error) {
+              throw new CanvasError(error.code ?? "azure_pipeline_error", error.message);
+            }
+          },
+        },
+        {
           name: "summary",
-          description: "Return a text summary of the current review queue without opening the canvas.",
+          description: "Return a summary of the active dashboard mode without opening the canvas.",
           handler: async () => {
             const { dashboard } = await getDashboard(false);
             if (!dashboard.authenticated) {
@@ -96,6 +161,8 @@ const session = await joinSession({
                   id: a.id, login: a.login, sources: a.sourceKinds, status: a.status,
                   enterprise: !!a.enterprise, host: a.host ?? null,
                 })),
+                mode: dashboard.mode,
+                health: healthSummaryForAgent(dashboard),
               };
             }
             const c = dashboard.counts;
@@ -111,6 +178,7 @@ const session = await joinSession({
               repos: dashboard.repos,
               counts: c,
               notifications: (dashboard.notifications ?? []).length,
+              health: healthSummaryForAgent(dashboard),
             };
           },
         },
@@ -153,11 +221,74 @@ const session = await joinSession({
       ],
       open: async (ctx) => {
         const entry = await startInstance(ctx.instanceId, (m) => session.log(m, { level: "debug" }));
-        return { title: "Aspire Team App", url: entry.url, status: "Review queue" };
+        return { title: "Aspire Team App", url: entry.url, status: "Team dashboard" };
       },
       onClose: async (ctx) => {
         await stopInstance(ctx.instanceId);
       },
     }),
   ],
+});
+
+// Bridge card action buttons (Test / Review / Resolve conflicts / Address review) to
+// the main session.
+//
+// Track whether the main session is mid-turn so a click can tell the user, truthfully,
+// whether their request starts now or queues behind the current task. The agent goes
+// busy at the start of an assistant turn and idle when the session settles. This is the
+// only honest signal available: an extension cannot spawn an independent sub-session
+// (that is an agent tool), so a queued prompt genuinely waits for the current turn.
+let agentBusy = false;
+// Sends that have entered setAgentSend but not yet reached session.send(). Incremented
+// synchronously before the first await so two card clicks that arrive close together can't
+// both read agentBusy===false while suspended in session.log() and each claim "starting now".
+let sendsInFlight = 0;
+session.on("assistant.turn_start", () => { agentBusy = true; });
+session.on("session.idle", () => { agentBusy = false; });
+
+// The loopback server builds the prompt plus a short log line and calls this to
+// (1) drop a visible breadcrumb on the session timeline and (2) post the prompt as a
+// user turn, so the agent opens the PR sub-session or does the interactive work. We
+// snapshot the busy flag *before* sending — session.send queues behind an in-flight
+// turn rather than interrupting it — and return it so the button labels itself
+// "Queued …" vs "Sent" instead of always claiming success.
+setAgentSend(async ({ prompt, log }) => {
+  // Decide queued/starting *synchronously* here, before any await. agentBusy alone races:
+  // when two actions fire nearly together, both suspend in the session.log() await below
+  // before either calls session.send(), so both would read agentBusy===false. Also treat a
+  // send already in flight as outstanding work the next click queues behind.
+  const queued = agentBusy || sendsInFlight > 0;
+  sendsInFlight++;
+  try {
+    if (log) {
+      // The breadcrumb is best-effort: a session.log() failure must NOT block session.send(),
+      // which carries the user's actual request. We still await it (so the breadcrumb, when it
+      // succeeds, lands before the queued/started prompt) but swallow any error and fall through
+      // to the send rather than rejecting the whole bridge and 500ing without queueing anything.
+      try {
+        await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+      } catch {
+        // ignore — the timeline breadcrumb is cosmetic; the send below is what matters.
+      }
+    }
+    const messageId = await session.send({ prompt });
+    return { messageId, queued };
+  } finally {
+    sendsInFlight--;
+  }
+});
+
+setBrowserOpen(async (pr) => {
+  const instanceId = `aspire-team-app-pr-${pr.repository}-${pr.number}`
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 128);
+  return session.rpc.canvas.open({
+    canvasId: "browser",
+    instanceId,
+    input: {
+      url: pr.url,
+      title: `${pr.repository} #${pr.number}`,
+      placement: { surface: "panel", focus: true },
+    },
+  });
 });

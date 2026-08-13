@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -11,6 +14,58 @@ namespace Aspire.Cli.Tests.Certificates;
 
 public class UnixCertificateManagerTests
 {
+    [Fact]
+    public async Task GetTrustLevel_WhenCanceled_KillsCertUtilProcessTree()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate trust is only exercised on Linux.");
+
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var nssDbDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "nssdb"));
+        var parentPidFile = Path.Combine(tempDirectory.FullName, "certutil-parent.pid");
+        var childPidFile = Path.Combine(tempDirectory.FullName, "certutil-child.pid");
+        var parentPid = 0;
+        var childPid = 0;
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        try
+        {
+            var certUtilFile = await CreateBlockingCertUtilAsync(tempDirectory, parentPidFile, childPidFile);
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName,
+                ["SSL_CERT_DIR"] = tempDirectory.FullName,
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
+            });
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, _ => new ProcessStartInfo(certUtilFile.FullName)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+            using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(365));
+            var trustTask = Task.Run(() => manager.GetTrustLevel(certificate, cancellationTokenSource.Token));
+
+            parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
+                .DefaultTimeout();
+            childPid = await ProcessTestHelpers.WaitForProcessIdAsync(childPidFile, TestContext.Current.CancellationToken)
+                .DefaultTimeout();
+
+            cancellationTokenSource.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => trustTask).DefaultTimeout();
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(parentPid, TimeSpan.FromSeconds(10)), $"Expected certutil process {parentPid} to exit.");
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(childPid, TimeSpan.FromSeconds(10)), $"Expected child process {childPid} to exit.");
+        }
+        finally
+        {
+            cancellationTokenSource.Cancel();
+            ProcessTestHelpers.TryKillProcess(parentPid);
+            ProcessTestHelpers.TryKillProcess(childPid);
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void GetTrustLevel_WithCorruptOpenSslCertificate_DoesNotThrow()
     {
@@ -146,4 +201,30 @@ public class UnixCertificateManagerTests
             openSslDirectory.Delete(recursive: true);
         }
     }
+
+    private static async Task<FileInfo> CreateBlockingCertUtilAsync(DirectoryInfo directory, string parentPidFile, string childPidFile)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new PlatformNotSupportedException();
+        }
+
+        var certUtilFile = new FileInfo(Path.Combine(directory.FullName, "certutil"));
+        var script =
+            "#!/usr/bin/env bash" + Environment.NewLine +
+            $"echo $$ > '{EscapeShellPath(parentPidFile)}'" + Environment.NewLine +
+            "sleep 60 &" + Environment.NewLine +
+            $"echo $! > '{EscapeShellPath(childPidFile)}'" + Environment.NewLine +
+            "wait $!" + Environment.NewLine;
+        await File.WriteAllTextAsync(certUtilFile.FullName, script);
+        File.SetUnixFileMode(
+            certUtilFile.FullName,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        return certUtilFile;
+    }
+
+    private static string EscapeShellPath(string path) => path.Replace("'", "'\"'\"'", StringComparison.Ordinal);
 }

@@ -372,6 +372,16 @@
         <target state="translated">Vérification de l’environnement Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="EnvironmentCheckTimedOutMessageFormat">
+        <source>Environment check '{0}' timed out after {1} seconds.</source>
+        <target state="new">Environment check '{0}' timed out after {1} seconds.</target>
+        <note>{0} is the environment check name. {1} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="EnvironmentChecksTimedOutMessageFormat">
+        <source>Environment checks timed out after {0} seconds.</source>
+        <target state="new">Environment checks timed out after {0} seconds.</target>
+        <note>{0} is the total timeout in seconds.</note>
+      </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
         <target state="new">Aspire CLI Installations</target>
@@ -381,6 +391,11 @@
         <source>Install discovery failed. See the Aspire CLI logs for details.</source>
         <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
+        <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <note>{0} is the timeout in seconds.</note>
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>

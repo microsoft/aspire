@@ -1,18 +1,18 @@
 import * as assert from 'assert';
 import nodeChildProcess = require('child_process');
-import * as fs from 'fs';
+import fs = require('fs');
 import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
-import { AppHostDataRepository, AspireCliFailedError } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, AspireCliFailedError, isMatchingAppHostPath, shortenPath } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import type { AppHostDiscoveryService, CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProvider from '../utils/configInfoProvider';
-import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
@@ -41,11 +41,38 @@ class TestChildProcess extends EventEmitter {
     }
 }
 
-function createLsLineCallback(options: any): (line: string) => void {
+function createLsOutputCallback(options: cliModule.SpawnProcessOptions | undefined): (line: string) => void {
     return line => {
+        if (options?.lineCallback) {
+            for (const candidate of toStreamedLsCandidates(line)) {
+                options.lineCallback(JSON.stringify(candidate));
+            }
+
+            options.exitCallback?.(0);
+            return;
+        }
+
         options?.stdoutCallback?.(line);
         options?.exitCallback?.(0);
     };
+}
+
+function toStreamedLsCandidates(output: string): CandidateAppHostDisplayInfo[] {
+    const parsed = JSON.parse(output);
+    if (Array.isArray(parsed)) {
+        return parsed;
+    }
+
+    if (!Array.isArray(parsed.all_project_file_candidates)) {
+        return [];
+    }
+
+    return parsed.all_project_file_candidates.map((candidatePath: string) => ({
+        path: candidatePath,
+        language: 'csharp',
+        status: 'buildable',
+        selected: candidatePath === parsed.selected_project_file,
+    }));
 }
 
 suite('AppHostDataRepository', () => {
@@ -63,11 +90,10 @@ suite('AppHostDataRepository', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
-        // The repository probes `aspire config info --json` to learn whether the CLI advertises the
-        // describe `--include-disabled-commands` capability. Default to a capability-supporting CLI
-        // so the common-path tests below still see the flag on the describe invocation.
+        // Default to a current CLI so common-path tests use streamed discovery and include disabled
+        // commands in describe output. Compatibility tests override this response explicitly.
         getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
-            capabilities: [describeIncludeDisabledCommandsCapability],
+            capabilities: [describeIncludeDisabledCommandsCapability, lsJsonStreamCapability],
         } as any);
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
@@ -122,7 +148,7 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
-    test('restarts ps polling immediately after a workspace-folder change while discovery is stuck', async () => {
+    test('keeps ps polling active after a workspace-folder change while discovery is stuck', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -135,8 +161,7 @@ suite('AppHostDataRepository', () => {
                 folderChangeListener = listener;
                 return { dispose: () => { } };
             });
-        // A discovery that never resolves keeps `_workspaceAppHostDiscoveryComplete` false, so the only
-        // path that can restart ps is the folder-change handler itself (not a discovery-completion branch).
+        // A discovery that never resolves keeps `_workspaceAppHostDiscoveryComplete` false.
         const appHostDiscoveryService = {
             onDidChangeCandidates: new vscode.EventEmitter<vscode.WorkspaceFolder>().event,
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
@@ -155,14 +180,790 @@ suite('AppHostDataRepository', () => {
             assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
             folderChangeListener({ added: [], removed: [] });
 
-            // ps must restart right away — before the (stuck) discovery resolves — rather than leaving an
-            // active panel with no running-state source.
-            await waitForCondition(() => countPsSpawns() > psSpawnsBeforeFolderChange,
-                'expected ps polling to restart immediately after the workspace-folder change');
+            await waitForMicrotasks();
+            assert.strictEqual(countPsSpawns(), psSpawnsBeforeFolderChange);
             assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
         } finally {
             repository.dispose();
             onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('keeps surviving describe streams active while workspace-folder rediscovery is stuck', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const appHostPath = '/configured/AppHost.csproj';
+        let discoveryCount = 0;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            discover: () => ++discoveryCount === 1
+                ? Promise.resolve([{
+                    path: appHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                }])
+                : new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'initial workspace discovery did not complete');
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(
+                () => spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'ps'),
+                'expected ps polling to start');
+            const describeCall = await startDescribeForRunningAppHost(appHostPath);
+            const describeProcess = describeCall.returnValue as TestChildProcess;
+
+            assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
+            folderChangeListener({ added: [], removed: [] });
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [appHostPath]);
+            assert.strictEqual(describeProcess.killed, false);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace-folder changes prune removed-root candidates while rediscovery is stuck', async () => {
+        const rootA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-a'),
+            name: 'root-a',
+            index: 0,
+        };
+        const rootB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-b'),
+            name: 'root-b',
+            index: 1,
+        };
+        const rootC: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-c'),
+            name: 'root-c',
+            index: 1,
+        };
+        const rootAAppHostPath = path.join(rootA.uri.fsPath, 'MyAppHost.csproj');
+        const rootBAppHostPath = path.join('/configured', 'root-b', 'MyAppHost.csproj');
+        defaultWorkspaceFoldersStub.restore();
+        let currentWorkspaceFolders: readonly vscode.WorkspaceFolder[] = [rootA, rootB];
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').get(() => currentWorkspaceFolders);
+        defaultWorkspaceFoldersStub = { restore: () => { } } as sinon.SinonStub;
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().callsFake((workspaceFolder: vscode.WorkspaceFolder) => {
+            if (workspaceFolder === rootC) {
+                return new Promise<CandidateAppHostDisplayInfo[]>(() => { });
+            }
+
+            return Promise.resolve([{
+                path: workspaceFolder === rootA ? rootAAppHostPath : rootBAppHostPath,
+                language: 'csharp',
+                status: 'buildable',
+                selected: workspaceFolder === rootA,
+            }]);
+        });
+        const discoveryService = {
+            discover,
+            forgetWorkspaceFolder: () => { },
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'initial workspace discovery did not complete');
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [rootBAppHostPath, rootAAppHostPath]);
+
+            currentWorkspaceFolders = [rootA, rootC];
+            assert.ok(folderChangeListener);
+            folderChangeListener({ added: [rootC], removed: [rootB] });
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [rootAAppHostPath]);
+            assert.strictEqual(repository.workspaceAppHostName, shortenPath(rootAAppHostPath));
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace-folder changes preserve a queued forced refresh', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().callsFake(() => new Promise<CandidateAppHostDisplayInfo[]>(() => { }));
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            discover,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount === 1, 'initial discovery did not start');
+            repository.refresh();
+
+            assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
+            folderChangeListener({ added: [], removed: [] });
+            await waitForCondition(() => discover.callCount === 2, 'replacement discovery did not start');
+
+            assert.strictEqual(discover.secondCall.args[1], true);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace-folder change starts new discovery without cancelling unrelated old-root subscriber', async () => {
+        const oldFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/old-workspace'),
+            name: 'old-workspace',
+            index: 0,
+        };
+        const newFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/new-workspace'),
+            name: 'new-workspace',
+            index: 0,
+        };
+        defaultWorkspaceFoldersStub.restore();
+        let currentWorkspaceFolders: readonly vscode.WorkspaceFolder[] = [oldFolder];
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').get(() => currentWorkspaceFolders);
+        defaultWorkspaceFoldersStub = { restore: () => { } } as sinon.SinonStub;
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const lsCalls: Array<{ workingDirectory: string | undefined; options: cliModule.SpawnProcessOptions | undefined }> = [];
+        spawnStub.callsFake((_terminalProvider, _command, args = [], options) => {
+            if (args[0] === 'ls') {
+                lsCalls.push({ workingDirectory: options?.workingDirectory, options });
+            }
+            return new TestChildProcess();
+        });
+        const discoveryService = new AppHostDiscoveryService(terminalProvider);
+        const unrelatedOldRootDiscovery = discoveryService.discover(oldFolder);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => lsCalls.length === 1, 'expected shared old-root discovery to start once');
+            assert.strictEqual(lsCalls[0].workingDirectory, oldFolder.uri.fsPath);
+
+            currentWorkspaceFolders = [newFolder];
+            assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
+            folderChangeListener({ added: [newFolder], removed: [oldFolder] });
+
+            await waitForCondition(() => lsCalls.length === 2,
+                'expected new-root discovery to start before old-root discovery completes');
+            assert.strictEqual(lsCalls[1].workingDirectory, newFolder.uri.fsPath);
+
+            const oldCandidate = path.join(oldFolder.uri.fsPath, 'AppHost.csproj');
+            createLsOutputCallback(lsCalls[0].options)(JSON.stringify([{
+                path: oldCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]));
+            assert.deepStrictEqual(await unrelatedOldRootDiscovery, [{
+                path: oldCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+
+            const newCandidate = path.join(newFolder.uri.fsPath, 'AppHost.csproj');
+            createLsOutputCallback(lsCalls[1].options)(JSON.stringify([{
+                path: newCandidate,
+                language: 'csharp',
+                status: 'buildable',
+            }]));
+            await waitForMicrotasks();
+        }
+        finally {
+            repository.dispose();
+            discoveryService.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery includes AppHosts from every workspace folder', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/typescript'),
+                name: 'typescript',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/python'),
+                name: 'python',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => [{
+            path: path.join(workspaceFolder.uri.fsPath, 'apphost.mts'),
+            language: 'typescript',
+            status: 'buildable',
+            selected: true,
+        }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
+
+            assert.deepStrictEqual(
+                discover.getCalls().map(call => (call.args[0] as vscode.WorkspaceFolder).uri.fsPath),
+                workspaceFolders.map(folder => folder.uri.fsPath));
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                path.join(workspaceFolders[1].uri.fsPath, 'apphost.mts'),
+                path.join(workspaceFolders[0].uri.fsPath, 'apphost.mts'),
+            ]);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery deduplicates equivalent AppHost paths across folders', async () => {
+        const nestedWorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/nested'),
+            name: 'nested',
+            index: 0,
+        };
+        const outerWorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 1,
+        };
+        const workspaceFolders = [
+            nestedWorkspaceFolder,
+            outerWorkspaceFolder,
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const canonicalAppHostPath = path.join(nestedWorkspaceFolder.uri.fsPath, 'apphost.mts');
+        const equivalentAppHostPath = `${outerWorkspaceFolder.uri.fsPath}${path.sep}nested${path.sep}..${path.sep}nested${path.sep}apphost.mts`;
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => [{
+            path: workspaceFolder === nestedWorkspaceFolder ? canonicalAppHostPath : equivalentAppHostPath,
+            language: 'typescript',
+            status: 'buildable',
+            selected: true,
+        }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [canonicalAppHostPath]);
+            assert.strictEqual(repository.workspaceAppHostPath, canonicalAppHostPath);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery preserves case-distinct Windows AppHosts with different filesystem identities', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/upper'),
+                name: 'upper',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/lower'),
+                name: 'lower',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const statStub = sinon.stub(fs, 'statSync').callsFake((filePath: fs.PathLike) => ({
+            dev: 1n,
+            ino: path.basename(path.dirname(String(filePath))) === 'AppHost' ? 100n : 101n,
+        }) as fs.BigIntStats);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const upperCasePath = '/workspace/AppHost/apphost.mts';
+        const lowerCasePath = '/workspace/apphost/apphost.mts';
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => [{
+            path: workspaceFolder === workspaceFolders[0] ? upperCasePath : lowerCasePath,
+            language: 'typescript',
+            status: 'buildable',
+        }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [upperCasePath, lowerCasePath]);
+            assert.strictEqual(statStub.callCount, 2, 'Expected one filesystem identity lookup per unique candidate path');
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            statStub.restore();
+            platformStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery reads each candidate filesystem identity once per combination pass', async () => {
+        const workspaceFolders = Array.from({ length: 5 }, (_, index) => ({
+            uri: vscode.Uri.file(`/workspace/root${index}`),
+            name: `root${index}`,
+            index,
+        }));
+        const candidatePaths = workspaceFolders.map((_, index) => `/workspace/AppHost${index}/apphost.mts`);
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const statStub = sinon.stub(fs, 'statSync').callsFake((filePath: fs.PathLike) => ({
+            dev: 1n,
+            ino: BigInt(candidatePaths.indexOf(String(filePath)) + 1),
+        }) as fs.BigIntStats);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => [{
+            path: candidatePaths[workspaceFolder.index],
+            language: 'typescript',
+            status: 'buildable',
+        }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidatePaths);
+            assert.strictEqual(statStub.callCount, candidatePaths.length);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            statStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('running AppHost matching preserves case-distinct Windows filesystem entries', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const statStub = sinon.stub(fs, 'statSync').callsFake((filePath: fs.PathLike) => ({
+            dev: 1n,
+            ino: path.basename(path.dirname(String(filePath))) === 'AppHost' ? 100n : 101n,
+        }) as fs.BigIntStats);
+
+        try {
+            assert.strictEqual(
+                isMatchingAppHostPath('/workspace/AppHost/apphost.mts', '/workspace/apphost/apphost.mts'),
+                false);
+        } finally {
+            statStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('workspace discovery preserves one explicit selection across roots', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/typescript'),
+                name: 'typescript',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/python'),
+                name: 'python',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const selectedPath = path.join(workspaceFolders[0].uri.fsPath, 'selected', 'apphost.mts');
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => workspaceFolder === workspaceFolders[0]
+            ? [
+                {
+                    path: selectedPath,
+                    language: 'typescript',
+                    status: 'buildable',
+                    selected: true,
+                },
+                {
+                    path: path.join(workspaceFolder.uri.fsPath, 'other', 'apphost.mts'),
+                    language: 'typescript',
+                    status: 'buildable',
+                },
+            ]
+            : [{
+                path: path.join(workspaceFolder.uri.fsPath, 'apphost.mts'),
+                language: 'typescript',
+                status: 'buildable',
+            }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
+
+            assert.strictEqual(repository.workspaceAppHostPath, selectedPath);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery failure preserves healthy folder candidates', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/typescript'),
+                name: 'typescript',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/python'),
+                name: 'python',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const siblingDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const discover = sinon.stub().callsFake((workspaceFolder: vscode.WorkspaceFolder) =>
+            workspaceFolder === workspaceFolders[0]
+                ? Promise.reject(new Error('typescript discovery failed'))
+                : siblingDiscovery.promise);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount === 2, 'multi-root discovery did not start');
+            const siblingAppHostPath = path.join(workspaceFolders[1].uri.fsPath, 'apphost.mts');
+            siblingDiscovery.resolve([{
+                path: siblingAppHostPath,
+                language: 'typescript',
+                status: 'buildable',
+            }]);
+
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace discovery did not complete');
+
+            assert.strictEqual(repository.hasError, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [siblingAppHostPath]);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery reports all-root failures in workspace-folder order', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/root-a'),
+                name: 'root-a',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/root-b'),
+                name: 'root-b',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        let rejectFirstDiscovery: ((reason?: unknown) => void) | undefined;
+        const firstDiscovery = new Promise<CandidateAppHostDisplayInfo[]>((_resolve, reject) => {
+            rejectFirstDiscovery = reject;
+        });
+        const discover = sinon.stub().callsFake((workspaceFolder: vscode.WorkspaceFolder) =>
+            workspaceFolder === workspaceFolders[0]
+                ? firstDiscovery
+                : Promise.reject(new Error('root-b discovery failed')));
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount === 2, 'multi-root discovery did not start');
+            await waitForMicrotasks();
+            assert.ok(rejectFirstDiscovery);
+            rejectFirstDiscovery(new Error('root-a discovery failed'));
+
+            await waitForCondition(() => repository.hasError, 'workspace discovery error was not surfaced');
+            assert.ok(repository.errorMessage?.includes(workspaceFolders[0].uri.fsPath), repository.errorMessage);
+            assert.ok(repository.errorMessage?.includes('root-a discovery failed'), repository.errorMessage);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery limits concurrent folder scans', async () => {
+        const workspaceFolders = Array.from({ length: 6 }, (_, index) => ({
+            uri: vscode.Uri.file(`/workspace/root-${index}`),
+            name: `root-${index}`,
+            index,
+        }));
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discoveries = workspaceFolders.map(() => createDeferred<CandidateAppHostDisplayInfo[]>());
+        let activeDiscoveries = 0;
+        let maxActiveDiscoveries = 0;
+        const discover = sinon.stub().callsFake((_workspaceFolder: vscode.WorkspaceFolder) => {
+            const discovery = discoveries[discover.callCount - 1];
+            activeDiscoveries++;
+            maxActiveDiscoveries = Math.max(maxActiveDiscoveries, activeDiscoveries);
+            return discovery.promise.finally(() => activeDiscoveries--);
+        });
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount >= 4, 'initial discovery workers did not start');
+            assert.strictEqual(discover.callCount, 4);
+
+            discoveries[0].resolve([]);
+            await waitForCondition(() => discover.callCount === 5, 'fifth folder discovery did not start');
+            discoveries[1].resolve([]);
+            await waitForCondition(() => discover.callCount === 6, 'sixth folder discovery did not start');
+            discoveries.slice(2).forEach(discovery => discovery.resolve([]));
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace discovery did not complete');
+
+            assert.strictEqual(maxActiveDiscoveries, 4);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace-folder changes reuse surviving discovery caches', async () => {
+        const rootA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-a'),
+            name: 'root-a',
+            index: 0,
+        };
+        const rootB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-b'),
+            name: 'root-b',
+            index: 1,
+        };
+        const rootC: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/root-c'),
+            name: 'root-c',
+            index: 1,
+        };
+        defaultWorkspaceFoldersStub.restore();
+        let currentWorkspaceFolders: readonly vscode.WorkspaceFolder[] = [rootA, rootB];
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').get(() => currentWorkspaceFolders);
+        defaultWorkspaceFoldersStub = { restore: () => { } } as sinon.SinonStub;
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().resolves([]);
+            const forgetWorkspaceFolder = sinon.spy();
+            const discoveryService = {
+                discover,
+                forgetWorkspaceFolder,
+                onDidChangeCandidates: candidateChangeEmitter.event,
+                dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount === 2, 'initial multi-root discovery did not complete');
+
+            currentWorkspaceFolders = [rootA, rootC];
+            assert.ok(folderChangeListener);
+            folderChangeListener({ added: [rootC], removed: [rootB] });
+
+            await waitForCondition(() => discover.callCount === 4, 'changed workspace discovery did not complete');
+            for (const call of discover.getCalls().slice(2)) {
+                assert.strictEqual(call.args[1], undefined);
+            }
+            assert.strictEqual(forgetWorkspaceFolder.calledOnceWithExactly(rootB), true);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('candidate changes in any workspace folder refresh workspace discovery', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/typescript'),
+                name: 'typescript',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/python'),
+                name: 'python',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().callsFake(async (workspaceFolder: vscode.WorkspaceFolder) => [{
+            path: path.join(workspaceFolder.uri.fsPath, 'apphost.mts'),
+            language: 'typescript',
+            status: 'buildable',
+        }]);
+        const discoveryService = {
+            discover,
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            await waitForCondition(() => discover.callCount === 2, 'initial multi-root discovery did not start');
+
+            candidateChangeEmitter.fire(workspaceFolders[1]);
+
+            await waitForCondition(() => discover.callCount === 4, 'second-root change did not refresh discovery');
+            assert.strictEqual(discover.getCalls().filter(call =>
+                (call.args[0] as vscode.WorkspaceFolder).uri.toString() === workspaceFolders[1].uri.toString()).length, 2);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps shows running AppHosts from every folder before discovery completes', async () => {
+        const workspaceFolders = [
+            {
+                uri: vscode.Uri.file('/workspace/typescript'),
+                name: 'typescript',
+                index: 0,
+            },
+            {
+                uri: vscode.Uri.file('/workspace/python'),
+                name: 'python',
+                index: 1,
+            },
+        ];
+        const workspaceFoldersStub = stubWorkspaceFolders(workspaceFolders);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discoveryService = {
+            discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(
+                () => spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'ps'),
+                'workspace ps did not start');
+            const psCall = spawnStub.getCalls().find(call =>
+                (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
+            assert.ok(psCall);
+            const appHostPath = path.join(workspaceFolders[1].uri.fsPath, 'apphost.py');
+
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath,
+                appHostPid: 1,
+            }]));
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(repository.appHosts.map(appHost => appHost.appHostPath), [appHostPath]);
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
             workspaceFoldersStub.restore();
         }
     });
@@ -1234,11 +2035,12 @@ suite('AppHostDataRepository', () => {
 
     test('describe reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1259,7 +2061,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
             await waitForMicrotasks();
@@ -1306,8 +2110,10 @@ suite('AppHostDataRepository', () => {
 
     test('describe clears compatibility error after receiving resource data', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -1329,7 +2135,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
             await waitForMicrotasks();
@@ -1365,10 +2173,11 @@ suite('AppHostDataRepository', () => {
 
     test('workspace ps success does not clear describe error', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        const getAppHostsProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
-            return getAppHostsProcess;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
+            return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
@@ -1389,7 +2198,9 @@ suite('AppHostDataRepository', () => {
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
             }));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             repository.setAppHostFilesOpen(['/workspace/apps/Store/AppHost.csproj']);
             await waitForMicrotasks();
@@ -1449,7 +2260,7 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             switch (args[0]) {
                 case 'ls':
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                     return getAppHostsProcess;
                 case 'describe':
                     return describeProcesses.shift() ?? new TestChildProcess();
@@ -1515,7 +2326,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2128,7 +2939,7 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             switch (args[0]) {
                 case 'ls':
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                     return getAppHostsProcess;
                 case 'describe':
                     return describeProcess;
@@ -2173,7 +2984,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2243,7 +3054,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2307,7 +3118,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             return new TestChildProcess();
         });
@@ -2425,7 +3236,7 @@ suite('AppHostDataRepository', () => {
             let getAppHostsLineCallback: ((line: string) => void) | undefined;
             spawnStub.callsFake((_terminalProvider, _command, args, options) => {
                 if (args[0] === 'ls') {
-                    getAppHostsLineCallback = createLsLineCallback(options);
+                    getAppHostsLineCallback = createLsOutputCallback(options);
                 }
                 return new TestChildProcess();
             });
@@ -2495,7 +3306,7 @@ suite('AppHostDataRepository', () => {
     test('single workspace AppHost candidate keeps workspace mode', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -2530,7 +3341,7 @@ suite('AppHostDataRepository', () => {
     test('possibly unbuildable AppHost candidates do not force global mode', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         const workspaceFoldersStub = stubWorkspaceFolders([{
@@ -2543,7 +3354,7 @@ suite('AppHostDataRepository', () => {
         try {
             await waitForAppHostDiscovery();
             assert.ok(getAppHostsLineCallback);
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--stream', '--nologo']);
 
             getAppHostsLineCallback(JSON.stringify([
                 {
@@ -2584,8 +3395,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -2597,7 +3410,9 @@ suite('AppHostDataRepository', () => {
             assert.ok(getAppHostsLineCallback);
 
             getAppHostsLineCallback(JSON.stringify([]));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
@@ -2641,8 +3456,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -2661,7 +3478,9 @@ suite('AppHostDataRepository', () => {
                     status: 'possibly-unbuildable',
                 },
             ]));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.isWorkspaceAppHostDiscoveryComplete,
+                'workspace AppHost discovery did not complete');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
@@ -3233,7 +4052,333 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('queues forced workspace discovery refresh without starting overlapping discovery', async () => {
+    test('file changes show loading until rediscovery finds an AppHost', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const oldCandidate = {
+            path: '/workspace/old/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const newCandidate = {
+            path: '/workspace/new/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let secondDiscoveryCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([oldCandidate]);
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onStreamedCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+            secondDiscoveryCallback = onStreamedCandidate;
+            return secondDiscovery.promise;
+        });
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: discoveryChanges.event,
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        try {
+            await waitForCondition(() => repository.workspaceAppHostPath === oldCandidate.path, 'initial workspace discovery did not apply');
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+            repository.activate();
+            repository.setPanelVisible(true);
+
+            discoveryChanges.fire(workspaceFolder);
+            await waitForCondition(() => discoverStub.callCount === 2, 'workspace rediscovery did not start');
+
+            assert.strictEqual(repository.isLoading, true);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(repository.workspaceAppHostName, undefined);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.ok(secondDiscoveryCallback);
+
+            secondDiscoveryCallback(newCandidate);
+
+            assert.strictEqual(repository.isLoading, true);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+
+            await waitForCondition(() => repository.workspaceAppHostCandidatePaths.length === 1, 'streamed workspace candidate was not applied after the debounce');
+            assert.strictEqual(repository.isLoading, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [newCandidate.path]);
+
+            secondDiscovery.resolve([newCandidate]);
+            await waitForCondition(() => repository.workspaceAppHostPath === newCandidate.path, 'replacement workspace discovery did not apply');
+
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+        } finally {
+            repository.dispose();
+            discoveryChanges.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('rapid AppHost results are applied together', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+        const candidates = ['First', 'Second', 'Third'].map(name => ({
+            path: `/workspace/${name}/AppHost.csproj`,
+            language: 'csharp',
+            status: 'buildable',
+        }));
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            incrementalCandidateCallback(candidates[0]);
+            await clock.tickAsync(25);
+            incrementalCandidateCallback(candidates[1]);
+            await clock.tickAsync(25);
+            incrementalCandidateCallback(candidates[2]);
+
+            await clock.tickAsync(49);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(updateCount, 0);
+
+            await clock.tickAsync(1);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 1);
+        } finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('continuous AppHost results are applied within a bounded wait', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+        const candidates = Array.from({ length: 10 }, (_, index) => ({
+            path: `/workspace/AppHost${index}/AppHost.csproj`,
+            language: 'csharp',
+            status: 'buildable',
+        }));
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            incrementalCandidateCallback(candidates[0]);
+            for (let index = 1; index < candidates.length; index++) {
+                await clock.tickAsync(25);
+                incrementalCandidateCallback(candidates[index]);
+            }
+
+            await clock.tickAsync(24);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(updateCount, 0);
+
+            await clock.tickAsync(1);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 1);
+        }
+        finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('AppHost results separated by pauses are applied incrementally', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+        const candidates = ['First', 'Second'].map(name => ({
+            path: `/workspace/${name}/AppHost.csproj`,
+            language: 'csharp',
+            status: 'buildable',
+        }));
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+
+            incrementalCandidateCallback(candidates[0]);
+            await clock.tickAsync(50);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [candidates[0].path]);
+            assert.strictEqual(updateCount, 1);
+
+            incrementalCandidateCallback(candidates[1]);
+            await clock.tickAsync(50);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, candidates.map(candidate => candidate.path));
+            assert.strictEqual(updateCount, 2);
+        } finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('workspace discovery shows non-cancellable window progress only while the workspace view is visible', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: () => discovery.promise,
+            dispose: () => { },
+        };
+        let progressCompleted = false;
+        const progressCancellationToken = {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: () => { } }),
+        } as vscode.CancellationToken;
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((options: any, task: any) =>
+            Promise.resolve(task({ report: () => { } }, progressCancellationToken))
+                .finally(() => progressCompleted = true));
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.setPanelVisible(true);
+            await waitForCondition(() => withProgressStub.calledOnce, 'workspace discovery progress did not appear');
+
+            assert.deepStrictEqual(withProgressStub.firstCall.args[0], {
+                location: vscode.ProgressLocation.Window,
+                title: 'Discovering AppHosts...',
+                cancellable: false,
+            });
+            assert.strictEqual(progressCompleted, false);
+
+            repository.setViewMode('global');
+            await waitForCondition(() => progressCompleted, 'workspace discovery progress did not close in global view');
+            assert.strictEqual(withProgressStub.callCount, 1);
+        } finally {
+            discovery.resolve([]);
+            repository.dispose();
+            withProgressStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('final discovery results replace a pending incremental update', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
+                incrementalCandidateCallback = onIncrementalCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+        const zetaCandidate = {
+            path: '/workspace/Zeta/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const alphaCandidate = {
+            path: '/workspace/Alpha/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        };
+        const expectedPaths = [alphaCandidate.path, zetaCandidate.path];
+        let updateCount = 0;
+        const updateSubscription = repository.onDidChangeData(() => updateCount++);
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(incrementalCandidateCallback);
+            incrementalCandidateCallback(zetaCandidate);
+            incrementalCandidateCallback(alphaCandidate);
+            incrementalCandidateCallback(alphaCandidate);
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+
+            discovery.resolve([alphaCandidate, zetaCandidate]);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, true);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, expectedPaths);
+
+            const finalUpdateCount = updateCount;
+            await clock.tickAsync(50);
+            assert.strictEqual(updateCount, finalUpdateCount);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, expectedPaths);
+        } finally {
+            updateSubscription.dispose();
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('repeated project changes queue one follow-up discovery', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3243,6 +4388,7 @@ suite('AppHostDataRepository', () => {
         const firstDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let firstTokenCancelled = false;
+        let candidatesChanged: ((workspaceFolder: vscode.WorkspaceFolder) => void) | undefined;
         const discoverStub = sinon.stub();
         discoverStub.onFirstCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, cancellationToken?: vscode.CancellationToken) => {
             cancellationToken?.onCancellationRequested(() => {
@@ -3250,12 +4396,12 @@ suite('AppHostDataRepository', () => {
             });
             return firstDiscovery.promise;
         });
-        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, forceRefresh?: boolean) => {
-            assert.strictEqual(forceRefresh, true);
-            return secondDiscovery.promise;
-        });
+        discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
-            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            onDidChangeCandidates: (listener: (workspaceFolder: vscode.WorkspaceFolder) => void) => {
+                candidatesChanged = listener;
+                return { dispose: () => { } };
+            },
             discover: discoverStub,
             dispose: () => { },
         };
@@ -3265,14 +4411,18 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
             assert.strictEqual(discoverStub.callCount, 1);
 
-            repository.refresh();
+            assert.ok(candidatesChanged);
+            for (let i = 0; i < 10; i++) {
+                candidatesChanged(workspaceFolder);
+            }
             await waitForMicrotasks();
 
             assert.strictEqual(firstTokenCancelled, false);
             assert.strictEqual(discoverStub.callCount, 1);
 
             firstDiscovery.resolve([]);
-            await waitForCondition(() => discoverStub.callCount === 2, 'queued forced workspace discovery did not run');
+            await waitForCondition(() => discoverStub.callCount === 2, 'queued workspace discovery did not run');
+            assert.strictEqual(discoverStub.secondCall.args[1], false);
             secondDiscovery.resolve([]);
             await waitForAppHostDiscovery();
 
@@ -3566,6 +4716,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable',
             }]);
             await waitForCondition(() => discoverStub.callCount === 2, 'queued forced workspace discovery did not run');
+            assert.strictEqual(discoverStub.secondCall.args[1], true);
 
             assert.strictEqual(repository.workspaceAppHostPath, undefined);
 
@@ -3590,7 +4741,7 @@ suite('AppHostDataRepository', () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+            getAppHostsLineCallback = createLsOutputCallback(options);
             return new TestChildProcess();
         });
         spawnStub.onSecondCall().returns(new TestChildProcess());
@@ -3800,7 +4951,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -3902,7 +5053,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psArgs = args;
@@ -3959,7 +5110,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psOptions = options;
@@ -4029,7 +5180,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'ps') {
                 psOptions = options;
@@ -4106,7 +5257,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4171,7 +5322,7 @@ suite('AppHostDataRepository', () => {
         let psOptions: any;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4238,7 +5389,7 @@ suite('AppHostDataRepository', () => {
         const oneShotPsOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions = options;
@@ -4329,7 +5480,7 @@ suite('AppHostDataRepository', () => {
         const describeOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions.push(options);
@@ -4417,7 +5568,7 @@ suite('AppHostDataRepository', () => {
         const describeOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
+                getAppHostsLineCallback = createLsOutputCallback(options);
             }
             if (args[0] === 'describe') {
                 describeOptions.push(options);
@@ -4700,6 +5851,207 @@ suite('AppHostDataRepository global polling', () => {
         assert.strictEqual(repository.isLoading, false, 'global spinner must clear when ps is already polling');
 
         repository.dispose();
+    });
+
+    test('global refresh shows loading until the fresh AppHost snapshot arrives', async () => {
+        const psFollowProcess = new TestChildProcess();
+        const psSnapshotProcess = new TestChildProcess();
+        let psFollowOptions: any;
+        let psSnapshotOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+                return psFollowProcess;
+            }
+            if (args[0] === 'ps') {
+                psSnapshotOptions = options;
+                return psSnapshotProcess;
+            }
+            return new TestChildProcess();
+        });
+        const completionEvents: string[] = [];
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').callsFake(async (command: string, key: string, value: unknown) => {
+            if (command === 'setContext' && key === 'aspire.loading' && value === false) {
+                completionEvents.push('loading cleared');
+            }
+            return undefined;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+        let dataChanges = 0;
+        const dataSubscription = repository.onDidChangeData(() => {
+            dataChanges++;
+            if (repository.viewMode === 'global' && !repository.isLoading) {
+                completionEvents.push('tree refreshed');
+            }
+        });
+        const runningAppHost = {
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'running',
+        };
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+
+            psFollowOptions.lineCallback(JSON.stringify(runningAppHost));
+            await waitForCondition(() => repository.appHosts.length === 1, 'global AppHost ps delta was not applied');
+            assert.strictEqual(repository.isLoading, false);
+
+            const changesBeforeRefresh = dataChanges;
+            repository.refresh();
+            await waitForCondition(() => psSnapshotOptions !== undefined, 'global refresh snapshot did not start');
+
+            assert.strictEqual(repository.isLoading, true);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, runningAppHost.appHostPath);
+            assert.ok(dataChanges > changesBeforeRefresh, 'loading must invalidate the global tree');
+
+            completionEvents.length = 0;
+            psFollowOptions.lineCallback(JSON.stringify({
+                ...runningAppHost,
+                dashboardUrl: 'http://localhost:18888',
+            }));
+            await waitForCondition(() => repository.appHosts[0].dashboardUrl !== undefined, 'global AppHost ps delta was not applied during refresh');
+
+            assert.strictEqual(repository.isLoading, true, 'ps --follow deltas must not complete authoritative refresh loading');
+            assert.deepStrictEqual(completionEvents, []);
+
+            const changesWhileLoading = dataChanges;
+            completionEvents.length = 0;
+            psSnapshotOptions.stdoutCallback(JSON.stringify([runningAppHost]));
+            psSnapshotOptions.exitCallback(0);
+            await waitForCondition(() => !repository.isLoading, 'global refresh loading did not clear');
+
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, runningAppHost.appHostPath);
+            assert.ok(dataChanges > changesWhileLoading, 'the unchanged snapshot must restore the global tree');
+            assert.deepStrictEqual(completionEvents, ['tree refreshed', 'loading cleared']);
+        } finally {
+            dataSubscription.dispose();
+            repository.dispose();
+            executeCommandStub.restore();
+        }
+    });
+
+    test('global refresh clears loading and reports malformed snapshot output', async () => {
+        const psFollowProcess = new TestChildProcess();
+        const psSnapshotProcess = new TestChildProcess();
+        let psFollowOptions: any;
+        let psSnapshotOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+                return psFollowProcess;
+            }
+            if (args[0] === 'ps') {
+                psSnapshotOptions = options;
+                return psSnapshotProcess;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+
+            repository.refresh();
+            await waitForCondition(() => psSnapshotOptions !== undefined, 'global refresh snapshot did not start');
+            assert.strictEqual(repository.isLoading, true);
+
+            psSnapshotOptions.stdoutCallback('{ malformed json');
+            psSnapshotOptions.exitCallback(0);
+            await waitForCondition(() => !repository.isLoading, 'global refresh loading did not clear after malformed output');
+
+            assert.ok(repository.errorMessage, 'malformed successful snapshot must surface an error');
+            assert.match(repository.errorMessage, /^Error fetching running AppHosts:/);
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('workspace discovery does not update the visible global view', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const candidate = {
+            path: '/workspace/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        } as const;
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const rediscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let onIncrementalCandidate: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().callsFake((_workspaceFolder, _forceRefresh, _cancellationToken, onCandidate) => {
+            onIncrementalCandidate = onCandidate;
+            return rediscovery.promise;
+        });
+        const discoveryService = {
+            discover: discoverStub,
+            onDidChangeCandidates: discoveryChanges.event,
+            dispose: () => discoveryChanges.dispose(),
+        } as unknown as AppHostDiscoveryService;
+        let psFollowOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps' && args.includes('--follow')) {
+                psFollowOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+        let dataChanges = 0;
+        const dataSubscription = repository.onDidChangeData(() => dataChanges++);
+
+        try {
+            await waitForAppHostDiscovery();
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psFollowOptions !== undefined, 'global ps watch did not start');
+            assert.strictEqual(repository.isLoading, false);
+
+            executeCommandStub.resetHistory();
+            dataChanges = 0;
+            discoveryChanges.fire(workspaceFolder);
+            await waitForCondition(() => onIncrementalCandidate !== undefined, 'workspace rediscovery did not start');
+
+            assert.ok(onIncrementalCandidate);
+            onIncrementalCandidate(candidate);
+            await waitForCondition(
+                () => repository.workspaceAppHostCandidatePaths.length === 1,
+                'incremental workspace candidate was not applied');
+
+            rediscovery.resolve([candidate]);
+            await waitForAppHostDiscovery();
+
+            const visibleContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext'
+                && (call.args[1] === 'aspire.loading'
+                    || call.args[1] === 'aspire.noAppHosts'
+                    || call.args[1] === 'aspire.noRunningAppHosts'));
+            assert.deepStrictEqual(visibleContextCalls, []);
+            assert.strictEqual(dataChanges, 0);
+            assert.strictEqual(repository.viewMode, 'global');
+            assert.strictEqual(repository.isLoading, false);
+            assert.deepStrictEqual(repository.appHosts, []);
+        } finally {
+            dataSubscription.dispose();
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+            discoveryChanges.dispose();
+        }
     });
 
     test('global panel starts ps follow and updates from streamed AppHost deltas', async () => {
@@ -5018,6 +6370,78 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
+    test('global stop refresh survives a polling interval restart', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const configChange = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const onDidChangeConfigurationStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration')
+            .callsFake(listener => configChange.event(listener));
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 2000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json', '--nologo']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json', '--nologo']);
+
+            await waitForCondition(() => spawned.some(call => JSON.stringify(call.args) === followArgs), 'expected initial ps --follow call');
+            const initialFollowCall = spawned.filter(call => JSON.stringify(call.args) === followArgs).at(-1)!;
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+            }));
+            await waitForCondition(() => repository.appHosts.length === 1, 'global AppHost ps delta was not applied');
+
+            // Changing the polling interval is the remaining path that restarts `ps` polling underneath a
+            // pending post-stop refresh. The refresh is the only authoritative signal that clears a stale
+            // global AppHost row, so a routine restart must not cancel it.
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            const snapshotCallsBeforeTimer = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length;
+            inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 4000 });
+            configChange.fire({ affectsConfiguration: section => section === 'aspire.appHostsPollingInterval' });
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                snapshotCallsBeforeTimer + 1,
+                'expected stop refresh snapshot after the polling interval change restarted ps polling'
+            );
+
+            const postStopSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(postStopSnapshot);
+            postStopSnapshot.options.stdoutCallback('[]');
+            postStopSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.appHosts.length, 0);
+        } finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            onDidChangeConfigurationStub.restore();
+            configChange.dispose();
+            clock.restore();
+        }
+    });
     test('hiding global panel before cli path resolves prevents ps from starting', async () => {
         const cliPath = createDeferred<string>();
         getCliPathStub.returns(cliPath.promise);
@@ -5323,7 +6747,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
-    test('global describe streams are stopped when switching to workspace mode', async () => {
+    test('switching view mode reuses the existing ps and describe processes', async () => {
         const spawned: { args: string[]; process: TestChildProcess; options: any }[] = [];
         spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
             const process = new TestChildProcess();

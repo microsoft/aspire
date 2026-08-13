@@ -140,13 +140,9 @@ internal sealed class DenoCommandLineAnnotation : IResourceAnnotation
     public bool ServeEndpointCreated { get; set; }
 
     /// <summary>
-    /// The environment callback created when <c>WithDenoServe</c> added <c>PORT</c> to an endpoint that did not
-    /// already have a target-port environment variable.
+    /// The environment callback created when <c>WithDenoServe</c> maps the endpoint target port to <c>PORT</c>.
     /// </summary>
     public EnvironmentCallbackAnnotation? ServeEnvironmentCallback { get; set; }
-
-    /// <summary>The endpoint's target-port environment variable before <c>WithDenoServe</c> selected it.</summary>
-    public string? ServePreviousTargetPortEnvironmentVariable { get; set; }
 
     /// <summary>The publish target port assigned by <c>WithDenoServe</c>, if it supplied one.</summary>
     public int? ServeAssignedTargetPort { get; set; }

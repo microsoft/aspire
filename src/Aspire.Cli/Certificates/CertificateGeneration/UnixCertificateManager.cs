@@ -45,10 +45,17 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private HashSet<string>? _availableCommands;
     private readonly IEnvironment _environment;
+    private readonly Func<string, ProcessStartInfo> _createCertUtilStartInfo = CreateCertUtilStartInfo;
 
     public UnixCertificateManager(ILogger logger, IEnvironment environment) : base(logger)
     {
         _environment = environment;
+    }
+
+    internal UnixCertificateManager(ILogger logger, IEnvironment environment, Func<string, ProcessStartInfo> createCertUtilStartInfo)
+        : this(logger, environment)
+    {
+        _createCertUtilStartInfo = createCertUtilStartInfo;
     }
 
     internal UnixCertificateManager(string subject, int version)
@@ -58,7 +65,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
+        => GetTrustLevel(certificate, CancellationToken.None);
+
+    internal TrustLevel GetTrustLevel(X509Certificate2 certificate, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sawTrustSuccess = false;
         var sawTrustFailure = false;
 
@@ -159,7 +170,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             {
                 foreach (var nssDb in nssDbs)
                 {
-                    if (IsCertificateInNssDb(certificateNickname, nssDb))
+                    if (IsCertificateInNssDb(certificateNickname, nssDb, cancellationToken))
                     {
                         sawTrustSuccess = true;
                     }
@@ -690,24 +701,24 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// <remarks>
     /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
-    private bool IsCertificateInNssDb(string nickname, NssDb nssDb)
+    private bool IsCertificateInNssDb(string nickname, NssDb nssDb, CancellationToken cancellationToken = default)
     {
         // -V will validate that a cert can be used for a given purpose, in this case, server verification.
         // There is no corresponding -V check for the "Trusted CA" status required by Firefox, so we just check for existence.
         // (The docs suggest that "-V -u A" should do this, but it seems to accept all certs.)
         var operation = nssDb.IsFirefox ? "-L" : "-V -u V";
 
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} {operation}");
 
         try
         {
             using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
+            WaitForExit(process, cancellationToken);
             return process.ExitCode == 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -715,6 +726,25 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             // This method is used to determine whether more trust is needed, so it's better to underestimate the amount of trust.
             return false;
         }
+    }
+
+    private static void WaitForExit(Process process, CancellationToken cancellationToken)
+    {
+        using var cancellationRegistration = cancellationToken.Register(static state =>
+        {
+            var process = (Process)state!;
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
+            {
+                // The process either exited concurrently or could not be killed by this platform.
+            }
+        }, process);
+
+        process.WaitForExit();
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <remarks>
@@ -726,11 +756,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var usage = nssDb.IsFirefox ? "C" : "P";
 
         // This silently clobbers an existing entry, so there's no need to check for existence first.
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"");
 
         try
         {
@@ -750,11 +776,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// </remarks>
     private bool TryRemoveCertificateFromNssDb(string nickname, NssDb nssDb)
     {
-        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = _createCertUtilStartInfo($"-d sql:{nssDb.Path} -D -n {nickname}");
 
         try
         {
@@ -773,6 +795,15 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             Log.UnixNssDbRemovalException(nssDb.Path, ex.Message);
             return false;
         }
+    }
+
+    private static ProcessStartInfo CreateCertUtilStartInfo(string arguments)
+    {
+        return new ProcessStartInfo(CertificateHelpers.CertUtilCommand, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
     }
 
     private IEnumerable<string> GetFirefoxProfiles(string firefoxDirectory)

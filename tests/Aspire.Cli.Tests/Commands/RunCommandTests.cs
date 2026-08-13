@@ -3,14 +3,17 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -614,6 +617,221 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
+    // https://github.com/microsoft/aspire/issues/19035. An AppHost that MSBuild cannot even evaluate
+    // (missing Aspire.AppHost.Sdk, malformed project XML) must reach the command's real build path so the
+    // original MSBuild diagnostics are printed. Replacing them with a bare "The project could not be
+    // built." tells the user nothing about what to fix.
+    private const string MissingSdkBuildError = "AppHost.csproj : error MSB4236: The SDK 'Aspire.AppHost.Sdk/0.0.0-does-not-exist' specified could not be found.";
+
+    private static void WriteUnbuildableAppHostProject(FileInfo projectFile)
+    {
+        Directory.CreateDirectory(projectFile.DirectoryName!);
+        File.WriteAllText(projectFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="0.0.0-does-not-exist" />
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+    }
+
+    /// <summary>
+    /// Configures a runner whose MSBuild evaluation always fails (so the AppHost can only ever be
+    /// classified as possibly unbuildable) and whose build emits <see cref="MissingSdkBuildError"/>.
+    /// </summary>
+    private static TestDotNetCliRunner CreateUnevaluatableAppHostRunner()
+    {
+        var runner = new TestDotNetCliRunner();
+
+        // A non-zero exit with no JSON payload is what DotNetCliRunner returns when MSBuild cannot
+        // evaluate the project at all, which is what produces the possibly-unbuildable classification.
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) => (1, null);
+        runner.BuildAsyncCallback = (_, _, buildOptions, _) =>
+        {
+            buildOptions.StandardErrorCallback?.Invoke(MissingSdkBuildError);
+            return 1;
+        };
+
+        return runner;
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExplicitAppHostCannotBeEvaluated_SurfacesMSBuildDiagnosticsAndBuildFailureExitCode()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        WriteUnbuildableAppHostProject(appHostProjectFile);
+
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => CreateUnevaluatableAppHostRunner();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostProjectFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Contains(interactionService.DisplayedLines, line => line.Line == MissingSdkBuildError);
+        Assert.Contains(InteractionServiceStrings.ProjectCouldNotBeBuilt, interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenConfiguredAppHostCannotBeEvaluated_SurfacesMSBuildDiagnosticsAndBuildFailureExitCode()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        WriteUnbuildableAppHostProject(appHostProjectFile);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            JsonSerializer.Serialize(new { appHost = new { path = "AppHost/AppHost.csproj" } }));
+
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => CreateUnevaluatableAppHostRunner();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Contains(interactionService.DisplayedLines, line => line.Line == MissingSdkBuildError);
+        Assert.Contains(InteractionServiceStrings.ProjectCouldNotBeBuilt, interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenAmbientDiscoveryOnlyFindsUnbuildableAppHosts_ReportsProjectResolutionFailure()
+    {
+        // Nothing was named by the user here, so this stays a project-resolution failure: the CLI never
+        // built anything and must keep the pre-existing message, exit code, and telemetry tag.
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        WriteUnbuildableAppHostProject(appHostProjectFile);
+
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => CreateUnevaluatableAppHostRunner();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Contains(InteractionServiceStrings.UnbuildableAppHostsDetected, interactionService.DisplayedErrors);
+
+        Assert.NotNull(fixture.CapturedActivity);
+        var tags = fixture.CapturedActivity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("project_not_found", tags[TelemetryConstants.Tags.ErrorType]);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExplicitAppHostCannotBeEvaluated_TagsRunActivityAsBuildFailure()
+    {
+        using var fixture = new TelemetryFixture();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        WriteUnbuildableAppHostProject(appHostProjectFile);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => CreateUnevaluatableAppHostRunner();
+            options.TelemetryFactory = _ => fixture.Telemetry;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostProjectFile.FullName}");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotNull(fixture.CapturedActivity);
+        var tags = fixture.CapturedActivity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("build_failed", tags[TelemetryConstants.Tags.ErrorType]);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenUnverifiedAppHostBuildsButIsNotAnAppHost_FailsInsteadOfWaitingForBackchannel()
+    {
+        // A candidate kept only because MSBuild could not evaluate it has never been confirmed to be an
+        // AppHost. Once the build repairs evaluation and proves it is an ordinary project, the existing
+        // compatibility gate must reject it; launching it would hang until the startup timeout waiting
+        // for a backchannel that never arrives.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        WriteUnbuildableAppHostProject(appHostProjectFile);
+
+        var evaluationCount = 0;
+        var interactionService = new TestInteractionService();
+        var backchannelWaited = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+                {
+                    // First evaluation (project resolution) fails, so the project is only ever a
+                    // possibly-unbuildable candidate. Later evaluations succeed and prove the project is
+                    // an ordinary library, not an AppHost.
+                    if (Interlocked.Increment(ref evaluationCount) == 1)
+                    {
+                        return (1, null);
+                    }
+
+                    return (0, JsonDocument.Parse("""
+                        {
+                          "Properties": { "IsAspireHost": "false", "AspireHostingSDKVersion": null },
+                          "Items": {}
+                        }
+                        """));
+                };
+                runner.BuildAsyncCallback = (_, _, _, _) => 0;
+                runner.RunAsyncCallback = async (_, _, _, _, _, _, _, _, ct) =>
+                {
+                    backchannelWaited = true;
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostProjectFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(ErrorStrings.ProjectIsNotAppHost, interactionService.DisplayedErrors);
+        Assert.False(backchannelWaited, "The run must fail before the AppHost process is launched.");
+    }
+
     [Fact]
     public async Task RunCommand_WithDetachFlag_DoesNotShowUpdateNotification()
     {
@@ -633,6 +851,77 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await result.InvokeAsync().DefaultTimeout();
 
         Assert.False(testNotifier.NotifyWasCalled, "Update notification should not be shown when --detach is used");
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedChild_DoesNotStartCliMetadataPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory();
+
+        var parentServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        parentServices.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using (var parentProvider = parentServices.BuildServiceProvider())
+        {
+            var parentCommand = parentProvider.GetRequiredService<RootCommand>();
+            var parentResult = parentCommand.Parse($"run --detach --apphost {appHostFile.FullName}");
+
+            await parentResult.InvokeAsync().DefaultTimeout();
+        }
+
+        var childEnvironment = Assert.IsAssignableFrom<IDictionary<string, string>>(processFactory.LastEnvironmentVariables);
+        var childArguments = Assert.IsAssignableFrom<IEnumerable<string>>(processFactory.LastArguments);
+        Assert.Contains("run", childArguments);
+        Assert.DoesNotContain("--detach", childArguments);
+        Assert.Equal("true", childEnvironment[KnownConfigNames.CliRunDetached]);
+
+        var cliPrefetchStarted = false;
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            {
+                cliPrefetchStarted = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var childServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+            options.ConfigurationCallback += config =>
+            {
+                foreach (var (name, value) in childEnvironment)
+                {
+                    config[name] = value;
+                }
+            };
+        });
+        using var childProvider = childServices.BuildServiceProvider();
+
+        var prefetcher = childProvider.GetRequiredService<NuGetPackagePrefetcher>();
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+
+        var childCommand = childProvider.GetRequiredService<RootCommand>();
+        var childResult = childCommand.Parse("run");
+
+        await childResult.InvokeAsync().DefaultTimeout();
+        await prefetcher.ExecuteTask!.DefaultTimeout();
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.False(cliPrefetchStarted);
     }
 
     [Fact]
@@ -1255,6 +1544,68 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("Service 'frontend' needs to specify a port", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("MSB3277", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Timed out waiting for AppHost server", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenBackchannelFailsBeforeConnection_ReportsUnknownExitWithoutSentinel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var runCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetException(
+                    new FailedToConnectBackchannelConnection(
+                        "The AppHost server process exited unexpectedly",
+                        new SocketException((int)SocketError.ConnectionRefused)));
+
+                await runCanExit.Task.WaitAsync(cancellationToken);
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        try
+        {
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            var error = Assert.Single(interactionService.DisplayedErrors);
+            var expectedError = string.Format(
+                CultureInfo.CurrentCulture,
+                InteractionServiceStrings.UnexpectedErrorOccurred,
+                "The AppHost server process exited unexpectedly");
+            Assert.Equal(expectedError, error);
+            Assert.DoesNotContain("-1", error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            runCanExit.TrySetResult();
+        }
     }
 
     [Fact]

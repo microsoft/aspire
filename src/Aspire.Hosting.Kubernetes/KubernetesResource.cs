@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 using System.Globalization;
 using System.Net.Sockets;
@@ -228,8 +229,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 // This matches the core framework's SetBothPortsEnvVariables() behavior,
                 // which skips DefaultHttpsEndpoint when setting HTTPS_PORTS.
                 // See: https://github.com/microsoft/aspire/issues/14029
-                if (resource is IProjectLaunchDefaultsResource projectResource &&
-                    endpoint == projectResource.DefaultHttpsEndpoint)
+                if (resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) &&
+                    endpoint == launchDefaults.DefaultHttpsEndpoint)
                 {
                     // Find the existing http endpoint's HelmValue to share it
                     var httpMapping = EndpointMappings.Values.FirstOrDefault(m => m.Scheme == "http");

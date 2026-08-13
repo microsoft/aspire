@@ -159,6 +159,12 @@
   <data name="NavMenuMetricsTab" xml:space="preserve">
     <value>Metrics</value>
   </data>
+  <data name="NavMenuToggleExpand" xml:space="preserve">
+    <value>Expand navigation labels</value>
+  </data>
+  <data name="NavMenuToggleCollapse" xml:space="preserve">
+    <value>Collapse navigation to icons</value>
+  </data>
   <data name="MainLayoutAspire" xml:space="preserve">
     <value>Aspire</value>
   </data>
