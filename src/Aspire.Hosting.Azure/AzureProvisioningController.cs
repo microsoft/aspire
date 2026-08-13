@@ -83,6 +83,7 @@ internal sealed class AzureProvisioningController(
 {
     internal const string ForgetStateCommandName = "forget-state";
     internal const string ChangeResourceLocationCommandName = "change-location";
+    internal const string ConfirmDeleteArgumentName = "confirmDelete";
     internal const string GetAzureResourceCommandName = "get-azure-resource";
     internal const string CancelCommandName = "cancel-azure-operation";
     internal const string DeleteAzureResourceCommandName = "delete-azure-resource";
@@ -365,8 +366,18 @@ internal sealed class AzureProvisioningController(
                 AlwaysLoadOnStart = true,
                 LoadCallback = context => LoadLocationArgumentOptionsAsync(context, deploymentStateResourceName)
             }
-        }
+        },
+        CreateChangeLocationDeleteConfirmationArgument()
     ];
+
+    private static InteractionInput CreateChangeLocationDeleteConfirmationArgument() => new()
+    {
+        Name = ConfirmDeleteArgumentName,
+        Label = AzureProvisioningStrings.ChangeResourceLocationConfirmDeleteLabel,
+        Description = AzureProvisioningStrings.ChangeResourceLocationConfirmDeleteDescription,
+        InputType = InputType.Boolean,
+        Value = "false"
+    };
 
     private static async Task LoadTenantArgumentOptionsAsync(LoadInputContext context)
     {
@@ -672,7 +683,8 @@ internal sealed class AzureProvisioningController(
                     Required = true,
                     Value = currentLocation,
                     Options = locationOptions
-                }
+                },
+                CreateChangeLocationDeleteConfirmationArgument()
             ],
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -687,10 +699,20 @@ internal sealed class AzureProvisioningController(
             return false;
         }
 
-        return await ChangeResourceLocationAsync(model, resourceName, location, cancellationToken).ConfigureAwait(false);
+        return await ChangeResourceLocationAsync(
+            model,
+            resourceName,
+            location,
+            IsResourceDeletionConfirmed(result.Data),
+            cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> ChangeResourceLocationAsync(DistributedApplicationModel model, string resourceName, string location, CancellationToken cancellationToken)
+    private async Task<bool> ChangeResourceLocationAsync(
+        DistributedApplicationModel model,
+        string resourceName,
+        string location,
+        bool confirmDelete,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
@@ -700,7 +722,10 @@ internal sealed class AzureProvisioningController(
 
         location = NormalizeLocation(location, await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false));
 
-        return await RunOperationAsync<bool>(model, new ChangeResourceLocationIntent(resourceName, location), cancellationToken).ConfigureAwait(false);
+        return await RunOperationAsync<bool>(
+            model,
+            new ChangeResourceLocationIntent(resourceName, location, confirmDelete),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private Task<ExecuteCommandResult> ExecuteResetProvisioningStateCommandAsync(ExecuteCommandContext context)
@@ -880,8 +905,18 @@ internal sealed class AzureProvisioningController(
             return Task.FromResult(false);
         }
 
-        return ChangeResourceLocationAsync(model, resourceName, location, cancellationToken);
+        return ChangeResourceLocationAsync(
+            model,
+            resourceName,
+            location,
+            IsResourceDeletionConfirmed(arguments),
+            cancellationToken);
     }
+
+    private static bool IsResourceDeletionConfirmed(InteractionInputCollection arguments)
+        => arguments.TryGetByName(ConfirmDeleteArgumentName, out var input) &&
+            bool.TryParse(input.Value, out var confirmDelete) &&
+            confirmDelete;
 
     internal ResourceCommandState GetEnvironmentCommandState()
     {
@@ -1874,7 +1909,7 @@ internal sealed class AzureProvisioningController(
                 intent,
                 AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
                 FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
-            await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, cancellationToken).ConfigureAwait(false);
+            await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, intent.ConfirmDelete, cancellationToken).ConfigureAwait(false);
             await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
         }
 
@@ -3360,7 +3395,11 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private async Task DeleteCachedResourceForLocationChangeAsync(AzureBicepResource resource, string requestedLocation, CancellationToken cancellationToken)
+    private async Task DeleteCachedResourceForLocationChangeAsync(
+        AzureBicepResource resource,
+        string requestedLocation,
+        bool confirmDelete,
+        CancellationToken cancellationToken)
     {
         var currentLocation = TryGetCurrentResourceLocation(resource) ??
             await TryGetPersistedResourceLocationAsync(resource, cancellationToken).ConfigureAwait(false);
@@ -3396,6 +3435,17 @@ internal sealed class AzureProvisioningController(
             // Cached state can point at a resource that has already been manually deleted. In that
             // case the location change only needs to update local override state and reprovision.
             return;
+        }
+
+        if (!confirmDelete)
+        {
+            // Resource command confirmations are UI metadata and are not enforced by non-interactive
+            // CLI or MCP callers. Require an explicit command argument at the destructive boundary so
+            // every caller must acknowledge possible data loss before the live resource is deleted.
+            throw new InvalidOperationException(FormatUserString(
+                AzureProvisioningStrings.ChangeResourceLocationDeleteConfirmationRequiredFormat,
+                resource.Name,
+                ConfirmDeleteArgumentName));
         }
 
         _logger.LogInformation(
@@ -4295,7 +4345,7 @@ internal sealed class AzureProvisioningController(
 
     private sealed record ForgetResourceStateIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Reset provisioning state"));
 
-    private sealed record ChangeResourceLocationIntent(string ResourceName, string Location) : AzureIntent(AzureOperationState.Resource(ResourceName, "Change Azure resource location"));
+    private sealed record ChangeResourceLocationIntent(string ResourceName, string Location, bool ConfirmDelete) : AzureIntent(AzureOperationState.Resource(ResourceName, "Change Azure resource location"));
 
     private sealed record ReprovisionResourceIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Reprovision Azure resource"));
 
