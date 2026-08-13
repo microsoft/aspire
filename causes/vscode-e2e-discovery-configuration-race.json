@@ -1,0 +1,17 @@
+{
+  "id": "vscode-e2e-discovery-configuration-race",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E 'rediscovers workspace AppHost candidates when config changes' fails due to config file read/write race",
+  "test_name": "Aspire workspace discovery and configuration E2E rediscovers workspace AppHost candidates when config changes",
+  "error_pattern": "assert.ok(multipleCandidates.state.workspaceAppHostCandidatePaths.length >= 2) evaluated to falsy. aspire config info stderr: The configuration file '.../aspire.config.json' contains invalid JSON: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. CLI AppHost discovery failed; using 1 AppHost project candidate(s) found in the workspace.",
+  "occurrences": [
+    {
+      "run_id": 31662686822,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31662686822",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, discovery-configuration)",
+      "pr_number": 19178,
+      "observed_at": "2026-08-13T03:37:49Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19330"
+}

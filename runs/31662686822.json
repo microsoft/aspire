@@ -1,0 +1,38 @@
+{
+  "run_id": 31662686822,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31662686822",
+  "analyzed_at": "2026-08-13T03:37:49Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19178,
+    "title": "Bound the NuGet package search timeout",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/bound-nuget-package-search",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19178"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, discovery-configuration)",
+      "id": 94333057292,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31662686822/job/94333057292",
+      "classification": "flaky-test",
+      "reason": "The PR only changes src/Aspire.Cli/Layout/LayoutProcessRunner.cs and its test file, unrelated to the VS Code extension or workspace discovery/config code. The failing E2E test writes/reads aspire.config.json concurrently while the CLI is polling it, and the CLI encountered a malformed/partially-written JSON file ('Expected depth to be zero at the end of the JSON payload... There is an open JSON object or array that should be closed'), causing AppHost discovery to fall back and the workspace to only report 1 candidate instead of the expected >=2. This is a timing/race condition reading a config file during a live-update test, not caused by PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire workspace discovery and configuration E2E rediscovers workspace AppHost candidates when config changes",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, discovery-configuration)",
+      "error": "The expression evaluated to a falsy value: assert.ok(multipleCandidates.state.workspaceAppHostCandidatePaths.length >= 2)",
+      "stack_trace": "aspire config info stderr: The configuration file '/tmp/aev-lAOCGL/workspace/aspire.config.json' contains invalid JSON: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 3 | BytePositionInLine: 0. Failed to get Aspire config info (exit code: 20). CLI AppHost discovery failed; using 1 AppHost project candidate(s) found in the workspace.",
+      "classification": "flaky",
+      "reason": "The test mutates aspire.config.json to add a second AppHost candidate and expects the CLI to rediscover it, but the CLI read the config file mid-write and saw invalid/incomplete JSON, causing discovery to fall back to a single candidate. This is a file-write/read race condition in the E2E test harness, unrelated to the PR's LayoutProcessRunner changes."
+    }
+  ],
+  "causes": ["vscode-e2e-discovery-configuration-race"]
+}
