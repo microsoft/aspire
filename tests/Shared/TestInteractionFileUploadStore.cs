@@ -14,9 +14,9 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
 
     public ConcurrentQueue<int> StartedInteractions { get; } = new();
-    public ConcurrentQueue<(int InteractionId, IReadOnlyList<InteractionFile> Files)> CompletedInteractions { get; } = new();
+    public ConcurrentQueue<int> CompletedInteractions { get; } = new();
     public ConcurrentQueue<int> CanceledInteractions { get; } = new();
-    public Action<int, IReadOnlyList<InteractionFile>>? CompleteInteractionCallback { get; set; }
+    public Action<int>? CompleteInteractionCallback { get; set; }
     public Action<int>? CancelInteractionCallback { get; set; }
 
     public void StartInteraction(int interactionId)
@@ -60,10 +60,10 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
         }
     }
 
-    public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
+    public void CompleteInteraction(int interactionId)
     {
-        CompleteInteractionCallback?.Invoke(interactionId, files);
-        CompletedInteractions.Enqueue((interactionId, files));
+        CompleteInteractionCallback?.Invoke(interactionId);
+        CompletedInteractions.Enqueue(interactionId);
     }
 
     public void CancelInteraction(int interactionId)

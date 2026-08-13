@@ -513,12 +513,9 @@ internal class InteractionService : IInteractionService
         if (interactionState.InteractionInfo is Interaction.InputsInteractionInfo inputsInfo &&
             inputsInfo.Inputs.Any(input => input.InputType == InputType.File))
         {
-            if (completion.State is IReadOnlyList<InteractionInput> inputs)
+            if (completion.State is IReadOnlyList<InteractionInput>)
             {
-                var files = inputs
-                    .SelectMany(input => input.Files ?? [])
-                    .ToArray();
-                _fileUploadStore.CompleteInteraction(interactionState.InteractionId, files);
+                _fileUploadStore.CompleteInteraction(interactionState.InteractionId);
             }
             else
             {

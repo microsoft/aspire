@@ -39,9 +39,9 @@ internal interface IInteractionFileUploadStore
     void RemoveEntry(int interactionId, string fileId);
 
     /// <summary>
-    /// Marks an interaction as completed and starts weak-reference tracking for its uploaded files.
+    /// Marks an interaction as completed.
     /// </summary>
-    void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files);
+    void CompleteInteraction(int interactionId);
 
     /// <summary>
     /// Cancels an interaction and removes its completed uploads.

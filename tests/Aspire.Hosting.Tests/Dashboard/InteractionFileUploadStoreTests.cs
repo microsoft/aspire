@@ -82,9 +82,8 @@ public class InteractionFileUploadStoreTests
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+        fileUploadStore.CompleteInteraction(InteractionId);
 
         Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("other.bin", InteractionId, InputName));
 
@@ -103,11 +102,9 @@ public class InteractionFileUploadStoreTests
 
         var (fileId1, filePath1) = CreateEntry(fileUploadStore, "file1.bin");
         var (fileId2, filePath2) = fileUploadStore.CreateEntry("file2.bin", InteractionId, InputName);
-        var interactionFile1 = new InteractionFile(fileId1, "file1.bin", filePath1);
-        var interactionFile2 = new InteractionFile(fileId2, "file2.bin", filePath2);
         fileUploadStore.CompleteUpload(InteractionId, fileId1);
         fileUploadStore.CompleteUpload(InteractionId, fileId2);
-        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile1, interactionFile2]);
+        fileUploadStore.CompleteInteraction(InteractionId);
 
         fileUploadStore.RemoveEntry(InteractionId, fileId1);
 
@@ -147,22 +144,22 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public async Task RemoveUnreferencedFiles_UploadInProgress_KeepsFile()
+    public async Task RemoveCanceledFiles_CompletedInteractionWithUploadInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteInteraction(InteractionId, []);
+        fileUploadStore.CompleteInteraction(InteractionId);
 
-        fileUploadStore.RemoveUnreferencedFiles();
+        fileUploadStore.RemoveCanceledFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
     [Fact]
-    public async Task RemoveUnreferencedFiles_UploadCompleteInteractionInProgress_KeepsFile()
+    public async Task RemoveCanceledFiles_UploadCompleteInteractionInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -170,7 +167,7 @@ public class InteractionFileUploadStoreTests
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        fileUploadStore.RemoveUnreferencedFiles();
+        fileUploadStore.RemoveCanceledFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
@@ -211,25 +208,23 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public async Task RemoveUnreferencedFiles_CompleteInteractionWithLiveReference_KeepsFile()
+    public async Task RemoveCanceledFiles_CompletedInteraction_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
-        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+        fileUploadStore.CompleteInteraction(InteractionId);
 
-        fileUploadStore.RemoveUnreferencedFiles();
+        fileUploadStore.RemoveCanceledFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
-        GC.KeepAlive(interactionFile);
     }
 
     [Fact]
-    public async Task RemoveUnreferencedFiles_CompleteInteractionWithoutLiveReference_RemovesFile()
+    public async Task RemoveCanceledFiles_CompletedInteractionAfterInteractionFileCollected_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -241,10 +236,10 @@ public class InteractionFileUploadStoreTests
         GC.Collect();
         Assert.False(weakReference.TryGetTarget(out _));
 
-        fileUploadStore.RemoveUnreferencedFiles();
+        fileUploadStore.RemoveCanceledFiles();
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
-        Assert.False(File.Exists(filePath));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.True(File.Exists(filePath));
     }
 
     [Theory]
@@ -349,6 +344,20 @@ public class InteractionFileUploadStoreTests
         Assert.Null(result);
     }
 
+    [Theory]
+    [InlineData("[null]")]
+    [InlineData("[{\"Id\":null}]")]
+    [InlineData("[{\"Id\":\"\"}]")]
+    public async Task ResolveFileReferences_MalformedReference_ReturnsNull(string json)
+    {
+        using var fileSystemService = new TestFileSystemService();
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+
+        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
+
+        Assert.Null(result);
+    }
+
     [Fact]
     public async Task ResolveFileReferences_EmptyValue_ReturnsNull()
     {
@@ -401,7 +410,7 @@ public class InteractionFileUploadStoreTests
     private static WeakReference<InteractionFile> CompleteInteractionWithFile(InteractionFileUploadStore fileUploadStore, string fileId, string filePath)
     {
         var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
-        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+        fileUploadStore.CompleteInteraction(InteractionId);
         return new WeakReference<InteractionFile>(interactionFile);
     }
 }

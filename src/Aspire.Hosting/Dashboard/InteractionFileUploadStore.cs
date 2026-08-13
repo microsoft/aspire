@@ -157,35 +157,30 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     }
 
     /// <summary>
-    /// Marks an interaction as completed and starts weak-reference tracking for its uploaded files.
+    /// Marks an interaction as completed.
     /// </summary>
-    public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
+    public void CompleteInteraction(int interactionId)
     {
         if (!_interactions.TryGetValue(interactionId, out var interaction))
         {
             return;
         }
 
-        var filesById = files.ToLookup(file => file.Id, StringComparer.Ordinal);
         lock (interaction)
         {
             interaction.State = FileInteractionState.Complete;
         }
 
         _logger.LogDebug(
-            "Completed file upload tracking for interaction {InteractionId} with {FileCount} uploaded files and {ReferenceCount} file references.",
+            "Completed file upload tracking for interaction {InteractionId} with {FileCount} uploaded files.",
             interactionId,
-            interaction.Files.Count,
-            files.Count);
+            interaction.Files.Count);
 
-        foreach (var (fileId, entry) in interaction.Files)
+        foreach (var entry in interaction.Files.Values)
         {
             lock (entry)
             {
                 entry.InteractionState = FileInteractionState.Complete;
-                entry.References = filesById[fileId]
-                    .Select(file => new WeakReference<InteractionFile>(file))
-                    .ToArray();
             }
         }
 
@@ -230,7 +225,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         RemoveInteractionIfEmpty(interactionId, interaction);
     }
 
-    internal void RemoveUnreferencedFiles()
+    internal void RemoveCanceledFiles()
     {
         foreach (var (interactionId, interaction) in _interactions)
         {
@@ -239,10 +234,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 bool removeEntry;
                 lock (entry)
                 {
-                    removeEntry = entry.UploadComplete &&
-                        (entry.InteractionState == FileInteractionState.Canceled ||
-                         entry.InteractionState == FileInteractionState.Complete &&
-                         (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
+                    removeEntry = entry.UploadComplete && entry.InteractionState == FileInteractionState.Canceled;
                 }
 
                 if (removeEntry)
@@ -263,11 +255,11 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             {
                 try
                 {
-                    RemoveUnreferencedFiles();
+                    RemoveCanceledFiles();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to clean up unreferenced uploaded files. Cleanup will be retried.");
+                    _logger.LogWarning(ex, "Failed to clean up canceled uploaded files. Cleanup will be retried.");
                 }
             }
         }
@@ -287,10 +279,10 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             return null;
         }
 
-        FileReference[]? fileRefs;
+        FileReference?[]? fileRefs;
         try
         {
-            fileRefs = JsonSerializer.Deserialize<FileReference[]>(jsonValue);
+            fileRefs = JsonSerializer.Deserialize<FileReference?[]>(jsonValue);
         }
         catch (JsonException ex)
         {
@@ -307,6 +299,12 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         for (var idx = 0; idx < fileRefs.Length; idx++)
         {
             var fileRef = fileRefs[idx];
+            if (fileRef is null || string.IsNullOrEmpty(fileRef.Id))
+            {
+                logger.LogWarning("Received malformed file reference in interaction input '{InputName}'. Skipping.", inputName);
+                continue;
+            }
+
             var filePath = store.GetFilePath(fileRef.Id, interactionId, inputName);
             if (filePath is null)
             {
@@ -355,8 +353,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     // The shape matches what the Dashboard sends: [{"Id":"...","Name":"..."}]
     private sealed class FileReference
     {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
+        public string? Id { get; set; }
+        public string? Name { get; set; }
     }
 
     private bool TryGetEntry(int interactionId, string fileId, [NotNullWhen(true)] out FileEntry? entry)
@@ -383,7 +381,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         public string InputName { get; } = inputName;
         public bool UploadComplete { get; set; }
         public FileInteractionState InteractionState { get; set; }
-        public IReadOnlyList<WeakReference<InteractionFile>>? References { get; set; }
     }
 
     private sealed class FileInteraction

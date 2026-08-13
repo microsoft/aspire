@@ -99,7 +99,7 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
             InputName = inputName
         }, cancellationTokenSource.Token));
 
-        fileUploadStore.CompleteInteraction(interactionId, []);
+        fileUploadStore.CompleteInteraction(interactionId);
         fileUploadStore.StartInteraction(interactionId);
         var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.txt", interactionId, inputName);
 
