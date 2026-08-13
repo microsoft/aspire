@@ -89,7 +89,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 """
                 async () => {
                     const fluent = await import('/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js');
-                    const root = document.getElementById('aspire-design-system');
+                    const root = document.body;
                     const style = getComputedStyle(root);
 
                     function normalize(color) {
