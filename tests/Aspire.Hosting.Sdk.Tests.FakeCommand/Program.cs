@@ -14,7 +14,7 @@ var setupArgumentIndex = Array.IndexOf(forwardedArgs, "setup");
 var installPathArgumentIndex = Array.IndexOf(forwardedArgs, "--install-path");
 // The targets exercise setup as either:
 //   aspire.exe setup
-//   dotnet ... dnx --yes aspire.cli@<version> -- setup --install-path <path>
+//   dotnet ... dnx --yes aspire.cli[@<version>] -- setup --install-path <path>
 var setupInstallPath = forwardedArgs switch
 {
     ["setup"] => AppContext.BaseDirectory,

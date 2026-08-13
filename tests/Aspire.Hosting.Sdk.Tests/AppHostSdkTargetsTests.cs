@@ -626,9 +626,15 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var staleCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "stale-cli"));
         await CreateFakeAspireCliWithVersionAsync(staleCliDirectory.FullName, AspireCliVersion);
         var staleBundle = CreateFakeCliBundle(staleCliDirectory.FullName);
-        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        var dnxDirectoryName = OperatingSystem.IsWindows()
+            ? "dnx"
+            : "dnx $HOME `aspire-test-command`";
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, dnxDirectoryName));
         await CreateFakeDnxAsync(dnxDirectory.FullName);
-        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var aspireHomeDirectoryName = OperatingSystem.IsWindows()
+            ? "aspire-home"
+            : "aspire-home $HOME `aspire-test-command`";
+        var aspireHome = Path.Combine(workspace.Path, aspireHomeDirectoryName);
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
             """
               <PropertyGroup>
@@ -642,7 +648,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(staleCliDirectory.FullName, dnxDirectory.FullName)
         };
 
-        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment);
+        // Explicit Dnx mode can use an unversioned package reference so a tool manifest can select
+        // the CLI version. Force that shape here because the fake setup must support both forms.
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(
+            project,
+            environment,
+            ["-p:_AspireCliDnxPackageReference=aspire.cli"]);
         var dnxBundle = GetFakeCliBundlePaths(aspireHome);
 
         Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
@@ -651,6 +662,33 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(dnxBundle.ManagedPath, properties["AspireDashboardPath"]);
         Assert.NotEqual(staleBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
         AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsPreservesUnixShellMetacharactersInAspireCliPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "This test validates Unix process argument handling.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(
+            Path.Combine(workspace.Path, "cli $HOME `aspire-test-command`"));
+        var aspireCliPath = await CreateFakeAspireCliThatSetsUpBundleAsync(fakeCliDirectory.FullName);
+        var aspireHome = Path.Combine(workspace.Path, "empty-aspire-home");
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            ["AspireCliPath"] = aspireCliPath
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+        var selectedBundle = GetFakeCliBundlePaths(fakeCliDirectory.FullName);
+
+        Assert.Equal(aspireCliPath, properties["_AspireResolvedCliPath"]);
+        Assert.Equal(selectedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(selectedBundle.ManagedDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(selectedBundle.ManagedPath, properties["AspireDashboardPath"]);
+        AssertCliBundleExists(fakeCliDirectory.FullName, JsonSerializer.Serialize(properties));
     }
 
     [Fact]
@@ -726,11 +764,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         var buildResult = await RunDotNetWithArgumentsAsync(
             project.ProjectDirectory,
-            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=100"],
+            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=100", "-warnaserror"],
             environment);
 
         Assert.True(buildResult.ExitCode == 0, buildResult.Output);
-        Assert.Contains("MSB5002", buildResult.Output);
         AssertCliBundleExists(aspireHome, buildResult.Output);
     }
 
@@ -1175,7 +1212,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     echo "13.5.0"
                     exit 0
                 fi
-                if [ "$1" = "--yes" ] && [ "$2" = "aspire.cli@13.5.0" ] && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
                     mkdir -p "$6/bundle/dcp" "$6/bundle/managed"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"

@@ -576,9 +576,9 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             appHostDirectory,
             new Dictionary<string, string> { ["ASPIRE_HOME"] = aspireHome });
 
-        Assert.Contains("MSB5002", output);
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
+        Assert.Contains("The command timed out after 100 milliseconds.", output);
     }
 
     [Fact]
