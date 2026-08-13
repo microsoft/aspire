@@ -15,9 +15,10 @@ public interface ILanguageSupport
     string Language { get; }
 
     /// <summary>
-    /// Gets the environment variable that accepts an additional PEM certificate bundle for this language runtime.
+    /// Gets the environment variable that accepts an additional PEM certificate bundle when running an AppHost for this language.
     /// </summary>
     /// <remarks>
+    /// The CLI sets this environment variable only when running the AppHost, not when publishing it.
     /// Return the name of the runtime-specific environment variable, rather than a certificate path.
     /// For example:
     /// <code>

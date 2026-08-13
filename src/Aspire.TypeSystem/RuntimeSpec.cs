@@ -68,11 +68,12 @@ public sealed class RuntimeSpec
     public string? ExtensionLaunchCapability { get; init; }
 
     /// <summary>
-    /// Gets the environment variable that accepts an additional PEM certificate bundle for this language runtime.
+    /// Gets the environment variable that accepts an additional PEM certificate bundle when running an AppHost for this language.
     /// </summary>
     /// <remarks>
     /// When set, the CLI assigns this environment variable a certificate bundle containing the
-    /// ASP.NET Core development certificate before launching the AppHost. For example:
+    /// ASP.NET Core development certificate before launching the AppHost in run mode. The variable
+    /// is not set when publishing the AppHost. For example:
     /// <code>
     /// CertificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS";
     /// </code>
