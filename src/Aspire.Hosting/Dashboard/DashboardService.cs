@@ -504,6 +504,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         var cancellationToken = context.CancellationToken;
         long totalBytesWritten = 0;
         string? fileId = null;
+        int? interactionId = null;
         FileStream? fileStream = null;
 
         try
@@ -529,7 +530,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                     }
 
                     string path;
-                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, chunk.InteractionId, chunk.InputName);
+                    interactionId = chunk.InteractionId;
+                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, interactionId.Value, chunk.InputName);
                     fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
                 }
 
@@ -560,9 +562,9 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 fileStream = null;
             }
 
-            if (fileId is not null)
+            if (fileId is not null && interactionId is not null)
             {
-                fileUploadStore.RemoveEntry(fileId);
+                fileUploadStore.RemoveEntry(interactionId.Value, fileId);
             }
 
             throw;
@@ -575,7 +577,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             }
         }
 
-        fileUploadStore.CompleteUpload(fileId!);
+        fileUploadStore.CompleteUpload(interactionId!.Value, fileId!);
 
         return new UploadFileResponse { FileId = fileId };
     }

@@ -19,9 +19,9 @@ internal interface IInteractionFileUploadStore
     (string FileId, string FilePath) CreateEntry(string originalFileName, int interactionId, string inputName);
 
     /// <summary>
-    /// Marks a file upload as successfully completed.
+    /// Marks a file upload for an interaction as successfully completed.
     /// </summary>
-    void CompleteUpload(string fileId);
+    void CompleteUpload(int interactionId, string fileId);
 
     /// <summary>
     /// Gets the file path for a given file ID, interaction ID, and input name.
@@ -29,14 +29,14 @@ internal interface IInteractionFileUploadStore
     string? GetFilePath(string fileId, int interactionId, string inputName);
 
     /// <summary>
-    /// Gets the original file name for a given file ID.
+    /// Gets the original file name for a given interaction and file ID.
     /// </summary>
-    string? GetFileName(string fileId);
+    string? GetFileName(int interactionId, string fileId);
 
     /// <summary>
-    /// Removes a file entry and cleans up its uploaded content.
+    /// Removes a file entry from an interaction and cleans up its uploaded content.
     /// </summary>
-    void RemoveEntry(string fileId);
+    void RemoveEntry(int interactionId, string fileId);
 
     /// <summary>
     /// Marks an interaction as completed and starts weak-reference tracking for its uploaded files.

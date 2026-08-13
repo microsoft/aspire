@@ -57,7 +57,7 @@ public class InteractionFileUploadStoreTests
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
 
-        Assert.Equal("cert.pem", fileUploadStore.GetFileName(fileId));
+        Assert.Equal("cert.pem", fileUploadStore.GetFileName(InteractionId, fileId));
     }
 
     [Fact]
@@ -69,10 +69,30 @@ public class InteractionFileUploadStoreTests
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         Assert.True(File.Exists(filePath));
 
-        fileUploadStore.RemoveEntry(fileId);
+        fileUploadStore.RemoveEntry(InteractionId, fileId);
 
         Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void RemoveEntry_LastFile_RemovesCompletedInteraction()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
+
+        Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("other.bin", InteractionId, InputName));
+
+        fileUploadStore.RemoveEntry(InteractionId, fileId);
+        fileUploadStore.StartInteraction(InteractionId);
+        var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.bin", InteractionId, InputName);
+
+        Assert.True(File.Exists(replacementPath));
     }
 
     [Fact]
@@ -97,7 +117,7 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         fileUploadStore.RemoveUnreferencedFiles();
 
@@ -112,7 +132,7 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         fileUploadStore.CancelInteraction(InteractionId);
 
@@ -133,7 +153,7 @@ public class InteractionFileUploadStoreTests
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
 
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
@@ -146,7 +166,7 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
         var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
         fileUploadStore.CompleteInteraction(InteractionId, [interactionFile]);
 
@@ -164,7 +184,7 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
         var weakReference = CompleteInteractionWithFile(fileUploadStore, fileId, filePath);
 
         GC.Collect();
