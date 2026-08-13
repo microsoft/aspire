@@ -36,6 +36,22 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+    }
+
+    [Fact]
+    public void GetFilePath_UploadInProgress_ReturnsNull()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
     }
@@ -134,7 +150,7 @@ public class InteractionFileUploadStoreTests
         fileUploadStore.RemoveEntry(otherInteractionId, fileId);
         fileUploadStore.CancelInteraction(InteractionId);
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
 
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -152,7 +168,7 @@ public class InteractionFileUploadStoreTests
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteInteraction(InteractionId);
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
@@ -194,7 +210,7 @@ public class InteractionFileUploadStoreTests
 
         fileUploadStore.CancelInteraction(InteractionId);
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
 
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -273,6 +289,7 @@ public class InteractionFileUploadStoreTests
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "cert.pem", "CertInput");
         File.WriteAllText(filePath, "certificate-content");
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
         var resolvedFiles = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "CertInput", NullLogger.Instance);

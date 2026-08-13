@@ -115,10 +115,18 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// </summary>
     public string? GetFilePath(string fileId, int interactionId, string inputName)
     {
-        return TryGetEntry(interactionId, fileId, out var entry) &&
-            string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
-                ? entry.TempFile.Path
-                : null;
+        if (!TryGetEntry(interactionId, fileId, out var entry))
+        {
+            return null;
+        }
+
+        lock (entry)
+        {
+            return entry.UploadComplete &&
+                string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
+                    ? entry.TempFile.Path
+                    : null;
+        }
     }
 
     /// <summary>
