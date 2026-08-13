@@ -96,6 +96,57 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
+    public async Task RemoveEntry_TerminalInteraction_RemainsUntilLastFileRemoved()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+
+        var (fileId1, filePath1) = CreateEntry(fileUploadStore, "file1.bin");
+        var (fileId2, filePath2) = fileUploadStore.CreateEntry("file2.bin", InteractionId, InputName);
+        var interactionFile1 = new InteractionFile(fileId1, "file1.bin", filePath1);
+        var interactionFile2 = new InteractionFile(fileId2, "file2.bin", filePath2);
+        fileUploadStore.CompleteUpload(InteractionId, fileId1);
+        fileUploadStore.CompleteUpload(InteractionId, fileId2);
+        fileUploadStore.CompleteInteraction(InteractionId, [interactionFile1, interactionFile2]);
+
+        fileUploadStore.RemoveEntry(InteractionId, fileId1);
+
+        fileUploadStore.StartInteraction(InteractionId);
+        Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("other.bin", InteractionId, InputName));
+        Assert.Equal(filePath2, fileUploadStore.GetFilePath(fileId2, InteractionId, InputName));
+
+        fileUploadStore.RemoveEntry(InteractionId, fileId2);
+        fileUploadStore.StartInteraction(InteractionId);
+        var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.bin", InteractionId, InputName);
+
+        Assert.True(File.Exists(replacementPath));
+    }
+
+    [Fact]
+    public async Task FileOperations_DifferentInteractionId_DoNotMutateEntry()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        var otherInteractionId = InteractionId + 1;
+        fileUploadStore.StartInteraction(otherInteractionId);
+
+        Assert.Null(fileUploadStore.GetFileName(otherInteractionId, fileId));
+        fileUploadStore.CompleteUpload(otherInteractionId, fileId);
+        fileUploadStore.RemoveEntry(otherInteractionId, fileId);
+        fileUploadStore.CancelInteraction(InteractionId);
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.True(File.Exists(filePath));
+
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
     public async Task RemoveUnreferencedFiles_UploadInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
@@ -325,6 +376,8 @@ public class InteractionFileUploadStoreTests
         await fileUploadStore.DisposeAsync();
 
         Assert.Null(fileUploadStore.GetFilePath("anything", InteractionId, InputName));
+        Assert.False(File.Exists(filePath1));
+        Assert.False(File.Exists(filePath2));
     }
 
     [Fact]
