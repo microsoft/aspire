@@ -1,0 +1,56 @@
+{
+  "run_id": 31728585505,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31728585505",
+  "analyzed_at": "2026-08-13T19:21:43Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19077,
+    "title": "Expose resolved environment variables to debug launch producers",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/issue-18956-launch-config-context",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19077"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "id": 94551870519,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31728585505/job/94551870519",
+      "classification": "flaky-test",
+      "reason": "Job failed with exit code 1 in TypeScript SDK validation; PR only changes C#/Hosting files (DebugSupportExtensions.cs, ExecutableLaunchConfiguration.cs, DcpExecutor.cs, etc.) and does not touch any polyglot SDK / TypeScript export code, so this failure is unrelated to the PR's changes. Detailed job logs were unavailable, but the lack of any relevant code path overlap supports a flaky/transient job classification.",
+      "failed_steps": ["Run TypeScript SDK validation"]
+    },
+    {
+      "name": "Tests / Templates-XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "id": 94553252605,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31728585505/job/94553252605",
+      "classification": "flaky-test",
+      "reason": "Test timed out after 300s running 'dotnet new aspire-apphost' via the .NET 8 SDK on a Windows runner, followed by an SDK targeting error for net9.0. The PR does not modify template test infrastructure or the dotnet SDK/template setup; this is a known pattern of Windows CI runners being slow/overloaded causing template scaffolding commands to exceed the timeout window, unrelated to the PR's Hosting/launch-configuration changes.",
+      "failed_steps": ["Run nuget dependent tests (Windows)"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 94554723718,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31728585505/job/94554723718",
+      "classification": "flaky-test",
+      "reason": "This is an aggregation/gate job ('Check validation results') that simply fails because the upstream TypeScript SDK Validation (Node 24.x) job failed; it has no independent failure cause and is not related to PR changes.",
+      "failed_steps": ["Check validation results"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Templates.Tests.XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-xunit\", extraTestCreationArgs: \"--xunit-version v2\", sdk: Net8, tfm: Net9, error: \"The current .NET SDK does not support targeting .N\"...)",
+      "job": "Tests / Templates-XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : Command execution timed out after 300 secs: 'D:\\a\\aspire\\aspire\\artifacts\\bin\\dotnet-8\\dotnet.exe new aspire-apphost -o \"new_build_aspire_xunit_xc1vzq1o_5xw.AppHost\" -f net9.0 --debug:custom-hive \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\templates-$c2e3646d\\templates\"' ---- System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Aspire.Templates.Tests.ToolCommand.ExecuteAsync(String[] args) in /_/tests/Shared/TemplatesTesting/ToolCommand.cs:line 95\n   at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(...) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 123\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(...) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 35",
+      "classification": "flaky",
+      "reason": "300-second timeout while invoking `dotnet new` to scaffold a template project is a classic CI-runner-under-load timing issue rather than a code defect. The test/template code is not touched by this PR, and the accompanying '.NET SDK does not support targeting .NET 9.0' annotation reflects a template test parameter matrix expectation (verifying an error condition), not an actual regression caused by the PR."
+    }
+  ],
+  "causes": ["windows-template-net8-new-timeout", "polyglot-typescript-sdk-validation-node24-failure"]
+}

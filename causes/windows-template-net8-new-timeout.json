@@ -1,0 +1,17 @@
+{
+  "id": "windows-template-net8-new-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild times out after 300s running 'dotnet new aspire-apphost' on Windows runner",
+  "test_name": "Aspire.Templates.Tests.XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild",
+  "error_pattern": "System.Threading.Tasks.TaskCanceledException : Command execution timed out after 300 secs: 'D:\\a\\aspire\\aspire\\artifacts\\bin\\dotnet-8\\dotnet.exe new aspire-apphost -o \"new_build_aspire_xunit_...\" -f net9.0 --debug:custom-hive ...' at Aspire.Templates.Tests.ToolCommand.ExecuteAsync",
+  "occurrences": [
+    {
+      "run_id": 31728585505,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31728585505",
+      "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "pr_number": 19077,
+      "observed_at": "2026-08-13T19:21:43Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19362"
+}
