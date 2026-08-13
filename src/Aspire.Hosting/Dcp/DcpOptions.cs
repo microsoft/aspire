@@ -142,18 +142,18 @@ internal sealed class DcpOptions
     public bool EnableAspireContainerTunnel { get; set; } = true;
 }
 
-internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
+internal class ValidateDcpOptions(DistributedApplicationExecutionContext executionContext) : IValidateOptions<DcpOptions>
 {
     public ValidateOptionsResult Validate(string? name, DcpOptions options)
     {
         var builder = new ValidateOptionsResultBuilder();
 
-        if (string.IsNullOrWhiteSpace(options.CliPath))
+        if (executionContext.IsRunMode && string.IsNullOrWhiteSpace(options.CliPath))
         {
             builder.AddError("The path to the DCP executable used for Aspire orchestration is required.", "CliPath");
         }
 
-        if (string.IsNullOrWhiteSpace(options.DashboardPath))
+        if (executionContext.IsRunMode && string.IsNullOrWhiteSpace(options.DashboardPath))
         {
             builder.AddError("The path to the Aspire Dashboard binaries is missing.", "DashboardPath");
         }

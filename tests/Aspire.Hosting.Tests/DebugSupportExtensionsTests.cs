@@ -4,9 +4,11 @@
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
@@ -16,12 +18,61 @@ namespace Aspire.Hosting.Tests;
 public class DebugSupportExtensionsTests
 {
     [Fact]
+    public void LaunchConfigurationCallbackContextExposesOnlyLaunchProducerInputs()
+    {
+        var contextType = typeof(LaunchConfigurationCallbackContext);
+
+        Assert.Empty(contextType.GetConstructors(BindingFlags.Public | BindingFlags.Instance));
+        Assert.Equal(
+            [
+                nameof(LaunchConfigurationCallbackContext.CancellationToken),
+                nameof(LaunchConfigurationCallbackContext.EnvironmentVariables),
+                nameof(LaunchConfigurationCallbackContext.Mode),
+                nameof(LaunchConfigurationCallbackContext.Resource)
+            ],
+            contextType.GetProperties().Select(property => property.Name).Order());
+        Assert.All(contextType.GetProperties(), property => Assert.Null(property.SetMethod));
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationInspectionOverloadCreatesResourceBoundContext()
+    {
+        var inspectionOverload = typeof(DebugSupportExtensions).GetMethod(
+            nameof(DebugSupportExtensions.CreateLaunchConfigurationAsync),
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(IResource), typeof(string), typeof(CancellationToken)]);
+
+        Assert.NotNull(inspectionOverload);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration { Mode = context.Mode });
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug, cts.Token));
+
+        Assert.NotNull(observedContext);
+        Assert.Same(executable.Resource, observedContext.Resource);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, observedContext.Mode);
+        Assert.Empty(observedContext.EnvironmentVariables);
+        Assert.Equal(cts.Token, observedContext.CancellationToken);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+    }
+
+    [Fact]
     public async Task CreateLaunchConfigurationResolvesTheLaunchProfileForProjectResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
 
-        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await project.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
 
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
         Assert.Equal(GetProjectPath(project.Resource), launchConfiguration.ProjectPath);
@@ -38,7 +89,7 @@ public class DebugSupportExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
 
-        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await project.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
 
         Assert.True(launchConfiguration.DisableLaunchProfile);
         Assert.Equal(string.Empty, launchConfiguration.LaunchProfile);
@@ -69,7 +120,7 @@ public class DebugSupportExtensionsTests
                                  LaunchProfile = "https"
                              }, KnownLaunchConfigurationTypes.Project);
 
-        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await project.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug));
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.NoDebug));
 
         Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
         Assert.Equal("custom-path", launchConfiguration.ProjectPath);
@@ -83,7 +134,7 @@ public class DebugSupportExtensionsTests
         var executable = builder.AddExecutable("app", "go", ".")
                                 .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode, Package = "./cmd/api" }, "go");
 
-        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug));
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.NoDebug));
 
         Assert.Equal("go", launchConfiguration.Type);
         Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
@@ -97,13 +148,13 @@ public class DebugSupportExtensionsTests
         // themselves asynchronous (for example build-argument callbacks contributed by other annotations).
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".")
-                                .WithDebugSupport(async (mode, ct) =>
+                                .WithDebugSupport(async (mode, _) =>
                                 {
                                     await Task.Yield();
                                     return new TestGoLaunchConfiguration { Mode = mode, Package = "./cmd/api" };
                                 }, "go");
 
-        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
 
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
         Assert.Equal("./cmd/api", launchConfiguration.Package);
@@ -117,13 +168,13 @@ public class DebugSupportExtensionsTests
         CancellationToken observedToken = default;
 
         var executable = builder.AddExecutable("app", "go", ".")
-                                .WithDebugSupport((mode, ct) =>
+                                .WithDebugSupport((mode, cancellationToken) =>
                                 {
-                                    observedToken = ct;
+                                    observedToken = cancellationToken;
                                     return Task.FromResult(new TestGoLaunchConfiguration { Mode = mode });
                                 }, "go");
 
-        await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug, cts.Token);
+        await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug, cts.Token);
 
         Assert.Equal(cts.Token, observedToken);
     }
@@ -134,7 +185,7 @@ public class DebugSupportExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
 
         Assert.Contains("does not declare debug launch support", exception.Message);
     }
@@ -146,9 +197,11 @@ public class DebugSupportExtensionsTests
         // support without carrying metadata fails with a clear message rather than a sequence error.
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "dotnet", ".");
-        executable.WithDebugSupport(mode => ProjectLaunchConfigurationFactory.Create(executable.Resource, mode), KnownLaunchConfigurationTypes.Project);
+        executable.WithDebugSupport(
+            mode => ProjectLaunchConfigurationFactory.Create(executable.Resource, mode),
+            KnownLaunchConfigurationTypes.Project);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
 
         Assert.Contains("has no project metadata", exception.Message);
     }
@@ -156,14 +209,11 @@ public class DebugSupportExtensionsTests
     [Fact]
     public async Task CreateLaunchConfigurationThrowsWhenTheProducerReturnsNull()
     {
-        // TLaunchConfiguration is unconstrained, so a producer for a reference type can legitimately
-        // return null. That must fail with a message that names the resource rather than flowing into
-        // the non-nullable Task<object> result or writing a null entry into the DCP annotation.
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".")
                                 .WithDebugSupport(_ => (TestGoLaunchConfiguration)null!, "go");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
 
         Assert.Contains("returned null", exception.Message);
         Assert.Contains("app", exception.Message);
@@ -304,6 +354,19 @@ public class DebugSupportExtensionsTests
     }
 
     private static string GetProjectPath(IResource resource) => resource.Annotations.OfType<IProjectMetadata>().Last().ProjectPath;
+
+    private static Task<object> CreateLaunchConfigurationForTestAsync(
+        IResource resource,
+        string mode = ExecutableLaunchMode.Debug,
+        CancellationToken cancellationToken = default)
+    {
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            resource,
+            mode,
+            cancellationToken: cancellationToken);
+
+        return resource.CreateLaunchConfigurationAsync(callbackContext);
+    }
 
     private sealed class TestGoLaunchConfiguration() : ExecutableLaunchConfiguration("go")
     {
