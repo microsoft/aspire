@@ -94,12 +94,26 @@ function isDenoEntrypoint(arg: string, config: JavaScriptRuntimeLaunchConfigurat
         return true;
     }
 
-    if (arg === scriptPath) {
+    if (arePathsEqual(arg, scriptPath)) {
         return true;
     }
 
-    return !!config.working_directory &&
-        path.resolve(config.working_directory, arg) === scriptPath;
+    if (!config.working_directory) {
+        return false;
+    }
+
+    const candidatePath = path.isAbsolute(arg)
+        ? arg
+        : path.join(config.working_directory, arg);
+    return arePathsEqual(candidatePath, scriptPath);
+}
+
+function arePathsEqual(left: string, right: string): boolean {
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
+    return process.platform === 'win32'
+        ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+        : normalizedLeft === normalizedRight;
 }
 
 async function getAvailableTcpPort(): Promise<number> {
