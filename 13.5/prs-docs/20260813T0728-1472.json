@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents timeouts for aspire doctor checks (PR #18969)",
+  "mergedAt": "2026-08-13T07:28:15Z",
+  "number": 1472,
+  "runDate": "2026-08-13T12:26:28Z",
+  "status": "included",
+  "title": "[docs] Document aspire doctor check timeouts"
+}
