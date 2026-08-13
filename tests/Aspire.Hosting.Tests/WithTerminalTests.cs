@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
@@ -669,6 +670,46 @@ public class WithTerminalTests
         finally
         {
             DeleteIfExists(metadataPath, producerPath, lockPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalFailsClearlyWhenReplicaLockCannotBeAcquired()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceName = "lock-timeout-" + Guid.NewGuid().ToString("N");
+        var resource = builder.AddExecutable(resourceName, "myapp", ".");
+        resource.WithTerminal();
+
+        var app = builder.Build();
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+        var appHostPath = configuration["AppHost:FilePath"]
+            ?? configuration["AppHost:Path"]
+            ?? throw new InvalidOperationException("The test AppHost path is not configured.");
+
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        Directory.CreateDirectory(trmnlDirectory);
+        var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, resourceName, replicaIndex: 0);
+        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
+
+        try
+        {
+            using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {
+                var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+                var exception = await Assert.ThrowsAsync<TimeoutException>(
+                    () => builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model)));
+
+                Assert.Equal(
+                    $"Timed out after 5 seconds acquiring terminal host replica lock '{lockPath}'.",
+                    exception.Message);
+            }
+        }
+        finally
+        {
+            DeleteIfExists(lockPath);
+            await app.DisposeAsync();
         }
     }
 

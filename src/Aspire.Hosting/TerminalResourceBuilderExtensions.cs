@@ -387,9 +387,10 @@ public static class TerminalResourceBuilderExtensions
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Sidecar is best-effort: a missing one only degrades external discovery, it
-            // doesn't break the terminal session itself (the AppHost still passes the UDS
-            // paths to the host process via --producer-uds/--consumer-uds/--control-uds).
+            // Once the ownership lock is acquired, sidecar writes are best-effort: a missing
+            // sidecar only degrades external discovery. Lock timeouts are intentionally not
+            // caught here because starting without synchronization could collide with another
+            // AppHost using the same deterministic replica paths.
             logger?.LogDebug(ex, "Failed to write terminal host metadata sidecar '{Path}'.", metadataPath);
         }
     }
@@ -400,12 +401,16 @@ public static class TerminalResourceBuilderExtensions
     };
 
     private static readonly TimeSpan s_replicaLockRetryDelay = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan s_replicaLockTimeout = TimeSpan.FromSeconds(5);
 
     private static async Task<FileStream> AcquireReplicaLockAsync(
         string trmnlDirectory,
         string replicaId,
         CancellationToken cancellationToken)
     {
+        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
+        var stopwatch = Stopwatch.StartNew();
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -414,10 +419,16 @@ public static class TerminalResourceBuilderExtensions
             {
                 return OpenReplicaLock(trmnlDirectory, replicaId);
             }
-            catch (IOException)
+            catch (IOException ex)
             {
                 // Another AppHost is updating or sweeping this replica. Wait until its
                 // read/write/delete transaction completes before replacing the sidecar.
+                if (stopwatch.Elapsed >= s_replicaLockTimeout)
+                {
+                    throw new TimeoutException(
+                        $"Timed out after {s_replicaLockTimeout.TotalSeconds:N0} seconds acquiring terminal host replica lock '{lockPath}'.",
+                        ex);
+                }
             }
 
             await Task.Delay(s_replicaLockRetryDelay, cancellationToken).ConfigureAwait(false);
