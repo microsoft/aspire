@@ -217,7 +217,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(interaction.InteractionId, i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -230,7 +230,7 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    private InputDto MapInputDto(int interactionId, Aspire.DashboardService.Proto.V1.InteractionInput i)
     {
         var inputType = DashboardService.MapInputType(i.InputType);
 
@@ -238,7 +238,7 @@ internal sealed class DashboardServiceData : IDisposable
         // Resolve each ID to the temp file path and build InputFileDto entries.
         if (inputType == InputType.File)
         {
-            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(i.Name, i.Value, inputType, files);

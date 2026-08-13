@@ -435,7 +435,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(CreateInputDto(matchingInput, responseAnswer));
+                                dtos.Add(CreateInputDto(interactionId, matchingInput, responseAnswer));
                             }
 
                             DashboardServiceData.ProcessInputs(
@@ -484,13 +484,13 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     /// Creates an InputDto, resolving file references from the FileUploadStore for File inputs.
     /// The CLI sends Value as JSON [{"Id":"...","Name":"..."}] matching the dashboard format.
     /// </summary>
-    private InputDto CreateInputDto(InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
+    private InputDto CreateInputDto(int interactionId, InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
     {
         var value = responseAnswer.Value ?? "";
 
         if (matchingInput.InputType == InputType.File)
         {
-            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, value, matchingInput.Name, _logger);
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, value, interactionId, matchingInput.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);

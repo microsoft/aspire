@@ -37,7 +37,7 @@ public class FileUploadStoreTests
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        Assert.Null(fileUploadStore.GetFilePath("nonexistent", InputName));
+        Assert.Null(fileUploadStore.GetFilePath("nonexistent", InteractionId, InputName));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.RemoveEntry(fileId);
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
     }
 
@@ -86,7 +86,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.RemoveUnreferencedFiles();
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
@@ -101,7 +101,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.RemoveUnreferencedFiles();
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
@@ -116,7 +116,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.CancelInteraction(InteractionId);
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
     }
 
@@ -130,12 +130,12 @@ public class FileUploadStoreTests
 
         fileUploadStore.CancelInteraction(InteractionId);
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
 
         fileUploadStore.CompleteUpload(fileId);
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
     }
 
@@ -152,7 +152,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.RemoveUnreferencedFiles();
 
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
         GC.KeepAlive(interactionFile);
     }
@@ -172,7 +172,31 @@ public class FileUploadStoreTests
 
         fileUploadStore.RemoveUnreferencedFiles();
 
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InputName));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void RemoveUnreferencedFiles_DeletionFails_RetriesOnNextCleanup()
+    {
+        using var fileSystemService = new TestFileSystemService(createDirectoryAtTempFilePath: true);
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
+        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteInteraction(InteractionId, []);
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.True(Directory.Exists(filePath));
+
+        Directory.Delete(filePath);
+        File.Create(filePath).Dispose();
+
+        fileUploadStore.RemoveUnreferencedFiles();
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.False(File.Exists(filePath));
     }
 
@@ -217,7 +241,7 @@ public class FileUploadStoreTests
         File.WriteAllText(filePath, "certificate-content");
 
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "CertInput", NullLogger.Instance);
+        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "CertInput", NullLogger.Instance);
 
         Assert.NotNull(resolvedFiles);
         var file = Assert.Single(resolvedFiles);
@@ -235,7 +259,21 @@ public class FileUploadStoreTests
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "OtherFile", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "OtherFile", NullLogger.Instance);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_DifferentInteractionId_ReturnsNull()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
+
+        var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
+        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
+
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId + 1, InputName, NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -247,7 +285,7 @@ public class FileUploadStoreTests
         using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -259,7 +297,7 @@ public class FileUploadStoreTests
         using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -270,7 +308,7 @@ public class FileUploadStoreTests
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = new FileUploadStore(fileSystemService);
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, "", "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, "", InteractionId, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -289,7 +327,7 @@ public class FileUploadStoreTests
 
         fileUploadStore.Dispose();
 
-        Assert.Null(fileUploadStore.GetFilePath("anything", InputName));
+        Assert.Null(fileUploadStore.GetFilePath("anything", InteractionId, InputName));
     }
 
     [Fact]

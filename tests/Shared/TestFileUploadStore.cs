@@ -36,9 +36,10 @@ internal sealed class TestFileUploadStore : IFileUploadStore
     {
     }
 
-    public string? GetFilePath(string fileId, string inputName)
+    public string? GetFilePath(string fileId, int interactionId, string inputName)
     {
         return _files.TryGetValue(fileId, out var entry) &&
+            entry.InteractionId == interactionId &&
             string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
                 ? entry.FilePath
                 : null;

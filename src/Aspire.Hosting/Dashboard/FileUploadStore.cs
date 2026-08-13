@@ -21,6 +21,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
+    private readonly bool _preserveTempFiles;
     private readonly ILogger<FileUploadStore> _logger;
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
@@ -33,6 +34,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     public FileUploadStore(IFileSystemService fileSystemService, ILogger<FileUploadStore> logger)
     {
         _tempFileSystem = fileSystemService.TempDirectory;
+        _preserveTempFiles = fileSystemService is FileSystemService { ShouldPreserveTempFiles: true };
         _logger = logger;
         _cleanupTask = RunCleanupAsync(_cleanupCts.Token);
     }
@@ -116,11 +118,12 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     }
 
     /// <summary>
-    /// Gets the file path for a given file ID and input name.
+    /// Gets the file path for a given file ID, interaction ID, and input name.
     /// </summary>
-    public string? GetFilePath(string fileId, string inputName)
+    public string? GetFilePath(string fileId, int interactionId, string inputName)
     {
         return _files.TryGetValue(fileId, out var entry) &&
+            entry.InteractionId == interactionId &&
             string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
                 ? entry.TempFile.Path
                 : null;
@@ -139,31 +142,64 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public void RemoveEntry(string fileId)
     {
-        if (_files.TryRemove(fileId, out var entry))
+        if (!_files.TryGetValue(fileId, out var entry))
         {
-            _logger.LogDebug(
-                "Removing uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}.",
-                fileId,
-                entry.InteractionId,
-                entry.InputName);
+            return;
+        }
 
-            if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
+        lock (entry)
+        {
+            entry.RemovalRequested = true;
+
+            if (!_preserveTempFiles)
             {
-                lock (interaction)
+                try
                 {
-                    interaction.FileIds.Remove(fileId);
+                    File.Delete(entry.TempFile.Path);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Failed to remove uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}. Cleanup will be retried.",
+                        fileId,
+                        entry.InteractionId,
+                        entry.InputName);
+                    return;
                 }
             }
 
-            try
+            if (!_files.TryRemove(KeyValuePair.Create(fileId, entry)))
             {
-                entry.TempFile.Dispose();
-            }
-            catch
-            {
-                // Best effort cleanup.
+                return;
             }
         }
+
+        if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
+        {
+            lock (interaction)
+            {
+                interaction.FileIds.Remove(fileId);
+            }
+        }
+
+        try
+        {
+            entry.TempFile.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to dispose temporary file tracking for uploaded file entry {FileId}.",
+                fileId);
+        }
+
+        _logger.LogDebug(
+            "Removed uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}.",
+            fileId,
+            entry.InteractionId,
+            entry.InputName);
     }
 
     /// <summary>
@@ -258,7 +294,8 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
             bool removeEntry;
             lock (entry)
             {
-                removeEntry = entry.UploadComplete &&
+                removeEntry = entry.RemovalRequested ||
+                    entry.UploadComplete &&
                     (entry.InteractionState == FileInteractionState.Canceled ||
                      entry.InteractionState == FileInteractionState.Complete &&
                      (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
@@ -298,7 +335,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// Resolves a JSON-encoded file reference array into InputFileDto entries.
     /// Returns null if the value is empty, malformed, or contains no resolvable files.
     /// </summary>
-    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IFileUploadStore store, string? jsonValue, string inputName, ILogger logger)
+    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IFileUploadStore store, string? jsonValue, int interactionId, string inputName, ILogger logger)
     {
         if (string.IsNullOrEmpty(jsonValue))
         {
@@ -325,7 +362,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         for (var idx = 0; idx < fileRefs.Length; idx++)
         {
             var fileRef = fileRefs[idx];
-            var filePath = store.GetFilePath(fileRef.Id, inputName);
+            var filePath = store.GetFilePath(fileRef.Id, interactionId, inputName);
             if (filePath is null)
             {
                 // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
@@ -379,6 +416,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         public int InteractionId { get; } = interactionId;
         public string InputName { get; } = inputName;
         public bool UploadComplete { get; set; }
+        public bool RemovalRequested { get; set; }
         public FileInteractionState InteractionState { get; set; }
         public IReadOnlyList<WeakReference<InteractionFile>>? References { get; set; }
     }
