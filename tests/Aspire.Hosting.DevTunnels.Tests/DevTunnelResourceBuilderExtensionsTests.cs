@@ -471,9 +471,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(InteractionType.MessageBox, interaction.Type);
         Assert.Equal("Dev tunnel URLs", interaction.Title);
         Assert.Equal(
-            $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
-            $"- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>{Environment.NewLine}" +
-            "- **Local endpoint URL:** <http://localhost:3000>",
+            $"**Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>  {Environment.NewLine}" +
+            $"**Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>  {Environment.NewLine}" +
+            "**Local endpoint URL:** <http://localhost:3000>",
             interaction.Message);
         Assert.Equal(MessageIntent.None, options.Intent);
         Assert.True(options.EnableMessageMarkdown);
@@ -519,8 +519,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.True(result.Success);
         Assert.Null(result.Data);
         Assert.Equal(
-            $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
-            "- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>",
+            $"**Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>  {Environment.NewLine}" +
+            "**Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>",
             interaction.Message);
     }
 
@@ -566,9 +566,9 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         Assert.True(result.Success);
         Assert.Equal(
-            $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
-            $"- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>{Environment.NewLine}" +
-            "- **Local endpoint URL:** <http://target:8080>",
+            $"**Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>  {Environment.NewLine}" +
+            $"**Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>  {Environment.NewLine}" +
+            "**Local endpoint URL:** <http://target:8080>",
             interaction.Message);
     }
 

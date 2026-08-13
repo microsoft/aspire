@@ -806,8 +806,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
         }
 
         var markdown = string.Join(
-            Environment.NewLine,
-            urlProperties.Select(p => $"- **{p.DisplayName}:** <{p.Value}>"));
+            $"  {Environment.NewLine}",
+            urlProperties.Select(p => $"**{p.DisplayName}:** <{p.Value}>"));
 
         // This action only inspects derived resource state, so open an interaction directly instead of
         // returning command-result data through the generic text visualizer.
