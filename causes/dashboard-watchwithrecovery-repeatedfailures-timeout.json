@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-watchwithrecovery-repeatedfailures-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents times out waiting for disconnected events",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents",
+  "error_pattern": "System.TimeoutException : The operation at /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:361 timed out after reaching the limit of 30000ms.\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber)\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents()",
+  "occurrences": [
+    {
+      "run_id": 31742946349,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31742946349",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "pr_number": 19345,
+      "observed_at": "2026-08-13T22:18:29Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19363"
+}

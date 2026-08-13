@@ -1,0 +1,38 @@
+{
+  "run_id": 31742946349,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31742946349",
+  "analyzed_at": "2026-08-13T22:18:29Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19345,
+    "title": "Require confirmation before change-location deletes Azure resources",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "dapine/change-location-safety",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19345"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 94601341642,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31742946349/job/94601341642",
+      "classification": "flaky-test",
+      "reason": "Failed test WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents times out at 30000ms in a reconnection/recovery timing test within Aspire.Dashboard.Tests, an area not touched by this PR (which only modifies Aspire.Hosting.Azure files).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:361 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 194\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 361\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.WatchWithRecovery_RepeatedFailures_FiresMultipleDisconnectedEvents() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 370",
+      "classification": "flaky",
+      "reason": "This test simulates repeated connection failures and recovery with timing dependencies; a 30s timeout in this recovery-event-firing test under CI load is a known pattern of timing-sensitive dashboard tests, and the PR does not touch any Dashboard or DashboardClient code."
+    }
+  ],
+  "causes": ["dashboard-watchwithrecovery-repeatedfailures-timeout"]
+}
