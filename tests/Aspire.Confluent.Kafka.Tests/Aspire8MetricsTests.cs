@@ -108,7 +108,10 @@ public class Aspire8MetricsTests
         Assert.Contains(collectorNetworkReceived.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 
         Assert.Equal(5, collectorMessageTx.LastMeasurement!.Value);
+        Assert.Equal("{message}", collectorMessageTx.Instrument!.Unit);
         Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "messaging.client.id" && t.Value!.ToString() == "rdkafka");
+        Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "messaging.system" && t.Value!.ToString() == "kafka");
+        Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "messaging.operation.name" && t.Value!.ToString() == "send");
         Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "name" && t.Value!.ToString() == "rdkafka#producer-1");
         Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 
@@ -118,7 +121,10 @@ public class Aspire8MetricsTests
         Assert.Contains(collectorMessageTransmitted.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 
         Assert.Equal(5, collectorMessageRx.LastMeasurement!.Value);
+        Assert.Equal("{message}", collectorMessageRx.Instrument!.Unit);
         Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "messaging.client.id" && t.Value!.ToString() == "rdkafka");
+        Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "messaging.system" && t.Value!.ToString() == "kafka");
+        Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "messaging.operation.name" && t.Value!.ToString() == "poll");
         Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "name" && t.Value!.ToString() == "rdkafka#producer-1");
         Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 

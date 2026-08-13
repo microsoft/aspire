@@ -49,26 +49,34 @@ internal sealed partial class MetricsService(MetricsChannel channel, ConfluentKa
 
                 tags.Add(new KeyValuePair<string, object?> (Tags.Type, statistics.Type));
 
+                var sentMessageTags = tags;
+                sentMessageTags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
+                sentMessageTags.Add(Tags.OperationName, TagValues.SendOperationName);
+
+                var consumedMessageTags = tags;
+                consumedMessageTags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
+                consumedMessageTags.Add(Tags.OperationName, TagValues.PollOperationName);
+
                 if (_state.TryGetValue(statistics.Name, out var previous))
                 {
                     metrics.Tx.Add(statistics.Tx - previous.Tx, tags);
                     metrics.TxBytes.Add(statistics.TxBytes - previous.TxBytes, tags);
-                    metrics.TxMessages.Add(statistics.TxMessages - previous.TxMessages, tags);
+                    metrics.TxMessages.Add(statistics.TxMessages - previous.TxMessages, sentMessageTags);
                     metrics.TxMessageBytes.Add(statistics.TxMessageBytes - previous.TxMessageBytes, tags);
                     metrics.Rx.Add(statistics.Rx - previous.Rx, tags);
                     metrics.RxBytes.Add(statistics.RxBytes - previous.RxBytes, tags);
-                    metrics.RxMessages.Add(statistics.RxMessages - previous.RxMessages, tags);
+                    metrics.RxMessages.Add(statistics.RxMessages - previous.RxMessages, consumedMessageTags);
                     metrics.RxMessageBytes.Add(statistics.RxMessageBytes - previous.RxMessageBytes, tags);
                 }
                 else
                 {
                     metrics.Tx.Add(statistics.Tx, tags);
                     metrics.TxBytes.Add(statistics.TxBytes, tags);
-                    metrics.TxMessages.Add(statistics.TxMessages, tags);
+                    metrics.TxMessages.Add(statistics.TxMessages, sentMessageTags);
                     metrics.TxMessageBytes.Add(statistics.TxMessageBytes, tags);
                     metrics.Rx.Add(statistics.Rx, tags);
                     metrics.RxBytes.Add(statistics.RxBytes, tags);
-                    metrics.RxMessages.Add(statistics.RxMessages, tags);
+                    metrics.RxMessages.Add(statistics.RxMessages, consumedMessageTags);
                     metrics.RxMessageBytes.Add(statistics.RxMessageBytes, tags);
                 }
 
