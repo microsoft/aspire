@@ -45,7 +45,7 @@ internal sealed class NewCommand : BaseCommand
         Description = NewCommandStrings.OutputArgumentDescription,
         Recursive = true
     };
-    private static readonly Option<string?> s_sourceOption = new("--source", "-s")
+    internal static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
         Description = NewCommandStrings.SourceArgumentDescription,
         Recursive = true
@@ -127,6 +127,16 @@ internal sealed class NewCommand : BaseCommand
     {
         var explicitLanguageId = parseResult.GetValue(_languageOption);
         return string.IsNullOrWhiteSpace(explicitLanguageId) ? null : NormalizeLanguageId(explicitLanguageId);
+    }
+
+    internal override void PrepareForExecution(ParseResult parseResult)
+    {
+        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(s_sourceOption)))
+        {
+            // The foreground template lookup applies --source. Background prefetch does not know
+            // about invocation options, so letting it run would still contact fallback feeds.
+            DisableTemplatePackageMetadataPrefetchingForInvocation();
+        }
     }
 
     private static string NormalizeLanguageId(string languageId)

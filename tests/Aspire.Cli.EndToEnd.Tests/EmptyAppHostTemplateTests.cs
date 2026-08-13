@@ -60,7 +60,18 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync("mkdir source-feed && cp \"$HOME\"/.aspire/hives/*/packages/Aspire.ProjectTemplates.*.nupkg source-feed/", counter);
         await auto.RunCommandAsync("aspire --version > /tmp/aspire-source-version", counter);
+        await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
         await auto.RunCommandAsync("export ASPIRE_CLI_CHANNEL=staging ASPIRE_CLI_VERSION=\"$(cat /tmp/aspire-source-version)\"", counter);
+
+        // Package search can suppress source failures, so use a TCP tripwire to detect connection attempts independently of logs.
+        await auto.RunCommandAsync("printf '127.0.0.1 api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org\\n' >> /etc/hosts", counter);
+        await auto.RunCommandAsync(
+            "rm -f /tmp/nuget-org-contacted /tmp/nuget-org-listener-ready && " +
+            "python3 -c 'import pathlib,socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); " +
+            "s.bind((\"0.0.0.0\",443)); s.listen(); pathlib.Path(\"/tmp/nuget-org-listener-ready\").touch(); " +
+            "c,_=s.accept(); pathlib.Path(\"/tmp/nuget-org-contacted\").touch(); c.close()' >/tmp/nuget-org-listener.log 2>&1 & " +
+            "while [ ! -f /tmp/nuget-org-listener-ready ]; do sleep 0.1; done",
+            counter);
         await auto.RunCommandAsync("rm -rf \"$HOME/.aspire/logs\" && mkdir -p \"$HOME/.aspire/logs\"", counter);
 
         await auto.RunCommandAsync(
@@ -71,6 +82,7 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync("test -f SourceOverrideApp/apphost.cs", counter);
         await auto.RunCommandAsync(
+            "test ! -e /tmp/nuget-org-contacted && " +
             "find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
             "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
             counter);
