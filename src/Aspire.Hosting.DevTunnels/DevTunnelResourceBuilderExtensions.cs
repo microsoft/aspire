@@ -816,7 +816,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
             markdown,
             new MessageBoxInteractionOptions
             {
-                Intent = MessageIntent.Information,
+                Intent = MessageIntent.None,
                 EnableMessageMarkdown = true,
                 PrimaryButtonText = MessageStrings.ShowTunnelUrlsCommandClose,
                 ShowSecondaryButton = false

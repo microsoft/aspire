@@ -475,7 +475,7 @@ public class DevTunnelResourceBuilderExtensionsTests
             $"- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>{Environment.NewLine}" +
             "- **Local endpoint URL:** <http://localhost:3000>",
             interaction.Message);
-        Assert.Equal(MessageIntent.Information, options.Intent);
+        Assert.Equal(MessageIntent.None, options.Intent);
         Assert.True(options.EnableMessageMarkdown);
         Assert.Equal("Close", options.PrimaryButtonText);
         Assert.False(options.ShowSecondaryButton);
