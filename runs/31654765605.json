@@ -1,0 +1,29 @@
+{
+  "run_id": 31654765605,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31654765605",
+  "analyzed_at": "2026-08-13T01:04:00Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19321,
+    "title": "Tighten deployment test dispatch",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-fix-deployment-command-injection",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19321"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (windows-latest)",
+      "id": 94308492721,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31654765605/job/94308492721",
+      "classification": "transient-infra",
+      "reason": "csc.exe (Roslyn compiler) exited with code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) during template project build, and the dotnet-aot.dll/coreclr.dll host also failed to load with the same HRESULT pattern. This is a well-known Windows runner process initialization failure unrelated to the PR, which only modified deployment-test workflow YAML files (.github/workflows/deployment-test-command.yml, deployment-tests.yml) and did not touch any template or build code.",
+      "failed_steps": ["Run nuget dependent tests (Windows)", "Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}

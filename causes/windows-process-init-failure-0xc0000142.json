@@ -1,8 +1,8 @@
 {
   "id": "windows-process-init-failure-0xc0000142",
   "type": "infra-failure",
-  "title": "Windows process initialization failure (exit code -1073741502 / 0xC0000142) in post-test steps",
-  "error_pattern": "Process completed with exit code -1073741502. (0xC0000142 STATUS_DLL_INIT_FAILED) occurring in post-test upload/cleanup steps after all tests pass successfully on Windows runners.",
+  "title": "Windows process initialization failure (exit code -1073741502 / 0xC0000142) in build/post-test steps",
+  "error_pattern": "csc.exe exited with code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED); dotnet-aot.dll/coreclr.dll failed to load with HRESULT 0x8007045A/0x8007054F, unable to bind to CoreCLR. Process completed with exit code -1073741502 in subsequent post-test upload/cleanup steps on windows-latest runner.",
   "occurrences": [
     {
       "run_id": 29060131780,
@@ -73,6 +73,13 @@
       "job": "Tests / Hosting.Qdrant / Hosting.Qdrant (windows-latest)",
       "pr_number": 19127,
       "observed_at": "2026-08-12T08:12:32Z"
+    },
+    {
+      "run_id": 31654765605,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31654765605",
+      "job": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (windows-latest)",
+      "pr_number": 19321,
+      "observed_at": "2026-08-13T01:04:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"
