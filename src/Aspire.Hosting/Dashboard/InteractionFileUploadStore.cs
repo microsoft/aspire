@@ -17,13 +17,9 @@ namespace Aspire.Hosting.Dashboard;
 /// </summary>
 internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IAsyncDisposable
 {
-    private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(10);
-
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
     private readonly ILogger<InteractionFileUploadStore> _logger;
-    private readonly CancellationTokenSource _cleanupCts = new();
-    private readonly Task _cleanupTask;
     private int _disposed;
 
     public InteractionFileUploadStore(IFileSystemService fileSystemService)
@@ -35,7 +31,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     {
         _tempFileSystem = fileSystemService.TempDirectory;
         _logger = logger;
-        _cleanupTask = RunCleanupAsync(_cleanupCts.Token);
     }
 
     /// <summary>
@@ -225,49 +220,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         RemoveInteractionIfEmpty(interactionId, interaction);
     }
 
-    internal void RemoveCanceledFiles()
-    {
-        foreach (var (interactionId, interaction) in _interactions)
-        {
-            foreach (var (fileId, entry) in interaction.Files)
-            {
-                bool removeEntry;
-                lock (entry)
-                {
-                    removeEntry = entry.UploadComplete && entry.InteractionState == FileInteractionState.Canceled;
-                }
-
-                if (removeEntry)
-                {
-                    RemoveEntry(interactionId, fileId);
-                }
-            }
-        }
-    }
-
-    private async Task RunCleanupAsync(CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(s_cleanupInterval);
-
-        try
-        {
-            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
-            {
-                try
-                {
-                    RemoveCanceledFiles();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to clean up canceled uploaded files. Cleanup will be retried.");
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-    }
-
     /// <summary>
     /// Resolves a JSON-encoded file reference array into InputFileDto entries.
     /// Returns null if the value is empty, malformed, or contains no resolvable files.
@@ -319,16 +271,12 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         return files.Count > 0 ? files : null;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
-            return;
+            return ValueTask.CompletedTask;
         }
-
-        _cleanupCts.Cancel();
-        await _cleanupTask.ConfigureAwait(false);
-        _cleanupCts.Dispose();
 
         _logger.LogDebug(
             "Disposing file upload store with {FileCount} uploaded files and {InteractionCount} tracked interactions.",
@@ -347,6 +295,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             }
         }
         _interactions.Clear();
+
+        return ValueTask.CompletedTask;
     }
 
     // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
