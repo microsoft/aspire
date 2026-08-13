@@ -1,0 +1,38 @@
+{
+  "run_id": 31668464647,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31668464647",
+  "analyzed_at": "2026-08-13T05:49:44Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19331,
+    "title": "Fix Dashboard HTML language under invariant culture",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-dashboard-html-lang",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19331"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 94352532868,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31668464647/job/94352532868",
+      "classification": "flaky-test",
+      "reason": "Single test failure in Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests, a timing-sensitive process-exit-vs-signaler race test unrelated to the PR's Dashboard globalization changes. Matches known recurring flaky test 'processguest-blockingsignaler-timeout'.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected process exit to win over the still-blocked signaler but it took 00:00:07.2027384.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 192\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Timing-sensitive assertion on process-exit-vs-signaler race under CI load. The test file is not touched by this PR (which only changes Dashboard globalization code), and this exact test has recurred multiple times previously under the same cause ID."
+    }
+  ],
+  "causes": ["processguest-blockingsignaler-timeout"]
+}
