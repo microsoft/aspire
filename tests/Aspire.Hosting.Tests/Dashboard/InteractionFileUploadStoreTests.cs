@@ -144,7 +144,7 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public async Task RemoveCanceledFiles_CompletedInteractionWithUploadInProgress_KeepsFile()
+    public async Task CompleteInteraction_UploadInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -152,22 +152,18 @@ public class InteractionFileUploadStoreTests
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteInteraction(InteractionId);
 
-        fileUploadStore.RemoveCanceledFiles();
-
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
     [Fact]
-    public async Task RemoveCanceledFiles_UploadCompleteInteractionInProgress_KeepsFile()
+    public async Task UploadCompleteInteractionInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-
-        fileUploadStore.RemoveCanceledFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
@@ -208,7 +204,7 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public async Task RemoveCanceledFiles_CompletedInteraction_KeepsFile()
+    public async Task CompleteInteraction_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -217,14 +213,12 @@ public class InteractionFileUploadStoreTests
         fileUploadStore.CompleteUpload(InteractionId, fileId);
         fileUploadStore.CompleteInteraction(InteractionId);
 
-        fileUploadStore.RemoveCanceledFiles();
-
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
     }
 
     [Fact]
-    public async Task RemoveCanceledFiles_CompletedInteractionAfterInteractionFileCollected_KeepsFile()
+    public async Task CompleteInteraction_AfterInteractionFileCollected_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -235,8 +229,6 @@ public class InteractionFileUploadStoreTests
 
         GC.Collect();
         Assert.False(weakReference.TryGetTarget(out _));
-
-        fileUploadStore.RemoveCanceledFiles();
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
