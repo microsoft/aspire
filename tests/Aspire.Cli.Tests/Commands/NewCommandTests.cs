@@ -1186,6 +1186,58 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        string? discoveryCatchAllSource = null;
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfig, _) =>
+            {
+                Assert.NotNull(nugetConfig);
+
+                var document = XDocument.Load(nugetConfig.FullName);
+                var catchAllSource = document.Root!
+                    .Element("packageSourceMapping")!
+                    .Elements("packageSource")
+                    .Single(source => source
+                        .Elements("package")
+                        .Any(package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages));
+
+                discoveryCatchAllSource = (string?)catchAllSource.Attribute("key");
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = sourceOverride, Version = "9.2.0" }]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Stable,
+            [new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(sourceOverride, discoveryCatchAllSource);
+    }
+
     [Theory]
     [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
