@@ -613,6 +613,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     IconName = "LinkMultiple",
                     IconVariant = IconVariant.Regular,
                     IsHighlighted = true,
+                    Visibility = ResourceCommandVisibility.UI,
                     UpdateState = context =>
                         context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
                         portResource.LastKnownStatus?.PortUri is not null
