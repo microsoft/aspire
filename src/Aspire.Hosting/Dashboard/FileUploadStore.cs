@@ -21,7 +21,6 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
-    private readonly bool _preserveTempFiles;
     private readonly ILogger<FileUploadStore> _logger;
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
@@ -34,7 +33,6 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     public FileUploadStore(IFileSystemService fileSystemService, ILogger<FileUploadStore> logger)
     {
         _tempFileSystem = fileSystemService.TempDirectory;
-        _preserveTempFiles = fileSystemService is FileSystemService { ShouldPreserveTempFiles: true };
         _logger = logger;
         _cleanupTask = RunCleanupAsync(_cleanupCts.Token);
     }
@@ -151,22 +149,19 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         {
             entry.RemovalRequested = true;
 
-            if (!_preserveTempFiles)
+            try
             {
-                try
-                {
-                    File.Delete(entry.TempFile.Path);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "Failed to remove uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}. Cleanup will be retried.",
-                        fileId,
-                        entry.InteractionId,
-                        entry.InputName);
-                    return;
-                }
+                entry.TempFile.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to remove uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}. Cleanup will be retried.",
+                    fileId,
+                    entry.InteractionId,
+                    entry.InputName);
+                return;
             }
 
             if (!_files.TryRemove(KeyValuePair.Create(fileId, entry)))
@@ -181,18 +176,6 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
             {
                 interaction.FileIds.Remove(fileId);
             }
-        }
-
-        try
-        {
-            entry.TempFile.Dispose();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Failed to dispose temporary file tracking for uploaded file entry {FileId}.",
-                fileId);
         }
 
         _logger.LogDebug(

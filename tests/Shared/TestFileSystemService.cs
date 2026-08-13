@@ -13,16 +13,16 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
 {
     private readonly TestTempFileSystemService _tempDirectory;
 
-    public TestFileSystemService(bool createDirectoryAtTempFilePath = false)
+    public TestFileSystemService(bool failFirstTempFileDispose = false)
     {
-        _tempDirectory = new TestTempFileSystemService(createDirectoryAtTempFilePath);
+        _tempDirectory = new TestTempFileSystemService(failFirstTempFileDispose);
     }
 
     public ITempFileSystemService TempDirectory => _tempDirectory;
 
     public void Dispose() => _tempDirectory.Dispose();
 
-    private sealed class TestTempFileSystemService(bool createDirectoryAtTempFilePath) : ITempFileSystemService, IDisposable
+    private sealed class TestTempFileSystemService(bool failFirstTempFileDispose) : ITempFileSystemService, IDisposable
     {
         private readonly List<string> _directories = [];
 
@@ -39,15 +39,8 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
             _directories.Add(tempDir.FullName);
             var resolvedName = fileName ?? System.IO.Path.GetRandomFileName();
             var filePath = System.IO.Path.Combine(tempDir.FullName, resolvedName);
-            if (createDirectoryAtTempFilePath)
-            {
-                Directory.CreateDirectory(filePath);
-            }
-            else
-            {
-                File.Create(filePath).Dispose();
-            }
-            return new TestTempFile(filePath, tempDir.FullName);
+            File.Create(filePath).Dispose();
+            return new TestTempFile(filePath, tempDir.FullName, failFirstTempFileDispose);
         }
 
         public void Dispose()
@@ -89,22 +82,23 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
         }
     }
 
-    private sealed class TestTempFile(string path, string parentDir) : TempFile
+    private sealed class TestTempFile(string path, string parentDir, bool failFirstDispose) : TempFile
     {
+        private bool _failDispose = failFirstDispose;
+
         public override string Path => path;
 
         public override void Dispose()
         {
-            try
+            if (_failDispose)
             {
-                if (Directory.Exists(parentDir))
-                {
-                    Directory.Delete(parentDir, recursive: true);
-                }
+                _failDispose = false;
+                throw new IOException("Simulated temporary file deletion failure.");
             }
-            catch
+
+            if (Directory.Exists(parentDir))
             {
-                // Best-effort cleanup.
+                Directory.Delete(parentDir, recursive: true);
             }
         }
     }

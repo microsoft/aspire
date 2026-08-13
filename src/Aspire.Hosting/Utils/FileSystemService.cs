@@ -246,38 +246,33 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
                 return;
             }
 
-            _disposed = true;
-
-            // Remove from tracking
-            _parent.UntrackItem(_path);
-
             // Skip deletion if preserve flag is set
             if (_parent.ShouldPreserveTempFiles)
             {
+                _disposed = true;
+                _parent.UntrackItem(_path);
                 return;
             }
 
-            try
+            // Only mark the file as disposed and untrack it after cleanup succeeds. Callers can
+            // retry disposal when a transient failure, such as an open file handle, blocks deletion.
+            if (File.Exists(_path))
             {
-                if (File.Exists(_path))
-                {
-                    File.Delete(_path);
-                    _parent.Logger?.LogDebug("Cleaned up temporary file: {Path}", _path);
-                }
+                File.Delete(_path);
+                _parent.Logger?.LogDebug("Cleaned up temporary file: {Path}", _path);
+            }
 
-                if (_deleteParentDirectory)
+            if (_deleteParentDirectory)
+            {
+                var parentDir = System.IO.Path.GetDirectoryName(_path);
+                if (parentDir is not null && Directory.Exists(parentDir))
                 {
-                    var parentDir = System.IO.Path.GetDirectoryName(_path);
-                    if (parentDir is not null && Directory.Exists(parentDir))
-                    {
-                        Directory.Delete(parentDir, recursive: true);
-                    }
+                    Directory.Delete(parentDir, recursive: true);
                 }
             }
-            catch
-            {
-                // Ignore errors during cleanup
-            }
+
+            _disposed = true;
+            _parent.UntrackItem(_path);
         }
     }
 }
