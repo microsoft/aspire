@@ -423,6 +423,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         };
 
         var command = Assert.Single(port.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == DevTunnelPortResource.ShowTunnelUrlsCommandName);
+        Assert.Equal("LinkMultiple", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
         using var serviceProvider = builder.Services.BuildServiceProvider();
 
         var enabledState = command.UpdateState(new UpdateCommandStateContext
