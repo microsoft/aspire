@@ -19,11 +19,6 @@ internal sealed class NativeCertificateToolRunner(
     IEnvironment environment,
     ILogger<NativeCertificateToolRunner> logger) : ICertificateToolRunner
 {
-    private const UnixFileMode CertificateCacheDirectoryPermissions =
-        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-    private const UnixFileMode CertificateCacheFilePermissions =
-        UnixFileMode.UserRead | UnixFileMode.UserWrite;
-
     public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
         var availableCertificates = certificateManager.ListCertificates(
@@ -251,7 +246,6 @@ internal sealed class NativeCertificateToolRunner(
         var hash = Convert.ToHexString(XxHash128.Hash(pemContents)).ToLowerInvariant();
         var outputPath = Path.Combine(outputDirectory, $"aspire-dev-cert-{hash}.pem");
 
-        EnsureCertificateCacheDirectory(outputDirectory);
         if (File.Exists(outputPath))
         {
             logger.LogDebug("Reusing cached development certificate PEM at {Path}", outputPath);
@@ -259,66 +253,8 @@ internal sealed class NativeCertificateToolRunner(
         }
 
         logger.LogDebug("Writing development certificate PEM to cache at {Path}", outputPath);
-        WriteCertificateCacheFile(outputPath, pemContents);
+        CertificateCacheWriter.WriteFile(outputPath, pemContents, logger);
         return outputPath;
-    }
-
-    private static void EnsureCertificateCacheDirectory(string directory)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Directory.CreateDirectory(directory);
-            return;
-        }
-
-#pragma warning disable CA1416 // Validate platform compatibility
-        Directory.CreateDirectory(directory, CertificateCacheDirectoryPermissions);
-        File.SetUnixFileMode(directory, CertificateCacheDirectoryPermissions);
-#pragma warning restore CA1416 // Validate platform compatibility
-    }
-
-    private void WriteCertificateCacheFile(string outputPath, byte[] contents)
-    {
-        var temporaryPath = Path.Combine(
-            Path.GetDirectoryName(outputPath)!,
-            $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            var options = new FileStreamOptions
-            {
-                Access = FileAccess.Write,
-                Mode = FileMode.CreateNew,
-                Share = FileShare.None
-            };
-
-            if (!OperatingSystem.IsWindows())
-            {
-#pragma warning disable CA1416 // Validate platform compatibility
-                options.UnixCreateMode = CertificateCacheFilePermissions;
-#pragma warning restore CA1416 // Validate platform compatibility
-            }
-
-            using (var stream = new FileStream(temporaryPath, options))
-            {
-                stream.Write(contents);
-                stream.Flush(flushToDisk: true);
-            }
-
-            try
-            {
-                File.Move(temporaryPath, outputPath);
-            }
-            catch (IOException) when (File.Exists(outputPath))
-            {
-                // Another process created the same content-addressed certificate first.
-                logger.LogDebug("Another process created the cached development certificate PEM at {Path}", outputPath);
-            }
-        }
-        finally
-        {
-            File.Delete(temporaryPath);
-        }
     }
 
     private static string[]? GetSanExtension(X509Certificate2 cert)

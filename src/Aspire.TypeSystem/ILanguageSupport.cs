@@ -20,6 +20,9 @@ public interface ILanguageSupport
     /// <remarks>
     /// The CLI sets this environment variable only when running the AppHost, not when publishing it.
     /// Return the name of the runtime-specific environment variable, rather than a certificate path.
+    /// The runtime uses the certificate bundle as additional trusted roots for the entire AppHost process,
+    /// affecting all outbound TLS connections, including connections unrelated to Aspire-managed resources.
+    /// Implementations should opt in only when this process-wide trust scope is appropriate.
     /// For example:
     /// <code>
     /// public string? CertificateBundleEnvironmentVariable => "NODE_EXTRA_CA_CERTS";

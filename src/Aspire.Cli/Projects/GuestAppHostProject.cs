@@ -33,8 +33,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 {
     private const string DevCertificateCacheDirectoryName = "dev-certs";
     private const string CertificateBundleCacheDirectoryName = "bundles";
-    private const UnixFileMode CertificateCacheDirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-    private const UnixFileMode CertificateCacheFilePermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
@@ -2068,10 +2066,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         CertificateBundleCacheDirectoryName);
                     var bundlePath = Path.Combine(bundleDirectory, $"{cacheFilePrefix}-{bundleHash}.pem");
 
-                    EnsureCertificateBundleDirectory(bundleDirectory);
                     if (!File.Exists(bundlePath))
                     {
-                        await WriteCertificateBundleAsync(bundlePath, bundleContents, cancellationToken);
+                        CertificateCacheWriter.WriteFile(bundlePath, bundleContents, _logger);
                     }
 
                     certificateBundlePath = bundlePath;
@@ -2107,69 +2104,4 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         environmentVariables[environmentVariableName] = value;
     }
 
-    private static void EnsureCertificateBundleDirectory(string bundleDirectory)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Directory.CreateDirectory(bundleDirectory);
-            return;
-        }
-
-#pragma warning disable CA1416 // Validate platform compatibility
-        Directory.CreateDirectory(bundleDirectory, CertificateCacheDirectoryPermissions);
-        File.SetUnixFileMode(bundleDirectory, CertificateCacheDirectoryPermissions);
-#pragma warning restore CA1416 // Validate platform compatibility
-    }
-
-    private async Task WriteCertificateBundleAsync(string bundlePath, byte[] bundleContents, CancellationToken cancellationToken)
-    {
-        // Write to a temporary file before moving it into place so readers never observe a partial bundle.
-        var temporaryPath = Path.Combine(
-            Path.GetDirectoryName(bundlePath)!,
-            $".{Path.GetFileName(bundlePath)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            var options = new FileStreamOptions
-            {
-                Access = FileAccess.Write,
-                Mode = FileMode.CreateNew,
-                Options = FileOptions.Asynchronous,
-                Share = FileShare.None
-            };
-
-            if (!OperatingSystem.IsWindows())
-            {
-#pragma warning disable CA1416 // Validate platform compatibility
-                options.UnixCreateMode = CertificateCacheFilePermissions;
-#pragma warning restore CA1416 // Validate platform compatibility
-            }
-
-            await using (var stream = new FileStream(temporaryPath, options))
-            {
-                await stream.WriteAsync(bundleContents, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-
-            try
-            {
-                File.Move(temporaryPath, bundlePath);
-            }
-            catch (IOException) when (File.Exists(bundlePath))
-            {
-                // Another AppHost created the same content-addressed bundle first.
-            }
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(temporaryPath);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogDebug(ex, "Failed to delete temporary certificate bundle {TemporaryPath}", temporaryPath);
-            }
-        }
-    }
 }

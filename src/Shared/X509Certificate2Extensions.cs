@@ -141,11 +141,13 @@ internal static class X509Certificate2Extensions
         CancellationToken cancellationToken = default)
     {
         using var chain = new X509Chain();
+        // Revocation does not apply to self-signed development certificates.
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
 
         X509Certificate2Collection? rootCertificates = null;
         if (OperatingSystem.IsWindows())
         {
+            // On Windows, chain.Build() can succeed even when the certificate is not in the trusted root store.
             using var rootStore = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
             rootStore.Open(OpenFlags.ReadOnly);
             rootCertificates = rootStore.Certificates;
