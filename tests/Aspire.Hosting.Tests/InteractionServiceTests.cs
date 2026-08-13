@@ -1346,7 +1346,7 @@ public class InteractionServiceTests
         var resultTask = interactionService.PromptInputAsync("Select file", "please", input);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
-        fileUploadStore.CompleteInteractionCallback = (_, _) => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+        fileUploadStore.CompleteInteractionCallback = _ => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
 
         await CompleteInteractionAsync(
             interactionService,
@@ -1359,10 +1359,9 @@ public class InteractionServiceTests
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
-        var completedInteraction = Assert.Single(fileUploadStore.CompletedInteractions);
-        Assert.Equal(interaction.InteractionId, completedInteraction.InteractionId);
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CompletedInteractions));
         var resultInput = Assert.IsType<InteractionInput>(result.Data);
-        Assert.Same(Assert.Single(resultInput.Files!), Assert.Single(completedInteraction.Files));
+        Assert.Single(resultInput.Files!);
     }
 
     [Fact]
