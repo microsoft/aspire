@@ -14,23 +14,23 @@ namespace Aspire.Hosting.Dashboard;
 /// <summary>
 /// Stores uploaded files from the Dashboard and maps file IDs to their temporary paths on disk.
 /// </summary>
-internal sealed class FileUploadStore : IFileUploadStore, IDisposable
+internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IDisposable
 {
     private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(10);
 
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
-    private readonly ILogger<FileUploadStore> _logger;
+    private readonly ILogger<InteractionFileUploadStore> _logger;
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
 
-    public FileUploadStore(IFileSystemService fileSystemService)
-        : this(fileSystemService, NullLogger<FileUploadStore>.Instance)
+    public InteractionFileUploadStore(IFileSystemService fileSystemService)
+        : this(fileSystemService, NullLogger<InteractionFileUploadStore>.Instance)
     {
     }
 
-    public FileUploadStore(IFileSystemService fileSystemService, ILogger<FileUploadStore> logger)
+    public InteractionFileUploadStore(IFileSystemService fileSystemService, ILogger<InteractionFileUploadStore> logger)
     {
         _tempFileSystem = fileSystemService.TempDirectory;
         _logger = logger;
@@ -318,7 +318,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// Resolves a JSON-encoded file reference array into InputFileDto entries.
     /// Returns null if the value is empty, malformed, or contains no resolvable files.
     /// </summary>
-    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IFileUploadStore store, string? jsonValue, int interactionId, string inputName, ILogger logger)
+    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IInteractionFileUploadStore store, string? jsonValue, int interactionId, string inputName, ILogger logger)
     {
         if (string.IsNullOrEmpty(jsonValue))
         {

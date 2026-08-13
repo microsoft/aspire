@@ -19,7 +19,7 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
-    private readonly IFileUploadStore _fileUploadStore;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
     private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
@@ -28,7 +28,7 @@ internal sealed class DashboardServiceData : IDisposable
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
-        IFileUploadStore fileUploadStore)
+        IInteractionFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
@@ -238,7 +238,7 @@ internal sealed class DashboardServiceData : IDisposable
         // Resolve each ID to the temp file path and build InputFileDto entries.
         if (inputType == InputType.File)
         {
-            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
+            var files = InteractionFileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(i.Name, i.Value, inputType, files);

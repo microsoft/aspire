@@ -6,10 +6,10 @@ using System.Collections.Concurrent;
 namespace Aspire.Hosting.Utils;
 
 /// <summary>
-/// An in-memory implementation of <see cref="IFileUploadStore"/> for tests.
+/// An in-memory implementation of <see cref="IInteractionFileUploadStore"/> for tests.
 /// Does not write to disk or implement IDisposable.
 /// </summary>
-internal sealed class TestFileUploadStore : IFileUploadStore
+internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadStore
 {
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
 

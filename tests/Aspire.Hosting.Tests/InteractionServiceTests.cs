@@ -220,7 +220,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
 
         // Assert
         Assert.Equal(expected, interactionService.IsAvailable);
@@ -248,7 +248,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
 
         // Assert - Invalid values should be ignored, defaulting to true (since dashboard is enabled)
         Assert.True(interactionService.IsAvailable);
@@ -271,7 +271,7 @@ public class InteractionServiceTests
             new DistributedApplicationOptions { DisableDashboard = true },
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
 
         // Assert - Both conditions should result in false
         Assert.False(interactionService.IsAvailable);
@@ -1325,7 +1325,7 @@ public class InteractionServiceTests
             CancellationToken.None);
     }
 
-    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IFileUploadStore? fileUploadStore = null)
+    private static InteractionService CreateInteractionService(DistributedApplicationOptions? options = null, IInteractionFileUploadStore? fileUploadStore = null)
     {
         var configuration = new ConfigurationBuilder().Build();
         return new InteractionService(
@@ -1333,13 +1333,13 @@ public class InteractionServiceTests
             options ?? new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             configuration,
-            fileUploadStore ?? new TestFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore());
     }
 
     [Fact]
     public async Task PromptInputsAsync_FileWithValue_PassesValidation()
     {
-        var fileUploadStore = new TestFileUploadStore();
+        var fileUploadStore = new TestInteractionFileUploadStore();
         var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
 
         var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
@@ -1367,7 +1367,7 @@ public class InteractionServiceTests
     [Fact]
     public async Task PromptInputsAsync_Canceled_CancelsFileUploads()
     {
-        var fileUploadStore = new TestFileUploadStore();
+        var fileUploadStore = new TestInteractionFileUploadStore();
         var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
 
         var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File };
@@ -1390,7 +1390,7 @@ public class InteractionServiceTests
     [Fact]
     public async Task PromptInputsAsync_TextInputComplete_DoesNotUseFileUploadStore()
     {
-        var fileUploadStore = new TestFileUploadStore();
+        var fileUploadStore = new TestInteractionFileUploadStore();
         var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
 
         var input = new InteractionInput { Name = "Text", InputType = InputType.Text };
@@ -1414,7 +1414,7 @@ public class InteractionServiceTests
     [Fact]
     public async Task PromptInputsAsync_TextInputCanceled_DoesNotUseFileUploadStore()
     {
-        var fileUploadStore = new TestFileUploadStore();
+        var fileUploadStore = new TestInteractionFileUploadStore();
         var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
 
         var input = new InteractionInput { Name = "Text", InputType = InputType.Text };
