@@ -200,7 +200,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task EmbeddedAspireSkillsBundle_ArchiveAndPerFileHashes_AreValidSha512()
+    public async Task EmbeddedAspireSkillsBundle_ArchiveIsSha512_AndPerFileHashesVerify()
     {
         var provider = new EmbeddedAspireSkillsBundleProvider(NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
         var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(provider.Metadata);
@@ -213,6 +213,7 @@ public class AspireSkillsInstallerTests
         {
             // Stage the embedded archive to disk and confirm its full-file SHA-512 matches the metadata
             // the installer trusts before extraction (mirrors AspireSkillsInstaller.ValidateArchiveSha512).
+            // The full-file archive checksum is always SHA-512, independent of the per-file manifest below.
             var archivePath = Path.Combine(extractRoot, metadata.AssetName!);
             await using (var archiveStream = Assert.IsAssignableFrom<Stream>(provider.OpenArchive()))
             await using (var fileStream = File.Create(archivePath))
@@ -220,12 +221,14 @@ public class AspireSkillsInstallerTests
                 await archiveStream.CopyToAsync(fileStream);
             }
 
+            Assert.Equal(128, AspireSkillsBundle.NormalizeSha512(metadata.Sha512!).Length);
             Assert.Equal(AspireSkillsBundle.NormalizeSha512(metadata.Sha512!), ComputeSha512(archivePath));
 
-            // Extract the .tgz and independently recompute every per-file SHA-512 from the internal
-            // skill-manifest.json. This proves the embedded manifest carries real SHA-512 digests
-            // (128 hex chars) that match the extracted bytes, and it self-computes from whatever is
-            // embedded, so it stays valid if the bundle is later replaced by a freshly attested release.
+            // Extract the .tgz and independently recompute every per-file hash from the internal
+            // skill-manifest.json. The embedded snapshot is the exact attestation-verified release asset,
+            // so its per-file manifest uses whatever digest that release shipped (SHA-256 for v0.0.1;
+            // SHA-512 once a signed SHA-512 release is re-embedded). This self-computes from whatever is
+            // embedded, so it stays valid across that transition.
             var contentDir = Path.Combine(extractRoot, "content");
             Directory.CreateDirectory(contentDir);
             await using (var fileStream = File.OpenRead(archivePath))
@@ -252,22 +255,32 @@ public class AspireSkillsInstallerTests
                 Assert.NotEmpty(skill.Files);
                 foreach (var file in skill.Files)
                 {
-                    var normalizedHash = AspireSkillsBundle.NormalizeSha512(file.Sha512!);
-                    // A SHA-512 digest is 64 bytes => 128 lowercase hex characters (a lingering SHA-256
-                    // digest would be 64 characters), so the length check is what pins this to SHA-512.
-                    Assert.Equal(128, normalizedHash.Length);
-
                     var filePath = Path.Combine(bundleRoot, "skills", skill.Name!, AspireSkillsBundle.NormalizeRelativePath(file.RelativePath));
-                    Assert.Equal(normalizedHash, ComputeSha512(filePath));
+
+                    // Verify against the digest the manifest actually carries. SHA-512 is preferred and is
+                    // what new builds emit; SHA-256 is the accepted fallback for the pre-switch attested bundle.
+                    if (!string.IsNullOrWhiteSpace(file.Sha512))
+                    {
+                        var normalizedHash = AspireSkillsBundle.NormalizeSha512(file.Sha512);
+                        Assert.Equal(128, normalizedHash.Length);
+                        Assert.Equal(normalizedHash, ComputeSha512(filePath));
+                    }
+                    else
+                    {
+                        var normalizedHash = AspireSkillsBundle.NormalizeSha256(file.Sha256!);
+                        Assert.Equal(64, normalizedHash.Length);
+                        Assert.Equal(normalizedHash, ComputeSha256(filePath));
+                    }
+
                     validatedFileCount++;
                 }
             }
 
             Assert.True(validatedFileCount > 0);
 
-            // Run the production loader end-to-end over the extracted bundle. Per-file SHA-512
-            // verification lives in AspireSkillsBundle.ValidateFile, so a clean load is the same
-            // check the runtime performs before caching the embedded snapshot.
+            // Run the production loader end-to-end over the extracted bundle. Per-file verification lives in
+            // AspireSkillsBundle.ValidateFile, so a clean load is the same check the runtime performs before
+            // caching the embedded snapshot.
             var bundle = await AspireSkillsBundle.LoadAsync(
                 new DirectoryInfo(bundleRoot),
                 metadata.Version!,
@@ -620,6 +633,12 @@ public class AspireSkillsInstallerTests
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static string ComputeSha512(byte[] bytes)
