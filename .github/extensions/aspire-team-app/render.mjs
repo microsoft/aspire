@@ -2990,7 +2990,7 @@ function settingsView() {
     "</div>" +
     '<div class="section"><h3>Ship milestone</h3>' +
       '<p class="hint">Used by Ship mode to group work for the active release.</p>' +
-      '<div class="field"><input type="text" id="release-input" value="' + esc(prefs.release || "") + '" placeholder="13.4" /></div></div>' +
+      '<div class="field"><input type="text" id="release-input" value="' + esc(prefs.release || "") + '" placeholder="13.5" /></div></div>' +
     pipelineEditorHtml() +
     '<div class="section" id="notif-settings"><h3>Notifications</h3>' +
       '<p class="hint">Live in-session alerts surface in the bell. Choose what counts.</p>' +
