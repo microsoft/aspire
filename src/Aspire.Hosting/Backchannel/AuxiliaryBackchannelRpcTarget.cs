@@ -33,15 +33,23 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
-    // Add-only accumulator of the secret parameters discovered over this connection's lifetime, guarded by
+    // Add-only accumulators of the secrets discovered over this connection's lifetime, both guarded by
     // _secretParametersLock. A backchannel connection lives for the duration of a single describe/watch (see
-    // AuxiliaryBackchannelService.HandleClientConnectionAsync), so this spans exactly that read session. It only
-    // ever grows: when DCP restarts a resource it forgets and re-evaluates the resource's callbacks
-    // (DcpExecutor.ForgetCachedCallbackResults), which can swap which secret a resource references. A
-    // still-in-flight snapshot from the prior incarnation can carry the old secret value, so we must keep
-    // redacting every secret we have ever observed rather than only the current pass's set, otherwise the old
-    // value would be published in plaintext (https://github.com/microsoft/aspire/issues/19241).
+    // AuxiliaryBackchannelService.HandleClientConnectionAsync), so these span exactly that read session.
+    //
+    // _accumulatedSecretParameters only ever grows: when DCP restarts a resource it forgets and re-evaluates the
+    // resource's callbacks (DcpExecutor.ForgetCachedCallbackResults), which can swap which secret a resource
+    // references. A still-in-flight snapshot from the prior incarnation can carry the old secret, so we keep
+    // trying to resolve every secret parameter we have ever observed rather than only the current pass's set.
+    //
+    // _accumulatedSecretValues also only ever grows, and is required in addition to the parameter set because a
+    // parameter's resolved value can be replaced in place: the runtime "Set parameter" path swaps a completed
+    // ParameterResource.WaitForValueTcs for a new one (ParameterProcessor.SetParameterValue), so re-resolving a
+    // retained parameter later yields only the new value. An already-published or still-current snapshot can
+    // still carry the previous value, so we must keep redacting every secret string we have ever resolved or
+    // that old value would be emitted in plaintext (https://github.com/microsoft/aspire/issues/19241).
     private readonly HashSet<ParameterResource> _accumulatedSecretParameters = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<string> _accumulatedSecretValues = new(StringComparer.Ordinal);
     private readonly object _secretParametersLock = new();
 
     #region V2 API Methods
@@ -1035,8 +1043,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Recompute the secret set for every event. Two things can change while a watch is open, and
-            // both must be reflected or a secret can be emitted in plaintext:
+            // Recompute the secret set for every event. Three things can change while a watch is open, and all
+            // must be reflected or a secret can be emitted in plaintext:
             //   1. A parameter's value can be resolved after the watch starts (e.g. interactive entry).
             //   2. The set of secret parameters a resource references can change across a restart — DCP
             //      clears and re-evaluates environment/argument callbacks on restart (see
@@ -1044,6 +1052,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             //      set only ever grows (see GetSecretParametersAsync), so a newly referenced secret is picked up
             //      while a secret referenced by a prior incarnation — which a lagging snapshot may still carry —
             //      stays redacted.
+            //   3. A parameter's resolved value can be replaced in place (the runtime "Set parameter" path), so
+            //      resolved secret strings are also accumulated add-only (see GetResolvedSecretParameterValuesAsync)
+            //      to keep redacting a prior value that a still-current snapshot may carry.
             var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
@@ -1228,13 +1239,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         => value is not null && secretParameterValues.Contains(value) ? null : value;
 
     /// <summary>
-    /// Collects the resolved values of secret parameters reachable from the application model so they
-    /// can be redacted from data sent to clients. Only values that have already been resolved are
-    /// returned; this never blocks waiting for interactive parameter resolution.
+    /// Collects the resolved values of secret parameters reachable from the application model so they can be
+    /// redacted from data sent to clients. Only values that have already been resolved are included; this never
+    /// blocks waiting for interactive parameter resolution. Resolved values are accumulated add-only for the
+    /// connection lifetime, so a value a parameter has since been reassigned away from stays redacted while an
+    /// older snapshot can still carry it.
     /// </summary>
     private async Task<HashSet<string>> GetResolvedSecretParameterValuesAsync(CancellationToken cancellationToken)
     {
-        var secretValues = new HashSet<string>(StringComparer.Ordinal);
+        // Resolve the current value of each accumulated secret parameter (peek-only; never blocks on interactive
+        // resolution), then merge into the connection's add-only value set below.
+        var resolvedThisPass = new List<string>();
 
         foreach (var parameter in await GetSecretParametersAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -1244,7 +1259,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 if (waitForValueTcs.Task is { IsCompletedSuccessfully: true } valueTask &&
                     valueTask.Result is { Length: > 0 } value)
                 {
-                    secretValues.Add(value);
+                    resolvedThisPass.Add(value);
                 }
             }
             else
@@ -1253,7 +1268,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 {
                     if (parameter.ValueInternal is { Length: > 0 } value)
                     {
-                        secretValues.Add(value);
+                        resolvedThisPass.Add(value);
                     }
                 }
                 catch
@@ -1263,7 +1278,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        return secretValues;
+        // Accumulate this pass's resolved secret strings add-only and return everything seen so far. A parameter's
+        // value can be replaced in place (the runtime "Set parameter" path swaps its completed WaitForValueTcs),
+        // so re-resolving a retained parameter later yields only the new value; keeping every value we have ever
+        // resolved ensures a still-current snapshot carrying the previous value is still redacted.
+        lock (_secretParametersLock)
+        {
+            _accumulatedSecretValues.UnionWith(resolvedThisPass);
+            return [.. _accumulatedSecretValues];
+        }
     }
 
     /// <summary>

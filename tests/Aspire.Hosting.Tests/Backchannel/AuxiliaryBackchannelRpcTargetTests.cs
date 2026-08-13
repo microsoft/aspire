@@ -634,6 +634,77 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RetainsPreviousSecretValue_AfterParameterValueIsReplaced()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        // Regression test for the leak the reviewer identified: the runtime "Set parameter" path replaces a
+        // parameter's already-completed WaitForValueTcs with a new value (ParameterProcessor.SetParameterValue),
+        // so re-resolving the SAME retained parameter object later yields only the new value. An already-published
+        // or still-current snapshot can still carry the previous secret value, so redaction accumulates resolved
+        // secret STRINGS add-only — retaining the parameter object alone is not enough because its value has been
+        // overwritten in place. The owner keeps referencing the same parameter throughout; only its value changes.
+        var secret = new ParameterResource("secret", _ => "value-a", secret: true);
+        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs.SetResult("value-a");
+
+        var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(context => context.EnvironmentVariables["SECRET"] = secret);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await PrimeEnvironmentCallbackCacheAsync(owner.Resource, app.Services).DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-a", true)
+            ]
+        }).DefaultTimeout();
+
+        // The same target instance is reused across both calls so the add-only accumulator persists between them,
+        // exactly as it would over the lifetime of a single describe/watch connection.
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        // First pass observes value-a and adds it to the connection's redaction set.
+        var firstResult = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+        var firstSnapshot = Assert.Single(firstResult, r => r.Name == "owner");
+        Assert.Null(Assert.Single(firstSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        // The runtime replaces the parameter's resolved value with value-b (as SetParameterValue does by swapping
+        // the completed WaitForValueTcs), but a lagging snapshot still carries value-a. Re-resolving the same
+        // parameter object now yields only value-b.
+        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs.SetResult("value-b");
+
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-a", true)
+            ]
+        }).DefaultTimeout();
+
+        var secondResult = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+        var secondSnapshot = Assert.Single(secondResult, r => r.Name == "owner");
+
+        // value-a must still be redacted. Without add-only value accumulation, re-resolving the parameter yields
+        // only value-b, so the stale value-a would be emitted in plaintext — the exact leak the reviewer called out.
+        Assert.Null(Assert.Single(secondSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_DoesNotInvokeUncachedResourceCallback_AndLeavesItEvaluable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
