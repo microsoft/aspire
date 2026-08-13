@@ -102,6 +102,98 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
+    public async Task LoadAsync_ValidatesLegacySha256PerFileHashes()
+    {
+        // The attestation-verified v0.0.1 bundle embedded in the CLI predates the SHA-512 switch and carries
+        // SHA-256 per-file hashes. Its exact bytes can't be re-hashed without invalidating the published
+        // attestation, so ValidateFile must keep accepting SHA-256 for such bundles until a SHA-512 release
+        // is re-embedded.
+        var bundleDirectory = CreateTempDirectory();
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        var skillPath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(skillPath, CreateSkillFileContent());
+
+        try
+        {
+            var manifest = new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Skills =
+                [
+                    new SkillBundleSkill
+                    {
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
+                        Files =
+                        [
+                            new SkillBundleFile
+                            {
+                                RelativePath = "SKILL.md",
+                                Sha256 = ComputeSha256(skillPath)
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            await WriteManifestAsync(bundleDirectory, manifest);
+
+            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
+            var skill = Assert.Single(bundle.GetSkillDefinitions());
+            Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ThrowsWhenNoPerFileHashSpecified()
+    {
+        var bundleDirectory = CreateTempDirectory();
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), CreateSkillFileContent());
+
+        try
+        {
+            var manifest = new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
+                Skills =
+                [
+                    new SkillBundleSkill
+                    {
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
+                        Files =
+                        [
+                            new SkillBundleFile
+                            {
+                                RelativePath = "SKILL.md"
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            await WriteManifestAsync(bundleDirectory, manifest);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+
+            Assert.Contains("SHA-512 or SHA-256", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LoadAsync_ThrowsWhenSkillDescriptionExceedsAgentHostLimit()
     {
         var bundleDirectory = CreateTempDirectory();
@@ -482,6 +574,12 @@ public class AspireSkillsBundleTests
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static string CreateSkillFileContent(
