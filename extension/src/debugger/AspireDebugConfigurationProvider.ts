@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -50,12 +50,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             return [this.createDefaultConfiguration(folder)];
         }
 
-        return [this.withProvidedSelectionOrigin({
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: getDebugTargetForCandidate(candidate)
-        })];
+        return [this.createProvidedConfiguration(folder, getDebugTargetForCandidate(candidate))];
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
@@ -221,11 +216,22 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     }
 
     private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
+        return this.createProvidedConfiguration(folder, folder.uri.fsPath);
+    }
+
+    private createProvidedConfiguration(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration {
+        // VS Code remembers a dynamic configuration by name and later searches all workspace
+        // folders for the first match. Use folder-specific names so F5 restores the selected
+        // folder instead of launching the first folder in a multi-root workspace.
+        const name = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
+            ? defaultConfigurationNameForWorkspaceFolder(folder.name)
+            : defaultConfigurationName;
+
         return this.withProvidedSelectionOrigin({
             type: 'aspire',
             request: 'launch',
-            name: defaultConfigurationName,
-            program: folder.uri.fsPath
+            name,
+            program
         });
     }
 

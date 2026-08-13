@@ -10,6 +10,7 @@ import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
+import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
@@ -586,6 +587,7 @@ suite('AspireDebugConfigurationProvider', () => {
         const configs = await provider.provideDebugConfigurations(folder);
 
         assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].name, defaultConfigurationNameForWorkspaceFolder(folder.name));
         assert.strictEqual(configs[0].program, projectPath);
         assert.strictEqual(configs[0][appHostSelectionOriginConfigKey], 'default-discovery');
     });
@@ -603,8 +605,28 @@ suite('AspireDebugConfigurationProvider', () => {
         const configs = await provider.provideDebugConfigurations(folder);
 
         assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].name, defaultConfigurationName);
         assert.strictEqual(configs[0].program, projectPath);
         assert.ok(!(appHostSelectionOriginConfigKey in configs[0]));
+    });
+
+    test('uses unique dynamic launch config names for aliased workspace folders', async () => {
+        const firstFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), '00-documentation', 0);
+        const secondFolder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), '09-application', 1);
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(tempDir, null), launchReservation);
+        sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
+
+        const [firstConfigs, secondConfigs] = await Promise.all([
+            provider.provideDebugConfigurations(firstFolder),
+            provider.provideDebugConfigurations(secondFolder),
+        ]);
+
+        assert.deepStrictEqual(
+            [firstConfigs[0].name, secondConfigs[0].name],
+            [
+                defaultConfigurationNameForWorkspaceFolder(firstFolder.name),
+                defaultConfigurationNameForWorkspaceFolder(secondFolder.name),
+            ]);
     });
 
     test('provides default dynamic launch config when active file is not an AppHost candidate', async () => {
@@ -706,11 +728,11 @@ suite('AspireDebugConfigurationProvider', () => {
     }
 });
 
-function createWorkspaceFolder(folderPath: string): vscode.WorkspaceFolder {
+function createWorkspaceFolder(folderPath: string, name = 'workspace', index = 0): vscode.WorkspaceFolder {
     return {
         uri: vscode.Uri.file(folderPath),
-        name: 'workspace',
-        index: 0,
+        name,
+        index,
     };
 }
 
