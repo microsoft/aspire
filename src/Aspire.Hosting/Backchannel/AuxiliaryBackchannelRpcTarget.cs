@@ -33,6 +33,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
+    // Add-only accumulator of the secret parameters discovered over this connection's lifetime, guarded by
+    // _secretParametersLock. A backchannel connection lives for the duration of a single describe/watch (see
+    // AuxiliaryBackchannelService.HandleClientConnectionAsync), so this spans exactly that read session. It only
+    // ever grows: when DCP restarts a resource it forgets and re-evaluates the resource's callbacks
+    // (DcpExecutor.ForgetCachedCallbackResults), which can swap which secret a resource references. A
+    // still-in-flight snapshot from the prior incarnation can carry the old secret value, so we must keep
+    // redacting every secret we have ever observed rather than only the current pass's set, otherwise the old
+    // value would be published in plaintext (https://github.com/microsoft/aspire/issues/19241).
+    private readonly HashSet<ParameterResource> _accumulatedSecretParameters = new(ReferenceEqualityComparer.Instance);
+    private readonly object _secretParametersLock = new();
+
     #region V2 API Methods
 
     /// <summary>
@@ -1029,8 +1040,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             //   1. A parameter's value can be resolved after the watch starts (e.g. interactive entry).
             //   2. The set of secret parameters a resource references can change across a restart — DCP
             //      clears and re-evaluates environment/argument callbacks on restart (see
-            //      DcpExecutor.ForgetCachedCallbackResults), so a value cached for the connection lifetime
-            //      could omit a newly referenced secret.
+            //      DcpExecutor.ForgetCachedCallbackResults). Peek-only discovery re-runs here and the redaction
+            //      set only ever grows (see GetSecretParametersAsync), so a newly referenced secret is picked up
+            //      while a secret referenced by a prior incarnation — which a lagging snapshot may still carry —
+            //      stays redacted.
             var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
@@ -1262,31 +1275,43 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// The set includes generated parameters (such as the password created by <c>AddPostgres</c>) that are
     /// referenced by a resource but never registered in the model, which enumerating
     /// <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> alone would miss and leak in plaintext
-    /// (https://github.com/microsoft/aspire/issues/19241). It is recomputed per call rather than cached
-    /// because DCP re-evaluates a resource's environment and argument callbacks on restart (see
-    /// <c>DcpExecutor.ForgetCachedCallbackResults</c>), so a restart can change which secrets a resource
-    /// references and a cached set could omit a newly referenced one. Discovery reads the execution-cached
-    /// callback results (<see cref="ResourceDependencyDiscoveryOptions.CacheAnnotationCallbackResults"/>) and
-    /// fails closed: if dependencies cannot be determined the exception propagates rather than emitting a
-    /// snapshot from an incomplete redaction set.
+    /// (https://github.com/microsoft/aspire/issues/19241).
+    /// <para>
+    /// Discovery is <em>peek-only</em>: it reads callback results that DCP already resolved and cached while
+    /// starting the resource (<see cref="ResourceDependencyDiscoveryOptions.PeekCachedCallbackResultsOnly"/>) and
+    /// never invokes a callback itself. This matters because <c>aspire describe</c> observes live resource
+    /// snapshots concurrently with DCP's own cache lifecycle: DCP forgets and re-evaluates a resource's callbacks
+    /// on restart (see <c>DcpExecutor.ForgetCachedCallbackResults</c>). Invoking a callback from here would run it
+    /// with the client's cancellation token and could cache a canceled or faulted task that DCP would then reuse on
+    /// the resource's execution path. A running resource can only appear in a snapshot after DCP has resolved and
+    /// cached its values, so peeking still observes every secret that a snapshot could expose.
+    /// </para>
+    /// <para>
+    /// The discovered set is merged into a per-connection, add-only accumulator: it only ever grows for the life
+    /// of this describe/watch. A restart can change which secret a resource references, and a still-in-flight
+    /// snapshot from the prior incarnation can carry the previous value, so the redaction set must never shrink or
+    /// that value would be emitted in plaintext.
+    /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
     {
         if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
         {
-            return [];
+            lock (_secretParametersLock)
+            {
+                return [.. _accumulatedSecretParameters];
+            }
         }
 
         var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
 
-        // Read the callback results cached during execution rather than re-invoking the callbacks. This
-        // observes the same referenced resources that produced the running resource, does not re-run
-        // stateful callbacks (which could report a different set of parameters), and reflects the values
-        // DCP re-evaluates on restart. Mirrors ContainerCreator.GetHostDependenciesAsync.
+        // Peek at the callback results DCP cached while starting each resource; never invoke a callback. This
+        // observes the same referenced resources that produced the running snapshot without racing DCP's cache
+        // lifecycle or running stateful callbacks with the client's cancellation token.
         var discoveryOptions = new ResourceDependencyDiscoveryOptions
         {
             DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
-            CacheAnnotationCallbackResults = true
+            PeekCachedCallbackResultsOnly = true
         };
 
         // Parameter resources referenced by annotations are not registered in the model, so they are not
@@ -1312,10 +1337,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Fail closed at this confidentiality boundary. If secret dependencies cannot be determined, the
-            // redaction set is incomplete and a snapshot built from it could expose a secret in plaintext, so
-            // propagate instead of continuing with a partial set. Cancellation is intentionally not caught
-            // here so it surfaces as cancellation rather than a leak.
+            // Fail closed at this confidentiality boundary. Peek-only discovery does not invoke callbacks, so a
+            // failure here is unexpected; if it does happen the redaction set is incomplete and a snapshot built
+            // from it could expose a secret in plaintext, so propagate instead of continuing with a partial set.
+            // Cancellation is intentionally not caught here so it surfaces as cancellation rather than a leak.
             logger.LogDebug(ex, "Failed to compute resource dependencies while collecting secret parameters for redaction.");
             throw;
         }
@@ -1328,7 +1353,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        return [.. secretParameters];
+        // Merge this pass's discoveries into the add-only accumulator and return everything seen so far, so a
+        // secret referenced by an earlier incarnation stays redacted even after a restart re-points the resource.
+        lock (_secretParametersLock)
+        {
+            _accumulatedSecretParameters.UnionWith(secretParameters);
+            return [.. _accumulatedSecretParameters];
+        }
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)

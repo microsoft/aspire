@@ -103,6 +103,15 @@ public class EnvironmentCallbackAnnotation : IResourceAnnotation, IEnvCallbackAn
         }
     }
 
+    bool IEnvCallbackAnnotation.TryGetCachedResult(out Task<Dictionary<string, object>>? result)
+    {
+        lock(_lock)
+        {
+            result = _callbackTask;
+            return result is not null;
+        }
+    }
+
     private async Task<Dictionary<string, object>> ExecuteCallbackAsync(EnvironmentCallbackContext context)
     {
         await Callback(context).ConfigureAwait(false);
