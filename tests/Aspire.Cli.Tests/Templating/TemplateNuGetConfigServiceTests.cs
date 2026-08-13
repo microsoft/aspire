@@ -320,6 +320,62 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveTemplatePackageAsync_RequestedChannelWithSourceOverride_ReplacesFallbackSource()
+    {
+        const string channelName = "staging";
+        const string channelSource = "https://channel.example/v3/index.json";
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+
+        var packageCache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfigFile, _) =>
+            {
+                Assert.NotNull(nugetConfigFile);
+                var doc = XDocument.Load(nugetConfigFile.FullName);
+                var sources = doc.Root!.Element("packageSources")!.Elements("add")
+                    .Select(e => (string)e.Attribute("value")!)
+                    .ToArray();
+                Assert.Equal([channelSource, sourceOverride], sources);
+
+                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli
+                    {
+                        Id = TemplateNuGetConfigService.TemplatesPackageName,
+                        Version = "13.5.0-preview.1",
+                        Source = channelSource
+                    }
+                ]);
+            }
+        };
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var channel = PackageChannel.CreateExplicitChannel(
+                    channelName,
+                    PackageChannelQuality.Prerelease,
+                    [
+                        new PackageMapping("Aspire*", channelSource),
+                        new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+                    ],
+                    packageCache,
+                    features: new TestFeatures(),
+                    NullLogger.Instance);
+                return Task.FromResult<IEnumerable<PackageChannel>>([channel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: channelName,
+            VersionOverride: null,
+            SourceOverride: sourceOverride,
+            IncludePrHives: false);
+
+        await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ResolveTemplatePackageAsync_NonExistentRequestedChannel_NotLocal_StillThrowsChannelNotFound()
     {
         // Companion to RequestedChannel_NotFound_Throws: any unrecognized name (typo
