@@ -939,6 +939,51 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
 
+    [Theory]
+    [InlineData("", 1, "File", "First chunk must include a file name.")]
+    [InlineData("file.txt", 0, "File", "First chunk must include an interaction ID.")]
+    [InlineData("file.txt", 1, "", "First chunk must include an input name.")]
+    public async Task UploadFile_FirstChunkMissingRequiredMetadata_ThrowsInvalidArgument(
+        string fileName,
+        int interactionId,
+        string inputName,
+        string expectedMessage)
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = fileName, InteractionId = interactionId, InputName = inputName });
+        requestStream.Complete();
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+        Assert.Equal(expectedMessage, exception.Status.Detail);
+    }
+
+    [Fact]
+    public async Task UploadFile_UnknownInteraction_RejectsUpload()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "file.txt", InteractionId = 1, InputName = "File" });
+        requestStream.Complete();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => dashboardService.UploadFile(requestStream, context));
+
+        Assert.Equal("Interaction '1' is not accepting file uploads.", exception.Message);
+    }
+
     [Fact]
     public async Task UploadFile_ThenResolveFileReferences_ResolvesCorrectly()
     {

@@ -1390,6 +1390,26 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptInputsAsync_FileInputCancellationToken_CancelsFileUploadsBeforeCompletion()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File };
+        var resultTask = interactionService.PromptInputAsync("Select file", "please", input, cancellationToken: cancellationTokenSource.Token);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        fileUploadStore.CancelInteractionCallback = _ => Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        await cancellationTokenSource.CancelAsync();
+        var result = await resultTask;
+
+        Assert.True(result.Canceled);
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
+        Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CanceledInteractions));
+    }
+
+    [Fact]
     public async Task PromptInputsAsync_TextInputComplete_DoesNotUseFileUploadStore()
     {
         var fileUploadStore = new TestInteractionFileUploadStore();
