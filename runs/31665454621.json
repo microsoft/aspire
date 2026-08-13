@@ -1,0 +1,38 @@
+{
+  "run_id": 31665454621,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31665454621",
+  "analyzed_at": "2026-08-13T04:30:08Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19329,
+    "title": "[automated] Fix AppHost discovery E2E synchronization",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "fix-command-palette-discovery-e2e-flake",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19329"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "id": 94339209887,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31665454621/job/94339209887",
+      "classification": "flaky-test",
+      "reason": "Test timed out; matches a known recurring flaky test cause (mauibuildqueue-releasesemaphoreafterlaunchasync, issue #18592). PR only modifies extension e2e test files, unrelated to Aspire.Hosting.Maui.Tests.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 664\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Matches known recurring flaky test (issue #18592), timing-sensitive semaphore release test unrelated to PR changes (PR only touched extension e2e test files)."
+    }
+  ],
+  "causes": ["mauibuildqueue-releasesemaphoreafterlaunchasync"]
+}
