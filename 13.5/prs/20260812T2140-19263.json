@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19232: doctor resolves dotnet path",
+  "mergedAt": "2026-08-12T21:40:37Z",
+  "number": 19263,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Resolve dotnet paths in doctor checks"
+}

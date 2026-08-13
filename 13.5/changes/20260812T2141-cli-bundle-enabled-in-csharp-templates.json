@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "New C# AppHost projects and single-file AppHosts created from templates now default to the Aspire CLI bundle layout, avoiding the opt-in warning and enabling bundled dashboard and DCP features out of the box.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-08-12T21:41:54Z",
+  "lastMergedAt": "2026-08-12T21:41:54Z",
+  "name": "CLI bundle enabled by default in C# AppHost templates",
+  "owner": "DamianEdwards",
+  "prs": [
+    19294
+  ]
+}

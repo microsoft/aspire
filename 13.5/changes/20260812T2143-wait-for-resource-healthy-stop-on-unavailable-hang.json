@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@rsd-darshan"
+  ],
+  "description": "`WaitForResourceHealthyAsync` with `WaitBehavior.StopOnResourceUnavailable` now fails immediately when the named resource is missing from the application model, instead of hanging indefinitely waiting for events that would never arrive.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-08-12T21:43:07Z",
+  "lastMergedAt": "2026-08-12T21:43:07Z",
+  "name": "Fixed hang when waiting on a nonexistent resource",
+  "owner": "mitchdenny",
+  "prs": [
+    19260
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19220: fixed deploy hang on route-less Gateways/Ingresses",
+  "mergedAt": "2026-08-12T21:46:34Z",
+  "number": 19254,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Don't select skipped Gateways and Ingresses for TLS work"
+}

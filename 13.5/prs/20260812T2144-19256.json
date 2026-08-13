@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19214: suppressed CLI progress during console logging",
+  "mergedAt": "2026-08-12T21:44:29Z",
+  "number": 19256,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Suppress CLI progress when console logging is enabled"
+}

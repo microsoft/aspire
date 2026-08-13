@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Backport of #19076: CLI bundle enabled in C# AppHost templates",
+  "mergedAt": "2026-08-12T21:41:54Z",
+  "number": 19294,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Enable CLI bundle in C# AppHost templates"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "rsd-darshan",
+  "comment": "Backport of #17351: fixed WaitBehavior.StopOnResourceUnavailable hang",
+  "mergedAt": "2026-08-12T21:43:07Z",
+  "number": 19260,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Fix WaitBehavior.StopOnResourceUnavailable hanging when resource does not exist in model"
+}

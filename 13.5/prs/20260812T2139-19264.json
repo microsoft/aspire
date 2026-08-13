@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19226: AKS persistent volume support",
+  "mergedAt": "2026-08-12T21:39:43Z",
+  "number": 19264,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Add AKS persistent volume support"
+}

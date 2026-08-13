@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19219: AKS credential pipeline pinned to deployment subscription",
+  "mergedAt": "2026-08-12T21:37:33Z",
+  "number": 19271,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "[release/13.5] Pin AKS credential pipeline to the deployment subscription"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Docker Compose and Kubernetes publish now pin the Aspire Dashboard image to a specific reproducible tag instead of an untagged reference, so generated manifests no longer resolve to a mutable `:latest` build that could drift from the app's Aspire version.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📌",
+  "firstMergedAt": "2026-08-12T21:31:24Z",
+  "lastMergedAt": "2026-08-12T21:31:24Z",
+  "name": "Pinned dashboard image for reproducible deployments",
+  "owner": "IEvangelist",
+  "prs": [
+    19249
+  ]
+}

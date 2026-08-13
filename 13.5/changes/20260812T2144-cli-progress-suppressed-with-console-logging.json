@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "CLI progress spinners and cursor updates no longer interleave with diagnostic logs when console logging is enabled (e.g. `aspire doctor -l trace`), so timestamps and log lines stay clean and unshifted.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-08-12T21:44:29Z",
+  "lastMergedAt": "2026-08-12T21:44:29Z",
+  "name": "Suppressed CLI progress rendering during console logging",
+  "owner": "JamesNK",
+  "prs": [
+    19256
+  ]
+}

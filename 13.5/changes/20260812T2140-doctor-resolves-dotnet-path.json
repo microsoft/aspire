@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire doctor` now resolves the `dotnet` executable through the same PATH lookup used elsewhere before launching the SDK and deprecated-workload checks, so results are consistent instead of relying on an unresolved bare `dotnet` invocation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-08-12T21:40:37Z",
+  "lastMergedAt": "2026-08-12T21:40:37Z",
+  "name": "Fixed dotnet path resolution in doctor checks",
+  "owner": "JamesNK",
+  "prs": [
+    19263
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Pinned dashboard image for reproducible deployments",
+  "mergedAt": "2026-08-12T21:31:24Z",
+  "number": 19249,
+  "runDate": "2026-08-13T06:29:45Z",
+  "status": "included",
+  "title": "Pin published Aspire Dashboard image to a reproducible tag"
+}
