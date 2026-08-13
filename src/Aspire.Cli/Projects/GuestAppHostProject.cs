@@ -2048,11 +2048,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             try
             {
                 var existingBundlePath = Path.GetFullPath(existingCertificateBundle, workingDirectory.FullName);
-                var pathComparison = _environment.IsWindows() || _environment.IsMacOS()
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal;
 
-                if (!string.Equals(existingBundlePath, devCertPemPath, pathComparison))
+                // macOS volumes and Windows directories can opt into case-sensitive paths.
+                if (!string.Equals(existingBundlePath, devCertPemPath, StringComparison.Ordinal))
                 {
                     var devCertificateContents = await File.ReadAllBytesAsync(devCertPemPath, cancellationToken);
                     var existingBundleContents = await File.ReadAllBytesAsync(existingBundlePath, cancellationToken);

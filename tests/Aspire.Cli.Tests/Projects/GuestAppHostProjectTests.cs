@@ -1377,6 +1377,40 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task ConfigureCertificateBundleEnvironmentAsync_DoesNotAssumeMacOSPathsAreCaseInsensitive()
+    {
+        var lowerCaseDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, "certificates");
+        var upperCaseDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, "CERTIFICATES");
+        Directory.CreateDirectory(lowerCaseDirectory);
+        Directory.CreateDirectory(upperCaseDirectory);
+        var devCertificatePath = Path.Combine(lowerCaseDirectory, "aspire.pem");
+        var existingBundlePath = Path.Combine(upperCaseDirectory, "ASPIRE.PEM");
+        await File.WriteAllTextAsync(existingBundlePath, "existing certificate", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(devCertificatePath, "development certificate", TestContext.Current.CancellationToken);
+        var expectedDevCertificateContents = await File.ReadAllBytesAsync(devCertificatePath, TestContext.Current.CancellationToken);
+        var expectedExistingBundleContents = await File.ReadAllBytesAsync(existingBundlePath, TestContext.Current.CancellationToken);
+        byte[] expectedBundleContents = [.. expectedDevCertificateContents, (byte)'\n', .. expectedExistingBundleContents];
+        var project = CreateGuestAppHostProject(environment: TestEnvironment.CreateMacOS());
+        var envVars = new Dictionary<string, string>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = existingBundlePath
+        };
+
+        await project.ConfigureCertificateBundleEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
+            TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(devCertificatePath, envVars["NODE_EXTRA_CA_CERTS"]);
+        Assert.Equal(
+            expectedBundleContents,
+            await File.ReadAllBytesAsync(envVars["NODE_EXTRA_CA_CERTS"], TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ConfigureCertificateBundleEnvironmentAsync_DoesNotSet_WhenPemPathIsNull()
     {
         var project = CreateGuestAppHostProject();
