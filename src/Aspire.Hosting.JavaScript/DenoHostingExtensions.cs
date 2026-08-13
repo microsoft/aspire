@@ -65,9 +65,18 @@ public static partial class JavaScriptHostingExtensions
         // one directory named "data,secret" instead grants `data` and `secret` separately, so the requested path is
         // denied while unrelated paths are granted. Reject it here rather than emit a command line that means
         // something other than what the caller asked for.
+        //
+        // An empty params array intentionally emits an unscoped flag, but an individual null or empty value emits
+        // `--allow-read=` (or the equivalent permission) and Deno 2.9 rejects it. Do not trim values: Deno accepts
+        // whitespace as a permission value.
         foreach (var value in snapshot)
         {
-            if (value is not null && value.Contains(','))
+            if (string.IsNullOrEmpty(value))
+            {
+                throw new ArgumentException("Deno permission values cannot be null or empty.", nameof(values));
+            }
+
+            if (value.Contains(','))
             {
                 var flag = permission.Deny ? $"--deny-{permission.Name}" : $"--allow-{permission.Name}";
                 throw new ArgumentException($"The value '{value}' cannot contain a comma. Deno separates {flag} values with commas and provides no way to escape them, so this value would be interpreted as multiple permissions. Pass each value as a separate argument.", nameof(values));
@@ -113,6 +122,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="kind">The permission to grant.</param>
     /// <param name="values">Optional values that scope the permission. When empty, all access of the selected kind is allowed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="values"/> contains a null or empty value, or a value containing a comma.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -125,6 +135,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="kind">The permission to deny.</param>
     /// <param name="values">Optional values that scope the permission. When empty, all access of the selected kind is denied.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="values"/> contains a null or empty value, or a value containing a comma.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]

@@ -1452,6 +1452,39 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             exception.Message.ReplaceLineEndings("\n"));
     }
 
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, "")]
+    public void WithDenoPermission_RejectsNullOrEmptyValues(bool deny, string? value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+        {
+            if (deny)
+            {
+                denoApp.WithDenoDeny(DenoPermissionKind.Read, value!);
+            }
+            else
+            {
+                denoApp.WithDenoAllow(DenoPermissionKind.Read, value!);
+            }
+        });
+
+        Assert.Equal(
+            "Deno permission values cannot be null or empty. (Parameter 'values')",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task WithDenoPermission_PreservesWhitespaceValue()
+    {
+        var args = await GetDenoArgsAsync(d => d.WithDenoAllow(DenoPermissionKind.Read, " "));
+
+        Assert.Equal(["run", "--allow-read= ", "main.ts"], args);
+    }
+
     [Fact]
     public void WithDenoInstallFalseDoesNotCreateInstallerWhenNoneExists()
     {
