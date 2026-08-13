@@ -2045,7 +2045,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithDotNetTemplateAndSourceOverridePersistsSourceForLaterRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        const string sourceOverride = "https://proxy.example/v3/index.json";
 
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -2054,6 +2054,17 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var runner = CreateTestRunnerWithStandardPackages();
                 runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, cancellationToken) =>
                 {
+                    Assert.NotNull(nugetConfigFile);
+
+                    var document = XDocument.Load(nugetConfigFile.FullName);
+                    var installPackageSources = document.Root!
+                        .Element("packageSources")!
+                        .Elements("add")
+                        .Select(element => (string)element.Attribute("value")!)
+                        .ToArray();
+
+                    Assert.Equal([sourceOverride], installPackageSources);
+
                     return (0, version);
                 };
                 runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, cancellationToken) =>
