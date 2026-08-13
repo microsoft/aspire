@@ -1259,25 +1259,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// as a top-level resource.
     /// </summary>
     /// <remarks>
-    /// Enumerating only <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> misses generated
-    /// parameters such as the password created by <c>AddPostgres("pg")</c>, which is referenced by the
-    /// owning resource but never added to the model. That gap let the owning resource's own environment
-    /// variable (e.g. <c>POSTGRES_PASSWORD</c>) leak the secret in plaintext even though the same value
-    /// was redacted for dependent resources (https://github.com/microsoft/aspire/issues/19241). Discovery
-    /// mirrors <see cref="ParameterProcessor"/> — the component that actually resolves these
-    /// parameters — so the redaction set matches the set of secret values that can flow into a resource.
-    /// <para>
-    /// The set is recomputed on every call rather than cached for the connection lifetime. DCP clears and
-    /// re-evaluates a resource's environment and argument callbacks when it restarts (see
-    /// <c>DcpExecutor.ForgetCachedCallbackResults</c>), so a restart can change which secret parameters a
-    /// resource references; a set cached from an earlier snapshot could then omit a newly referenced secret
-    /// and leak it in plaintext. Discovery reads the execution-cached callback results
-    /// (<see cref="ResourceDependencyDiscoveryOptions.CacheAnnotationCallbackResults"/>) so it observes the
-    /// same referenced resources that produced the running resource instead of re-invoking stateful
-    /// callbacks, which also keeps the per-call cost low. Discovery failures fail closed: rather than return
-    /// an incomplete redaction set, the exception propagates so no snapshot is emitted with an
-    /// under-redacted environment.
-    /// </para>
+    /// The set includes generated parameters (such as the password created by <c>AddPostgres</c>) that are
+    /// referenced by a resource but never registered in the model, which enumerating
+    /// <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> alone would miss and leak in plaintext
+    /// (https://github.com/microsoft/aspire/issues/19241). It is recomputed per call rather than cached
+    /// because DCP re-evaluates a resource's environment and argument callbacks on restart (see
+    /// <c>DcpExecutor.ForgetCachedCallbackResults</c>), so a restart can change which secrets a resource
+    /// references and a cached set could omit a newly referenced one. Discovery reads the execution-cached
+    /// callback results (<see cref="ResourceDependencyDiscoveryOptions.CacheAnnotationCallbackResults"/>) and
+    /// fails closed: if dependencies cannot be determined the exception propagates rather than emitting a
+    /// snapshot from an incomplete redaction set.
     /// </remarks>
     private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
     {
@@ -1310,29 +1301,30 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        foreach (var resource in appModel.Resources)
+        // Compute the transitive dependency closure of every resource in a single multi-root walk. It shares
+        // one visited set across all roots, so each resource's (execution-cached) callbacks are read at most
+        // once. Discovering per resource instead would repeat the traversal for every resource and make the
+        // initial WatchAsync stream — which emits one event per resource — do quadratic work.
+        IReadOnlySet<IResource> dependencies;
+        try
         {
-            IReadOnlySet<IResource> dependencies;
-            try
-            {
-                dependencies = await resource.GetResourceDependenciesAsync(executionContext, discoveryOptions, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Fail closed at this confidentiality boundary. If a resource's secret dependencies cannot
-                // be determined, the redaction set is incomplete and a snapshot built from it could expose a
-                // secret in plaintext, so propagate instead of continuing with a partial set. Cancellation
-                // is intentionally not caught here so it surfaces as cancellation rather than a leak.
-                logger.LogDebug(ex, "Failed to compute dependencies for resource {ResourceName} while collecting secret parameters for redaction.", resource.Name);
-                throw;
-            }
+            dependencies = await ResourceExtensions.GetDependenciesAsync(appModel.Resources, executionContext, discoveryOptions, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fail closed at this confidentiality boundary. If secret dependencies cannot be determined, the
+            // redaction set is incomplete and a snapshot built from it could expose a secret in plaintext, so
+            // propagate instead of continuing with a partial set. Cancellation is intentionally not caught
+            // here so it surfaces as cancellation rather than a leak.
+            logger.LogDebug(ex, "Failed to compute resource dependencies while collecting secret parameters for redaction.");
+            throw;
+        }
 
-            foreach (var parameter in dependencies.OfType<ParameterResource>())
+        foreach (var parameter in dependencies.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
             {
-                if (parameter.Secret)
-                {
-                    secretParameters.Add(parameter);
-                }
+                secretParameters.Add(parameter);
             }
         }
 
