@@ -30,7 +30,7 @@
     <PackageVersion Include="Azure.Storage.Files.DataLake" Version="12.26.0" />
     <PackageVersion Include="Azure.Storage.Files.Shares" Version="12.26.0" />
     <PackageVersion Include="Azure.Storage.Queues" Version="12.26.0" />
-    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.59.0" />
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.61.0" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.1.2" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.1.2" />
     <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.33.0" />
