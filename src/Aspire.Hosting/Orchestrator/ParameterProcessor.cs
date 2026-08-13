@@ -519,7 +519,7 @@ public sealed class ParameterProcessor(
     }
 
     // Internal for testing purposes - allows passing specific parameters to test.
-    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken allParametersResolvedToken)
     {
         var stateModified = false;
 
@@ -542,11 +542,16 @@ public sealed class ParameterProcessor(
                         Intent = MessageIntent.Warning,
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
 
                 if (result.Canceled)
                 {
                     logger.LogDebug("Unresolved parameters notification was dismissed. The notification will not be shown again.");
+
+                    // Keep waitForResolution callers blocked until resource commands resolve the remaining parameters.
+                    var allParametersResolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using var registration = allParametersResolvedToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), allParametersResolved);
+                    await allParametersResolved.Task.ConfigureAwait(false);
                     break;
                 }
 
@@ -588,7 +593,7 @@ public sealed class ParameterProcessor(
                         ShowDismiss = true,
                         EnableMessageMarkdown = true,
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
 
                 if (!valuesPrompt.Canceled)
                 {
@@ -607,7 +612,7 @@ public sealed class ParameterProcessor(
                             continue;
                         }
 
-                        await ApplyParameterValueAsync(parameter, inputValue, shouldSave, cancellationToken).ConfigureAwait(false);
+                        await ApplyParameterValueAsync(parameter, inputValue, shouldSave, allParametersResolvedToken).ConfigureAwait(false);
 
                         if (shouldSave)
                         {

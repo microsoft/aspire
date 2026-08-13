@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -271,17 +272,25 @@ public class ParameterProcessorTests
     }
 
     [Fact]
-    public async Task HandleUnresolvedParametersAsync_WhenUserDismissesNotification_DoesNotShowNotificationAgain()
+    public async Task InitializeParametersAsync_WhenUserDismissesNotification_WaitsWithoutShowingNotificationAgain()
     {
         // Arrange
         var testInteractionService = new TestInteractionService();
-        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var notificationDismissed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var testSink = new TestSink();
+        testSink.MessageLogged += context =>
+        {
+            if (context.Message == "Unresolved parameters notification was dismissed. The notification will not be shown again.")
+            {
+                notificationDismissed.TrySetResult();
+            }
+        };
+        var testLogger = new TestLogger<ParameterProcessor>(new TestLoggerFactory(testSink, enabled: true));
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService, logger: testLogger);
         var parameterWithMissingValue = CreateParameterWithMissingValue("missingParam");
 
-        parameterWithMissingValue.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
         // Act - Start handling unresolved parameters
-        var handleTask = parameterProcessor.HandleUnresolvedParametersAsync([parameterWithMissingValue], CancellationToken.None);
+        var initializeTask = parameterProcessor.InitializeParametersAsync([parameterWithMissingValue], waitForResolution: true);
 
         // Wait for the message bar interaction
         var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
@@ -289,13 +298,16 @@ public class ParameterProcessorTests
 
         // Dismiss the message bar interaction
         messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+        await notificationDismissed.Task.DefaultTimeout();
 
-        await handleTask.DefaultTimeout();
-
-        // Assert - Parameter should remain unresolved without another notification
+        // Assert - Parameter should remain unresolved without another notification and initialization should keep waiting
         Assert.NotNull(parameterWithMissingValue.WaitForValueTcs);
         Assert.False(parameterWithMissingValue.WaitForValueTcs.Task.IsCompleted);
+        Assert.False(initializeTask.IsCompleted);
         Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+
+        await parameterProcessor.SetParameterCoreAsync(parameterWithMissingValue, CreateSetParameterArguments("resolvedValue"), CancellationToken.None).DefaultTimeout();
+        await initializeTask.DefaultTimeout();
     }
 
     [Fact]
