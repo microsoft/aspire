@@ -16,6 +16,8 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
     public ConcurrentQueue<int> StartedInteractions { get; } = new();
     public ConcurrentQueue<(int InteractionId, IReadOnlyList<InteractionFile> Files)> CompletedInteractions { get; } = new();
     public ConcurrentQueue<int> CanceledInteractions { get; } = new();
+    public Action<int, IReadOnlyList<InteractionFile>>? CompleteInteractionCallback { get; set; }
+    public Action<int>? CancelInteractionCallback { get; set; }
 
     public void StartInteraction(int interactionId)
     {
@@ -57,11 +59,13 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
 
     public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
     {
+        CompleteInteractionCallback?.Invoke(interactionId, files);
         CompletedInteractions.Enqueue((interactionId, files));
     }
 
     public void CancelInteraction(int interactionId)
     {
+        CancelInteractionCallback?.Invoke(interactionId);
         CanceledInteractions.Enqueue(interactionId);
 
         foreach (var (fileId, entry) in _files)
