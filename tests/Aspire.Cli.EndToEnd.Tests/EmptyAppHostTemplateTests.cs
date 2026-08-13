@@ -40,4 +40,39 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
     }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task CreateEmptyAppHostWithSourceOverrideDoesNotContactNuGetOrg()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.RunCommandAsync("mkdir source-feed && cp \"$HOME\"/.aspire/hives/*/packages/Aspire.ProjectTemplates.*.nupkg source-feed/", counter);
+        await auto.RunCommandAsync("aspire --version > /tmp/aspire-source-version", counter);
+        await auto.RunCommandAsync("export ASPIRE_CLI_CHANNEL=staging ASPIRE_CLI_VERSION=\"$(cat /tmp/aspire-source-version)\"", counter);
+        await auto.RunCommandAsync("rm -rf \"$HOME/.aspire/logs\" && mkdir -p \"$HOME/.aspire/logs\"", counter);
+
+        await auto.RunCommandAsync(
+            "aspire new aspire-empty --name SourceOverrideApp --output SourceOverrideApp --language csharp " +
+            "--source source-feed --non-interactive --suppress-agent-init --localhost-tld false --log-level Debug",
+            counter,
+            TimeSpan.FromMinutes(2));
+
+        await auto.RunCommandAsync("test -f SourceOverrideApp/apphost.cs", counter);
+        await auto.RunCommandAsync(
+            "find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
+            "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
+            counter);
+    }
 }

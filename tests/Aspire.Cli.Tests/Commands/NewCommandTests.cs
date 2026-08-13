@@ -1252,7 +1252,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore(string language, string? featureFlag, string scaffoldFileName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         string? capturedPackageSourceOverride = null;
         TestInteractionService? interactionService = null;
 
@@ -1282,7 +1282,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language {language} --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language {language} --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -1298,13 +1298,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
 
         var services = CreateServiceCollection(workspace);
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1990,7 +1990,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithTypeScriptStarterAndSourceOverridePersistsSourceAndPlumbsOverride()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
 
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
@@ -2033,7 +2033,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
