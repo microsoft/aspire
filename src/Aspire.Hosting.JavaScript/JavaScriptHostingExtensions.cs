@@ -1109,27 +1109,25 @@ public static partial class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
     {
+        // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
+        // of traces, metrics, and logs with no application-level SDK required. Enable it only when an OTLP HTTP
+        // endpoint is injected; dashboard-free AppHosts remain valid and should not require an observability
+        // backend merely because they host a Deno workload.
+        //
+        // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
+        // of Aspire's default gRPC preference.
+        //
+        // No `--unstable-otel` flag is emitted: native OTel is STABLE on the pinned Deno 2.9.0 image.
+        // Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
+        // alone activates and exports traces/metrics/logs; `--unstable-otel` is no longer listed by
+        // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
+        // "true"/"false" (not "1"), which is what we emit.
+        // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
         builder.WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
             .WithRequiredCommandsFromPackageManager("deno")
-            // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
-            // of traces, metrics, and logs with no application-level SDK required. Enable it only when an OTLP HTTP
-            // endpoint is available; dashboard-free AppHosts remain valid and should not require an observability
-            // backend merely because they host a Deno workload. Publish mode retains the setting because deployment
-            // targets resolve the exporter endpoint from the OtlpExporterAnnotation.
-            //
-            // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
-            // of Aspire's default gRPC preference.
-            //
-            // No `--unstable-otel` flag is emitted: native OTel is STABLE on the pinned Deno 2.9.0 image.
-            // Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
-            // alone activates and exports traces/metrics/logs; `--unstable-otel` is no longer listed by
-            // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
-            // "true"/"false" (not "1"), which is what we emit.
-            // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
             .WithEnvironment(context =>
             {
-                if (context.ExecutionContext.IsPublishMode ||
-                    context.EnvironmentVariables.ContainsKey(OtlpEndpointEnvironmentVariable))
+                if (context.EnvironmentVariables.ContainsKey(OtlpEndpointEnvironmentVariable))
                 {
                     context.EnvironmentVariables["OTEL_DENO"] = "true";
                 }

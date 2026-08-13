@@ -1034,7 +1034,6 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [
                 new("NODE_ENV", "production"),
-                new("OTEL_DENO", "true"),
                 new("PORT", "{js.bindings.http.targetPort}"),
             ],
             environment.OrderBy(pair => pair.Key));
@@ -2321,6 +2320,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         // Deno's built-in OpenTelemetry integration is enabled with a single environment variable.
         Assert.Equal("true", env["OTEL_DENO"]);
+        Assert.Equal("http://localhost:4318", env["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         Assert.Equal("http/protobuf", env["OTEL_EXPORTER_OTLP_PROTOCOL"]);
     }
 
@@ -2338,6 +2338,19 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [new("NODE_ENV", "production")],
             environment.OrderBy(pair => pair.Key));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_DoesNotEnableNativeOpenTelemetryInPlainPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var denoApp = builder.AddDenoApp("denoapp", ".", "main.ts");
+
+        var environment = await EnvironmentVariableEvaluator
+            .GetEnvironmentVariablesAsync(denoApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.False(environment.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"));
+        Assert.False(environment.ContainsKey("OTEL_DENO"));
     }
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only

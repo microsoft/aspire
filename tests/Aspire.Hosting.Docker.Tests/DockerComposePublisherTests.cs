@@ -524,6 +524,45 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         await Verify(composeContent, "yaml");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishAsync_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(dashboardEnabled);
+
+        // Mirror Deno's endpoint-dependent environment callback without adding a JavaScript
+        // integration dependency to the Docker publisher tests.
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithEnvironment(context =>
+            {
+                if (context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint))
+                {
+                    context.EnvironmentVariables["OTEL_DENO"] = "true";
+                }
+            });
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        var hasEndpoint = compose.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = compose.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
     [Fact]
     public async Task PublishAsync_WithDashboard_UsesCustomConfiguration()
     {

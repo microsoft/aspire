@@ -74,7 +74,8 @@ public static class OtlpConfigurationExtensions
             builder.Resource,
             builder.ApplicationBuilder.Configuration,
             builder.ApplicationBuilder.Environment,
-            skipIfEndpointUnavailable: true);
+            skipIfEndpointUnavailable: true,
+            insertBeforeEnvironmentCallbacks: true);
 
         return builder;
     }
@@ -83,12 +84,13 @@ public static class OtlpConfigurationExtensions
         IResource resource,
         IConfiguration configuration,
         IHostEnvironment environment,
-        bool skipIfEndpointUnavailable = false)
+        bool skipIfEndpointUnavailable = false,
+        bool insertBeforeEnvironmentCallbacks = false)
     {
         // Configure OpenTelemetry in projects using environment variables.
         // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/configuration/sdk-environment-variables.md
 
-        resource.Annotations.Add(new EnvironmentCallbackAnnotation(async context =>
+        var annotation = new EnvironmentCallbackAnnotation(async context =>
         {
             if (context.ExecutionContext.IsPublishMode)
             {
@@ -156,7 +158,18 @@ public static class OtlpConfigurationExtensions
                 // - https://github.com/search?q=org%3Aopen-telemetry+OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT&type=code
                 context.EnvironmentVariables[KnownOtelConfigNames.InstrumentationGenAiCaptureMessageContent] = "true";
             }
-        }));
+        });
+
+        if (insertBeforeEnvironmentCallbacks)
+        {
+            // Endpoint-dependent environment callbacks must observe the endpoint regardless of the order in
+            // which integrations added their annotations.
+            resource.Annotations.Insert(0, annotation);
+        }
+        else
+        {
+            resource.Annotations.Add(annotation);
+        }
     }
 
     private static bool HasConfiguredOtlpEndpoint(IConfiguration configuration, OtlpProtocol? requiredProtocol)

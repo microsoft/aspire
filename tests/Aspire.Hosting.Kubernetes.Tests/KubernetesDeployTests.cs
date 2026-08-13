@@ -1691,6 +1691,52 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("OTEL_SERVICE_NAME", content);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dashboard_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithDashboard(dashboardEnabled);
+
+        // Mirror Deno's endpoint-dependent environment callback without adding a JavaScript
+        // integration dependency to the Kubernetes publisher tests.
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithEnvironment(context =>
+            {
+                if (context.EnvironmentVariables.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"))
+                {
+                    context.EnvironmentVariables["OTEL_DENO"] = "true";
+                }
+            });
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+        outputHelper.WriteLine(content);
+
+        var hasEndpoint = content.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = content.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
     [Fact]
     public void Dashboard_ResourceHasCorrectEndpoints()
     {

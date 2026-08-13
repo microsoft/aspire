@@ -79,9 +79,12 @@ public class WithOtlpExporterTests
     public async Task OptionalHttpOtlpSkipsEnvironmentWhenEndpointIsUnavailable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = true);
+        var endpointInjected = false;
 
         var container = builder.AddResource(new ContainerResource("testSource"))
-            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithEnvironment(context =>
+                endpointInjected = context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
         using var app = builder.Build();
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -89,8 +92,34 @@ public class WithOtlpExporterTests
             serviceProvider: app.Services).DefaultTimeout();
 
         Assert.Empty(config);
+        Assert.False(endpointInjected);
         var annotation = Assert.Single(container.Resource.Annotations.OfType<OtlpExporterAnnotation>());
         Assert.Equal(OtlpProtocol.HttpProtobuf, annotation.RequiredProtocol);
+    }
+
+    [Fact]
+    public async Task OptionalHttpOtlpEndpointIsAvailableToLaterEnvironmentCallbacks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
+
+        var container = builder.AddResource(new ContainerResource("testSource"))
+            .WithEnvironment(context =>
+            {
+                if (context.EnvironmentVariables.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint))
+                {
+                    context.EnvironmentVariables["OTEL_DENO"] = "true";
+                }
+            })
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+        using var app = builder.Build();
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services).DefaultTimeout();
+
+        Assert.Equal("http://localhost:4318", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.Equal("true", config["OTEL_DENO"]);
     }
 
     [InlineData(default, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "otlp-grpc", "http2", 52000, "grpc")]

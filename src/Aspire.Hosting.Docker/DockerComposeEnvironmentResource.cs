@@ -378,7 +378,9 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             };
 
             // Configure OTLP environment variables
-            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            // Inject the endpoint before workload callbacks that conditionally enable runtime-specific
+            // telemetry exporters based on its presence.
+            resourceWithEnv.Annotations.Insert(0, new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
