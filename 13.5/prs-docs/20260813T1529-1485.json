@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19303 which is not in the 13.5 changelog batch",
+  "mergedAt": "2026-08-13T15:29:21Z",
+  "number": 1485,
+  "runDate": "2026-08-13T18:22:23Z",
+  "status": "excluded",
+  "title": "[docs] Use SHA-512 for Aspire Skills bundle integrity, hide remote-fetch toggle"
+}

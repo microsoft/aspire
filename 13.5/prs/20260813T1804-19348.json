@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #19306 (bug fix: custom IDE project launch argument regression)",
+  "mergedAt": "2026-08-13T18:04:24Z",
+  "number": 19348,
+  "runDate": "2026-08-13T18:22:02Z",
+  "status": "included",
+  "title": "[release/13.5] Fix custom IDE project launch"
+}

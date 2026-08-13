@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Uploaded files used by `IInteractionService` (e.g., file prompts) could be left on disk after failed or canceled interactions, growing disk usage over the AppHost's lifetime. Uploads are now tied to their owning interaction and input, and failed or canceled uploads are cleaned up immediately, preventing stale or mismatched file references from being submitted.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-08-13T18:10:01Z",
+  "lastMergedAt": "2026-08-13T18:10:01Z",
+  "name": "Cleaned up uploaded interaction files",
+  "owner": "JamesNK",
+  "prs": [
+    19334
+  ]
+}

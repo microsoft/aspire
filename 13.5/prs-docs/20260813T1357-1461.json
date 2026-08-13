@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs tooling/infrastructure hardening, not tied to a specific changelog entry",
+  "mergedAt": "2026-08-13T13:57:57Z",
+  "number": 1461,
+  "runDate": "2026-08-13T18:22:23Z",
+  "status": "excluded",
+  "title": "Harden API data generation and fix C# deep links"
+}

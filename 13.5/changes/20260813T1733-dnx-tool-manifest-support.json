@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "C# AppHost projects can now opt into DNX resolution that honors an in-scope .NET local tools manifest, letting a repository pin the Aspire CLI version in `.config/dotnet-tools.json` and have that version used when launching an AppHost through `dotnet run`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📌",
+  "firstMergedAt": "2026-08-13T17:33:41Z",
+  "lastMergedAt": "2026-08-13T17:33:41Z",
+  "name": "Local tool manifest support for AppHost DNX invocation",
+  "owner": "DamianEdwards",
+  "prs": [
+    19315
+  ]
+}

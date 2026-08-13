@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19322 (bug fix: uploaded interaction files not cleaned up)",
+  "mergedAt": "2026-08-13T18:10:01Z",
+  "number": 19334,
+  "runDate": "2026-08-13T18:22:02Z",
+  "status": "included",
+  "title": "[release/13.5] Clean up uploaded interaction files"
+}

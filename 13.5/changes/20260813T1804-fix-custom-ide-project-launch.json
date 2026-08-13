@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a regression where custom IDE project launches (e.g., Azure Functions) combining launch-profile arguments with AppHost arguments received an invalid `--` separator meant only for `dotnet run`/`dotnet watch`, producing malformed commands. Custom launchers now receive their arguments directly, and Aspire no longer attempts an invalid Process fallback when no runnable process invocation was prepared.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-08-13T18:04:24Z",
+  "lastMergedAt": "2026-08-13T18:04:24Z",
+  "name": "Fixed custom IDE project launch argument handling",
+  "owner": "karolz-ms",
+  "prs": [
+    19348
+  ]
+}
