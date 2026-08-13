@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Dashboard;
 /// <summary>
 /// Stores uploaded files from the Dashboard and maps file IDs to their temporary paths on disk.
 /// </summary>
-internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IAsyncDisposable
+internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IDisposable
 {
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
@@ -271,11 +271,11 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         return files.Count > 0 ? files : null;
     }
 
-    public ValueTask DisposeAsync()
+    public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
-            return ValueTask.CompletedTask;
+            return;
         }
 
         _logger.LogDebug(
@@ -295,8 +295,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             }
         }
         _interactions.Clear();
-
-        return ValueTask.CompletedTask;
     }
 
     // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
