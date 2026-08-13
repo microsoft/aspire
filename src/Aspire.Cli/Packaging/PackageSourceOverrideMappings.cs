@@ -15,9 +15,13 @@ internal static class PackageSourceOverrideMappings
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentNullException.ThrowIfNull(workingDirectory);
 
+        // On Unix, Uri treats DOS-shaped paths such as C:/feed as absolute file URIs.
+        // Preserve a file URI only when the source explicitly includes the file: scheme.
         if (Path.IsPathFullyQualified(source) ||
             UrlHelper.IsHttpUrl(source) ||
-            (Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.IsFile))
+            (source.StartsWith("file:", StringComparison.OrdinalIgnoreCase) &&
+                Uri.TryCreate(source, UriKind.Absolute, out var uri) &&
+                uri.IsFile))
         {
             return source;
         }

@@ -17,4 +17,17 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "relative:feed"), result);
     }
+
+    [Theory]
+    [InlineData("C:/feed")]
+    [InlineData("a:/feed")]
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    public void ResolveForWorkingDirectory_DosShapedRelativePath_ResolvesAgainstWorkingDirectory(string source)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, source), result);
+    }
 }
