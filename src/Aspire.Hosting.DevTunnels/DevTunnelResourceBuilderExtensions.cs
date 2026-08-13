@@ -793,28 +793,28 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
         var publicUrl = NormalizeUrl(portUri);
         var localUrl = portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString;
-        List<string> markdownLines =
+        List<string> lines =
         [
-            $"## {MessageStrings.ShowTunnelUrlsCommandResultHeading}",
+            MessageStrings.ShowTunnelUrlsCommandResultHeading,
             "",
-            $"- **{MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel}:** <{publicUrl}>"
+            $"{MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel}: {publicUrl}"
         ];
 
         var inspectUrl = GetInspectUrl(portUri);
         if (inspectUrl is not null)
         {
-            markdownLines.Add($"- **{MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel}:** <{inspectUrl}>");
+            lines.Add($"{MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel}: {inspectUrl}");
         }
 
         if (!string.IsNullOrWhiteSpace(localUrl))
         {
-            markdownLines.Add($"- **{MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel}:** <{localUrl}>");
+            lines.Add($"{MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel}: {localUrl}");
         }
 
         return Task.FromResult(CommandResults.Success(
             MessageStrings.ShowTunnelUrlsCommandSuccess,
-            string.Join(Environment.NewLine, markdownLines),
-            CommandResultFormat.Markdown,
+            string.Join(Environment.NewLine, lines),
+            CommandResultFormat.Text,
             displayImmediately: true));
     }
 

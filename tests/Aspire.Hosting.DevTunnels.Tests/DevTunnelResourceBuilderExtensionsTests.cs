@@ -406,7 +406,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task ShowTunnelUrlsCommand_ReturnsMarkdownResultWithRelevantUrls()
+    public async Task ShowTunnelUrlsCommand_ReturnsPlaintextResultWithRelevantUrls()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -462,11 +462,14 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.True(result.Success);
         Assert.Equal("Dev tunnel URLs are available.", result.Message);
         Assert.NotNull(result.Data);
-        Assert.Equal(CommandResultFormat.Markdown, result.Data.Format);
+        Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.True(result.Data.DisplayImmediately);
-        Assert.Contains("- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>", result.Data.Value);
-        Assert.Contains("- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>", result.Data.Value);
-        Assert.Contains("- **Local endpoint URL:** <http://localhost:3000>", result.Data.Value);
+        Assert.Equal(
+            $"Dev tunnel URLs{Environment.NewLine}{Environment.NewLine}" +
+            $"Tunnel URL: https://n4skq32k-3000.use.devtunnels.ms{Environment.NewLine}" +
+            $"Inspect URL: https://n4skq32k-3000-inspect.use.devtunnels.ms{Environment.NewLine}" +
+            "Local endpoint URL: http://localhost:3000",
+            result.Data.Value);
     }
 
     [Fact]
@@ -499,9 +502,9 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.True(result.Success);
         Assert.NotNull(result.Data);
         Assert.Equal(
-            $"## Dev tunnel URLs{Environment.NewLine}{Environment.NewLine}" +
-            $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
-            "- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>",
+            $"Dev tunnel URLs{Environment.NewLine}{Environment.NewLine}" +
+            $"Tunnel URL: https://n4skq32k-3000.use.devtunnels.ms{Environment.NewLine}" +
+            "Inspect URL: https://n4skq32k-3000-inspect.use.devtunnels.ms",
             result.Data.Value);
     }
 
