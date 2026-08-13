@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,7 +19,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
 {
     private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(10);
 
-    private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<int, FileInteraction> _interactions = new();
     private readonly ITempFileSystemService _tempFileSystem;
     private readonly ILogger<InteractionFileUploadStore> _logger;
@@ -74,8 +74,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             var tempFile = _tempFileSystem.CreateTempFile(string.IsNullOrEmpty(safeName) ? null : safeName);
             var fileId = Guid.NewGuid().ToString("N");
 
-            _files[fileId] = new FileEntry(tempFile, interactionId, inputName);
-            interaction.FileIds.Add(fileId);
+            interaction.Files[fileId] = new FileEntry(tempFile, inputName);
             _logger.LogDebug(
                 "Created uploaded file entry {FileId} for interaction {InteractionId}, input {InputName}, and file {FileName}.",
                 fileId,
@@ -89,9 +88,9 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// <summary>
     /// Marks a file upload as successfully completed.
     /// </summary>
-    public void CompleteUpload(string fileId)
+    public void CompleteUpload(int interactionId, string fileId)
     {
-        if (!_files.TryGetValue(fileId, out var entry))
+        if (!TryGetEntry(interactionId, fileId, out var entry))
         {
             return;
         }
@@ -106,12 +105,12 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         _logger.LogDebug(
             "Completed upload for file entry {FileId}, interaction {InteractionId}, and input {InputName}.",
             fileId,
-            entry.InteractionId,
+            interactionId,
             entry.InputName);
 
         if (removeEntry)
         {
-            RemoveEntry(fileId);
+            RemoveEntry(interactionId, fileId);
         }
     }
 
@@ -120,8 +119,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// </summary>
     public string? GetFilePath(string fileId, int interactionId, string inputName)
     {
-        return _files.TryGetValue(fileId, out var entry) &&
-            entry.InteractionId == interactionId &&
+        return TryGetEntry(interactionId, fileId, out var entry) &&
             string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
                 ? entry.TempFile.Path
                 : null;
@@ -130,27 +128,20 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// <summary>
     /// Gets the original file name for a given file ID.
     /// </summary>
-    public string? GetFileName(string fileId)
+    public string? GetFileName(int interactionId, string fileId)
     {
-        return _files.TryGetValue(fileId, out var entry) ? Path.GetFileName(entry.TempFile.Path) : null;
+        return TryGetEntry(interactionId, fileId, out var entry) ? Path.GetFileName(entry.TempFile.Path) : null;
     }
 
     /// <summary>
     /// Removes a file entry and deletes the associated file on disk.
     /// </summary>
-    public void RemoveEntry(string fileId)
+    public void RemoveEntry(int interactionId, string fileId)
     {
-        if (!_files.TryRemove(fileId, out var entry))
+        if (!_interactions.TryGetValue(interactionId, out var interaction) ||
+            !interaction.Files.TryRemove(fileId, out var entry))
         {
             return;
-        }
-
-        if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
-        {
-            lock (interaction)
-            {
-                interaction.FileIds.Remove(fileId);
-            }
         }
 
         entry.TempFile.Dispose();
@@ -158,8 +149,10 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         _logger.LogDebug(
             "Removed uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}.",
             fileId,
-            entry.InteractionId,
+            interactionId,
             entry.InputName);
+
+        RemoveInteractionIfEmpty(interactionId, interaction);
     }
 
     /// <summary>
@@ -173,27 +166,19 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         }
 
         var filesById = files.ToLookup(file => file.Id, StringComparer.Ordinal);
-        string[] fileIds;
-
         lock (interaction)
         {
             interaction.State = FileInteractionState.Complete;
-            fileIds = [.. interaction.FileIds];
         }
-        _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
 
         _logger.LogDebug(
             "Completed file upload tracking for interaction {InteractionId} with {FileCount} uploaded files and {ReferenceCount} file references.",
             interactionId,
-            fileIds.Length,
+            interaction.Files.Count,
             files.Count);
 
-        foreach (var fileId in fileIds)
+        foreach (var (fileId, entry) in interaction.Files)
         {
-            if (!_files.TryGetValue(fileId, out var entry))
-            {
-                continue;
-            }
             lock (entry)
             {
                 entry.InteractionState = FileInteractionState.Complete;
@@ -202,6 +187,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                     .ToArray();
             }
         }
+
+        RemoveInteractionIfEmpty(interactionId, interaction);
     }
 
     /// <summary>
@@ -214,25 +201,18 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             return;
         }
 
-        string[] fileIds;
         lock (interaction)
         {
             interaction.State = FileInteractionState.Canceled;
-            fileIds = [.. interaction.FileIds];
         }
-        _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
 
         _logger.LogDebug(
             "Canceled file upload tracking for interaction {InteractionId} with {FileCount} uploaded files.",
             interactionId,
-            fileIds.Length);
+            interaction.Files.Count);
 
-        foreach (var fileId in fileIds)
+        foreach (var (fileId, entry) in interaction.Files)
         {
-            if (!_files.TryGetValue(fileId, out var entry))
-            {
-                continue;
-            }
             bool removeEntry;
             lock (entry)
             {
@@ -242,27 +222,32 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
 
             if (removeEntry)
             {
-                RemoveEntry(fileId);
+                RemoveEntry(interactionId, fileId);
             }
         }
+
+        RemoveInteractionIfEmpty(interactionId, interaction);
     }
 
     internal void RemoveUnreferencedFiles()
     {
-        foreach (var (fileId, entry) in _files)
+        foreach (var (interactionId, interaction) in _interactions)
         {
-            bool removeEntry;
-            lock (entry)
+            foreach (var (fileId, entry) in interaction.Files)
             {
-                removeEntry = entry.UploadComplete &&
-                    (entry.InteractionState == FileInteractionState.Canceled ||
-                     entry.InteractionState == FileInteractionState.Complete &&
-                     (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
-            }
+                bool removeEntry;
+                lock (entry)
+                {
+                    removeEntry = entry.UploadComplete &&
+                        (entry.InteractionState == FileInteractionState.Canceled ||
+                         entry.InteractionState == FileInteractionState.Complete &&
+                         (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
+                }
 
-            if (removeEntry)
-            {
-                RemoveEntry(fileId);
+                if (removeEntry)
+                {
+                    RemoveEntry(interactionId, fileId);
+                }
             }
         }
     }
@@ -328,7 +313,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
                 continue;
             }
-            var fileName = string.IsNullOrEmpty(fileRef.Name) ? store.GetFileName(fileRef.Id) ?? "" : fileRef.Name;
+            var fileName = string.IsNullOrEmpty(fileRef.Name) ? store.GetFileName(interactionId, fileRef.Id) ?? "" : fileRef.Name;
             files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
         }
 
@@ -342,11 +327,11 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         _cleanupCts.Dispose();
 
         _logger.LogDebug(
-            "Disposing file upload store with {FileCount} uploaded files and {InteractionCount} active interactions.",
-            _files.Count,
+            "Disposing file upload store with {FileCount} uploaded files and {InteractionCount} tracked interactions.",
+            _interactions.Values.Sum(interaction => interaction.Files.Count),
             _interactions.Count);
 
-        foreach (var entry in _files.Values)
+        foreach (var entry in _interactions.Values.SelectMany(interaction => interaction.Files.Values))
         {
             try
             {
@@ -357,7 +342,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 // Best effort cleanup.
             }
         }
-        _files.Clear();
         _interactions.Clear();
     }
 
@@ -369,10 +353,27 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         public string Name { get; set; } = "";
     }
 
-    private sealed class FileEntry(TempFile tempFile, int interactionId, string inputName)
+    private bool TryGetEntry(int interactionId, string fileId, [NotNullWhen(true)] out FileEntry? entry)
+    {
+        entry = null;
+        return _interactions.TryGetValue(interactionId, out var interaction) &&
+            interaction.Files.TryGetValue(fileId, out entry);
+    }
+
+    private void RemoveInteractionIfEmpty(int interactionId, FileInteraction interaction)
+    {
+        lock (interaction)
+        {
+            if (interaction.State != FileInteractionState.InProgress && interaction.Files.IsEmpty)
+            {
+                _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
+            }
+        }
+    }
+
+    private sealed class FileEntry(TempFile tempFile, string inputName)
     {
         public TempFile TempFile { get; } = tempFile;
-        public int InteractionId { get; } = interactionId;
         public string InputName { get; } = inputName;
         public bool UploadComplete { get; set; }
         public FileInteractionState InteractionState { get; set; }
@@ -381,7 +382,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
 
     private sealed class FileInteraction
     {
-        public HashSet<string> FileIds { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, FileEntry> Files { get; } = new(StringComparer.Ordinal);
         public FileInteractionState State { get; set; }
     }
 

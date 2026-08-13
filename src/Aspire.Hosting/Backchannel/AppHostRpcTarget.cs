@@ -278,11 +278,11 @@ internal class AppHostRpcTarget(
         }
         catch
         {
-            fileUploadStore.RemoveEntry(fileId);
+            fileUploadStore.RemoveEntry(request.InteractionId, fileId);
             throw;
         }
 
-        fileUploadStore.CompleteUpload(fileId);
+        fileUploadStore.CompleteUpload(request.InteractionId, fileId);
 
         return new UploadFileResponse { FileId = fileId };
     }

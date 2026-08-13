@@ -34,7 +34,7 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
         return (fileId, filePath);
     }
 
-    public void CompleteUpload(string fileId)
+    public void CompleteUpload(int interactionId, string fileId)
     {
     }
 
@@ -47,14 +47,17 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
                 : null;
     }
 
-    public string? GetFileName(string fileId)
+    public string? GetFileName(int interactionId, string fileId)
     {
-        return _files.TryGetValue(fileId, out var entry) ? entry.OriginalFileName : null;
+        return _files.TryGetValue(fileId, out var entry) && entry.InteractionId == interactionId ? entry.OriginalFileName : null;
     }
 
-    public void RemoveEntry(string fileId)
+    public void RemoveEntry(int interactionId, string fileId)
     {
-        _files.TryRemove(fileId, out _);
+        if (_files.TryGetValue(fileId, out var entry) && entry.InteractionId == interactionId)
+        {
+            _files.TryRemove(fileId, out _);
+        }
     }
 
     public void CompleteInteraction(int interactionId, IReadOnlyList<InteractionFile> files)
