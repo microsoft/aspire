@@ -2031,12 +2031,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Explicit AppHost configuration takes precedence over the inherited environment.
         // Environment variable names are case-insensitive on Windows.
-        var configuredKey = environmentVariables.ContainsKey(environmentVariableName)
-            ? environmentVariableName
-            : _environment.IsWindows()
-                ? environmentVariables.Keys.FirstOrDefault(key => string.Equals(key, environmentVariableName, StringComparison.OrdinalIgnoreCase))
-                : null;
-        var existingCertificateBundle = configuredKey is not null
+        var configuredKeys = _environment.IsWindows()
+            ? environmentVariables.Keys
+                .Where(key => string.Equals(key, environmentVariableName, StringComparison.OrdinalIgnoreCase))
+                .ToArray()
+            : environmentVariables.ContainsKey(environmentVariableName)
+                ? [environmentVariableName]
+                : [];
+        var existingCertificateBundle = configuredKeys.LastOrDefault() is { } configuredKey
             ? environmentVariables[configuredKey]
             : _environment.GetEnvironmentVariable(environmentVariableName);
         var certificateBundlePath = devCertPemPath;
@@ -2085,18 +2087,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
         }
 
-        SetCertificateBundleEnvironmentVariable(environmentVariables, configuredKey, environmentVariableName, certificateBundlePath);
+        SetCertificateBundleEnvironmentVariable(environmentVariables, configuredKeys, environmentVariableName, certificateBundlePath);
     }
 
     private static void SetCertificateBundleEnvironmentVariable(
         IDictionary<string, string> environmentVariables,
-        string? configuredKey,
+        IEnumerable<string> configuredKeys,
         string environmentVariableName,
         string value)
     {
-        if (configuredKey is not null && !string.Equals(configuredKey, environmentVariableName, StringComparison.Ordinal))
+        foreach (var configuredKey in configuredKeys)
         {
-            environmentVariables.Remove(configuredKey);
+            if (!string.Equals(configuredKey, environmentVariableName, StringComparison.Ordinal))
+            {
+                environmentVariables.Remove(configuredKey);
+            }
         }
 
         environmentVariables[environmentVariableName] = value;

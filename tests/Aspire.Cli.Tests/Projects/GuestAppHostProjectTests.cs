@@ -1396,6 +1396,7 @@ public class GuestAppHostProjectTests : IDisposable
     [Fact]
     public async Task ConfigureCertificateBundleEnvironmentAsync_CreatesAndReusesCombinedBundle_WhenAlreadySet()
     {
+        const string certificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS";
         const string configuredNodeExtraCaCertsKey = "Node_Extra_Ca_Certs";
         var homeDirectory = _workspace.CreateDirectory("bundle-home");
         var existingBundlePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "existing-ca-certs.pem");
@@ -1412,11 +1413,12 @@ public class GuestAppHostProjectTests : IDisposable
 
         var environment = TestEnvironment.CreateWindows(new Dictionary<string, string?>
         {
-            ["NODE_EXTRA_CA_CERTS"] = inheritedBundlePath
+            [certificateBundleEnvironmentVariable] = inheritedBundlePath
         });
         var project = CreateGuestAppHostProject(environment: environment, homeDirectory: homeDirectory);
         var envVars = new Dictionary<string, string>
         {
+            [certificateBundleEnvironmentVariable] = inheritedBundlePath,
             [configuredNodeExtraCaCertsKey] = Path.GetFileName(existingBundlePath)
         };
         var expectedBundleContents = Encoding.UTF8.GetBytes($"{devCertificateContents}\n{existingBundleContents}");
@@ -1432,24 +1434,24 @@ public class GuestAppHostProjectTests : IDisposable
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
-            "NODE_EXTRA_CA_CERTS",
+            certificateBundleEnvironmentVariable,
             "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedBundlePath, envVars["NODE_EXTRA_CA_CERTS"]);
+        Assert.Equal(expectedBundlePath, envVars[certificateBundleEnvironmentVariable]);
         Assert.DoesNotContain(configuredNodeExtraCaCertsKey, envVars.Keys);
         Assert.Equal(expectedBundleContents, await File.ReadAllBytesAsync(expectedBundlePath, TestContext.Current.CancellationToken));
 
         var cachedWriteTime = DateTime.UtcNow.AddDays(-1);
         File.SetLastWriteTimeUtc(expectedBundlePath, cachedWriteTime);
         cachedWriteTime = File.GetLastWriteTimeUtc(expectedBundlePath);
-        envVars.Remove("NODE_EXTRA_CA_CERTS");
+        envVars.Remove(certificateBundleEnvironmentVariable);
         envVars[configuredNodeExtraCaCertsKey] = Path.GetFileName(existingBundlePath);
         await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
-            "NODE_EXTRA_CA_CERTS",
+            certificateBundleEnvironmentVariable,
             "typescript-nodejs",
             TestContext.Current.CancellationToken);
 

@@ -17,6 +17,13 @@ public interface ILanguageSupport
     /// <summary>
     /// Gets the environment variable that accepts an additional PEM certificate bundle for this language runtime.
     /// </summary>
+    /// <remarks>
+    /// Return the name of the runtime-specific environment variable, rather than a certificate path.
+    /// For example:
+    /// <code>
+    /// public string? CertificateBundleEnvironmentVariable => "NODE_EXTRA_CA_CERTS";
+    /// </code>
+    /// </remarks>
     string? CertificateBundleEnvironmentVariable => null;
 
     /// <summary>
