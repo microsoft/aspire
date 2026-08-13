@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
@@ -200,6 +201,17 @@ public static class TerminalResourceBuilderExtensions
         var metadataLogger = @event.Services.GetService<ILoggerFactory>()?.CreateLogger("Aspire.Hosting.WithTerminal");
         var appHostPid = Environment.ProcessId;
         var createdAtUtc = DateTime.UtcNow;
+
+        // Before writing this run's sidecars, reclaim terminal-host files left behind by any
+        // AppHost that exited ungracefully (SIGKILL / crash) and so never ran its cleanup. A
+        // graceful `aspire stop` is already handled by the terminal host's own SIGTERM teardown
+        // plus the ApplicationStopped backstop below, but an ungraceful exit strands
+        // {id}.dcp.sock / {id}.host.sock (and the sidecar) forever. ~/.aspire/trmnl/ is shared by
+        // every AppHost on the machine, so we only delete files whose owning AppHost PID is
+        // provably gone — keyed off the sidecar's AppHostPid, which exists for exactly this GC.
+        // See https://github.com/microsoft/aspire/issues/19302.
+        SweepOrphanedTerminalFiles(trmnlDirectory, metadataLogger);
+
         for (var i = 0; i < replicaCount; i++)
         {
             var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, parent.Name, i);
@@ -267,16 +279,22 @@ public static class TerminalResourceBuilderExtensions
             replicaIds[i] = replicaId;
         }
 
-        // Best-effort cleanup callback on ApplicationStopped so stale files for this run
-        // are removed even if the host children crash mid-run.
+        // Backstop cleanup on ApplicationStopped. The terminal-host children now own their own
+        // socket teardown on graceful shutdown — they handle SIGTERM and unlink
+        // {id}.dcp.sock / {id}.host.sock as their final step (see Aspire.TerminalHost) — so on a
+        // clean `aspire stop` the .sock files are usually already gone by the time this runs.
+        // This callback still matters for two cases:
+        //   1. metadata.json — only the AppHost ever writes it and the child never deletes it, so
+        //      this is the sole cleanup path for the sidecar.
+        //   2. children that died ungracefully mid-run (crash / SIGKILL) and never got to unlink
+        //      their sockets.
         //
-        // Why ApplicationStopped (not ApplicationStopping): the terminal-host child
-        // processes also unlink their own UDS endpoints on graceful shutdown. Deleting
-        // after the children have fully exited avoids racing the children mid-drain.
+        // Why ApplicationStopped (not ApplicationStopping): deleting after the children have fully
+        // exited avoids racing a child that is still mid-drain and could re-bind its UDS.
         //
-        // Why we delete by replica-id prefix instead of `rm -r trmnlDirectory`: the
-        // directory is now shared across every AppHost on the machine. We only own files
-        // whose name starts with one of OUR replica ids.
+        // Why we delete by replica-id prefix instead of `rm -r trmnlDirectory`: the directory is
+        // shared across every AppHost on the machine. We only own files whose name starts with one
+        // of OUR replica ids.
         var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
         var loggerFactory = @event.Services.GetService<ILoggerFactory>();
         if (lifetime is not null)
@@ -385,6 +403,111 @@ public static class TerminalResourceBuilderExtensions
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger?.LogDebug(ex, "Failed to enumerate terminal host files for '{ReplicaId}'.", replicaId);
+        }
+    }
+
+    private static void SweepOrphanedTerminalFiles(string trmnlDirectory, ILogger? logger)
+    {
+        // Machine-wide GC of terminal-host files whose owning AppHost is gone. Safe to run on
+        // every AppHost start: the PID guards below make it idempotent and prevent it from ever
+        // touching a live AppHost's files (including sibling terminal resources of THIS run, which
+        // share our own process id).
+        try
+        {
+            if (!Directory.Exists(trmnlDirectory))
+            {
+                return;
+            }
+
+            // Snapshot the listing up front (GetFiles, not the lazy EnumerateFiles) because the
+            // loop deletes files from this same directory as it goes; iterating a live enumeration
+            // while mutating it is undefined on some platforms.
+            foreach (var candidatePath in Directory.GetFiles(trmnlDirectory))
+            {
+                // Only inspect metadata sidecars ("{replicaId}.metadata.json") — the owning PID we
+                // key off lives only there. Filtering in code (rather than with a
+                // "*.metadata.json" search pattern) sidesteps Win32 multi-dot search-pattern quirks.
+                if (!candidatePath.EndsWith("." + TerminalHostPaths.MetadataSuffix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                TerminalHostMetadata? metadata;
+                try
+                {
+                    // Sidecars are tiny (<1 KiB) UTF-8 JSON written by WriteMetadataSidecar.
+                    // ReadAllText strips a BOM if a sidecar was ever hand-edited with one.
+                    metadata = JsonSerializer.Deserialize<TerminalHostMetadata>(File.ReadAllText(candidatePath));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                {
+                    // A half-written sidecar (owner killed mid-write) or one from a newer/unknown
+                    // schema. Skip rather than delete: without a trustworthy PID we can't prove the
+                    // owner is dead, and a live AppHost may be writing this very file right now.
+                    logger?.LogDebug(ex, "Skipping unreadable terminal host sidecar '{Path}' during startup sweep.", candidatePath);
+                    continue;
+                }
+
+                if (metadata is null)
+                {
+                    continue;
+                }
+
+                // Our own run writes (or is about to write) these — never sweep them.
+                if (metadata.AppHostPid == Environment.ProcessId)
+                {
+                    continue;
+                }
+
+                // A different, still-running AppHost owns this terminal, so leave it alone. PID
+                // reuse can only produce a false "alive" here, which merely SKIPS a cleanup
+                // (benign — reclaimed on the next start); it can never delete a live terminal's files.
+                if (IsProcessAlive(metadata.AppHostPid))
+                {
+                    continue;
+                }
+
+                logger?.LogDebug(
+                    "Reclaiming orphaned terminal host files for replica '{ReplicaId}' (owner PID {AppHostPid} is no longer running).",
+                    metadata.ReplicaId,
+                    metadata.AppHostPid);
+                DeleteReplicaFiles(trmnlDirectory, metadata.ReplicaId, logger);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: a failed sweep only means orphans linger a little longer; it must never
+            // block AppHost startup.
+            logger?.LogDebug(ex, "Failed to sweep orphaned terminal host files in '{Directory}'.", trmnlDirectory);
+        }
+    }
+
+    private static bool IsProcessAlive(int pid)
+    {
+        // A non-positive PID is never a real, addressable OS process — treat as dead so a
+        // zero-initialized or corrupt sidecar becomes reclaimable.
+        if (pid <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            // GetProcessById throws ArgumentException when no running process has this id — i.e.
+            // the owning AppHost has exited and been reaped. This is the common orphan case.
+            return false;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Couldn't positively determine liveness (the process raced to exit between lookup and
+            // query, or its handle couldn't be opened). Bias to "alive" so we never delete files
+            // that might still belong to a running AppHost; a missed sweep is reclaimed next start.
+            return true;
         }
     }
 

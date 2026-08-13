@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
@@ -387,6 +388,152 @@ public class WithTerminalTests
         finally
         {
             await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepsOrphanedFilesFromDeadAppHost()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/19302 (startup-GC half): an
+        // AppHost that exits ungracefully (SIGKILL / crash) can strand {id}.dcp.sock /
+        // {id}.host.sock and its metadata sidecar in the shared ~/.aspire/trmnl/ forever. On the
+        // next AppHost start, MaterializeTerminalHosts sweeps sidecars whose owning PID is no
+        // longer alive.
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        Directory.CreateDirectory(trmnlDirectory);
+
+        // Unique, test-owned replica id so we only ever assert on files WE created and never
+        // collide with a real terminal on the developer's machine.
+        var orphanId = "test-orphan-" + Guid.NewGuid().ToString("N");
+        var orphanMetadataPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.MetadataSuffix}");
+        var orphanProducerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+        var orphanConsumerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ConsumerSockPurpose}.sock");
+        var orphanControlPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ControlSockPurpose}.sock");
+
+        // int.MaxValue is not a live process on any supported platform (it exceeds Linux pid_max
+        // and is an invalid — odd — Windows PID), so the sweep's liveness check classifies the
+        // owner as dead and reclaims the files.
+        WriteOrphanSidecar(orphanMetadataPath, orphanId, appHostPid: int.MaxValue);
+        File.WriteAllText(orphanProducerPath, string.Empty);
+        File.WriteAllText(orphanConsumerPath, string.Empty);
+        File.WriteAllText(orphanControlPath, string.Empty);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+        resource.WithTerminal();
+
+        var app = builder.Build();
+        try
+        {
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+            Assert.False(File.Exists(orphanMetadataPath), "Dead-owner sidecar should be swept on startup.");
+            Assert.False(File.Exists(orphanProducerPath), "Dead-owner producer socket should be swept on startup.");
+            Assert.False(File.Exists(orphanConsumerPath), "Dead-owner consumer socket should be swept on startup.");
+            Assert.False(File.Exists(orphanControlPath), "Dead-owner control socket should be swept on startup.");
+        }
+        finally
+        {
+            // Belt and braces: remove the orphan placeholders (in case the sweep regressed) and
+            // this run's own materialized terminal-host files so we don't pollute the shared dir.
+            DeleteIfExists(orphanMetadataPath, orphanProducerPath, orphanConsumerPath, orphanControlPath);
+            CleanUpTerminalHostFiles(resource);
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalDoesNotSweepFilesFromLiveAppHost()
+    {
+        // The startup sweep must NEVER delete files whose owning AppHost is still alive — otherwise
+        // a second AppHost start would rip the sockets out from under a running terminal. Seeding
+        // the current process id exercises the guard that protects both our own run and any live
+        // peer.
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        Directory.CreateDirectory(trmnlDirectory);
+
+        var liveId = "test-live-" + Guid.NewGuid().ToString("N");
+        var liveMetadataPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.MetadataSuffix}");
+        var liveProducerPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+
+        WriteOrphanSidecar(liveMetadataPath, liveId, appHostPid: Environment.ProcessId);
+        File.WriteAllText(liveProducerPath, string.Empty);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+        resource.WithTerminal();
+
+        var app = builder.Build();
+        try
+        {
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+            Assert.True(File.Exists(liveMetadataPath), "Live-owner sidecar must be preserved by the sweep.");
+            Assert.True(File.Exists(liveProducerPath), "Live-owner socket must be preserved by the sweep.");
+        }
+        finally
+        {
+            DeleteIfExists(liveMetadataPath, liveProducerPath);
+            CleanUpTerminalHostFiles(resource);
+            await app.DisposeAsync();
+        }
+    }
+
+    private static void WriteOrphanSidecar(string metadataPath, string replicaId, int appHostPid)
+    {
+        // Build a schema-valid sidecar so the sweep's deserialize succeeds and it makes its
+        // keep/delete decision purely from AppHostPid. The socket-path fields are required by the
+        // schema but never read by the sweep, so simple placeholders are fine.
+        var metadata = new TerminalHostMetadata
+        {
+            ReplicaId = replicaId,
+            ResourceName = "orphan",
+            ReplicaIndex = 0,
+            AppHostPath = "/does/not/matter",
+            AppHostPid = appHostPid,
+            CreatedAtUtc = DateTime.UtcNow,
+            Columns = 80,
+            Rows = 24,
+            ControlSocketPath = replicaId + ".ctrl.sock",
+            ConsumerSocketPath = replicaId + ".host.sock",
+        };
+
+        File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata));
+    }
+
+    private static void CleanUpTerminalHostFiles(IResourceBuilder<ExecutableResource> resource)
+    {
+        var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+        if (annotation is null || !annotation.IsInitialized)
+        {
+            return;
+        }
+
+        foreach (var host in annotation.TerminalHosts)
+        {
+            DeleteIfExists(
+                host.Layout.MetadataPath,
+                host.Layout.ProducerUdsPath,
+                host.Layout.ConsumerUdsPath,
+                host.Layout.ControlUdsPath);
+        }
+    }
+
+    private static void DeleteIfExists(params string[] paths)
+    {
+        foreach (var path in paths)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 
