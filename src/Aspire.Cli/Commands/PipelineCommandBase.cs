@@ -153,7 +153,19 @@ internal abstract class PipelineCommandBase : BaseCommand
             var commandArgs = GetCommandArgs(parseResult).Concat(parseResult.UnmatchedTokens).ToArray();
 
             extensionInteractionService.DisplayConsolePlainText($"Detected aspire {Name} inside the Aspire extension, starting a debug session in VS Code...");
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, debug: true, new DebugSessionOptions { Command = Name, Args = commandArgs.Length > 0 ? commandArgs : null });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                debug: true,
+                new DebugSessionOptions
+                {
+                    Command = Name,
+                    Args = commandArgs.Length > 0 ? commandArgs : null,
+                    EnvironmentVariables = new Dictionary<string, string>
+                    {
+                        [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName
+                    }
+                });
             return CommandResult.Success();
         }
 
@@ -184,7 +196,10 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
 
-            var env = new Dictionary<string, string>();
+            var env = new Dictionary<string, string>
+            {
+                [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName
+            };
 
             // Set interactivity enabled based on host environment capabilities
             if (!_hostEnvironment.SupportsInteractiveInput)
@@ -886,7 +901,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 // Build the prompt text based on number of inputs
                 var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
 
-                result = await HandleSingleInputAsync(input, promptText, backchannel, cancellationToken);
+                result = await HandleSingleInputAsync(input, promptText, backchannel, activity.Data.Id, cancellationToken);
             }
             else
             {
@@ -904,7 +919,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         await backchannel.CompletePromptResponseAsync(activity.Data.Id, answers, cancellationToken);
     }
 
-    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, string interactionId, CancellationToken cancellationToken)
     {
         // The wire format uses hyphens (e.g. "secret-text") but the enum uses PascalCase (SecretText).
         var normalizedType = input.InputType.Replace("-", "", StringComparison.Ordinal);
@@ -943,7 +958,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            InputType.File => await HandleFileInputAsync(input, promptText, backchannel, cancellationToken),
+            InputType.File => await HandleFileInputAsync(input, promptText, backchannel, interactionId, cancellationToken),
 
             _ => throw new InvalidOperationException($"Unsupported input type: {input.InputType}"),
         };
@@ -1005,8 +1020,14 @@ internal abstract class PipelineCommandBase : BaseCommand
             cancellationToken: cancellationToken);
     }
 
-    private async Task<string?> HandleFileInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    private async Task<string?> HandleFileInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, string interactionId, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(input.Name))
+        {
+            throw new InvalidOperationException("File prompt input is missing a name.");
+        }
+        var inputName = input.Name;
+
         ValidationResult Validator(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -1078,7 +1099,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 filePaths.Add(Path.GetFullPath(value));
             }
 
-            return await UploadFilesAsync(filePaths, backchannel, cancellationToken);
+            return await UploadFilesAsync(filePaths, backchannel, interactionId, inputName, cancellationToken);
         }
 
         var singleValue = await InteractionService.PromptForFilePathAsync(
@@ -1093,14 +1114,18 @@ internal abstract class PipelineCommandBase : BaseCommand
             return string.Empty;
         }
 
-        return await UploadFilesAsync([Path.GetFullPath(singleValue)], backchannel, cancellationToken);
+        return await UploadFilesAsync([Path.GetFullPath(singleValue)], backchannel, interactionId, inputName, cancellationToken);
     }
 
-    private static async Task<string> UploadFilesAsync(List<string> filePaths, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    private static async Task<string> UploadFilesAsync(List<string> filePaths, IAppHostCliBackchannel backchannel, string interactionId, string inputName, CancellationToken cancellationToken)
     {
         if (filePaths.Count == 0)
         {
             return string.Empty;
+        }
+        if (!int.TryParse(interactionId, CultureInfo.InvariantCulture, out var interactionIdValue))
+        {
+            throw new InvalidOperationException($"Prompt ID '{interactionId}' is not a valid interaction ID.");
         }
 
         var fileRefs = new List<FileReferenceDto>(filePaths.Count);
@@ -1112,7 +1137,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             // Upload the file to the AppHost and collect the reference.
             // Matching the same format the dashboard uses: [{"Id":"...","Name":"..."}]
-            var uploadResponse = await backchannel.UploadFileAsync(fullPath, fileName, cancellationToken);
+            var uploadResponse = await backchannel.UploadFileAsync(fullPath, fileName, interactionIdValue, inputName, cancellationToken);
             fileRefs.Add(new FileReferenceDto { Id = uploadResponse.FileId, Name = fileName });
         }
 

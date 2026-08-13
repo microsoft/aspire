@@ -29,6 +29,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _nextPort = StartOfAutoPortRange;
+    private int _nextResourceUid;
     private int _nextResourceVersion;
 
     public TestKubernetesService(
@@ -101,6 +102,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         lock (CreatedResources)
         {
             var modifiedResources = AllocateProxylessContainerServicePorts(res);
+            StampResourceUid(res);
             StampResourceVersion(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
@@ -184,6 +186,18 @@ internal sealed class TestKubernetesService : IKubernetesService
                     c.Writer.TryWrite((WatchEventType.Added, Copy(res)));
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Assigns a stable identity to a newly stored resource, the way an API server does when it
+    /// accepts a create request.
+    /// </summary>
+    private void StampResourceUid(CustomResource resource)
+    {
+        if (string.IsNullOrEmpty(resource.Metadata.Uid))
+        {
+            resource.Metadata.Uid = $"test-resource-{Interlocked.Increment(ref _nextResourceUid)}";
         }
     }
 

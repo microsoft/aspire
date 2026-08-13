@@ -219,6 +219,8 @@ await subnet.denyInbound({ from: AzureServiceTags.Internet });
 
 const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.addNodePool("system", { vmSize: AksNodeVmSizes.StandardDSv5.StandardD2sV5 });
+const aksVolume = await aks.addPersistentVolume("aks-data");
+await aksVolume.withCapacity("20Gi");
 
 // ===================================================================
 // Application pipeline on builder
@@ -867,6 +869,17 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         showDismiss: true
     });
 
+    const progress = await interactionService.promptProgress("Completing **work**...", {
+        title: "Progress",
+        options: {
+            primaryButtonText: "Cancel",
+            enableMessageMarkdown: true,
+            work: async (progressContext) => {
+                await progressContext.cancellationToken();
+            }
+        }
+    });
+
     const textInput = await interactionService.createTextInput("name", {
         label: "Name",
         description: "Your **name**",
@@ -941,6 +954,7 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         && confirmation.value === true
         && !messageBox.canceled
         && !notification.canceled
+        && !progress.canceled
         && !single.canceled
         && !multiCanceled;
 

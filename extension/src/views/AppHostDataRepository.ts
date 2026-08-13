@@ -5,7 +5,7 @@ import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli'
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry, isSameFileSystemEntryDescriptor } from '../utils/appHostDiscovery';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
@@ -96,6 +96,21 @@ export interface AppHostDisplayInfo {
 
 interface DescribeSnapshotJson {
     resources?: ResourceJson[];
+}
+
+interface WorkspaceFolderAppHostCandidates {
+    readonly workspaceFolder: vscode.WorkspaceFolder;
+    candidates: CandidateAppHostDisplayInfo[];
+}
+
+interface WorkspaceFolderDiscoveryError {
+    readonly workspaceFolder: vscode.WorkspaceFolder;
+    readonly error: unknown;
+}
+
+interface CombinedWorkspaceAppHostCandidates {
+    appHostCandidates: AppHostCandidate[];
+    selectedAppHostPath: string | null;
 }
 
 export class AspireCliNotInstalledError extends Error {
@@ -191,6 +206,7 @@ export class AppHostDataRepository {
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
     private static readonly _streamedCandidateUpdateDebounceMs = 50;
     private static readonly _streamedCandidateUpdateMaxWaitMs = 250;
+    private static readonly _workspaceAppHostDiscoveryConcurrency = 4;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -247,6 +263,7 @@ export class AppHostDataRepository {
     private _workspaceAppHostName: string | undefined;
     private _workspaceAppHostPath: string | undefined;
     private _workspaceAppHostCandidatePaths: string[] = [];
+    private readonly _workspaceFolderAppHostCandidates = new Map<string, CandidateAppHostDisplayInfo[]>();
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryVersion = 0;
@@ -281,20 +298,23 @@ export class AppHostDataRepository {
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
-            const rootFolder = vscode.workspace.workspaceFolders?.[0];
-            if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders?.some(currentWorkspaceFolder =>
+                currentWorkspaceFolder.uri.toString() === workspaceFolder.uri.toString())) {
                 this._markWorkspaceAppHostDiscoveryPending();
                 this._fetchWorkspaceAppHost();
             }
         });
-        this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
-            this._stopAllDescribes();
-            this._stopPolling();
-            this._cancelWorkspaceAppHostDiscovery();
-            this._markWorkspaceAppHostDiscoveryPending();
+        this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
+            this._removeWorkspaceFolderCandidates(event.removed);
+            for (const workspaceFolder of event.removed) {
+                this._appHostDiscoveryService.forgetWorkspaceFolder?.(workspaceFolder);
+            }
+            const forceRefresh = this._cancelWorkspaceAppHostDiscovery();
+            this._markWorkspaceAppHostDiscoveryPending({ preserveCandidates: true });
             this._clearErrors();
             this._syncPolling();
-            this._fetchWorkspaceAppHost({ forceRefresh: true });
+            this._fetchWorkspaceAppHost(forceRefresh ? { forceRefresh: true } : undefined);
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
@@ -565,9 +585,16 @@ export class AppHostDataRepository {
         this._updateLoadingContext();
     }
 
+    async fetchRunningAppHostsOnce(cancellationToken?: vscode.CancellationToken): Promise<AppHostDisplayInfo[]> {
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>(
+            'aspire ps',
+            this._withNoLogo(['ps', '--format', 'json']),
+            { cancellationToken });
+        return Array.isArray(appHosts) ? appHosts : [appHosts];
+    }
+
     async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
-        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', this._withNoLogo(['ps', '--format', 'json']));
-        const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
+        const appHostList = await this.fetchRunningAppHostsOnce();
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
             resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
@@ -716,15 +743,18 @@ export class AppHostDataRepository {
         }
 
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
-        const rootFolder = workspaceFolders[0];
+        const workspaceFolderSnapshot = [...workspaceFolders];
+        const workspaceFolderCandidates: WorkspaceFolderAppHostCandidates[] = workspaceFolderSnapshot.map(workspaceFolder => ({
+            workspaceFolder,
+            candidates: [],
+        }));
 
-        extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
+        extensionLogOutputChannel.info('Fetching workspace apphosts via shared AppHost discovery');
 
         const cancellationSource = new vscode.CancellationTokenSource();
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
         this._showWorkspaceAppHostDiscoveryProgress();
-        const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
         let incrementalCandidateUpdateTimer: ReturnType<typeof setTimeout> | undefined;
         let incrementalCandidateMaxWaitTimer: ReturnType<typeof setTimeout> | undefined;
         const cancelIncrementalCandidateUpdate = (): void => {
@@ -739,28 +769,31 @@ export class AppHostDataRepository {
         };
         const applyIncrementalCandidateUpdates = (): void => {
             cancelIncrementalCandidateUpdate();
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
-            const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
             if (buildableAppHostCandidates.length > 0) {
                 this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
                 this._updateWorkspaceContext();
             }
         };
-        const onIncrementalCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+        const onIncrementalCandidate = (folderCandidates: WorkspaceFolderAppHostCandidates, candidate: CandidateAppHostDisplayInfo): void => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
-            const existingCandidateIndex = streamedCandidates.findIndex(existingCandidate => isMatchingAppHostPath(existingCandidate.path, candidate.path));
+            const existingCandidateIndex = folderCandidates.candidates.findIndex(existingCandidate => isMatchingAppHostPath(existingCandidate.path, candidate.path));
             if (existingCandidateIndex >= 0) {
-                streamedCandidates[existingCandidateIndex] = candidate;
+                folderCandidates.candidates[existingCandidateIndex] = candidate;
             } else {
-                streamedCandidates.push(candidate);
+                folderCandidates.candidates.push(candidate);
             }
+            this._workspaceFolderAppHostCandidates.set(
+                folderCandidates.workspaceFolder.uri.toString(),
+                [...folderCandidates.candidates]);
 
             // Use a trailing debounce to coalesce short bursts, but start the maximum-wait timer
             // only for the first candidate so a dense stream cannot postpone every tree update.
@@ -773,18 +806,55 @@ export class AppHostDataRepository {
             incrementalCandidateUpdateTimer = setTimeout(applyIncrementalCandidateUpdates, AppHostDataRepository._streamedCandidateUpdateDebounceMs);
         };
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onIncrementalCandidate).then(appHosts => {
+        const discoverWorkspaceFolders = async (): Promise<WorkspaceFolderDiscoveryError[]> => {
+            const errors: Array<WorkspaceFolderDiscoveryError | undefined> = new Array(workspaceFolderCandidates.length);
+            let nextWorkspaceFolderIndex = 0;
+            const discoverNextWorkspaceFolder = async (): Promise<void> => {
+                while (nextWorkspaceFolderIndex < workspaceFolderCandidates.length) {
+                    const workspaceFolderIndex = nextWorkspaceFolderIndex++;
+                    const folderCandidates = workspaceFolderCandidates[workspaceFolderIndex];
+                    try {
+                        folderCandidates.candidates = await this._appHostDiscoveryService.discover(
+                            folderCandidates.workspaceFolder,
+                            options?.forceRefresh,
+                            cancellationSource.token,
+                            candidate => onIncrementalCandidate(folderCandidates, candidate));
+                    } catch (error) {
+                        folderCandidates.candidates = [];
+                        errors[workspaceFolderIndex] = {
+                            workspaceFolder: folderCandidates.workspaceFolder,
+                            error,
+                        };
+                    }
+                }
+            };
+            const workerCount = Math.min(
+                AppHostDataRepository._workspaceAppHostDiscoveryConcurrency,
+                workspaceFolderCandidates.length);
+            await Promise.all(Array.from({ length: workerCount }, () => discoverNextWorkspaceFolder()));
+            return errors.filter((error): error is WorkspaceFolderDiscoveryError => error !== undefined);
+        };
+
+        discoverWorkspaceFolders().then(errors => {
             cancelIncrementalCandidateUpdate();
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
-            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, appHosts);
+            this._setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
+            if (errors.length > 0 && buildableAppHostCandidates.length === 0) {
+                throw new Error(formatWorkspaceFolderDiscoveryError(errors[0]));
+            }
+            for (const error of errors) {
+                extensionLogOutputChannel.warn(`Failed to fetch workspace apphost from one workspace folder: ${formatWorkspaceFolderDiscoveryError(error)}`);
+            }
             this._workspaceAppHostDiscoveryComplete = true;
-            this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
+            this._handleWorkspaceAppHostCandidates(result.appHostCandidates, result.selectedAppHostPath);
         }).catch(error => {
             cancelIncrementalCandidateUpdate();
-            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)) {
                 return;
             }
 
@@ -792,6 +862,7 @@ export class AppHostDataRepository {
                 return;
             }
 
+            cancellationSource.cancel();
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
             this._runtimeSnapshotAfterWorkspaceDiscovery = false;
@@ -818,7 +889,8 @@ export class AppHostDataRepository {
         });
     }
 
-    private _cancelWorkspaceAppHostDiscovery(): void {
+    private _cancelWorkspaceAppHostDiscovery(): boolean {
+        const forceRefresh = this._workspaceAppHostDiscoveryForceRefreshQueued;
         this._workspaceAppHostDiscoveryRefreshQueued = false;
         this._workspaceAppHostDiscoveryForceRefreshQueued = false;
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
@@ -827,6 +899,7 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
         this._hideWorkspaceAppHostDiscoveryProgress();
+        return forceRefresh;
     }
 
     private _showWorkspaceAppHostDiscoveryProgress(): void {
@@ -837,8 +910,11 @@ export class AppHostDataRepository {
             return;
         }
 
+        // `Window` rather than `Notification`: discovery runs for as long as the workspace scan
+        // takes and a progress notification cannot be dismissed while it is active, so it covers
+        // the editor for the whole scan (https://github.com/microsoft/aspire/issues/19036).
         void vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
+            location: vscode.ProgressLocation.Window,
             title: appHostDiscoveryProgress,
             cancellable: false,
         }, () => new Promise<void>(resolve => {
@@ -859,9 +935,11 @@ export class AppHostDataRepository {
         resolve?.();
     }
 
-    private _markWorkspaceAppHostDiscoveryPending(): void {
+    private _markWorkspaceAppHostDiscoveryPending(options?: { preserveCandidates?: boolean }): void {
         this._workspaceAppHostDiscoveryComplete = false;
-        this._clearWorkspaceAppHostDiscovery();
+        if (!options?.preserveCandidates) {
+            this._clearWorkspaceAppHostDiscovery();
+        }
         this._loadingWorkspace = true;
         if (this._viewMode === 'workspace') {
             this._updateLoadingContext();
@@ -928,11 +1006,17 @@ export class AppHostDataRepository {
         }
     }
 
-    private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
-        const rootFolder = vscode.workspace.workspaceFolders?.[0];
-        return !this._disposed
-            && discoveryVersion === this._workspaceAppHostDiscoveryVersion
-            && rootFolder?.uri.toString() === workspaceFolder.uri.toString();
+    private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolders: readonly vscode.WorkspaceFolder[]): boolean {
+        const currentWorkspaceFolders = vscode.workspace.workspaceFolders;
+        if (this._disposed
+            || discoveryVersion !== this._workspaceAppHostDiscoveryVersion
+            || !currentWorkspaceFolders
+            || currentWorkspaceFolders.length !== workspaceFolders.length) {
+            return false;
+        }
+
+        return workspaceFolders.every((workspaceFolder, index) =>
+            currentWorkspaceFolders[index].uri.toString() === workspaceFolder.uri.toString());
     }
 
     private _setWorkspaceAppHostPath(appHostPath: string, appHostCandidates: readonly AppHostCandidate[]): void {
@@ -964,7 +1048,42 @@ export class AppHostDataRepository {
     private _clearWorkspaceAppHostDiscovery(): void {
         this._clearWorkspaceAppHostSelection();
         this._workspaceAppHostCandidatePaths = [];
+        this._workspaceFolderAppHostCandidates.clear();
         this._workspaceAppHostDescription = undefined;
+    }
+
+    private _removeWorkspaceFolderCandidates(removedWorkspaceFolders: readonly vscode.WorkspaceFolder[]): void {
+        for (const workspaceFolder of removedWorkspaceFolders) {
+            this._workspaceFolderAppHostCandidates.delete(workspaceFolder.uri.toString());
+        }
+
+        const workspaceFolderCandidates = (vscode.workspace.workspaceFolders ?? []).map(workspaceFolder => ({
+            workspaceFolder,
+            candidates: this._workspaceFolderAppHostCandidates.get(workspaceFolder.uri.toString()) ?? [],
+        }));
+        const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+        this._setWorkspaceAppHostCandidatePaths(result.appHostCandidates.filter(isBuildableAppHostCandidate));
+
+        const selectedAppHostPath = this._workspaceAppHostPath;
+        if (selectedAppHostPath) {
+            if (this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(candidatePath, selectedAppHostPath))) {
+                this._setWorkspaceAppHostPathFromCurrentCandidates(selectedAppHostPath);
+            } else {
+                this._clearWorkspaceAppHostSelection();
+            }
+        }
+        this._workspaceAppHostDescription = this._workspaceAppHostCandidatePaths.length > 1
+            ? workspaceViewSelectedMultipleAppHosts(this._workspaceAppHostCandidatePaths.length)
+            : undefined;
+    }
+
+    private _setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[]): void {
+        this._workspaceFolderAppHostCandidates.clear();
+        for (const folderCandidates of workspaceFolderCandidates) {
+            this._workspaceFolderAppHostCandidates.set(
+                folderCandidates.workspaceFolder.uri.toString(),
+                [...folderCandidates.candidates]);
+        }
     }
 
     // ── describe --follow ──
@@ -1311,8 +1430,8 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
-        const { stdout } = await this._runCliCommand(command, args);
+    private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
+        const { stdout } = await this._runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);
@@ -2040,6 +2159,146 @@ export function shortenPath(filePath: string): string {
     return shortenPaths([filePath])[0] ?? filePath;
 }
 
+function formatWorkspaceFolderDiscoveryError(error: WorkspaceFolderDiscoveryError): string {
+    return `${error.workspaceFolder.uri.fsPath}: ${String(error.error)}`;
+}
+
+function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[]): CombinedWorkspaceAppHostCandidates {
+    const appHostCandidates: Array<{ candidate: AppHostCandidate; descriptor: FileSystemEntryDescriptor; workspaceFolderDepth: number }> = [];
+    const appHostCandidateIndex = new FileSystemEntryDescriptorIndex();
+    const explicitlySelectedPaths: string[] = [];
+    const explicitlySelectedPathIndex = new FileSystemEntryDescriptorIndex();
+    const descriptorByResolvedPath = new Map<string, FileSystemEntryDescriptor>();
+    const getDescriptor = (candidatePath: string): FileSystemEntryDescriptor => {
+        const resolvedPath = path.resolve(candidatePath);
+        let descriptor = descriptorByResolvedPath.get(resolvedPath);
+        if (!descriptor) {
+            descriptor = getFileSystemEntryDescriptor(resolvedPath);
+            descriptorByResolvedPath.set(resolvedPath, descriptor);
+        }
+
+        return descriptor;
+    };
+
+    for (const folderCandidates of workspaceFolderCandidates) {
+        const result = getWorkspaceAppHostProjectSearchResult(folderCandidates.workspaceFolder, folderCandidates.candidates);
+        const workspaceFolderDepth = path.resolve(folderCandidates.workspaceFolder.uri.fsPath).length;
+        for (const candidate of result.app_host_candidates) {
+            const descriptor = getDescriptor(candidate.path);
+            const existingIndex = appHostCandidateIndex.find(descriptor);
+            if (existingIndex === undefined) {
+                appHostCandidates.push({ candidate, descriptor, workspaceFolderDepth });
+                appHostCandidateIndex.add(descriptor);
+            } else if (appHostCandidates[existingIndex].workspaceFolderDepth < workspaceFolderDepth) {
+                appHostCandidates[existingIndex] = { candidate, descriptor, workspaceFolderDepth };
+                appHostCandidateIndex.replace(existingIndex, descriptor);
+            }
+        }
+        for (const candidate of folderCandidates.candidates) {
+            const descriptor = getDescriptor(candidate.path);
+            if (candidate.selected === true
+                && candidate.status === 'buildable'
+                && explicitlySelectedPathIndex.find(descriptor) === undefined) {
+                explicitlySelectedPaths.push(candidate.path);
+                explicitlySelectedPathIndex.add(descriptor);
+            }
+        }
+    }
+
+    const combinedAppHostCandidates = appHostCandidates.map(({ candidate }) => candidate);
+    const buildableAppHostCandidates = combinedAppHostCandidates.filter(isBuildableAppHostCandidate);
+    const selectedAppHostPath = explicitlySelectedPaths.length === 1
+        ? combinedAppHostCandidates[appHostCandidateIndex.find(getDescriptor(explicitlySelectedPaths[0])) ?? -1]?.path
+        : explicitlySelectedPaths.length === 0 && buildableAppHostCandidates.length === 1
+            ? buildableAppHostCandidates[0].path
+            : null;
+
+    return {
+        appHostCandidates: combinedAppHostCandidates,
+        selectedAppHostPath: selectedAppHostPath ?? null,
+    };
+}
+
+class FileSystemEntryDescriptorIndex {
+    private readonly _descriptors: FileSystemEntryDescriptor[] = [];
+    private readonly _exactPathBuckets = new Map<string, number[]>();
+    private readonly _identityBuckets = new Map<string, number[]>();
+    private readonly _fallbackPathBuckets = new Map<string, number[]>();
+    private readonly _unstableFallbackPathBuckets = new Map<string, number[]>();
+
+    find(descriptor: FileSystemEntryDescriptor): number | undefined {
+        const identityKey = getStableIdentityKey(descriptor);
+        const candidateBuckets = [
+            this._exactPathBuckets.get(descriptor.resolvedPath),
+            identityKey === undefined ? undefined : this._identityBuckets.get(identityKey),
+            identityKey === undefined
+                ? this._fallbackPathBuckets.get(getFallbackPathKey(descriptor))
+                : this._unstableFallbackPathBuckets.get(getFallbackPathKey(descriptor)),
+        ];
+        const checkedIndexes = new Set<number>();
+
+        for (const bucket of candidateBuckets) {
+            for (const index of bucket ?? []) {
+                if (!checkedIndexes.has(index)
+                    && isSameFileSystemEntryDescriptor(this._descriptors[index], descriptor)) {
+                    return index;
+                }
+
+                checkedIndexes.add(index);
+            }
+        }
+
+        return undefined;
+    }
+
+    add(descriptor: FileSystemEntryDescriptor): void {
+        const index = this._descriptors.length;
+        this._descriptors.push(descriptor);
+        this.addToBuckets(index, descriptor);
+    }
+
+    replace(index: number, descriptor: FileSystemEntryDescriptor): void {
+        this._descriptors[index] = descriptor;
+        this.addToBuckets(index, descriptor);
+    }
+
+    private addToBuckets(index: number, descriptor: FileSystemEntryDescriptor): void {
+        addToBucket(this._exactPathBuckets, descriptor.resolvedPath, index);
+
+        const fallbackPathKey = getFallbackPathKey(descriptor);
+        addToBucket(this._fallbackPathBuckets, fallbackPathKey, index);
+
+        const identityKey = getStableIdentityKey(descriptor);
+        if (identityKey === undefined) {
+            addToBucket(this._unstableFallbackPathBuckets, fallbackPathKey, index);
+        } else {
+            addToBucket(this._identityBuckets, identityKey, index);
+        }
+    }
+}
+
+function getStableIdentityKey(descriptor: FileSystemEntryDescriptor): string | undefined {
+    const identity = descriptor.identity;
+    return identity !== undefined && identity.ino !== 0n
+        ? `${identity.dev}:${identity.ino}`
+        : undefined;
+}
+
+function getFallbackPathKey(descriptor: FileSystemEntryDescriptor): string {
+    return process.platform === 'win32'
+        ? descriptor.resolvedPath.toLowerCase()
+        : descriptor.resolvedPath;
+}
+
+function addToBucket(buckets: Map<string, number[]>, key: string, index: number): void {
+    const bucket = buckets.get(key);
+    if (!bucket) {
+        buckets.set(key, [index]);
+    } else if (bucket[bucket.length - 1] !== index) {
+        bucket.push(index);
+    }
+}
+
 const projectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
 
 export function shortenPaths(filePaths: readonly string[]): string[] {
@@ -2047,7 +2306,7 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
     const stateByPath = new Map<string, ShortenedPathState>();
 
     for (const filePath of filePaths) {
-        const pathKey = getComparisonKey(filePath);
+        const pathKey = filePath;
         let state = stateByPath.get(pathKey);
         if (!state) {
             state = createShortenedPathState(filePath);
@@ -2061,7 +2320,7 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
         const seenLabels = new Set<string>();
 
         for (const state of states) {
-            const labelKey = getComparisonKey(state.label);
+            const labelKey = state.label;
             if (seenLabels.has(labelKey)) {
                 duplicateLabels.add(labelKey);
             } else {
@@ -2074,13 +2333,13 @@ export function shortenPaths(filePaths: readonly string[]): string[] {
         }
 
         for (const state of states) {
-            if (duplicateLabels.has(getComparisonKey(state.label))) {
+            if (duplicateLabels.has(state.label)) {
                 expandShortenedPathState(state);
             }
         }
     }
 
-    return filePaths.map(filePath => stateByPath.get(getComparisonKey(filePath))?.label ?? filePath);
+    return filePaths.map(filePath => stateByPath.get(filePath)?.label ?? filePath);
 }
 
 interface ShortenedPathState {
@@ -2308,15 +2567,12 @@ function parseCliJsonOutput<T>(stdout: string): T {
 }
 
 function isPathInWorkspace(filePath: string): boolean {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-        return false;
-    }
-
-    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-    return relativePath !== ''
-        && !relativePath.startsWith('..')
-        && !path.isAbsolute(relativePath);
+    return vscode.workspace.workspaceFolders?.some(workspaceFolder => {
+        const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+        return relativePath !== ''
+            && !relativePath.startsWith('..')
+            && !path.isAbsolute(relativePath);
+    }) ?? false;
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
@@ -2374,17 +2630,18 @@ export function isMatchingAppHostPath(left: string | undefined, right: string | 
         return false;
     }
 
-    const normalizedLeft = getComparisonKey(path.normalize(left));
-    const normalizedRight = getComparisonKey(path.normalize(right));
-    if (normalizedLeft === normalizedRight) {
+    if (isSameFileSystemEntry(left, right)) {
         return true;
     }
+
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
 
     // `aspire extension get-apphosts` resolves a project file while `aspire ps`
     // can report the AppHost source file. Match by directory only for that
     // project/source-file shape so sibling AppHost projects don't collapse into
     // the same workspace AppHost.
-    return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight))
+    return isSameFileSystemEntry(path.dirname(normalizedLeft), path.dirname(normalizedRight))
         && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
 }
 

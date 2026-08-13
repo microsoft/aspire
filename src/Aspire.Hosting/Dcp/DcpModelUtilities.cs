@@ -28,6 +28,23 @@ internal static class DcpModelUtilities
             modelResource.GetLifetimeType() != Lifetime.Persistent;
     }
 
+    internal static void ValidateEndpointPorts(IResource modelResource, EndpointAnnotation endpoint)
+    {
+        var modelResourceName = modelResource.Name ?? "(unknown)";
+
+        if (modelResource.IsContainer())
+        {
+            if (EndpointAnnotation.NormalizePort(endpoint.TargetPort) is null)
+            {
+                throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+            }
+        }
+        else if (!endpoint.IsProxied && endpoint.Port is int && endpoint.Port != endpoint.TargetPort)
+        {
+            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
+        }
+    }
+
     /// <summary>
     /// Examines the Aspire resource annotations and adds equivalent ServiceProducerAnnotations to the corresponding DCP resource.
     /// </summary>
@@ -43,40 +60,32 @@ internal static class DcpModelUtilities
         foreach (var sp in servicesProduced)
         {
             var ea = sp.EndpointAnnotation;
+            ValidateEndpointPorts(modelResource, ea);
 
-            if (modelResource.IsContainer())
+            if (!modelResource.IsContainer())
             {
-                if (ea.TargetPort is null)
+                if (!ea.IsProxied)
                 {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+                    if (HasMultipleReplicas(appResource.DcpResource))
+                    {
+                        throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
+                    }
                 }
-            }
-            else if (!ea.IsProxied)
-            {
-                if (HasMultipleReplicas(appResource.DcpResource))
+                else
                 {
-                    throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
-                }
+                    Debug.Assert(ea.IsProxied);
 
-                if (ea.Port is int && ea.Port != ea.TargetPort)
-                {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
-                }
-            }
-            else
-            {
-                Debug.Assert(ea.IsProxied);
+                    if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
+                    {
+                        throw new InvalidOperationException(
+                            $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
+                    }
 
-                if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
-                {
-                    throw new InvalidOperationException(
-                        $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
-                }
-
-                if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
-                {
-                    throw new InvalidOperationException(
-                        $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    }
                 }
             }
 

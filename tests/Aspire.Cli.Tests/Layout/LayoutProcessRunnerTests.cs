@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
@@ -228,6 +229,76 @@ public class LayoutProcessRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenProcessDoesNotExitWithinTimeout_ThrowsTimeoutException()
+    {
+        var factory = new TestProcessExecutionFactory
+        {
+            AsyncAttemptCallback = async (_, _, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+                return (0, null);
+            }
+        };
+        var runner = new LayoutProcessRunner(factory);
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => runner.RunAsync(
+            "aspire-managed",
+            ["nuget", "search", "--query", "Aspire.Hosting"],
+            timeout: TimeSpan.FromMilliseconds(50),
+            ct: cancellationSource.Token));
+
+        Assert.Contains("NuGet package search", exception.Message);
+        Assert.Contains("Aspire.Hosting", exception.Message);
+        Assert.Contains("timed out", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(3_600_000, "1 hour")]
+    [InlineData(7_200_000, "2 hours")]
+    [InlineData(60_000, "1 minute")]
+    [InlineData(180_000, "3 minutes")]
+    [InlineData(1_000, "1 second")]
+    [InlineData(2_000, "2 seconds")]
+    [InlineData(1, "1 millisecond")]
+    [InlineData(2, "2 milliseconds")]
+    [InlineData(1_000.4, "1 second")]
+    [InlineData(1.0004, "1 millisecond")]
+    public void BuildTimeoutMessage_FormatsTimeoutUnits(double timeoutMilliseconds, string expectedTimeoutText)
+    {
+        var timeout = TimeSpan.FromMilliseconds(timeoutMilliseconds);
+        var workingDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        var message = BuildTimeoutMessage(timeout, workingDirectory);
+
+        Assert.Equal($"Process 'aspire-managed' timed out after {expectedTimeoutText} in '{workingDirectory.FullName}'.", message);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCallerTokenIsCanceled_PropagatesCancellation()
+    {
+        var factory = new TestProcessExecutionFactory
+        {
+            AsyncAttemptCallback = async (_, _, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+                return (0, null);
+            }
+        };
+        var runner = new LayoutProcessRunner(factory);
+
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(
+            "aspire-managed",
+            ["nuget", "search", "--query", "Aspire.Hosting"],
+            timeout: TimeSpan.FromMinutes(1),
+            ct: cancellationSource.Token));
+    }
+
+    [Fact]
     public async Task StartAsync_WhenKillOnParentExit_DisarmsCooperativeWatchdogOnWindowsOnly()
     {
         // Same mutual-exclusion contract as RunAsync above, for the long-lived StartAsync helpers
@@ -254,5 +325,13 @@ public class LayoutProcessRunnerTests
         {
             Assert.True(capturedEnv.ContainsKey("ASPIRE_CLI_PID"));
         }
+    }
+
+    private static string BuildTimeoutMessage(TimeSpan timeout, DirectoryInfo workingDirectory)
+    {
+        var method = typeof(LayoutProcessRunner).GetMethod("BuildTimeoutMessage", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        return Assert.IsType<string>(method.Invoke(null, new object[] { "aspire-managed", Array.Empty<string>(), workingDirectory, timeout }));
     }
 }

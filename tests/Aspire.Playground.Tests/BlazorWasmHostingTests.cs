@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Aspire.Playground.Tests;
 
-[RequiresFeature(TestFeature.Docker)]
+[RequiresFeature(TestFeature.ContainerRuntime)]
 public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
 {
     [Fact]

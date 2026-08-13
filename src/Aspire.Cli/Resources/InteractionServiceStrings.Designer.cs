@@ -367,11 +367,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project argument was not specified and no *.csproj files were detected..
+        ///   Looks up a localized string similar to The --apphost option was not specified and no AppHost project files were detected..
         /// </summary>
-        public static string ProjectOptionNotSpecifiedNoCsprojFound {
+        public static string ProjectOptionNotSpecifiedNoAppHostsFound {
             get {
-                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoCsprojFound", resourceCulture);
+                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoAppHostsFound", resourceCulture);
             }
         }
 

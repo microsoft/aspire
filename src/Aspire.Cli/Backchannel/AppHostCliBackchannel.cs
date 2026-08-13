@@ -27,7 +27,7 @@ internal interface IAppHostCliBackchannel
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
-    Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken);
+    Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostCliBackchannel(
@@ -554,7 +554,7 @@ internal sealed class AppHostCliBackchannel(
         return response;
     }
 
-    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -585,7 +585,7 @@ internal sealed class AppHostCliBackchannel(
             profilingTelemetry,
             "apphost",
             "UploadFileAsync",
-            [new UploadFileRequest { Data = data, FileName = fileName }],
+            [new UploadFileRequest { Data = data, FileName = fileName, InteractionId = interactionId, InputName = inputName }],
             cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("File uploaded with ID {FileId}", response.FileId);

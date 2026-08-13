@@ -1000,6 +1000,46 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task PublishAsync_PassesResolvedAspireHomeToAppHostServerEnvironment()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var serverSession = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after the server launch environment has been captured."))
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = serverSession
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+        var context = new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot
+        };
+
+        var exitCode = await project.PublishAsync(context, CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(serverSession.StartAsyncCalled);
+        Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
+        Assert.Equal(
+            Path.Combine(AppContext.BaseDirectory, ".home", ".aspire"),
+            sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.AspireHome]);
+    }
+
+    [Fact]
     public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
     {
         // When ASPIRE_CLI_* identity overrides (or the install sidecar) are active the CLI is

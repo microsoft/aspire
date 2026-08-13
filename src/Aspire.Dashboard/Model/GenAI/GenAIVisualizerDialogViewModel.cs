@@ -79,7 +79,8 @@ public sealed class GenAIVisualizerDialogViewModel
         {
             try
             {
-                // Deserialize to intermediate format since OpenApiSchema doesn't work well with System.Text.Json
+                // JSON Schema permits "type" to be either a string or an array of strings, so parse
+                // the payload through JsonNode before converting it to the dashboard's schema model.
                 var documentOptions = new JsonDocumentOptions
                 {
                     CommentHandling = JsonCommentHandling.Skip,
@@ -107,7 +108,7 @@ public sealed class GenAIVisualizerDialogViewModel
                         // Parse parameters if present
                         if (obj["parameters"] is JsonObject paramsObj)
                         {
-                            toolDef.Parameters = GenAISchemaHelpers.ParseOpenApiSchema(paramsObj);
+                            toolDef.Parameters = GenAISchemaHelpers.ParseToolDefinitionSchema(paramsObj);
                         }
 
                         viewModel.ToolDefinitions.Add(new ToolDefinitionViewModel { ToolDefinition = toolDef });

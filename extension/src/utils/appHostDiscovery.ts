@@ -248,6 +248,21 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return findCandidateForEditorFile(filePath, result);
     }
 
+    forgetWorkspaceFolder(workspaceFolder: vscode.WorkspaceFolder): void {
+        const key = path.resolve(workspaceFolder.uri.fsPath);
+        this._cache.delete(key);
+        const watchers = this._watchers.get(key);
+        if (watchers) {
+            watchers.forEach(watcher => watcher.dispose());
+            this._watchers.delete(key);
+        }
+        const pendingInvalidationTimer = this._pendingInvalidationTimers.get(key);
+        if (pendingInvalidationTimer) {
+            clearTimeout(pendingInvalidationTimer);
+            this._pendingInvalidationTimers.delete(key);
+        }
+    }
+
     dispose(): void {
         if (this._disposed) {
             return;
@@ -514,17 +529,17 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
 
         const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
-        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSamePath(candidate.path, configuredPath)))
+        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSameFileSystemEntry(candidate.path, configuredPath)))
             ?? configuredPaths[0];
         if (!configuredPath) {
             return candidates;
         }
 
-        const matchingCandidate = candidates.find(candidate => isSamePath(candidate.path, configuredPath));
+        const matchingCandidate = candidates.find(candidate => isSameFileSystemEntry(candidate.path, configuredPath));
         if (matchingCandidate) {
             return candidates.map(candidate => ({
                 ...candidate,
-                selected: isSamePath(candidate.path, configuredPath),
+                selected: isSameFileSystemEntry(candidate.path, configuredPath),
             }));
         }
 
@@ -1141,7 +1156,6 @@ function toCandidatesFromLegacySearchResult(parsed: LegacyAppHostProjectSearchRe
         path: candidatePath,
         language: 'csharp',
         status: 'buildable',
-        selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidatePath),
     }));
 }
 
@@ -1189,8 +1203,69 @@ function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: st
         && !relativePath.split(path.sep).some(segment => segment.toLowerCase() === 'bin' || segment.toLowerCase() === 'obj');
 }
 
-function isSamePath(left: string, right: string): boolean {
-    const comparison = process.platform === 'win32' || process.platform === 'darwin'
+type FileSystemEntryIdentity = Pick<fs.BigIntStats, 'dev' | 'ino'>;
+type FileSystemEntryIdentityProvider = (filePath: string) => FileSystemEntryIdentity | undefined;
+
+export interface FileSystemEntryDescriptor {
+    resolvedPath: string;
+    identity: FileSystemEntryIdentity | undefined;
+}
+
+export function getFileSystemEntryDescriptor(
+    filePath: string,
+    getIdentity: FileSystemEntryIdentityProvider = tryGetFileSystemEntryIdentity): FileSystemEntryDescriptor {
+    const resolvedPath = path.resolve(filePath);
+    return {
+        resolvedPath,
+        identity: getIdentity(resolvedPath),
+    };
+}
+
+export function isSameFileSystemEntryDescriptor(
+    left: FileSystemEntryDescriptor,
+    right: FileSystemEntryDescriptor): boolean {
+    if (left.resolvedPath === right.resolvedPath) {
+        return true;
+    }
+
+    if (hasStableFileSystemEntryIdentity(left.identity) && hasStableFileSystemEntryIdentity(right.identity)) {
+        return left.identity.dev === right.identity.dev && left.identity.ino === right.identity.ino;
+    }
+
+    return isSamePath(left.resolvedPath, right.resolvedPath);
+}
+
+export function isSameFileSystemEntry(
+    left: string,
+    right: string,
+    getIdentity: FileSystemEntryIdentityProvider = tryGetFileSystemEntryIdentity): boolean {
+    const resolvedLeft = path.resolve(left);
+    const resolvedRight = path.resolve(right);
+    if (resolvedLeft === resolvedRight) {
+        return true;
+    }
+
+    return isSameFileSystemEntryDescriptor(
+        { resolvedPath: resolvedLeft, identity: getIdentity(resolvedLeft) },
+        { resolvedPath: resolvedRight, identity: getIdentity(resolvedRight) });
+}
+
+function hasStableFileSystemEntryIdentity(
+    identity: FileSystemEntryIdentity | undefined): identity is FileSystemEntryIdentity {
+    return identity !== undefined && identity.ino !== 0n;
+}
+
+function tryGetFileSystemEntryIdentity(filePath: string): FileSystemEntryIdentity | undefined {
+    try {
+        return fs.statSync(filePath, { bigint: true });
+    }
+    catch {
+        return undefined;
+    }
+}
+
+export function isSamePath(left: string, right: string): boolean {
+    const comparison = process.platform === 'win32'
         ? 'case-insensitive'
         : 'case-sensitive';
     const resolvedLeft = path.resolve(left);

@@ -128,6 +128,9 @@ query($owner:String!, $name:String!, $after:String) {
         milestone { title }
         labels(first:15) { nodes { name } }
         assignees(first:10) { nodes { login } }
+        closedByPullRequestsReferences(first:5, includeClosedPrs:true) {
+          nodes { number title url state repository { nameWithOwner } }
+        }
       }
     }
   }
@@ -344,6 +347,15 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
 function normalizeIssue(repo, node, viewers) {
   const labels = (node.labels?.nodes ?? []).map((l) => l.name);
   const assignees = (node.assignees?.nodes ?? []).map((a) => a.login);
+  const linkedPullRequests = (node.closedByPullRequestsReferences?.nodes ?? [])
+    .filter((pr) => pr.state !== "CLOSED")
+    .map((pr) => ({
+      repository: pr.repository?.nameWithOwner ?? repo,
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      state: pr.state,
+    }));
   const author = node.author?.login ?? "ghost";
   return {
     repository: repo,
@@ -361,6 +373,7 @@ function normalizeIssue(repo, node, viewers) {
     milestone: node.milestone?.title ?? null,
     labels,
     assignees,
+    linkedPullRequests,
     isMine: viewers.has(author.toLowerCase()),
     assignedToMe: assignees.some((a) => viewers.has(a.toLowerCase())),
   };
@@ -643,7 +656,7 @@ export function capFocusKeepingDebt(cards, limit) {
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress, onPartial }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -667,26 +680,15 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   const okRepos = new Set();  // hostRepoKey(host, repo) that succeeded under at least one account
   const errorsRaw = [];       // { repo, host, message }
 
-  // Streaming progress + incremental snapshots. Each (account, repo) fetch reports when it
-  // settles so the caller can drive a deterministic progress bar (onProgress) and receive
-  // partial dashboards as data arrives (onPartial). Partials are throttled so a burst of
-  // fast repos doesn't reshape on every single completion.
+  // Each (account, repo) fetch reports when it settles so the caller can drive a deterministic
+  // progress bar. Dashboard state is intentionally produced only after every job completes:
+  // replacing an already-populated board with partial snapshots makes cards disappear and
+  // reappear as slower repositories finish.
   let total = 0;
   let done = 0;
-  let lastPartialAt = 0;
-  const PARTIAL_MIN_MS = 250;
-  const maybePartial = (force) => {
-    if (typeof onPartial !== "function") return;
-    const now = Date.now();
-    if (!force && now - lastPartialAt < PARTIAL_MIN_MS) return;
-    lastPartialAt = now;
-    // A failed partial push must never abort the underlying load.
-    try { onPartial(snapshot()); } catch { /* ignore */ }
-  };
   const reportDone = () => {
     done++;
     if (typeof onProgress === "function") onProgress({ done, total, phase: "fetch" });
-    maybePartial(false);
   };
 
   // Fetch each (account, repo) pair with that account's own token.
@@ -738,8 +740,6 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   total = jobs.length;
 
   // Reshape the accumulated PRs/issues into the dashboard shape the renderer consumes.
-  // A hoisted function declaration so the streaming callbacks above can snapshot partial
-  // results as repos arrive; also called once more below for the final, complete result.
   function snapshot() {
     const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -857,8 +857,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   }
 
   await Promise.all(jobs);
-  // Final, authoritative progress tick so a deterministic bar can complete even if the
-  // last throttled partial was skipped.
+  // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
   return snapshot();
 }

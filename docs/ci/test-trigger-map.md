@@ -45,7 +45,7 @@ paths.
 |---------|------------|
 | `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** (reaching neither Layer 1 nor Layer 2), except those carved out by `keep_routed` (files the selector routes to a target — `.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`). `patterns_file` is `eng/github-ci/ci-skip-entirely-patterns.txt`, the same list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). Why this — not `ignore` — is what stops the `README.md` fan-out: see [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
-| `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. Only needed for files Layer 1 *cannot* attribute (the inert `Vendoring/OpenTelemetry.Shared`); link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are already attributed by Layer 1 and need no entry. See [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
+| `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are attributed by Layer 1; the curated entries cover only paths that still need an explicit exemption. See [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
 | `affected_project_rules` | an affected **production** project, matched by project-name glob against Layer 1's affected set, → a target set. Matched against production names **only** — affected matrix test projects are excluded, so a test-only change cannot fire production jobs via a glob like `Aspire.Hosting*`. Follows the graph's transitive closure |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
@@ -151,12 +151,12 @@ Note `eng/OuterPreBuild.proj` (build-wide project-name validation) is here, but
 ### Ignore (`ignore`)
 
 Files Layer 2 deliberately accounts for with **no** target, so they do not trip
-the run-all fallback. Each is either covered precisely by Layer 1 or is inert:
+the run-all fallback. Entries are either covered precisely by Layer 1 or
+intentionally outside GitHub PR CI. Shared source examples:
 
 ```text
 src/Components/Common/**                          # link-compiled into many components; Layer 1 covers
 src/Vendoring/OpenTelemetry.Instrumentation.*/**  # glob-compiled into Redis/Kafka components; Layer 1 covers
-src/Vendoring/OpenTelemetry.Shared/**             # compiled by nothing; inert
 ```
 
 ### Path rules (`path_rules`)

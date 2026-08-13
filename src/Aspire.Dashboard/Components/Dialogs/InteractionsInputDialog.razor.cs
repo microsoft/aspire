@@ -246,7 +246,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             try
             {
                 using var stream = file.OpenReadStream(maxFileSize);
-                var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, _disposalCts.Token);
+                var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, Content.Interaction.InteractionId, inputModel.Input.Name, _disposalCts.Token);
                 fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

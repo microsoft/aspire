@@ -101,7 +101,9 @@ internal static class InteractionExports
     /// <summary>
     /// Displays a progress dialog with an indeterminate progress indicator.
     /// </summary>
-    [AspireExport]
+    // Progress prompts can invoke Work callbacks that re-enter the remote host through ATS, so the synchronous
+    // invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
         string message,
