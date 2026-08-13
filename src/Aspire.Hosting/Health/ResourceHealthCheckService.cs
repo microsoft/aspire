@@ -18,6 +18,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     // Internal for testing.
     internal TimeSpan HealthyHealthCheckInterval { get; set; } = TimeSpan.FromSeconds(30);
     internal TimeSpan NonHealthyHealthCheckStepInterval { get; set; } = TimeSpan.FromSeconds(1);
+    internal event Action<string, long>? ResourceReadyEventResultProcessed;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -69,6 +70,12 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                             }
                         }, state.CancellationToken);
                     }
+                    else if (!resourceEvent.Resource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out _))
+                    {
+                        // Resources without health checks finish their monitor after the first ready
+                        // event, so a later replica generation must trigger readiness from this loop.
+                        FireResourceReadyEvent(state);
+                    }
                 }
                 else if (KnownResourceStates.TerminalStates.Contains(resourceEvent.Snapshot.State?.Text))
                 {
@@ -115,7 +122,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
     private async Task MonitorResourceHealthAsync(ResourceMonitorState state)
     {
         var cancellationToken = state.CancellationToken;
-        var resource = state.LatestEvent.Resource;
+        var resource = state.Resource;
 
         if (!resource.TryGetAnnotationsIncludingAncestorsOfType<HealthCheckAnnotation>(out var annotations))
         {
@@ -125,7 +132,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             //       would need to revisit this and scan for transitive health checks
             //       on a periodic basis (you wouldn't want to do it on every pass.
             logger.LogDebug("Resource '{ResourceName}' has no health checks to monitor.", resource.Name);
-            FireResourceReadyEvent(resource, cancellationToken);
+            FireResourceReadyEvent(state);
 
             return;
         }
@@ -135,7 +142,6 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
         var lastHealthCheckTimestamp = 0L;
         var lastDelayInterrupted = false;
-        var resourceReadyEventFired = false;
         var nonHealthyReportCount = 0;
         ResourceEvent? currentEvent = null;
 
@@ -150,6 +156,8 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                     await state.DelayAsync(currentEvent: null, delay, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
+
+                var healthCheckGeneration = state.BeginHealthCheck(resourceNotificationService);
 
                 HealthReport report;
                 try
@@ -172,13 +180,17 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
                 logger.LogTrace("Health report status for '{ResourceName}' is {HealthReportStatus}.", resource.Name, report.Status);
 
+                if (!state.IsHealthCheckGenerationCurrent(healthCheckGeneration, resourceNotificationService))
+                {
+                    logger.LogTrace("Discarding stale health report for an earlier generation of resource '{ResourceName}'.", resource.Name);
+                    lastHealthCheckTimestamp = timeProvider.GetTimestamp();
+                    lastDelayInterrupted = true;
+                    continue;
+                }
+
                 if (report.Status == HealthStatus.Healthy)
                 {
-                    if (!resourceReadyEventFired)
-                    {
-                        resourceReadyEventFired = true;
-                        FireResourceReadyEvent(resource, cancellationToken);
-                    }
+                    FireResourceReadyEvent(state, healthCheckGeneration);
                     nonHealthyReportCount = 0;
                 }
                 else
@@ -252,8 +264,16 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         return false;
     }
 
-    private void FireResourceReadyEvent(IResource resource, CancellationToken cancellationToken)
+    private void FireResourceReadyEvent(ResourceMonitorState state, long? healthCheckGeneration = null)
     {
+        var resource = state.Resource;
+        var resourceGenerations = state.CaptureResourceReadyEventTargets(resourceNotificationService, healthCheckGeneration);
+        if (resourceGenerations.Count == 0)
+        {
+            return;
+        }
+
+        var cancellationToken = state.CancellationToken;
         logger.LogDebug("Resource '{ResourceName}' is ready.", resource.Name);
 
         // We don't want to block the monitoring loop while we fire the event.
@@ -275,13 +295,52 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
             logger.LogDebug("Publishing the result of ResourceReadyEvent for '{ResourceName}'.", resource.Name);
 
-            await resourceNotificationService.PublishUpdateAsync(resource, s => s with
+            try
             {
-                ResourceReadyEvent = new(task)
-            })
-            .ConfigureAwait(false);
+                await Task.WhenAll(resourceGenerations.Select(resourceGeneration =>
+                    PublishResourceReadyEventResultAsync(
+                        resource,
+                        resourceGeneration.ResourceId,
+                        resourceGeneration.Generation,
+                        task,
+                        cancellationToken))).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The resource monitor was stopped before every targeted replica reached its captured generation.
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to publish the result of ResourceReadyEvent for '{ResourceName}'.", resource.Name);
+            }
         },
         cancellationToken);
+    }
+
+    private async Task PublishResourceReadyEventResultAsync(
+        IResource resource,
+        string resourceId,
+        long resourceGeneration,
+        Task eventTask,
+        CancellationToken cancellationToken)
+    {
+        await resourceNotificationService.WaitForResourceAsync(
+            resource.Name,
+            resourceEvent =>
+                resourceEvent.ResourceId == resourceId &&
+                resourceEvent.Snapshot.ResourceGeneration >= resourceGeneration,
+            cancellationToken).ConfigureAwait(false);
+
+        await resourceNotificationService.PublishUpdateAsync(resource, resourceId, snapshot =>
+        {
+            // A newer callback may already have completed after a rapid restart. Make a stale
+            // publication a no-op so it cannot clear that generation's valid ready event.
+            return string.Equals(snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState) &&
+                   snapshot.ResourceGeneration == resourceGeneration
+                ? snapshot with { ResourceReadyEvent = new(eventTask, resourceGeneration) }
+                : snapshot;
+        }).ConfigureAwait(false);
+        ResourceReadyEventResultProcessed?.Invoke(resourceId, resourceGeneration);
     }
 
     private static ImmutableArray<HealthReportSnapshot> MergeHealthReports(ImmutableArray<HealthReportSnapshot> healthReports, HealthReport report, DateTime runAt)
@@ -323,21 +382,32 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts;
         private readonly object _lock = new object();
+        private readonly Dictionary<string, long> _resourceReadyGenerations = new(StringComparers.ResourceName);
+        private readonly Dictionary<string, long> _signaledResourceGenerations = new(StringComparers.ResourceName);
         private readonly string _resourceName;
         private TaskCompletionSource? _delayInterruptTcs;
+        private long _readyGenerationSignalVersion;
+        private long _handledReadyGenerationSignalVersion;
 
         public ResourceMonitorState(ILogger logger, ResourceEvent initialEvent, CancellationToken serviceStoppingToken)
         {
             _logger = logger;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(serviceStoppingToken);
             _resourceName = initialEvent.Resource.Name;
+            Resource = initialEvent.Resource;
             LatestEvent = initialEvent;
+            if (string.Equals(initialEvent.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+            {
+                _signaledResourceGenerations[initialEvent.ResourceId] = initialEvent.Snapshot.ResourceGeneration;
+            }
 
             _logger.LogDebug("Starting health monitoring for resource '{ResourceName}'.", _resourceName);
         }
 
         // Used to cancel and exit the monitoring loop for a resource.
         public CancellationToken CancellationToken => _cts.Token;
+
+        public IResource Resource { get; }
 
         public ResourceEvent LatestEvent { get; private set; }
 
@@ -353,7 +423,13 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             // A lock protects against a race between starting a delay and setting the latest event.
             lock (_lock)
             {
-                var shouldInterrupt = ShouldInterrupt(resourceEvent, LatestEvent);
+                var hasNewRunningGeneration = TrySignalRunningGeneration(resourceEvent);
+                if (hasNewRunningGeneration)
+                {
+                    _readyGenerationSignalVersion++;
+                }
+
+                var shouldInterrupt = hasNewRunningGeneration || ShouldInterrupt(resourceEvent, LatestEvent);
                 LatestEvent = resourceEvent;
 
                 if (shouldInterrupt)
@@ -363,11 +439,136 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             }
         }
 
+        public long BeginHealthCheck(ResourceNotificationService resourceNotificationService)
+        {
+            lock (_lock)
+            {
+                SynchronizeRunningGenerations(CaptureResourceEvents(resourceNotificationService));
+
+                // A generation that arrives during this health check increments the signal again,
+                // ensuring the next delay is interrupted if this check did not cover it.
+                _handledReadyGenerationSignalVersion = _readyGenerationSignalVersion;
+                return _readyGenerationSignalVersion;
+            }
+        }
+
+        public bool IsHealthCheckGenerationCurrent(long healthCheckGeneration, ResourceNotificationService resourceNotificationService)
+        {
+            lock (_lock)
+            {
+                SynchronizeRunningGenerations(CaptureResourceEvents(resourceNotificationService));
+                return _readyGenerationSignalVersion == healthCheckGeneration;
+            }
+        }
+
+        public IReadOnlyList<(string ResourceId, long Generation)> CaptureResourceReadyEventTargets(
+            ResourceNotificationService resourceNotificationService,
+            long? healthCheckGeneration = null)
+        {
+            lock (_lock)
+            {
+                // PublishUpdateAsync updates the notification store before this service's watcher
+                // necessarily consumes the event. Reconcile and select targets from the same captured
+                // state so a queued generation cannot be covered by an earlier health check.
+                var resourceEvents = CaptureResourceEvents(resourceNotificationService);
+                SynchronizeRunningGenerations(resourceEvents);
+                if (healthCheckGeneration is not null &&
+                    _readyGenerationSignalVersion != healthCheckGeneration)
+                {
+                    return [];
+                }
+
+                var targets = new List<(string ResourceId, long Generation)>();
+                var hasUntrackedRunningGeneration = false;
+
+                foreach (var (resourceId, resourceEvent) in resourceEvents)
+                {
+                    if (resourceEvent is null)
+                    {
+                        if (!_resourceReadyGenerations.ContainsKey(resourceId))
+                        {
+                            targets.Add((resourceId, 1));
+                        }
+
+                        continue;
+                    }
+
+                    var snapshot = resourceEvent.Snapshot;
+                    var isRunning = string.Equals(snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState);
+                    if (_resourceReadyGenerations.TryGetValue(resourceId, out var trackedGeneration))
+                    {
+                        if (isRunning && snapshot.ResourceGeneration > trackedGeneration)
+                        {
+                            targets.Add((resourceId, snapshot.ResourceGeneration));
+                            hasUntrackedRunningGeneration = true;
+                        }
+                    }
+                    else
+                    {
+                        // The first resource-level ready event covers the initial generation of every
+                        // replica. A replica that has not run yet will enter generation 1 when it starts.
+                        targets.Add((resourceId, isRunning ? snapshot.ResourceGeneration : Math.Max(snapshot.ResourceGeneration, 1)));
+                        hasUntrackedRunningGeneration |= isRunning;
+                    }
+                }
+
+                if (!hasUntrackedRunningGeneration)
+                {
+                    return [];
+                }
+
+                foreach (var (resourceId, generation) in targets)
+                {
+                    _resourceReadyGenerations[resourceId] = generation;
+                    if (!_signaledResourceGenerations.TryGetValue(resourceId, out var signaledGeneration) ||
+                        generation > signaledGeneration)
+                    {
+                        _signaledResourceGenerations[resourceId] = generation;
+                    }
+                }
+
+                return targets;
+            }
+        }
+
+        private List<(string ResourceId, ResourceEvent? ResourceEvent)> CaptureResourceEvents(
+            ResourceNotificationService resourceNotificationService)
+        {
+            var resourceEvents = new List<(string ResourceId, ResourceEvent? ResourceEvent)>();
+
+            foreach (var resourceId in Resource.GetResolvedResourceNames())
+            {
+                resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent);
+                resourceEvents.Add((resourceId, resourceEvent));
+            }
+
+            return resourceEvents;
+        }
+
+        private void SynchronizeRunningGenerations(
+            IReadOnlyList<(string ResourceId, ResourceEvent? ResourceEvent)> resourceEvents)
+        {
+            foreach (var (_, resourceEvent) in resourceEvents)
+            {
+                if (resourceEvent is not null && TrySignalRunningGeneration(resourceEvent))
+                {
+                    _readyGenerationSignalVersion++;
+                }
+            }
+        }
+
         internal async Task<bool> DelayAsync(ResourceEvent? currentEvent, TimeSpan delay, CancellationToken cancellationToken)
         {
             Task delayInterruptedTask;
             lock (_lock)
             {
+                if (currentEvent is not null &&
+                    _readyGenerationSignalVersion != _handledReadyGenerationSignalVersion)
+                {
+                    _logger.LogTrace("Health monitoring delay interrupted for a new generation of resource '{ResourceName}'.", _resourceName);
+                    return true;
+                }
+
                 // The event might have changed before delay was called. Interrupt immediately if required.
                 if (currentEvent != null && ShouldInterrupt(currentEvent, LatestEvent))
                 {
@@ -384,6 +585,23 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             var delayInterrupted = delayInterruptedTask.IsCompletedSuccessfully == true;
 
             return delayInterrupted;
+        }
+
+        private bool TrySignalRunningGeneration(ResourceEvent resourceEvent)
+        {
+            if (!string.Equals(resourceEvent.Snapshot.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+            {
+                return false;
+            }
+
+            if (_signaledResourceGenerations.TryGetValue(resourceEvent.ResourceId, out var generation) &&
+                resourceEvent.Snapshot.ResourceGeneration <= generation)
+            {
+                return false;
+            }
+
+            _signaledResourceGenerations[resourceEvent.ResourceId] = resourceEvent.Snapshot.ResourceGeneration;
+            return true;
         }
 
         private static bool ShouldInterrupt(ResourceEvent currentEvent, ResourceEvent previousEvent)

@@ -716,7 +716,7 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
         // Publish the first replica as finished
         await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource, "test0", s => s with
         {
-            State = KnownResourceStates.Finished,
+            State = KnownResourceStates.Finished
         });
 
         await app.ResourceNotifications.WaitForResourceAsync(nginx.Resource.Name, KnownResourceStates.Waiting, waitingStateCts.Token);
@@ -724,7 +724,7 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
         // Publish the second replica as finished
         await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource, "test1", s => s with
         {
-            State = KnownResourceStates.Finished,
+            State = KnownResourceStates.Finished
         });
 
         await app.ResourceNotifications.WaitForResourceAsync(nginx.Resource.Name, KnownResourceStates.Running, waitingStateCts.Token);

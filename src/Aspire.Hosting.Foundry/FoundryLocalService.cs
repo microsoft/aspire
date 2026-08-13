@@ -10,6 +10,30 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Foundry;
 
+/// <summary>
+/// Provides model operations for the Foundry Local service.
+/// </summary>
+internal interface IFoundryLocalModelService
+{
+    Task<string> DownloadModelAsync(string modelName, Action<float> downloadProgress, CancellationToken cancellationToken);
+
+    Task LoadModelAsync(string modelId, CancellationToken cancellationToken);
+
+    Task<bool> IsModelLoadedAsync(string modelId, CancellationToken cancellationToken);
+}
+
+internal sealed class FoundryLocalModelService : IFoundryLocalModelService
+{
+    public Task<string> DownloadModelAsync(string modelName, Action<float> downloadProgress, CancellationToken cancellationToken)
+        => FoundryLocalService.DownloadModelAsync(modelName, downloadProgress, cancellationToken);
+
+    public Task LoadModelAsync(string modelId, CancellationToken cancellationToken)
+        => FoundryLocalService.LoadModelAsync(modelId, cancellationToken);
+
+    public Task<bool> IsModelLoadedAsync(string modelId, CancellationToken cancellationToken)
+        => FoundryLocalService.IsModelLoadedAsync(modelId, cancellationToken);
+}
+
 internal static class FoundryLocalService
 {
     internal const string ApiKey = "unused";

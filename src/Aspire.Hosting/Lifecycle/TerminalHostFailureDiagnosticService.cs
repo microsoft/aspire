@@ -36,17 +36,10 @@ internal sealed class TerminalHostFailureDiagnosticService(
     IOptions<DcpOptions> dcpOptions,
     ILogger<TerminalHostFailureDiagnosticService> logger) : BackgroundService
 {
-    // States we treat as terminal-failure for a terminal host. Finished/Exited with non-zero
-    // exit code or no exit code (e.g. host crashed before reporting) is a failure; with
-    // exit code 0 it is a clean shutdown during AppHost stop and must not be surfaced as
-    // a failure (otherwise every successful run would log a phantom error on app shutdown).
-    private static readonly string[] s_terminalStates =
-    [
-        KnownResourceStates.FailedToStart,
-        KnownResourceStates.Finished,
-        KnownResourceStates.Exited,
-    ];
-
+    // States we treat as terminal-failure for a terminal host. FailedToStart is always a
+    // failure. Finished/Exited with non-zero exit code is a failure; with exit code 0 it is
+    // a clean shutdown during AppHost stop and must not be surfaced as a failure (otherwise
+    // every successful run would log a phantom error on app shutdown).
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // DCP can re-emit terminal-state events during recycle attempts and shutdown. Track
@@ -64,15 +57,30 @@ internal sealed class TerminalHostFailureDiagnosticService(
                 }
 
                 var state = evt.Snapshot.State?.Text;
-                if (state is null || Array.IndexOf(s_terminalStates, state) < 0)
+                if (state is null || !KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState))
+                {
+                    continue;
+                }
+
+                // DCP "Terminated" means the controller intentionally stopped the process
+                // during scale-down or object deletion. The public state is normalized to
+                // Exited, but the diagnostic service still needs to distinguish that from
+                // a hidden terminal host crashing before it reported startup success.
+                if (evt.Snapshot.IsDcpExecutableTerminated)
+                {
+                    continue;
+                }
+
+                if (!string.Equals(state, KnownResourceStates.FailedToStart, StringComparisons.ResourceState) &&
+                    evt.Snapshot.ExitCode is null)
                 {
                     continue;
                 }
 
                 // Treat exit code 0 (or "Finished"/"Exited" + zero) as a clean stop, not a
                 // failure. FailedToStart is always a failure regardless of exit code.
-                if (state != KnownResourceStates.FailedToStart
-                    && evt.Snapshot.ExitCode is 0)
+                if (!string.Equals(state, KnownResourceStates.FailedToStart, StringComparisons.ResourceState) &&
+                    evt.Snapshot.ExitCode is 0)
                 {
                     continue;
                 }

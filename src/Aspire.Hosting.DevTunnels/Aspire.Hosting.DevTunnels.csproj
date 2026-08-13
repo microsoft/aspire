@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)CoalescingAsyncOperation.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
@@ -17,6 +18,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Polly.Core" />
   </ItemGroup>
 
   <ItemGroup>
