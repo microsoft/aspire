@@ -10,7 +10,7 @@ import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { defaultConfigurationName, defaultConfigurationNameForDuplicateWorkspaceFolder, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
@@ -610,11 +610,12 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.ok(!(appHostSelectionOriginConfigKey in configs[0]));
     });
 
-    test('uses unique dynamic launch config names for aliased workspace folders', async () => {
-        const firstFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), '00-documentation', 0);
-        const secondFolder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), '09-application', 1);
+    test('uses unique dynamic launch config names for duplicate workspace folder aliases', async () => {
+        const firstFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), 'src', 0);
+        const secondFolder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), 'src', 1);
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(tempDir, null), launchReservation);
         sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([firstFolder, secondFolder]);
 
         const [firstConfigs, secondConfigs] = await Promise.all([
             provider.provideDebugConfigurations(firstFolder),
@@ -624,8 +625,8 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.deepStrictEqual(
             [firstConfigs[0].name, secondConfigs[0].name],
             [
-                defaultConfigurationNameForWorkspaceFolder(firstFolder.name),
-                defaultConfigurationNameForWorkspaceFolder(secondFolder.name),
+                defaultConfigurationNameForDuplicateWorkspaceFolder(firstFolder.name, firstFolder.uri.toString()),
+                defaultConfigurationNameForDuplicateWorkspaceFolder(secondFolder.name, secondFolder.uri.toString()),
             ]);
     });
 

@@ -734,6 +734,11 @@ async function executeE2eControlCommand(
       await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(folderPath), false);
       return undefined;
     }
+    case 'setWorkspaceFolders': {
+      const folders = getE2eWorkspaceFolderEntries(command.folders);
+      markStarted();
+      return await setE2eWorkspaceFolders(folders);
+    }
     case 'stopOwnedDebugSessionProcesses': {
       markStarted();
       const appHostPath = command.appHostPath;
@@ -1317,6 +1322,81 @@ function getE2eWorkspaceFolderPath(folderPath: unknown): string {
   }
 
   return folderPath;
+}
+
+function getE2eWorkspaceFolderEntries(folders: unknown): Array<{ uri: vscode.Uri; name?: string }> {
+  if (!Array.isArray(folders) || folders.length === 0) {
+    throw new Error('Aspire extension E2E setWorkspaceFolders requires at least one workspace folder.');
+  }
+
+  const expectedWorkspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT;
+  if (typeof expectedWorkspaceRoot !== 'string' || expectedWorkspaceRoot.length === 0) {
+    throw new Error('Aspire extension E2E setWorkspaceFolders requires ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT.');
+  }
+
+  return folders.map((folder, index) => {
+    if (!folder || typeof folder !== 'object') {
+      throw new Error(`Aspire extension E2E workspace folder ${index} must be an object.`);
+    }
+
+    const { folderPath, name } = folder as { folderPath?: unknown; name?: unknown };
+    if (typeof folderPath !== 'string' || folderPath.length === 0 || !path.isAbsolute(folderPath)) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} requires an absolute folderPath.`);
+    }
+    if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} requires an existing directory: ${folderPath}`);
+    }
+    if (!isPathWithinDirectory(folderPath, expectedWorkspaceRoot)) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} must stay inside the configured E2E workspace root.`);
+    }
+    if (name !== undefined && (typeof name !== 'string' || name.length === 0)) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} name must be a non-empty string when provided.`);
+    }
+
+    return {
+      uri: vscode.Uri.file(folderPath),
+      ...(typeof name === 'string' ? { name } : {}),
+    };
+  });
+}
+
+async function setE2eWorkspaceFolders(folders: Array<{ uri: vscode.Uri; name?: string }>): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+  const currentFolders = vscode.workspace.workspaceFolders ?? [];
+  const matchesCurrentFolders = currentFolders.length === folders.length && currentFolders.every((folder, index) =>
+    folder.uri.toString() === folders[index].uri.toString()
+    && folder.name === (folders[index].name ?? path.basename(folders[index].uri.fsPath)));
+  if (matchesCurrentFolders) {
+    return getWorkspaceFolderInfo();
+  }
+
+  let workspaceFoldersChanged: (() => void) | undefined;
+  const changed = new Promise<void>(resolve => workspaceFoldersChanged = resolve);
+  const subscription = vscode.workspace.onDidChangeWorkspaceFolders(() => workspaceFoldersChanged?.());
+  try {
+    if (!vscode.workspace.updateWorkspaceFolders(0, currentFolders.length, ...folders)) {
+      throw new Error('VS Code declined the E2E workspace folder update.');
+    }
+
+    await Promise.race([
+      changed,
+      delay(10_000).then(() => {
+        throw new Error('Timed out waiting for VS Code to apply the E2E workspace folder update.');
+      }),
+    ]);
+  }
+  finally {
+    subscription.dispose();
+  }
+
+  return getWorkspaceFolderInfo();
+}
+
+function getWorkspaceFolderInfo(): Array<{ name: string; uri: string; fileName: string }> {
+  return vscode.workspace.workspaceFolders?.map(folder => ({
+    name: folder.name,
+    uri: folder.uri.toString(),
+    fileName: folder.uri.fsPath,
+  })) ?? [];
 }
 
 function getE2eRunPath(filePath: unknown): string {

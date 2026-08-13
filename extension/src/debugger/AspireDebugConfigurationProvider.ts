@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForDuplicateWorkspaceFolder, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -221,10 +221,10 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
     private createProvidedConfiguration(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration {
         // VS Code remembers a dynamic configuration by name and later searches all workspace
-        // folders for the first match. Use folder-specific names so F5 restores the selected
-        // folder instead of launching the first folder in a multi-root workspace.
+        // folders for the first match. Folder aliases are not required to be unique, so include
+        // the stable URI when aliases collide rather than letting F5 launch the first match.
         const name = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
-            ? defaultConfigurationNameForWorkspaceFolder(folder.name)
+            ? this.getDynamicConfigurationName(folder)
             : defaultConfigurationName;
 
         return this.withProvidedSelectionOrigin({
@@ -233,6 +233,15 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             name,
             program
         });
+    }
+
+    private getDynamicConfigurationName(folder: vscode.WorkspaceFolder): string {
+        const duplicateName = vscode.workspace.workspaceFolders?.some(candidate =>
+            candidate.name === folder.name && candidate.uri.toString() !== folder.uri.toString());
+
+        return duplicateName
+            ? defaultConfigurationNameForDuplicateWorkspaceFolder(folder.name, folder.uri.toString())
+            : defaultConfigurationNameForWorkspaceFolder(folder.name);
     }
 
     private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {

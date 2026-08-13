@@ -87,6 +87,15 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolders', folders }, { timeoutMs: 30000 });
+    return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
+export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
+    await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
+}
+
 export async function snapshotClipboardForE2E(): Promise<void> {
     await executeE2eControlCommand({ name: 'snapshotClipboard' });
 }

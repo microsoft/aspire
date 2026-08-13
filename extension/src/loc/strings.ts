@@ -71,6 +71,7 @@ export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration alr
 export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed to configure launch.json: {0}.', error);
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default AppHost');
 export const defaultConfigurationNameForWorkspaceFolder = (workspaceFolderName: string) => vscode.l10n.t('Aspire: Launch default AppHost ({0})', workspaceFolderName);
+export const defaultConfigurationNameForDuplicateWorkspaceFolder = (workspaceFolderName: string, workspaceFolderUri: string) => vscode.l10n.t('Aspire: Launch default AppHost ({0}: {1})', workspaceFolderName, workspaceFolderUri);
 export const debugSessionAlreadyExists = (id: string) => vscode.l10n.t('A debug session is already active for id {0}.', id);
 export const selectDashboardLaunchBehavior = vscode.l10n.t('Select what should happen with the Aspire Dashboard when this launch configuration starts');
 export const dashboardLaunchNoneLabel = vscode.l10n.t('Do not open the dashboard');
