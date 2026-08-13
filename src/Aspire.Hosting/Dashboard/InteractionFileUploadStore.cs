@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Dashboard;
 /// <summary>
 /// Stores uploaded files from the Dashboard and maps file IDs to their temporary paths on disk.
 /// </summary>
-internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IDisposable
+internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, IAsyncDisposable
 {
     private static readonly TimeSpan s_cleanupInterval = TimeSpan.FromSeconds(10);
 
@@ -24,6 +24,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     private readonly ILogger<InteractionFileUploadStore> _logger;
     private readonly CancellationTokenSource _cleanupCts = new();
     private readonly Task _cleanupTask;
+    private int _disposed;
 
     public InteractionFileUploadStore(IFileSystemService fileSystemService)
         : this(fileSystemService, NullLogger<InteractionFileUploadStore>.Instance)
@@ -320,10 +321,15 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         return files.Count > 0 ? files : null;
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _cleanupCts.Cancel();
-        _cleanupTask.GetAwaiter().GetResult();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        await _cleanupCts.CancelAsync().ConfigureAwait(false);
+        await _cleanupTask.ConfigureAwait(false);
         _cleanupCts.Dispose();
 
         _logger.LogDebug(
