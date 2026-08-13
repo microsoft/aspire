@@ -44,12 +44,17 @@ internal static class BrowserDebuggerHelper
         var clientProjectDir = Path.GetDirectoryName(clientProjectPath) ?? clientProjectPath;
 
         var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, browser, clientProjectDir);
+        debuggerResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         // Tracks whether a debug browser session is currently active.
         // Toggled by the start/stop command handlers and reset when the resource stops
         // (e.g., user closes the browser).
         var debugSessionActive = false;
         var watcherCts = new CancellationTokenSource();
+        // Commands can be invoked concurrently by dashboard, CLI, or MCP clients. Serialize the
+        // complete state transition so duplicate starts and overlapping start/stop requests cannot
+        // race while replacing the watcher cancellation token source.
+        var debugSessionLock = new SemaphoreSlim(1, 1);
 
         builder.AddResource(debuggerResource)
             .WithParentRelationship(parentResource)
@@ -100,36 +105,44 @@ internal static class BrowserDebuggerHelper
             displayName: "Debug in Browser",
             executeCommand: async context =>
             {
-                if (debugSessionActive)
+                await debugSessionLock.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                try
                 {
+                    if (debugSessionActive)
+                    {
+                        return CommandResults.Success();
+                    }
+
+                    // Resolve the DCP instance name from the model resource's DcpInstancesAnnotation.
+                    // StartResourceAsync expects the DCP metadata name (e.g., "gateway-app-debugger-abc123"),
+                    // not the model resource name (e.g., "gateway-app-debugger").
+                    var dcpInstanceName = GetDcpInstanceName(debuggerResource);
+                    var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                    await orchestrator.StartResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
+                    debugSessionActive = true;
+
+                    // Cancel the previous watcher to signal it to stop, then dispose the old CTS
+                    // before creating a new one to avoid leaking CTS registrations and timers
+                    // from repeated start/stop cycles.
+                    await watcherCts.CancelAsync().ConfigureAwait(false);
+                    watcherCts.Dispose();
+                    watcherCts = new CancellationTokenSource();
+
+                    // Publish a no-op update on the command target to force the dashboard to
+                    // re-evaluate UpdateState callbacks and toggle command visibility.
+                    var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                    await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
+
+                    // Watch for the debugger resource to stop (e.g., user closes the browser)
+                    // so we can flip the flag and re-show the "Debug in Browser" command.
+                    _ = WatchForDebuggerStopAsync(context.ServiceProvider, commandTarget.Resource, debuggerResource, watcherCts.Token, () => debugSessionActive = false);
+
                     return CommandResults.Success();
                 }
-
-                // Resolve the DCP instance name from the model resource's DcpInstancesAnnotation.
-                // StartResourceAsync expects the DCP metadata name (e.g., "gateway-app-debugger-abc123"),
-                // not the model resource name (e.g., "gateway-app-debugger").
-                var dcpInstanceName = GetDcpInstanceName(debuggerResource);
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
-                await orchestrator.StartResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
-                debugSessionActive = true;
-
-                // Cancel the previous watcher to signal it to stop, then dispose the old CTS
-                // before creating a new one to avoid leaking CTS registrations and timers
-                // from repeated start/stop cycles.
-                await watcherCts.CancelAsync().ConfigureAwait(false);
-                watcherCts.Dispose();
-                watcherCts = new CancellationTokenSource();
-
-                // Publish a no-op update on the command target to force the dashboard to
-                // re-evaluate UpdateState callbacks and toggle command visibility.
-                var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-                await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
-
-                // Watch for the debugger resource to stop (e.g., user closes the browser)
-                // so we can flip the flag and re-show the "Debug in Browser" command.
-                _ = WatchForDebuggerStopAsync(context.ServiceProvider, commandTarget.Resource, debuggerResource, watcherCts.Token, () => debugSessionActive = false);
-
-                return CommandResults.Success();
+                finally
+                {
+                    debugSessionLock.Release();
+                }
             },
             commandOptions: new()
             {
@@ -155,19 +168,32 @@ internal static class BrowserDebuggerHelper
             displayName: "Stop Browser Debug",
             executeCommand: async context =>
             {
-                // Cancel the watcher so it doesn't race with our state reset.
-                await watcherCts.CancelAsync().ConfigureAwait(false);
+                await debugSessionLock.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (!debugSessionActive)
+                    {
+                        return CommandResults.Success();
+                    }
 
-                var dcpInstanceName = GetDcpInstanceName(debuggerResource);
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
-                await orchestrator.StopResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
-                debugSessionActive = false;
+                    // Cancel the watcher so it doesn't race with our state reset.
+                    await watcherCts.CancelAsync().ConfigureAwait(false);
 
-                // Force dashboard to re-evaluate command visibility.
-                var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-                await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
+                    var dcpInstanceName = GetDcpInstanceName(debuggerResource);
+                    var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                    await orchestrator.StopResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
+                    debugSessionActive = false;
 
-                return CommandResults.Success();
+                    // Force dashboard to re-evaluate command visibility.
+                    var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                    await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
+
+                    return CommandResults.Success();
+                }
+                finally
+                {
+                    debugSessionLock.Release();
+                }
             },
             commandOptions: new()
             {

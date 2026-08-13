@@ -481,26 +481,22 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
               <ItemGroup>
                 <ProjectReference Include="../Client/Client.csproj" />
               </ItemGroup>
-              <Target Name="ResolveBlazorWebAssemblyProjectReferences">
+              <Target Name="ResolveWebAssemblyProjectReferences">
                 <MSBuild Projects="@(ProjectReference)"
-                         Targets="GetBlazorWebAssemblyProjectReference"
+                         Targets="GetWebAssemblyProjectReference"
                          BuildInParallel="true"
                          SkipNonexistentTargets="true">
-                  <Output TaskParameter="TargetOutputs" ItemName="_BlazorWebAssemblyProjectReference" />
+                  <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
                 </MSBuild>
-                <ItemGroup>
-                  <BlazorWebAssemblyProjectReference Include="@(_BlazorWebAssemblyProjectReference)" />
-                </ItemGroup>
               </Target>
             </Project>
             """);
         File.WriteAllText(clientProjectPath, """
             <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
-              <Target Name="GetBlazorWebAssemblyProjectReference"
-                      Returns="@(_BlazorWebAssemblyProjectReference)">
+              <Target Name="GetWebAssemblyProjectReference"
+                      Returns="@(_WebAssemblyProjectReference)">
                 <ItemGroup>
-                  <_BlazorWebAssemblyProjectReference Include="$(MSBuildProjectFullPath)"
-                                                      Condition="'$(UsingMicrosoftNETSdkBlazorWebAssembly)' == 'true'" />
+                  <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
                 </ItemGroup>
               </Target>
             </Project>
