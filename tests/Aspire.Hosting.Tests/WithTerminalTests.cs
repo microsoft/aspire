@@ -276,9 +276,9 @@ public class WithTerminalTests
     {
         // Regression: prior to wiring an ApplicationStopped callback, every AppHost run
         // left stale UDS sockets and metadata sidecars behind in ~/.aspire/trmnl/.
-        // Now: MaterializeTerminalHosts writes a metadata sidecar at BeforeStartEvent
-        // time, and the ApplicationStopped callback deletes every file whose name starts
-        // with one of OUR replica ids.
+        // Now: MaterializeTerminalHostsAsync writes a metadata sidecar at BeforeStartEvent
+        // time, and the ApplicationStopped callback deletes the four known files for each
+        // replica owned by this run.
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
         resource.WithTerminal();
@@ -296,11 +296,9 @@ public class WithTerminalTests
             // BeforeStartEvent should have written the production metadata sidecar.
             // The three .sock files are normally created at runtime by DCP / the
             // terminal-host process (neither runs here), so we synthesise empty
-            // placeholders so the cleanup glob ({replicaId}.*) has the full set of
-            // four files to match against — that is the contract the cleanup must
-            // honour in production. A regression that narrowed the glob (e.g. only
-            // deleting *.metadata.json) would otherwise slip past this test and
-            // leak stale sockets, which causes UDS bind failures on the next run.
+            // placeholders so the cleanup path has the full set of four known files
+            // to delete. A regression that only deleted metadata would otherwise slip
+            // past this test and leak stale sockets, causing UDS bind failures next run.
             var allPaths = annotation.TerminalHosts
                 .SelectMany(h => new[]
                 {
@@ -317,9 +315,8 @@ public class WithTerminalTests
                     File.Exists(host.Layout.MetadataPath),
                     $"Metadata sidecar '{host.Layout.MetadataPath}' should exist after BeforeStartEvent.");
 
-                // Touch the three socket-shaped files so the cleanup glob has to
-                // delete them too. These are regular files (not real UDS) — the
-                // cleanup path treats every {replicaId}.* match the same way.
+                // Touch the three socket-shaped files so cleanup has to delete them too.
+                // These are regular files rather than real UDS endpoints.
                 File.WriteAllText(host.Layout.ProducerUdsPath, string.Empty);
                 File.WriteAllText(host.Layout.ConsumerUdsPath, string.Empty);
                 File.WriteAllText(host.Layout.ControlUdsPath, string.Empty);
@@ -334,6 +331,7 @@ public class WithTerminalTests
         }
         finally
         {
+            CleanUpTerminalHostFiles(resource);
             await app.DisposeAsync();
         }
     }
@@ -366,11 +364,14 @@ public class WithTerminalTests
             using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(host.Layout.MetadataPath));
             var root = doc.RootElement;
 
-            Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal(TerminalHostMetadata.CurrentSchemaVersion, root.GetProperty("schemaVersion").GetInt32());
             Assert.Equal(host.Layout.ReplicaId, root.GetProperty("replicaId").GetString());
             Assert.Equal("myapp", root.GetProperty("resourceName").GetString());
             Assert.Equal(0, root.GetProperty("replicaIndex").GetInt32());
             Assert.Equal(Environment.ProcessId, root.GetProperty("appHostPid").GetInt32());
+            Assert.Equal(
+                ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds(),
+                root.GetProperty("appHostProcessStartTimeUnixMilliseconds").GetInt64());
             Assert.Equal(137, root.GetProperty("columns").GetInt32());
             Assert.Equal(41, root.GetProperty("rows").GetInt32());
             Assert.Equal(host.Layout.ControlUdsPath, root.GetProperty("controlSocketPath").GetString());
@@ -387,6 +388,7 @@ public class WithTerminalTests
         }
         finally
         {
+            CleanUpTerminalHostFiles(resource);
             await app.DisposeAsync();
         }
     }
@@ -397,7 +399,7 @@ public class WithTerminalTests
         // Regression for https://github.com/microsoft/aspire/issues/19302 (startup-GC half): an
         // AppHost that exits ungracefully (SIGKILL / crash) can strand {id}.dcp.sock /
         // {id}.host.sock and its metadata sidecar in the shared ~/.aspire/trmnl/ forever. On the
-        // next AppHost start, MaterializeTerminalHosts sweeps sidecars whose owning PID is no
+        // next AppHost start, MaterializeTerminalHostsAsync sweeps sidecars whose owning PID is no
         // longer alive.
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
@@ -405,16 +407,23 @@ public class WithTerminalTests
 
         // Unique, test-owned replica id so we only ever assert on files WE created and never
         // collide with a real terminal on the developer's machine.
-        var orphanId = "test-orphan-" + Guid.NewGuid().ToString("N");
+        var orphanId = CreateTestReplicaId("orphan");
         var orphanMetadataPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.MetadataSuffix}");
         var orphanProducerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
         var orphanConsumerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ConsumerSockPurpose}.sock");
         var orphanControlPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ControlSockPurpose}.sock");
+        var orphanLockPath = GetReplicaLockPath(trmnlDirectory, orphanId);
 
         // int.MaxValue is not a live process on any supported platform (it exceeds Linux pid_max
         // and is an invalid — odd — Windows PID), so the sweep's liveness check classifies the
         // owner as dead and reclaims the files.
-        WriteOrphanSidecar(orphanMetadataPath, orphanId, appHostPid: int.MaxValue);
+        WriteSidecar(
+            orphanMetadataPath,
+            fileReplicaId: orphanId,
+            metadataReplicaId: orphanId,
+            appHostPid: int.MaxValue,
+            appHostProcessStartTimeUnixMilliseconds: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(orphanProducerPath, string.Empty);
         File.WriteAllText(orphanConsumerPath, string.Empty);
         File.WriteAllText(orphanControlPath, string.Empty);
@@ -438,7 +447,7 @@ public class WithTerminalTests
         {
             // Belt and braces: remove the orphan placeholders (in case the sweep regressed) and
             // this run's own materialized terminal-host files so we don't pollute the shared dir.
-            DeleteIfExists(orphanMetadataPath, orphanProducerPath, orphanConsumerPath, orphanControlPath);
+            DeleteIfExists(orphanMetadataPath, orphanProducerPath, orphanConsumerPath, orphanControlPath, orphanLockPath);
             CleanUpTerminalHostFiles(resource);
             await app.DisposeAsync();
         }
@@ -448,18 +457,29 @@ public class WithTerminalTests
     public async Task WithTerminalDoesNotSweepFilesFromLiveAppHost()
     {
         // The startup sweep must NEVER delete files whose owning AppHost is still alive — otherwise
-        // a second AppHost start would rip the sockets out from under a running terminal. Seeding
-        // the current process id exercises the guard that protects both our own run and any live
-        // peer.
+        // a second AppHost start would rip the sockets out from under a running terminal. A child
+        // process exercises the Process.GetProcessById liveness branch rather than the special case
+        // that preserves sidecars owned by this test process.
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
         Directory.CreateDirectory(trmnlDirectory);
 
-        var liveId = "test-live-" + Guid.NewGuid().ToString("N");
+        var liveId = CreateTestReplicaId("live");
         var liveMetadataPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.MetadataSuffix}");
         var liveProducerPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+        var liveLockPath = GetReplicaLockPath(trmnlDirectory, liveId);
 
-        WriteOrphanSidecar(liveMetadataPath, liveId, appHostPid: Environment.ProcessId);
+        using var liveProcess = TestProcesses.StartLongRunning();
+        var liveProcessStartTimeUnixMilliseconds =
+            ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(liveProcess.Id);
+        Assert.True(liveProcessStartTimeUnixMilliseconds.HasValue);
+        WriteSidecar(
+            liveMetadataPath,
+            fileReplicaId: liveId,
+            metadataReplicaId: liveId,
+            appHostPid: liveProcess.Id,
+            appHostProcessStartTimeUnixMilliseconds: liveProcessStartTimeUnixMilliseconds.Value,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(liveProducerPath, string.Empty);
 
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -477,33 +497,245 @@ public class WithTerminalTests
         }
         finally
         {
-            DeleteIfExists(liveMetadataPath, liveProducerPath);
+            DeleteIfExists(liveMetadataPath, liveProducerPath, liveLockPath);
+            CleanUpTerminalHostFiles(resource);
+
+            if (!liveProcess.HasExited)
+            {
+                liveProcess.Kill(entireProcessTree: true);
+                await liveProcess.WaitForExitAsync();
+            }
+
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsFilesFromReusedProcessId()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("reused-pid");
+        var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
+        var staleStartTimeUnixMilliseconds =
+            ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds() - (long)TimeSpan.FromMinutes(1).TotalMilliseconds;
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: Environment.ProcessId,
+            appHostProcessStartTimeUnixMilliseconds: staleStartTimeUnixMilliseconds,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+        File.WriteAllText(producerPath, string.Empty);
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.False(File.Exists(metadataPath));
+            Assert.False(File.Exists(producerPath));
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, producerPath, lockPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepDoesNotTrustReplicaIdFromMetadata()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var fileReplicaId = CreateTestReplicaId("mismatch");
+        var metadataPath = Path.Combine(trmnlDirectory, $"{fileReplicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var maliciousPrefix = "terminal-sweep-" + Guid.NewGuid().ToString("N");
+        var sentinelPath = Path.Combine(trmnlDirectory, maliciousPrefix + "-sentinel.tmp");
+        var lockPath = GetReplicaLockPath(trmnlDirectory, fileReplicaId);
+
+        WriteSidecar(
+            metadataPath,
+            fileReplicaId,
+            metadataReplicaId: maliciousPrefix + "*",
+            appHostPid: int.MaxValue,
+            appHostProcessStartTimeUnixMilliseconds: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+        File.WriteAllText(sentinelPath, string.Empty);
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.True(File.Exists(metadataPath), "A filename/content mismatch must not authorize deletion.");
+            Assert.True(File.Exists(sentinelPath), "Metadata content must never be used as a file search pattern.");
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, sentinelPath, lockPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepIgnoresInvalidReplicaIdFilename()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var invalidReplicaIdCharacters = CreateTestReplicaId("invalid").ToCharArray();
+        invalidReplicaIdCharacters[5] = '%';
+        var invalidReplicaId = new string(invalidReplicaIdCharacters);
+        var metadataPath = Path.Combine(trmnlDirectory, $"{invalidReplicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var producerPath = Path.Combine(trmnlDirectory, $"{invalidReplicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+
+        WriteSidecar(
+            metadataPath,
+            invalidReplicaId,
+            invalidReplicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessStartTimeUnixMilliseconds: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+        File.WriteAllText(producerPath, string.Empty);
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.True(File.Exists(metadataPath));
+            Assert.True(File.Exists(producerPath));
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, producerPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepIgnoresUnknownMetadataSchema()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("schema");
+        var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessStartTimeUnixMilliseconds: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion + 1);
+        File.WriteAllText(producerPath, string.Empty);
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.True(File.Exists(metadataPath));
+            Assert.True(File.Exists(producerPath));
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, producerPath, lockPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepSkipsReplicaLockedByAnotherWriter()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("locked");
+        var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
+        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessStartTimeUnixMilliseconds: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+        File.WriteAllText(producerPath, string.Empty);
+
+        try
+        {
+            using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            {
+                await RunStartupSweepAsync();
+            }
+
+            Assert.True(File.Exists(metadataPath));
+            Assert.True(File.Exists(producerPath));
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, producerPath, lockPath);
+        }
+    }
+
+    private static async Task RunStartupSweepAsync()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("sweep-" + Guid.NewGuid().ToString("N"), "myapp", ".");
+        resource.WithTerminal();
+
+        var app = builder.Build();
+        try
+        {
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        }
+        finally
+        {
             CleanUpTerminalHostFiles(resource);
             await app.DisposeAsync();
         }
     }
 
-    private static void WriteOrphanSidecar(string metadataPath, string replicaId, int appHostPid)
+    private static void WriteSidecar(
+        string metadataPath,
+        string fileReplicaId,
+        string metadataReplicaId,
+        int appHostPid,
+        long appHostProcessStartTimeUnixMilliseconds,
+        int schemaVersion)
     {
-        // Build a schema-valid sidecar so the sweep's deserialize succeeds and it makes its
-        // keep/delete decision purely from AppHostPid. The socket-path fields are required by the
-        // schema but never read by the sweep, so simple placeholders are fine.
+        // The socket-path fields are required by the schema but never read by the sweep,
+        // so simple placeholders are sufficient for these metadata validation tests.
         var metadata = new TerminalHostMetadata
         {
-            ReplicaId = replicaId,
+            SchemaVersion = schemaVersion,
+            ReplicaId = metadataReplicaId,
             ResourceName = "orphan",
             ReplicaIndex = 0,
             AppHostPath = "/does/not/matter",
             AppHostPid = appHostPid,
+            AppHostProcessStartTimeUnixMilliseconds = appHostProcessStartTimeUnixMilliseconds,
             CreatedAtUtc = DateTime.UtcNow,
             Columns = 80,
             Rows = 24,
-            ControlSocketPath = replicaId + ".ctrl.sock",
-            ConsumerSocketPath = replicaId + ".host.sock",
+            ControlSocketPath = fileReplicaId + ".ctrl.sock",
+            ConsumerSocketPath = fileReplicaId + ".host.sock",
         };
 
         File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata));
     }
+
+    private static string CreateTestReplicaId(string resourceName)
+        => TerminalHostPaths.ComputeReplicaId(
+            Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")),
+            resourceName,
+            replicaIndex: 0);
+
+    private static string GetTerminalDirectory()
+    {
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        Directory.CreateDirectory(trmnlDirectory);
+        return trmnlDirectory;
+    }
+
+    private static string GetReplicaLockPath(string trmnlDirectory, string replicaId)
+        => Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
 
     private static void CleanUpTerminalHostFiles(IResourceBuilder<ExecutableResource> resource)
     {
@@ -519,7 +751,18 @@ public class WithTerminalTests
                 host.Layout.MetadataPath,
                 host.Layout.ProducerUdsPath,
                 host.Layout.ConsumerUdsPath,
-                host.Layout.ControlUdsPath);
+                host.Layout.ControlUdsPath,
+                GetReplicaLockPath(Path.GetDirectoryName(host.Layout.MetadataPath)!, host.Layout.ReplicaId));
+        }
+    }
+
+    private static void CleanUpTerminalHostLocks(DistributedApplicationModel model)
+    {
+        foreach (var host in model.Resources.OfType<TerminalHostResource>())
+        {
+            DeleteIfExists(GetReplicaLockPath(
+                Path.GetDirectoryName(host.Layout.MetadataPath)!,
+                host.Layout.ReplicaId));
         }
     }
 
@@ -738,7 +981,14 @@ public class WithTerminalTests
         // because the test harness doesn't go through DistributedApplication.RunApplicationAsync.
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        try
+        {
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        }
+        finally
+        {
+            CleanUpTerminalHostLocks(model);
+        }
     }
 
     /// <summary>
@@ -760,8 +1010,15 @@ public class WithTerminalTests
     {
         await using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
-        return model;
+        try
+        {
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+            return model;
+        }
+        finally
+        {
+            CleanUpTerminalHostLocks(model);
+        }
     }
 
     [Fact]

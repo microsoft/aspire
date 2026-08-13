@@ -41,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="aspire-managed" />
     <InternalsVisibleTo Include="Aspire.TerminalHost.Tests" />
   </ItemGroup>
 

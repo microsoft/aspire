@@ -11,7 +11,7 @@ namespace Aspire.Shared.TerminalHost;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Written once by <c>TerminalResourceBuilderExtensions.MaterializeTerminalHosts</c> when
+/// Written once by <c>TerminalResourceBuilderExtensions.MaterializeTerminalHostsAsync</c> when
 /// the AppHost materializes each <c>TerminalHostResource</c>
 /// (during <c>BeforeStartEvent</c>) and deleted on <c>ApplicationStopped</c> alongside the
 /// <c>.sock</c> files. The descriptor lets external tools enumerate live terminals by
@@ -26,12 +26,15 @@ namespace Aspire.Shared.TerminalHost;
 /// </remarks>
 internal sealed class TerminalHostMetadata
 {
+    /// <summary>The metadata schema version understood by this build.</summary>
+    public const int CurrentSchemaVersion = 2;
+
     /// <summary>
     /// Bumped when fields are added or semantics change so older readers can refuse
     /// unknown schemas instead of silently misinterpreting them.
     /// </summary>
     [JsonPropertyName("schemaVersion")]
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
     /// <summary>The replica id (see <see cref="TerminalHostPaths.ComputeReplicaId(string, string, int)"/>).</summary>
     [JsonPropertyName("replicaId")]
@@ -50,11 +53,18 @@ internal sealed class TerminalHostMetadata
     public required string AppHostPath { get; init; }
 
     /// <summary>
-    /// Process id of the AppHost process. Stale sidecars (whose PID no longer exists)
-    /// can be safely garbage-collected by external tools.
+    /// Process id of the AppHost process. Readers pair it with
+    /// <see cref="AppHostProcessStartTimeUnixMilliseconds"/> before deciding ownership.
     /// </summary>
     [JsonPropertyName("appHostPid")]
     public required int AppHostPid { get; init; }
+
+    /// <summary>
+    /// Stable start time of the AppHost process, paired with <see cref="AppHostPid"/>
+    /// so a recycled PID cannot be mistaken for the original owner.
+    /// </summary>
+    [JsonPropertyName("appHostProcessStartTimeUnixMilliseconds")]
+    public required long AppHostProcessStartTimeUnixMilliseconds { get; init; }
 
     /// <summary>UTC timestamp when the sidecar was written.</summary>
     [JsonPropertyName("createdAtUtc")]

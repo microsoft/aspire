@@ -14,7 +14,7 @@ namespace Aspire.Shared.TerminalHost;
 /// <para>
 /// All per-replica terminal-host files live flat under <c>~/.aspire/trmnl/</c>. Each
 /// replica is identified by an 11-character base64url <em>replica id</em> derived from
-/// the tuple <c>(normalized AppHost path, resource name, replica index)</c>. The four
+/// the tuple <c>(normalized AppHost path, resource name, replica index)</c>. The five
 /// files for a single replica share the same <c>{replicaId}.</c> prefix:
 /// </para>
 /// <list type="bullet">
@@ -22,6 +22,7 @@ namespace Aspire.Shared.TerminalHost;
 ///   <item><description><c>{replicaId}.host.sock</c> — consumer UDS (host listens, viewers dial)</description></item>
 ///   <item><description><c>{replicaId}.ctrl.sock</c> — control UDS (host listens, AppHost dials)</description></item>
 ///   <item><description><c>{replicaId}.metadata.json</c> — descriptor sidecar (resource name, replica index, dims, PID)</description></item>
+///   <item><description><c>{replicaId}.lock</c> — persistent cross-process lifecycle lock</description></item>
 /// </list>
 /// <para>
 /// A flat layout (no per-AppHost or per-replica sub-directories) keeps the absolute
@@ -63,6 +64,9 @@ internal static class TerminalHostPaths
 
     /// <summary>Suffix for the per-replica metadata sidecar (JSON).</summary>
     public const string MetadataSuffix = "metadata.json";
+
+    /// <summary>Suffix for the persistent cross-process replica lock.</summary>
+    public const string LockSuffix = "lock";
 
     /// <summary>
     /// Length in characters of the base64url replica identifier.
@@ -143,6 +147,39 @@ internal static class TerminalHostPaths
     {
         ArgumentException.ThrowIfNullOrEmpty(replicaId);
         return Path.Combine(GetTrmnlDirectory(homeDirectory), $"{replicaId}.{MetadataSuffix}");
+    }
+
+    /// <summary>
+    /// Extracts and validates the replica identifier encoded in a metadata sidecar filename.
+    /// </summary>
+    public static bool TryGetReplicaIdFromMetadataPath(string metadataPath, out string replicaId)
+    {
+        var fileName = Path.GetFileName(metadataPath);
+        var metadataExtension = "." + MetadataSuffix;
+        if (!fileName.EndsWith(metadataExtension, StringComparison.Ordinal))
+        {
+            replicaId = string.Empty;
+            return false;
+        }
+
+        var candidate = fileName.AsSpan(0, fileName.Length - metadataExtension.Length);
+        if (candidate.Length != ReplicaIdLength)
+        {
+            replicaId = string.Empty;
+            return false;
+        }
+
+        foreach (var character in candidate)
+        {
+            if (!char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_'))
+            {
+                replicaId = string.Empty;
+                return false;
+            }
+        }
+
+        replicaId = candidate.ToString();
+        return true;
     }
 
     private static string NormalizePath(string path)

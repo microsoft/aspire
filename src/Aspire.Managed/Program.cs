@@ -92,14 +92,7 @@ static async Task<int> RunNuGet(string[] args)
 
 static async Task<int> RunTerminalHost(string[] args)
 {
-    using var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) =>
-    {
-        e.Cancel = true;
-        cts.Cancel();
-    };
-
-    return await TerminalHostApp.RunAsync(args, cts.Token).ConfigureAwait(false);
+    return await TerminalHostProcessRunner.RunAsync(args).ConfigureAwait(false);
 }
 
 static int ShowUsage()
