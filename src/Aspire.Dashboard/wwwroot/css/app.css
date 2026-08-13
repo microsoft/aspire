@@ -862,40 +862,36 @@ fluent-dialog td[cell-type=columnheader] fluent-button[appearance=stealth]:not(:
     border-color: var(--neutral-stroke-rest) !important;
 }
 
-/* Primary action buttons on DARK theme: a soft LIGHT-purple fill with a dark-violet label, so the
-   primary action reads as a bright, inviting chip against the dark chrome. FAST's stock dark
-   accent recipe is a near-white lavender (looks washed-out/disabled) and the brand-violet + white
-   treatment we used before read heavy; a light-purple fill + dark text is the requested look. The fill
-   and label are mixed from the brand seed (--accent-base-color #512bd4) so they track the theme. Each
-   interaction state darkens both the fill and label in tandem, preserving at least 4.5:1 text contrast.
-   Applies to every accent button/anchor - dialogs AND page toolbars.
+/* Primary action buttons on DARK theme use the same semantic accent colors as hyperlinks, with a
+    dark-violet label that preserves at least 4.5:1 text contrast in every interaction state.
+    Applies to every accent button/anchor - dialogs AND page toolbars.
    IMPORTANT: LIGHT theme is intentionally NOT touched here (stays on the stock saturated violet + white
    recipe), per the design ask. --foreground-on-accent is pinned to the dark label so FluentUI's own
    slotted label/icon colour follows it instead of painting white. */
 [data-theme="dark"] fluent-button[appearance='accent'],
 [data-theme="dark"] fluent-anchor[appearance='accent'] {
     --foreground-on-accent-rest: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
-    --foreground-on-accent-hover: color-mix(in srgb, var(--accent-base-color) 80%, #000000);
-    --foreground-on-accent-active: color-mix(in srgb, var(--accent-base-color) 75%, #000000);
+    --foreground-on-accent-hover: color-mix(in srgb, var(--accent-base-color) 65%, #000000);
+    --foreground-on-accent-active: color-mix(in srgb, var(--accent-base-color) 55%, #000000);
 }
 
 [data-theme="dark"] fluent-button[appearance='accent']:not(:hover):not(:active)::part(control),
 [data-theme="dark"] fluent-anchor[appearance='accent']:not(:hover):not(:active)::part(control) {
-    background: color-mix(in srgb, var(--accent-base-color) 30%, #ffffff);
+    background: var(--accent-fill-rest);
     color: color-mix(in srgb, var(--accent-base-color) 85%, #000000);
-    border-color: color-mix(in srgb, var(--accent-base-color) 45%, #ffffff);
+    border-color: var(--accent-fill-rest);
 }
 
 [data-theme="dark"] fluent-button[appearance='accent']:hover::part(control),
 [data-theme="dark"] fluent-anchor[appearance='accent']:hover::part(control) {
-    background: color-mix(in srgb, var(--accent-base-color) 40%, #ffffff);
-    color: color-mix(in srgb, var(--accent-base-color) 80%, #000000);
+    background: color-mix(in srgb, var(--accent-fill-rest) 90%, #000000);
+    color: color-mix(in srgb, var(--accent-base-color) 65%, #000000);
 }
 
 [data-theme="dark"] fluent-button[appearance='accent']:active::part(control),
 [data-theme="dark"] fluent-anchor[appearance='accent']:active::part(control) {
-    background: color-mix(in srgb, var(--accent-base-color) 45%, #ffffff);
-    color: color-mix(in srgb, var(--accent-base-color) 75%, #000000);
+    background: color-mix(in srgb, var(--accent-fill-rest) 85%, #000000);
+    color: color-mix(in srgb, var(--accent-base-color) 55%, #000000);
 }
 
 /* Secondary buttons (Cancel / Manage, neutral or default appearance): FAST's neutral fill is nearly the
