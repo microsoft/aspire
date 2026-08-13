@@ -11,18 +11,13 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 internal sealed class TestFileSystemService : IFileSystemService, IDisposable
 {
-    private readonly TestTempFileSystemService _tempDirectory;
-
-    public TestFileSystemService(bool failFirstTempFileDispose = false)
-    {
-        _tempDirectory = new TestTempFileSystemService(failFirstTempFileDispose);
-    }
+    private readonly TestTempFileSystemService _tempDirectory = new();
 
     public ITempFileSystemService TempDirectory => _tempDirectory;
 
     public void Dispose() => _tempDirectory.Dispose();
 
-    private sealed class TestTempFileSystemService(bool failFirstTempFileDispose) : ITempFileSystemService, IDisposable
+    private sealed class TestTempFileSystemService : ITempFileSystemService, IDisposable
     {
         private readonly List<string> _directories = [];
 
@@ -40,7 +35,7 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
             var resolvedName = fileName ?? System.IO.Path.GetRandomFileName();
             var filePath = System.IO.Path.Combine(tempDir.FullName, resolvedName);
             File.Create(filePath).Dispose();
-            return new TestTempFile(filePath, tempDir.FullName, failFirstTempFileDispose);
+            return new TestTempFile(filePath, tempDir.FullName);
         }
 
         public void Dispose()
@@ -82,23 +77,22 @@ internal sealed class TestFileSystemService : IFileSystemService, IDisposable
         }
     }
 
-    private sealed class TestTempFile(string path, string parentDir, bool failFirstDispose) : TempFile
+    private sealed class TestTempFile(string path, string parentDir) : TempFile
     {
-        private bool _failDispose = failFirstDispose;
-
         public override string Path => path;
 
         public override void Dispose()
         {
-            if (_failDispose)
+            try
             {
-                _failDispose = false;
-                throw new IOException("Simulated temporary file deletion failure.");
+                if (Directory.Exists(parentDir))
+                {
+                    Directory.Delete(parentDir, recursive: true);
+                }
             }
-
-            if (Directory.Exists(parentDir))
+            catch
             {
-                Directory.Delete(parentDir, recursive: true);
+                // Best-effort cleanup.
             }
         }
     }
