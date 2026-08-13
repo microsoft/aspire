@@ -822,6 +822,8 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
     private static string? GetInspectUrl(Uri portUri)
     {
+        // Dev Tunnel port hosts use a shape such as `n4skq32k-3000.use.devtunnels.ms`.
+        // The inspect host inserts `-inspect` before the first dot: `n4skq32k-3000-inspect.use.devtunnels.ms`.
         var hostPrefixLength = portUri.Host.IndexOf('.');
         if (hostPrefixLength < 0)
         {
