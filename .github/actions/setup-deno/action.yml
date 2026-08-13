@@ -1,0 +1,85 @@
+name: 'Setup Deno'
+description: 'Installs the pinned Deno version used by Aspire tests'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Deno (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        case "${{ runner.os }}-${{ runner.arch }}" in
+          Linux-X64)
+            TARGET="x86_64-unknown-linux-gnu"
+            SHA256="96c9c73fc05ea57603bc28d8071d41e861bd40bcf2a9f849dd5969ed1a2c8498"
+            ;;
+          Linux-ARM64)
+            TARGET="aarch64-unknown-linux-gnu"
+            SHA256="a0f266eb189af2f27db0c6dcf9eb2f68ba2e8bbff1442c969ace398463f8b2bf"
+            ;;
+          macOS-X64)
+            TARGET="x86_64-apple-darwin"
+            SHA256="04f71604d738ef2a3b0c08d00743b1a6580fd65d0dab604da2f57f30f4c74b55"
+            ;;
+          macOS-ARM64)
+            TARGET="aarch64-apple-darwin"
+            SHA256="2d11cf0505d4600a4492de8d07456a7a5e7eedebf68bdcbcb9092f520fcde0f1"
+            ;;
+          *)
+            echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}" >&2
+            exit 1
+            ;;
+        esac
+
+        INSTALL_DIR="${RUNNER_TEMP}/deno-2.9.0"
+        ARCHIVE="${RUNNER_TEMP}/deno-${TARGET}.zip"
+        curl --fail --location --retry 5 --output "$ARCHIVE" \
+          "https://github.com/denoland/deno/releases/download/v2.9.0/deno-${TARGET}.zip"
+
+        if [ "${{ runner.os }}" = "macOS" ]; then
+          echo "${SHA256}  ${ARCHIVE}" | shasum --algorithm 256 --check
+        else
+          echo "${SHA256}  ${ARCHIVE}" | sha256sum --check
+        fi
+
+        mkdir -p "$INSTALL_DIR"
+        unzip -q "$ARCHIVE" -d "$INSTALL_DIR"
+        chmod +x "$INSTALL_DIR/deno"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+        "$INSTALL_DIR/deno" --version
+
+    - name: Install Deno (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $target, $sha256 = switch ("${{ runner.arch }}") {
+          "X64" {
+            "x86_64-pc-windows-msvc"
+            "37e3a8e5f4ee360d08bbeec9ee07fdcaa9dcd1a39d4aeaac5807354aec557451"
+          }
+          "ARM64" {
+            "aarch64-pc-windows-msvc"
+            "de3d31811dd583d6b15746db1463bebc204118aa0e8b3fe2b5ecc488ed198cbf"
+          }
+          default {
+            Write-Error "Unsupported runner: Windows-${{ runner.arch }}"
+            exit 1
+          }
+        }
+
+        $installDir = Join-Path $env:RUNNER_TEMP "deno-2.9.0"
+        $archive = Join-Path $env:RUNNER_TEMP "deno-$target.zip"
+        Invoke-WebRequest `
+          -Uri "https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip" `
+          -OutFile $archive
+
+        $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash
+        if ($actualHash -ne $sha256) {
+          Write-Error "Deno archive checksum mismatch. Expected $sha256, got $actualHash."
+          exit 1
+        }
+
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+        Expand-Archive -Path $archive -DestinationPath $installDir -Force
+        $installDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $installDir "deno.exe") --version
