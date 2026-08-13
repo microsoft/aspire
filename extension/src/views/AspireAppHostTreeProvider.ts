@@ -711,7 +711,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     // When a launching AppHost appears in the running list, clear it from the launch service.
     private _clearLaunchingPathsForRunningAppHosts(): void {
         for (const appHost of this._repository.appHosts) {
-            this._launchService.clearMatchingLaunching(appHost.appHostPath);
+            this._launchService.clearLaunchingForRunningAppHost(appHost.appHostPath);
         }
     }
 
@@ -724,8 +724,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             clearTimeout(existingTimeout);
         }
 
-        // The terminal command does not expose completion/failure, so clear the optimistic
-        // UI state eventually even if no repository refresh arrives after a failed stop.
+        // Keep a safety bound in case no repository refresh arrives after a successful stop.
         const timeout = setTimeout(() => {
             this._clearStoppingAppHost(key, true);
         }, AspireAppHostTreeProvider._stoppingStateSafetyTimeoutMs);
@@ -1431,8 +1430,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         this._markAppHostStopping(appHostPath);
         try {
-            await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
-            this._repository.requestAppHostStopRefresh?.(appHostPath);
+            const result = await this._launchService.stopAppHost(appHostPath);
+            if (result.outcome === 'stopped') {
+                this._repository.requestAppHostStopRefresh?.(appHostPath);
+            } else {
+                const stoppingKey = this._findStoppingAppHostKey(appHostPath);
+                if (stoppingKey) {
+                    this._clearStoppingAppHost(stoppingKey, true);
+                }
+            }
         } catch (err) {
             const stoppingKey = this._findStoppingAppHostKey(appHostPath);
             if (stoppingKey) {

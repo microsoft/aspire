@@ -9,6 +9,7 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
+import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -28,6 +29,7 @@ export function createE2eStateFileBridge(
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
+  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
 ): vscode.Disposable {
   const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
   const controlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
@@ -242,7 +244,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, appHostLifecycleTools, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -358,6 +360,7 @@ async function executeE2eControlCommand(
   terminalProvider: AspireTerminalProvider,
   clipboardSnapshot: E2eClipboardSnapshot,
   clipboardExpectation: E2eClipboardExpectation,
+  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -574,6 +577,42 @@ async function executeE2eControlCommand(
       markStarted();
       const commands = await vscode.commands.getCommands(true);
       return commands.filter(commandId => commandId.startsWith('aspire-vscode.')).sort();
+    }
+    case 'getRegisteredLanguageModelTools': {
+      markStarted();
+      return vscode.lm.tools
+        .filter(tool => tool.name.startsWith('aspire_'))
+        .map(tool => ({ name: tool.name, tags: [...tool.tags], description: tool.description }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+    }
+    case 'prepareLanguageModelToolInvocation': {
+      markStarted();
+      const tool = appHostLifecycleTools.get(command.toolName);
+      if (!tool) {
+        throw new Error(`Language model tool '${command.toolName}' is not registered.`);
+      }
+
+      const prepared = await tool.prepareInvocation({ input: command.input }, new vscode.CancellationTokenSource().token);
+      return {
+        invocationMessage: prepared.invocationMessage,
+        confirmationTitle: prepared.confirmationMessages?.title,
+        confirmationMessage: prepared.confirmationMessages?.message,
+      };
+    }
+    case 'invokeLanguageModelTool': {
+      markStarted();
+      const invocationCount = Math.max(1, command.times ?? 1);
+      const invocationResults = await Promise.all(Array.from({ length: invocationCount }, () => vscode.lm.invokeTool(command.toolName, {
+        input: command.input,
+        toolInvocationToken: undefined,
+      })));
+
+      return {
+        results: invocationResults.map(invocationResult => invocationResult.content
+          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+          .map(part => part.value)
+          .join('')),
+      };
     }
     case 'getDebugSessionProcessInfo': {
       markStarted();

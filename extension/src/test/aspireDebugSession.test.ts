@@ -3139,6 +3139,46 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
     });
 
+    test('tracks the extension-created AppHost child for lifecycle recovery', async () => {
+        const appHostPath = join(makeTempDir(), 'apphost.mts');
+        writeFileSync(appHostPath, '');
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const childDebugSession = {
+            id: 'apphost-session',
+            session: { id: 'apphost-session', configuration: { noDebug: false } } as unknown as vscode.DebugSession,
+            stopSession: sinon.stub().resolves(),
+        };
+        const trackAppHostDebugSession = sinon.spy();
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { },
+            trackAppHostDebugSession);
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(childDebugSession);
+
+        await aspireDebugSession.startAppHost(appHostPath, [], [], true, { forceBuild: false });
+
+        assert.strictEqual(trackAppHostDebugSession.calledOnceWithExactly(aspireDebugSession, appHostPath, childDebugSession), true);
+    });
+
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {
         let restartHandler: ((debugSessionId: string) => boolean) | undefined;
         let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;

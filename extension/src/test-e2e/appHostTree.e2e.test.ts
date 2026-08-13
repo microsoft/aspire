@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
@@ -301,23 +301,15 @@ suite('Aspire AppHost tree E2E', function () {
 
         await setTerminalCommandExecutionSuppressedForE2E(true);
         try {
-            const beforeTerminalCommand = getTerminalCommandCount();
             await executeE2eControlCommand(
                 { name: 'stopAppHost', appHostPath: discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath() },
                 { waitFor: 'started' });
-
-            await waitForTerminalCommand(
-                event => event.executionSuppressed && event.subcommand.startsWith('stop '),
-                'suppressed AppHost stop terminal routing',
-                60000,
-                beforeTerminalCommand);
             await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success');
+            await waitForNoDebugSessions();
+            await waitForNoRunningAppHost();
         } finally {
             await setTerminalCommandExecutionSuppressedForE2E(false);
         }
-
-        await stopPrimaryAppHostIfRunning();
-        await waitForNoRunningAppHost();
     });
 
     async function waitForWorkspaceRediscoveryLoading(description: string): Promise<void> {

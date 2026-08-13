@@ -1,4 +1,4 @@
-import { BottomBarPanel, By, EditorView, InputBox, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
 const escapeKey = '\uE00C';
@@ -286,6 +286,38 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
             throw error;
         }
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
+}
+
+export interface AcceptedModalDialog {
+    message: string;
+    details: string;
+}
+
+export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<AcceptedModalDialog> {
+    let lastError: unknown;
+    const accepted = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const dialog = new ModalDialog();
+            const message = await dialog.getMessage();
+            if (!message) {
+                return false;
+            }
+
+            const details = await dialog.getDetails().catch(() => '');
+            if (screenshotName) {
+                await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
+            }
+
+            await dialog.pushButton(buttonTitle);
+            return { message, details };
+        }
+        catch (error) {
+            lastError = error;
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
+
+    return accepted as AcceptedModalDialog;
 }
 
 export async function getNotificationCount(): Promise<number> {

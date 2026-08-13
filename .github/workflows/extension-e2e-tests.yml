@@ -150,6 +150,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: apphost-lifecycle-tools
+            spec: out/test-e2e/test-e2e/appHostLifecycleTools.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: apphost-lifecycle-tools
+            spec: out/test-e2e/test-e2e/appHostLifecycleTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: tree-actions
             spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
             runner: ubuntu-latest

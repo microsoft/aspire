@@ -1,20 +1,32 @@
 import * as vscode from 'vscode';
-import { defaultConfigurationName } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName } from '../loc/strings';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { compareAppHostIdentity } from '../utils/appHostIdentity';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
+import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
+import { getAspireDebugConfigurationExternalLaunchReservation, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation } from './AspireDebugConfigurationProviderInternal';
+
+export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
+
+/**
+ * The part of `AppHostLaunchService` this provider needs to make a `launch.json`/F5
+ * launch visible to the shared launching reservation.
+ */
+export interface ExternalLaunchReservation {
+    /** Returns the reservation ID, or `false` when another launch or run session already owns this AppHost. */
+    tryReserveExternalLaunch(appHostPath: string, isDirectoryScope?: boolean): string | false;
+    /** Replaces this resolver's previous reservation, or returns `false` when the new AppHost is already owned. */
+    replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
+}
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     constructor(
         private readonly _appHostDiscoveryService: AppHostDiscoveryService,
-        // VS Code writes the configurations returned by an `Initial`-kind provider verbatim into a
-        // newly created launch.json, while `Dynamic`-kind configurations stay ephemeral. Only the
-        // ephemeral ones may carry the internal selection-origin marker: persisting it would bake a
-        // stale provenance into a user-owned file and permanently defeat the launch-configuration
-        // scoping this marker exists to enable. See https://github.com/microsoft/aspire/issues/19080.
+        private readonly _launchReservation: ExternalLaunchReservation,
         private readonly _triggerKind: vscode.DebugConfigurationProviderTriggerKind = vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
     }
 
@@ -42,7 +54,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             type: 'aspire',
             request: 'launch',
             name: defaultConfigurationName,
-            program: getDebugTargetForCandidate(candidate),
+            program: getDebugTargetForCandidate(candidate)
         })];
     }
 
@@ -78,15 +90,40 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
+        const configRecord = config as Record<string, unknown>;
+        // Read before the marker is stripped: an `AppHostLaunchService` launch reaches this
+        // resolver through `startDebugging` and has already reserved its own slot, so
+        // claiming it here as an external launch would make it refuse itself.
+        //
+        // VS Code registers this provider for both initial and dynamic configurations, and
+        // it can pass cloned configuration objects through the substituted resolver before the
+        // adapter starts. The launch-service marker is therefore a per-activation value, and
+        // this resolver refreshes the private marker before stripping the public transport
+        // property. A launch.json can spell `launchedByExtension`, but it cannot know the
+        // per-activation value that makes the property authoritative.
+        const launchedByExtension = isAspireDebugConfigurationExtensionOwned(config);
+        const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
+        if (launchedByExtension) {
+            markAspireDebugConfigurationAsExtensionOwned(config);
+        }
+        else if (existingExternalReservation) {
+            markAspireDebugConfigurationWithExternalLaunchReservation(
+                config,
+                existingExternalReservation.reservationId,
+                existingExternalReservation.appHostPath,
+                existingExternalReservation.isDirectoryScope);
+            configRecord[appHostLaunchReservationIdConfigKey] = existingExternalReservation.reservationId;
+        }
+        else {
+            delete configRecord[appHostLaunchReservationIdConfigKey];
+        }
         delete aspireConfig.skipCliAvailabilityCheck;
+        delete configRecord.launchedByExtension;
 
         if (typeof config.program === 'string') {
             const program = config.program;
-            if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && this.isWorkspaceFolderRoot(program, folder)) {
-                // Only a program pointing at the workspace folder root delegates the choice back to
-                // normal discovery, which is what the extension's own default configuration does. A
-                // configuration naming a specific AppHost file *or* subdirectory is scoped to that
-                // target and must not become the workspace default.
+            const isWorkspaceFolderLaunch = this.isWorkspaceFolderRoot(program, folder);
+            if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && isWorkspaceFolderLaunch) {
                 aspireConfig[appHostSelectionOriginConfigKey] = 'default-discovery';
             }
 
@@ -98,6 +135,55 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             }
             else {
                 delete config[appHostTelemetryTargetPathConfigKey];
+            }
+
+            // This is the last hook before VS Code creates the session, and it is the only
+            // point a `launch.json`/F5 launch shares with the tool-driven path, which goes
+            // through `AppHostLaunchService`. Claiming here is what stops an agent from
+            // starting a second AppHost in the window before the session exists. Only
+            // `run` claims: publish/deploy/do sessions are not AppHost lifetimes.
+            //
+            // The concrete candidate is claimed in preference to `config.program`: the
+            // default `${workspaceFolder}` configuration deliberately leaves `program` as
+            // the directory, and a directory is not the same identity as the AppHost inside
+            // it, so claiming the directory would leave the tool free to start a duplicate.
+            if (!launchedByExtension && getAspireDebugConfigurationCommand(aspireConfig) === 'run') {
+                const claimedPath = telemetryTarget?.path ?? (typeof config.program === 'string' ? config.program : undefined);
+                if (!claimedPath) {
+                    return config;
+                }
+
+                const isDirectoryScope = telemetryTarget === undefined && isWorkspaceFolderLaunch;
+                let reservationPath = claimedPath;
+                let reservationId: string | false;
+                if (!existingExternalReservation) {
+                    reservationId = this._launchReservation.tryReserveExternalLaunch(claimedPath, isDirectoryScope);
+                }
+                else if (existingExternalReservation.isDirectoryScope === isDirectoryScope &&
+                    compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
+                    reservationId = existingExternalReservation.reservationId;
+                    // Keep the path where the reservation was actually stored. The identity
+                    // can become ambiguous on a later resolver pass if sibling files appear.
+                    reservationPath = existingExternalReservation.appHostPath;
+                }
+                else {
+                    reservationId = this._launchReservation.replaceExternalLaunchReservation(
+                        existingExternalReservation.appHostPath,
+                        existingExternalReservation.reservationId,
+                        claimedPath,
+                        isDirectoryScope);
+                }
+
+                if (!reservationId) {
+                    // Another launch or run session already owns this AppHost, so proceeding
+                    // would produce two AppHosts for one project.
+                    // Abort this session and tell the user why rather than starting a second.
+                    void vscode.window.showInformationMessage(appHostLifecycleLaunchAlreadyClaimed);
+                    return undefined;
+                }
+
+                config[appHostLaunchReservationIdConfigKey] = reservationId;
+                markAspireDebugConfigurationWithExternalLaunchReservation(config, reservationId, reservationPath, isDirectoryScope);
             }
         }
 
@@ -139,33 +225,26 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             type: 'aspire',
             request: 'launch',
             name: defaultConfigurationName,
-            program: folder.uri.fsPath,
+            program: folder.uri.fsPath
         });
     }
 
     private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
-        if (this._triggerKind !== vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
-            // Leave the marker off so resolve-time classification runs against whatever the user
-            // ends up with in launch.json rather than against provenance frozen at creation time.
-            return config;
-        }
-
-        return { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' };
+        return this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
+            ? { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }
+            : config;
     }
 
     private isWorkspaceFolderRoot(program: string, folder: vscode.WorkspaceFolder | undefined): boolean {
         const owningFolder = folder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
-
         return owningFolder !== undefined && isSamePath(program, owningFolder.uri.fsPath);
     }
 
     private ensureAppHostSelectionOrigin(config: AspireExtendedDebugConfiguration): void {
-        if (config[appHostSelectionOriginConfigKey]) {
-            return;
+        if (!config[appHostSelectionOriginConfigKey]) {
+            config[appHostSelectionOriginConfigKey] = config.program
+                ? 'explicit-launch-configuration'
+                : 'default-discovery';
         }
-
-        config[appHostSelectionOriginConfigKey] = config.program
-            ? 'explicit-launch-configuration'
-            : 'default-discovery';
     }
 }

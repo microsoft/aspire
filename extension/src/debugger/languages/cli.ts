@@ -109,98 +109,118 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     return child;
 }
 
-export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): void {
-    const isWindows = process.platform === 'win32';
-    const processGroupPid = !isWindows && managedPosixProcessGroups.has(childProcess)
-        ? childProcess.pid
-        : undefined;
-    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-    let forceSignalSent = false;
-    const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
-    const forceTermination = (): boolean => {
-        if (forceSignalSent) {
-            return true;
-        }
-
-        try {
-            forceSignalSent = terminateCliProcessTree(childProcess, true);
-            if (!forceSignalSent) {
-                extensionLogOutputChannel.warn(`Failed to forcefully terminate ${description}.`);
+export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): Promise<void> {
+    return new Promise(resolve => {
+        const isWindows = process.platform === 'win32';
+        const processGroupPid = !isWindows && managedPosixProcessGroups.has(childProcess)
+            ? childProcess.pid
+            : undefined;
+        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+        let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
+        let forceSignalSent = false;
+        let settled = false;
+        const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
+        const forceTermination = (): boolean => {
+            if (forceSignalSent) {
+                return true;
             }
-        } catch (error) {
-            extensionLogOutputChannel.error(`Failed to forcefully terminate ${description}: ${String(error)}`);
-        }
 
-        return forceSignalSent;
-    };
-    const stopTracking = () => {
-        exited = true;
-        childProcess.off('close', onExit);
-        childProcess.off('exit', onExit);
-        if (forceKillTimer) {
-            clearTimeout(forceKillTimer);
-            forceKillTimer = undefined;
-        }
-    };
-    const onExit = () => {
-        stopTracking();
-        if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
-            // Once the leader exits, force any remaining descendants immediately. Delaying another
-            // negative-PID signal would allow the operating system to recycle the process-group ID.
-            forceTermination();
-        }
-        managedPosixProcessGroups.delete(childProcess);
-    };
+            try {
+                forceSignalSent = terminateCliProcessTree(childProcess, true);
+                if (!forceSignalSent) {
+                    extensionLogOutputChannel.warn(`Failed to forcefully terminate ${description}.`);
+                }
+            } catch (error) {
+                extensionLogOutputChannel.error(`Failed to forcefully terminate ${description}: ${String(error)}`);
+            }
 
-    if (!exited) {
-        childProcess.once('close', onExit);
-        childProcess.once('exit', onExit);
-    } else {
-        if (processGroupPid !== undefined) {
-            if (hasLiveProcessGroup()) {
+            return forceSignalSent;
+        };
+        const stopTracking = () => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            exited = true;
+            childProcess.off('close', onExit);
+            childProcess.off('exit', onExit);
+            if (forceKillTimer) {
+                clearTimeout(forceKillTimer);
+                forceKillTimer = undefined;
+            }
+            if (confirmationTimer) {
+                clearTimeout(confirmationTimer);
+                confirmationTimer = undefined;
+            }
+            resolve();
+        };
+        const onExit = () => {
+            if (settled) {
+                return;
+            }
+
+            if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
+                // Once the leader exits, force any remaining descendants immediately. Delaying another
+                // negative-PID signal would allow the operating system to recycle the process-group ID.
                 forceTermination();
             }
             managedPosixProcessGroups.delete(childProcess);
+            stopTracking();
+        };
+
+        if (!exited) {
+            childProcess.once('close', onExit);
+            childProcess.once('exit', onExit);
+        } else {
+            if (processGroupPid !== undefined) {
+                if (hasLiveProcessGroup()) {
+                    forceTermination();
+                }
+                managedPosixProcessGroups.delete(childProcess);
+            }
+            stopTracking();
             return;
         }
 
-        if (!isWindows) {
+        if (options?.force) {
+            if (!forceTermination()) {
+                stopTracking();
+                return;
+            }
+
+            confirmationTimer = setTimeout(() => {
+                confirmationTimer = undefined;
+                if (!options.suppressTimeoutWarning) {
+                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                }
+                managedPosixProcessGroups.delete(childProcess);
+                stopTracking();
+            }, processShutdownGracePeriodMs);
+            confirmationTimer.unref();
             return;
         }
 
-        // Windows taskkill walks the live process table from the PID. Once Node has reported the
-        // process exit, that PID can be reassigned to an unrelated process, so there is no safe
-        // process-tree sweep left to perform from this helper.
-        return;
-    }
-
-    if (options?.force) {
-        // Skip the graceful signal and its escalation timer entirely. The timer below is `unref`'d,
-        // so a caller that is itself shutting down — extension deactivation, which resolves as soon
-        // as this returns — can have its host exit before the timer ever fires, leaving a process
-        // that ignored SIGTERM alive along with its whole tree. Such callers have already spent
-        // their own cooperative window, so the only signal left that means anything is the hard one.
-        forceTermination();
-        return;
-    }
-
-    try {
-        if (!childProcess.killed) {
-            const signalSent = terminateCliProcessTree(childProcess, false);
-            if (!signalSent) {
-                extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
-                onExit();
+        try {
+            if (!childProcess.killed) {
+                const signalSent = terminateCliProcessTree(childProcess, false);
+                if (!signalSent) {
+                    extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
+                    if (childProcess.pid === undefined) {
+                        stopTracking();
+                        return;
+                    }
+                }
+            }
+        } catch (error) {
+            extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
+            if (childProcess.pid === undefined) {
+                stopTracking();
                 return;
             }
         }
-    } catch (error) {
-        extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
-        onExit();
-        return;
-    }
 
-    if (!exited) {
         forceKillTimer = setTimeout(() => {
             forceKillTimer = undefined;
             if (exited) {
@@ -218,10 +238,21 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
 
             if (!forceTermination()) {
                 stopTracking();
+                return;
             }
+
+            confirmationTimer = setTimeout(() => {
+                confirmationTimer = undefined;
+                if (!options?.suppressTimeoutWarning) {
+                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                }
+                managedPosixProcessGroups.delete(childProcess);
+                stopTracking();
+            }, processShutdownGracePeriodMs);
+            confirmationTimer.unref();
         }, processShutdownGracePeriodMs);
         forceKillTimer.unref();
-    }
+    });
 }
 
 function terminateCliProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {

@@ -210,6 +210,7 @@ export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugCo
 }
 
 export type AspireCommandType = 'run' | 'deploy' | 'publish' | 'do';
+export type AspireOperationKind = AspireCommandType | 'test' | 'unknown';
 
 export interface AspireExtendedDebugConfiguration extends vscode.DebugConfiguration {
     program: string;

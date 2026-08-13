@@ -585,9 +585,16 @@ export class AppHostDataRepository {
         this._updateLoadingContext();
     }
 
+    async fetchRunningAppHostsOnce(cancellationToken?: vscode.CancellationToken): Promise<AppHostDisplayInfo[]> {
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>(
+            'aspire ps',
+            this._withNoLogo(['ps', '--format', 'json']),
+            { cancellationToken });
+        return Array.isArray(appHosts) ? appHosts : [appHosts];
+    }
+
     async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
-        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', this._withNoLogo(['ps', '--format', 'json']));
-        const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
+        const appHostList = await this.fetchRunningAppHostsOnce();
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
             resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
@@ -1423,8 +1430,8 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
-        const { stdout } = await this._runCliCommand(command, args);
+    private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
+        const { stdout } = await this._runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);

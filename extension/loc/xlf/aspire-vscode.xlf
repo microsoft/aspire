@@ -16,6 +16,9 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleBusy">
+      <source xml:lang="en">Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathCopiedToClipboard">
       <source xml:lang="en">AppHost path copied to clipboard.</source>
     </trans-unit>
@@ -367,6 +370,9 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.mode.description">
+      <source xml:lang="en">How to start the AppHost: &apos;run&apos; starts it without attaching the debugger, &apos;debug&apos; starts it with the debugger attached.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
     </trans-unit>
@@ -565,6 +571,12 @@
     <trans-unit id="configuration.aspire.appHostsPollingInterval">
       <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.modelDescription">
+      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started.</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.modelDescription">
+      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through &apos;aspire stop --apphost&apos; for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
     </trans-unit>
@@ -685,8 +697,23 @@
     <trans-unit id="command.startResource">
       <source xml:lang="en">Start</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.displayName">
+      <source xml:lang="en">Start Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationTitle">
+      <source xml:lang="en">Start Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.userDescription">
+      <source xml:lang="en">Start an Aspire AppHost from this workspace in run or debug mode.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessage">
+      <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode?</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
       <source xml:lang="en">Start your Aspire app to launch all services. The dashboard stays available from the Aspire panel when you need it.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartInvocationMessage">
+      <source xml:lang="en">Starting Aspire AppHost {0}...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostStartingDescription">
       <source xml:lang="en">Starting...</source>
@@ -696,6 +723,21 @@
     </trans-unit>
     <trans-unit id="command.stopAppHost">
       <source xml:lang="en">Stop</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.displayName">
+      <source xml:lang="en">Stop Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopConfirmationTitle">
+      <source xml:lang="en">Stop Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.userDescription">
+      <source xml:lang="en">Stop a running Aspire AppHost from this workspace.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopConfirmationMessage">
+      <source xml:lang="en">Stop the Aspire AppHost {0}?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopInvocationMessage">
+      <source xml:lang="en">Stopping Aspire AppHost {0}...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.testRunSessionManagerNotInitialized">
       <source xml:lang="en">Test run session manager has not been initialized with DCP server connection information.</source>
@@ -747,6 +789,9 @@
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchAlreadyClaimed">
+      <source xml:lang="en">This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
@@ -850,6 +895,9 @@
     <trans-unit id="aspire-vscode.strings.workspaceViewSelectedMultipleAppHosts">
       <source xml:lang="en">Workspace view selected because aspire ls found {0} buildable AppHosts.</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHost.appHostPath.description">
+      <source xml:lang="en">Workspace-relative path of an AppHost that Aspire has already discovered in this workspace, for example &apos;AppHost/AppHost.csproj&apos; or &apos;apphost.cs&apos;. The value must match one of the discovered AppHosts exactly; arbitrary paths, absolute paths, and files Aspire did not discover are rejected. In a multi-root workspace, always prefix the path with the workspace folder name (for example &apos;backend/AppHost/AppHost.csproj&apos;).</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.yesLabel">
       <source xml:lang="en">Yes</source>
     </trans-unit>
@@ -862,6 +910,9 @@
     <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
       <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleUnresolvedPath">
+      <source xml:lang="en">an unresolved path</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathMustBeNonEmptyAbsolute">
       <source xml:lang="en">appHostPath must be a non-empty absolute path</source>
     </trans-unit>
@@ -870,6 +921,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleUnspecifiedMode">
+      <source xml:lang="en">unspecified</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionsFailedToStop">
       <source xml:lang="en">{0} debug sessions failed to stop: {1}</source>

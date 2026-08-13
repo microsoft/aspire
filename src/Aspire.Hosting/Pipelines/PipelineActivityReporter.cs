@@ -18,12 +18,12 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
     private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
-    private readonly IFileUploadStore _fileUploadStore;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _interactionServiceSubscriber;
 
-    public PipelineActivityReporter(InteractionService interactionService, IFileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
+    public PipelineActivityReporter(InteractionService interactionService, IInteractionFileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
     {
         _interactionService = interactionService;
         _fileUploadStore = fileUploadStore;
@@ -435,7 +435,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(CreateInputDto(matchingInput, responseAnswer));
+                                dtos.Add(CreateInputDto(interactionId, matchingInput, responseAnswer));
                             }
 
                             DashboardServiceData.ProcessInputs(
@@ -481,16 +481,16 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     }
 
     /// <summary>
-    /// Creates an InputDto, resolving file references from the FileUploadStore for File inputs.
+    /// Creates an InputDto, resolving file references from the InteractionFileUploadStore for File inputs.
     /// The CLI sends Value as JSON [{"Id":"...","Name":"..."}] matching the dashboard format.
     /// </summary>
-    private InputDto CreateInputDto(InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
+    private InputDto CreateInputDto(int interactionId, InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
     {
         var value = responseAnswer.Value ?? "";
 
         if (matchingInput.InputType == InputType.File)
         {
-            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, value, matchingInput.Name, _logger);
+            var files = InteractionFileUploadStore.ResolveFileReferences(_fileUploadStore, value, interactionId, matchingInput.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);

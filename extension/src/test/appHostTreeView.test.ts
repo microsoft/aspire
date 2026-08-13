@@ -456,7 +456,6 @@ suite('AspireAppHostTreeProvider', () => {
     });
 
     test('global AppHost shows stopping state immediately after stop command', () => {
-        const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
@@ -469,12 +468,9 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceAppHostDescription: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
-        } as unknown as AspireTerminalProvider;
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const launchService = makeLaunchService();
+        const stopStub = sandbox.stub(launchService, 'stopAppHost').resolves({ outcome: 'stopped', controller: 'external' });
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
         const [item] = provider.getChildren();
 
         provider.stopAppHost(item as any);
@@ -483,7 +479,8 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(stoppingItem.contextValue, 'appHost:stopping');
         assert.strictEqual(stoppingItem.description, 'Stopping...');
         assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        assert.deepStrictEqual(commands, [['stop', '--apphost', shellArg(appHostPath)]]);
+        assert.strictEqual(stopStub.calledOnce, true);
+        assert.strictEqual(stopStub.firstCall.args[0], appHostPath);
         provider.dispose();
     });
 
@@ -580,11 +577,11 @@ suite('AspireAppHostTreeProvider', () => {
         }
     });
 
-    test('stop AppHost requests refresh after terminal command is sent', async () => {
+    test('stop AppHost requests refresh after the shared lifecycle operation completes', async () => {
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const requestAppHostStopRefresh = sandbox.stub();
-        let resolveTerminalCommand: (() => void) | undefined;
+        let resolveStop: (() => void) | undefined;
         const repository = {
             viewMode: 'global' as ViewMode,
             appHosts: [makeAppHost({ appHostPath })],
@@ -596,23 +593,59 @@ suite('AspireAppHostTreeProvider', () => {
             requestAppHostStopRefresh,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: () => new Promise<void>(resolve => { resolveTerminalCommand = resolve; }),
-        } as unknown as AspireTerminalProvider;
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const launchService = makeLaunchService();
+        sandbox.stub(launchService, 'stopAppHost').returns(new Promise(resolve => {
+            resolveStop = () => resolve({ outcome: 'stopped', controller: 'external' });
+        }));
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
         const [item] = provider.getChildren();
 
         const stopTask = provider.stopAppHost(item as any);
 
         assert.strictEqual(requestAppHostStopRefresh.callCount, 0);
-        resolveTerminalCommand?.();
+        resolveStop?.();
         await stopTask;
 
         assert.strictEqual(requestAppHostStopRefresh.callCount, 1);
         assert.deepStrictEqual(requestAppHostStopRefresh.firstCall.args, [appHostPath]);
         provider.dispose();
+    });
+
+    test('stop AppHost clears optimistic state when the shared lifecycle operation does not stop', async () => {
+        const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const results = [
+            { outcome: 'notRunning' as const, controller: 'none' as const },
+            { outcome: 'alreadyStarting' as const, controller: 'editor' as const },
+            { outcome: 'ambiguousSession' as const, controller: 'editor' as const },
+        ];
+
+        for (const result of results) {
+            const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+            const requestAppHostStopRefresh = sandbox.stub();
+            const repository = {
+                viewMode: 'global' as ViewMode,
+                appHosts: [makeAppHost({ appHostPath })],
+                workspaceResources: [],
+                workspaceAppHostPath: undefined,
+                workspaceAppHostCandidatePaths: [],
+                workspaceAppHostName: undefined,
+                workspaceAppHostDescription: undefined,
+                requestAppHostStopRefresh,
+                onDidChangeData,
+            } as unknown as AppHostDataRepository;
+            const launchService = makeLaunchService();
+            sandbox.stub(launchService, 'stopAppHost').resolves(result);
+            const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
+            const [item] = provider.getChildren();
+
+            await provider.stopAppHost(item as any);
+
+            const [unchangedItem] = provider.getChildren();
+            assert.strictEqual(unchangedItem.contextValue, 'appHost');
+            assert.notStrictEqual(unchangedItem.description, 'Stopping...');
+            assert.strictEqual(requestAppHostStopRefresh.callCount, 0);
+            provider.dispose();
+        }
     });
 
     test('workspace stop notification requests refresh and marks stopping for running apphosts', () => {
@@ -706,7 +739,6 @@ suite('AspireAppHostTreeProvider', () => {
     });
 
     test('workspace AppHost shows stopping state immediately after stop command', () => {
-        const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
@@ -720,12 +752,9 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceAppHostDescription: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
-        } as unknown as AspireTerminalProvider;
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const launchService = makeLaunchService();
+        const stopStub = sandbox.stub(launchService, 'stopAppHost').resolves({ outcome: 'stopped', controller: 'external' });
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
         const [item] = provider.getChildren();
 
         provider.stopAppHost(item as any);
@@ -734,12 +763,11 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(stoppingItem.contextValue, 'workspaceResources:stopping');
         assert.strictEqual(stoppingItem.description, 'Stopping...');
         assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        assert.deepStrictEqual(commands, [['stop', '--apphost', shellArg(appHostPath)]]);
+        assert.strictEqual(stopStub.calledOnceWith(appHostPath), true);
         provider.dispose();
     });
 
     test('workspace AppHost candidate shows stopping state immediately after stop command', () => {
-        const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
         const alternateCandidatePath = path.resolve('workspace', 'apps', 'Billing', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
@@ -754,12 +782,9 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceAppHostDescription: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => 'aspire',
-            createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
-        } as unknown as AspireTerminalProvider;
-        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const launchService = makeLaunchService();
+        const stopStub = sandbox.stub(launchService, 'stopAppHost').resolves({ outcome: 'stopped', controller: 'external' });
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
         const [item] = provider.getChildren();
 
         provider.stopAppHost(item as any);
@@ -768,7 +793,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(updatedItem.contextValue, 'workspaceResources:stopping');
         assert.strictEqual(updatedItem.description, 'Stopping...');
         assert.strictEqual((updatedItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        assert.deepStrictEqual(commands, [['stop', '--apphost', shellArg(appHostPath)]]);
+        assert.strictEqual(stopStub.calledOnceWith(appHostPath), true);
         provider.dispose();
     });
 
@@ -801,14 +826,11 @@ suite('AspireAppHostTreeProvider', () => {
             const [workspaceItem] = provider.getChildren();
             const [resourceItem] = provider.getChildren(workspaceItem);
 
-            await provider.stopAppHost(workspaceItem as any);
-            proof.run(commandLines[0], ['stop', '--apphost', appHostPath]);
-
             await provider.viewResourceLogs(resourceItem as any);
-            proof.run(commandLines[1], ['logs', resourceName, '--apphost', appHostPath]);
+            proof.run(commandLines[0], ['logs', resourceName, '--apphost', appHostPath]);
 
             await provider.openResourceTerminal(resourceItem as any);
-            proof.run(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath]);
+            proof.run(commandLines[1], ['terminal', 'attach', resourceName, '--apphost', appHostPath]);
         }
         finally {
             provider.dispose();
@@ -848,14 +870,11 @@ suite('AspireAppHostTreeProvider', () => {
             const [workspaceItem] = provider.getChildren();
             const [resourceItem] = provider.getChildren(workspaceItem);
 
-            await provider.stopAppHost(workspaceItem as any);
-            proof.runPowerShell(commandLines[0], ['stop', '--apphost', appHostPath], powerShellPath);
-
             await provider.viewResourceLogs(resourceItem as any);
-            proof.runPowerShell(commandLines[1], ['logs', resourceName, '--apphost', appHostPath], powerShellPath);
+            proof.runPowerShell(commandLines[0], ['logs', resourceName, '--apphost', appHostPath], powerShellPath);
 
             await provider.openResourceTerminal(resourceItem as any);
-            proof.runPowerShell(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath], powerShellPath);
+            proof.runPowerShell(commandLines[1], ['terminal', 'attach', resourceName, '--apphost', appHostPath], powerShellPath);
         }
         finally {
             platformStub.restore();
@@ -890,7 +909,6 @@ suite('AspireAppHostTreeProvider', () => {
             const [workspaceItem] = provider.getChildren();
             const [resourceItem] = provider.getChildren(workspaceItem);
 
-            await assert.rejects(() => provider.stopAppHost(workspaceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.viewResourceLogs(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.openResourceTerminal(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
             // restartResource no longer flows through the terminal: it spawns the CLI directly with

@@ -931,6 +931,7 @@ suite('InteractionService endpoints', () => {
 				{} as any,
 				terminalProvider as any,
 				context.removeAspireDebugSession.bind(context),
+				() => { },
 				'debug-session');
 			(aspireDebugSession as any)._appHostDebugSession = {
 				id: appHostDebugSession.id,
@@ -1030,6 +1031,7 @@ suite('InteractionService endpoints', () => {
 				{} as any,
 				{ isCliDebugLoggingEnabled: () => false } as any,
 				context.removeAspireDebugSession.bind(context),
+				() => { },
 				'debug-session');
 			context.addAspireDebugSession(aspireDebugSession);
 			const testInfo = await createTestRpcServer(
@@ -1106,6 +1108,7 @@ suite('InteractionService endpoints', () => {
 					removalCalls++;
 					context.removeAspireDebugSession(session);
 				},
+				() => { },
 				'debug-session');
 			context.addAspireDebugSession(aspireDebugSession);
 			const testInfo = await createTestRpcServer(

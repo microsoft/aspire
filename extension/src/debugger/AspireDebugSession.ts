@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess, terminateCliProcess } from "./languages/cli";
@@ -30,6 +30,17 @@ import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey
 
 export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
+export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
+
+function getOperationKind(value: unknown): AspireOperationKind {
+  if (value === undefined || value === null) {
+    return 'run';
+  }
+
+  return value === 'run' || value === 'deploy' || value === 'publish' || value === 'do'
+    ? value
+    : 'unknown';
+}
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
   if (includeEnvironment && debugConfig.type !== 'maui') {
@@ -86,6 +97,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _rpcServer: AspireRpcServer;
   private readonly _dcpServer: AspireDcpServer;
   private readonly _terminalProvider: AspireTerminalProvider;
+  private readonly _trackAppHostDebugSession: AppHostDebugSessionTracker;
   private readonly _removeAspireDebugSession: (session: AspireDebugSession) => void;
 
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
@@ -163,10 +175,22 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   public readonly onDidSendDebugConsoleOutput = this._onDidSendDebugConsoleOutput.event;
   public readonly onDidChangeState = this._onDidChangeState.event;
   public readonly debugSessionId: string;
+  public readonly operationKind: AspireOperationKind;
   public configuration: AspireExtendedDebugConfiguration;
 
   get appHostPath(): string | undefined {
     return typeof this.configuration.program === 'string' ? this.configuration.program : undefined;
+  }
+
+  /**
+   * The AppHost the debug configuration provider resolved for this session when
+   * `program` points at a workspace folder instead of a file. It is only populated when
+   * the folder maps to a single unambiguous candidate, so consumers can treat it as an
+   * exact identity rather than a guess.
+   */
+  get resolvedAppHostPath(): string | undefined {
+    const resolvedPath = this.configuration[appHostTelemetryTargetPathConfigKey];
+    return typeof resolvedPath === 'string' ? resolvedPath : undefined;
   }
 
   get dashboardUrl(): string | undefined {
@@ -185,13 +209,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     return this._cliProcess?.pid;
   }
 
-  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, debugSessionId: string = generateDcpIdPrefix()) {
+  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind) {
     this._session = session;
     this._rpcServer = rpcServer;
     this._dcpServer = dcpServer;
     this._terminalProvider = terminalProvider;
+    this._trackAppHostDebugSession = trackAppHostDebugSession;
     this._removeAspireDebugSession = removeAspireDebugSession;
     this.configuration = session.configuration as AspireExtendedDebugConfiguration;
+    this.operationKind = operationKind ?? getOperationKind(this.configuration.command);
 
     this.debugSessionId = debugSessionId;
   }
@@ -1155,6 +1181,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       }
 
       this._appHostDebugSession = appHostDebugSession;
+      this._trackAppHostDebugSession(this, projectFile, appHostDebugSession);
 
       const disposable = vscode.debug.onDidTerminateDebugSession(async session => {
         if (this._appHostDebugSession && session.id === this._appHostDebugSession.id) {
