@@ -28,4 +28,22 @@ with create_builder() as builder:
     _ = vite_app.name
     _ = vite_app.command
     _ = vite_app.working_dir
+    deno_app = builder.add_deno_app("deno-app", "./deno-app", "main.ts")
+    deno_app.with_deno(install=False, install_args=["--cached-only"])
+    deno_app.with_deno_allow_all(enabled=False)
+    deno_app.with_deno_allow("Net", ["localhost:8000"])
+    deno_app.with_deno_deny("Read", ["./secrets"])
+    deno_app.with_deno_config("./deno.json")
+    deno_app.with_deno_import_map("./import_map.json")
+    deno_app.with_deno_lock("./deno.lock")
+    deno_app.with_deno_no_lock()
+    deno_app.with_deno_node_modules_dir(mode="Auto")
+    deno_app.with_deno_unstable(["kv", "worker-options"])
+    deno_app.with_deno_watch(hmr=True)
+    deno_app.with_deno_inspect(mode="InspectWait", host_port="127.0.0.1:9229")
+    deno_app.with_deno_run()
+    deno_app.with_deno_task("dev")
+    deno_app.with_deno_serve()
+    deno_app.with_deno_script_args(["--port", "8000"])
+    deno_app.with_deno_runtime_args(["--quiet"])
     builder.run()

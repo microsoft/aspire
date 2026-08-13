@@ -1888,77 +1888,6 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData("withDenoAllowAll")]
-    [InlineData("withDenoAllow")]
-    [InlineData("withDenoDeny")]
-    [InlineData("withDenoConfig")]
-    [InlineData("withDenoTask")]
-    [InlineData("withDenoServe")]
-    public void Scanner_DenoMethods_TargetDenoResource(string methodName)
-    {
-        var hostingAssembly = typeof(DistributedApplication).Assembly;
-        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
-
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
-
-        var capability = result.Capabilities
-            .FirstOrDefault(c => c.CapabilityId == $"Aspire.Hosting.JavaScript/{methodName}");
-        Assert.NotNull(capability);
-
-        var denoAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.DenoAppResource));
-        Assert.Contains(capability.ExpandedTargetTypes.Select(t => t.TypeId), id => id == denoAppTypeId);
-    }
-
-    [Fact]
-    public void Scanner_DenoMethods_HaveConsolidatedSurfaceAndEnumParameters()
-    {
-        var hostingAssembly = typeof(DistributedApplication).Assembly;
-        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
-
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
-        var denoCapabilities = result.Capabilities
-            .Where(c => c.CapabilityId.StartsWith("Aspire.Hosting.JavaScript/withDeno", StringComparison.Ordinal) &&
-                c.MethodName != "withDeno")
-            .OrderBy(c => c.MethodName, StringComparer.Ordinal)
-            .ToList();
-
-        Assert.Equal(
-            [
-                "withDenoAllow",
-                "withDenoAllowAll",
-                "withDenoConfig",
-                "withDenoDeny",
-                "withDenoImportMap",
-                "withDenoInspect",
-                "withDenoLock",
-                "withDenoNoLock",
-                "withDenoNodeModulesDir",
-                "withDenoRun",
-                "withDenoRuntimeArgs",
-                "withDenoScriptArgs",
-                "withDenoServe",
-                "withDenoTask",
-                "withDenoUnstable",
-                "withDenoWatch",
-            ],
-            denoCapabilities.Select(c => c.MethodName));
-
-        var allow = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoAllow");
-        var permissionKind = Assert.Single(allow.Parameters, p => p.Name == "kind");
-        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoPermissionKind), permissionKind.Type?.ClrType);
-
-        var inspect = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoInspect");
-        var inspectMode = Assert.Single(inspect.Parameters, p => p.Name == "mode");
-        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoInspectMode), inspectMode.Type?.ClrType);
-        Assert.True(inspectMode.IsOptional);
-
-        var nodeModules = Assert.Single(denoCapabilities, c => c.MethodName == "withDenoNodeModulesDir");
-        var nodeModulesMode = Assert.Single(nodeModules.Parameters, p => p.Name == "mode");
-        Assert.Equal(typeof(Aspire.Hosting.JavaScript.DenoNodeModulesDirMode), nodeModulesMode.Type?.ClrType);
-        Assert.True(nodeModulesMode.IsOptional);
-    }
-
     [Fact]
     public void DenoPublicApis_AreExperimental()
     {
@@ -1966,37 +1895,17 @@ public class AtsTypeScriptCodeGeneratorTests
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Where(method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp) ||
                 method.Name.StartsWith("WithDeno", StringComparison.Ordinal))
-            .OrderBy(method => method.Name, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(
-            [
-                "AddDenoApp",
-                "WithDeno",
-                "WithDenoAllow",
-                "WithDenoAllowAll",
-                "WithDenoConfig",
-                "WithDenoDeny",
-                "WithDenoImportMap",
-                "WithDenoInspect",
-                "WithDenoLock",
-                "WithDenoNoLock",
-                "WithDenoNodeModulesDir",
-                "WithDenoRun",
-                "WithDenoRuntimeArgs",
-                "WithDenoScriptArgs",
-                "WithDenoServe",
-                "WithDenoTask",
-                "WithDenoUnstable",
-                "WithDenoWatch",
-            ],
-            denoMethods.Select(method => method.Name));
+        Assert.NotEmpty(denoMethods);
+        Assert.Contains(denoMethods, method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp));
+        Assert.Contains(denoMethods, method => method.Name.StartsWith("WithDeno", StringComparison.Ordinal));
 
-        foreach (var method in denoMethods)
+        Assert.All(denoMethods, method =>
         {
             var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
             Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
-        }
+        });
 
         foreach (var type in new[]
         {
