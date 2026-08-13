@@ -5,7 +5,6 @@ import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration
 import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, denoTaskDebuggingUnsupported, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
-import { registerRunCleanup } from "../runCleanupRegistry";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes, launchMethodDirect, launchMethodPackageManager, resolveJavaScriptLaunchMethod } from "./javascriptRuntime";
 
 // Deno exposes a V8 inspector; --inspect-wait blocks execution until a debugger attaches (unlike
@@ -169,7 +168,6 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
         }
     });
 
-    registerRunCleanup(launchOptions.runId, disposeRelease);
     launchOptions.debugSession.registerResourceCleanup({
         dispose: disposeRelease
     });

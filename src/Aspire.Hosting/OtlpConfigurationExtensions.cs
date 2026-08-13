@@ -186,17 +186,14 @@ public static class OtlpConfigurationExtensions
         IResource resource,
         IDictionary<string, object> environmentVariables)
     {
-        foreach (var annotation in resource.Annotations.OfType<OtlpExporterAnnotation>())
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
         {
-            if (annotation is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
-            {
-                continue;
-            }
+            return;
+        }
 
-            foreach (var (name, value) in activationEnvironmentVariables)
-            {
-                environmentVariables.TryAdd(name, value);
-            }
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
         }
     }
 

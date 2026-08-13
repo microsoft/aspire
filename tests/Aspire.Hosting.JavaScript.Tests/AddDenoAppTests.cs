@@ -858,6 +858,25 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_CacheDoesNotCombineRawNoLockWithFrozen()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs("--no-lock");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN deno cache --no-lock main.ts", GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_ManualNodeModulesDirThrows()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -35,6 +35,38 @@ public class DebugSupportExtensionsTests
     }
 
     [Fact]
+    public async Task CreateLaunchConfigurationInspectionOverloadCreatesResourceBoundContext()
+    {
+        var inspectionOverload = typeof(DebugSupportExtensions).GetMethod(
+            nameof(DebugSupportExtensions.CreateLaunchConfigurationAsync),
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(IResource), typeof(string), typeof(CancellationToken)]);
+
+        Assert.NotNull(inspectionOverload);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration { Mode = context.Mode });
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug, cts.Token));
+
+        Assert.NotNull(observedContext);
+        Assert.Same(executable.Resource, observedContext.Resource);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, observedContext.Mode);
+        Assert.Empty(observedContext.EnvironmentVariables);
+        Assert.Equal(cts.Token, observedContext.CancellationToken);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+    }
+
+    [Fact]
     public async Task CreateLaunchConfigurationResolvesTheLaunchProfileForProjectResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

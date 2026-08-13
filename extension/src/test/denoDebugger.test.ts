@@ -10,15 +10,18 @@ import { AspireResourceExtendedDebugConfiguration, DenoLaunchConfiguration } fro
 suite('Deno Debugger Tests', () => {
     const fakeAspireDebugSession = Object.create(AspireDebugSession.prototype) as AspireDebugSession;
     let registeredCleanupCount = 0;
+    let resourceCleanups: vscode.Disposable[] = [];
     let terminateDebugSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
     let terminateDebugSessionListenerDisposeCount = 0;
 
-    fakeAspireDebugSession.registerResourceCleanup = () => {
+    fakeAspireDebugSession.registerResourceCleanup = cleanup => {
         registeredCleanupCount++;
+        resourceCleanups.push(cleanup);
     };
 
     setup(() => {
         registeredCleanupCount = 0;
+        resourceCleanups = [];
         terminateDebugSessionCallback = undefined;
         terminateDebugSessionListenerDisposeCount = 0;
         sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
@@ -30,6 +33,7 @@ suite('Deno Debugger Tests', () => {
     });
 
     teardown(() => {
+        resourceCleanups.forEach(cleanup => cleanup.dispose());
         cleanupRun('1');
         sinon.restore();
     });
@@ -121,6 +125,10 @@ suite('Deno Debugger Tests', () => {
         await configure(launchConfig, ['run', '-A', 'main.ts'], debugConfig);
 
         assert.ok(terminateDebugSessionCallback);
+        cleanupRun('1');
+
+        assert.strictEqual(terminateDebugSessionListenerDisposeCount, 0);
+
         terminateDebugSessionCallback(createTerminatedDebugSession('other-debug-session', '2'));
 
         assert.strictEqual(terminateDebugSessionListenerDisposeCount, 0);

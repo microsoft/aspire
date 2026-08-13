@@ -21,7 +21,7 @@ In the AppHost, add a JavaScript app resource with either C# or TypeScript:
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddJavaScriptApp("frontend", "../frontend", "app.js");
+builder.AddJavaScriptApp("frontend", "../frontend", "dev");
 
 builder.Build().Run();
 ```
@@ -33,7 +33,7 @@ import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
 
-await builder.addJavaScriptApp("frontend", "../frontend", { runScriptName: "app.js" });
+await builder.addJavaScriptApp("frontend", "../frontend", { runScriptName: "dev" });
 
 await builder.build().run();
 ```

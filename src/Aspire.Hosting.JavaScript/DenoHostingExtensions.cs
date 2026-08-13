@@ -1376,7 +1376,7 @@ public static partial class JavaScriptHostingExtensions
 
     private static bool ShouldUseFrozenLock(DenoCommandLineAnnotation deno, string workingDirectory)
     {
-        if (deno.NoLock)
+        if (deno.NoLock || deno.RuntimeArgs.Contains("--no-lock", StringComparer.Ordinal))
         {
             return false;
         }

@@ -121,7 +121,7 @@ public class WithOtlpExporterTests
     }
 
     [Fact]
-    public async Task LastOtlpExporterAnnotationControlsProtocolAndActivation()
+    public async Task LastOtlpExporterAnnotationControlsProtocolAndDoesNotApplySupersededActivation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(options => options.DisableDashboard = true);
         builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://localhost:4317";
@@ -139,7 +139,7 @@ public class WithOtlpExporterTests
 
         Assert.Equal("http://localhost:4317", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         Assert.Equal("grpc", config["OTEL_EXPORTER_OTLP_PROTOCOL"]);
-        Assert.Equal("true", config["OTEL_DENO"]);
+        Assert.False(config.ContainsKey("OTEL_DENO"));
     }
 
     [InlineData(default, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "otlp-grpc", "http2", 52000, "grpc")]
