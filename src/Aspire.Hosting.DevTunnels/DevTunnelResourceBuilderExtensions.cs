@@ -850,7 +850,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
             });
         }
 
-        if (portResource.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint?.UriString is { Length: > 0 } localUrl)
+        if (GetAllocatedUrl(portResource.TargetEndpoint) is { Length: > 0 } localUrl)
         {
             properties.Add(new(DevTunnelPortResource.LocalEndpointUrlPropertyName, localUrl)
             {
@@ -860,6 +860,17 @@ public static partial class DevTunnelsResourceBuilderExtensions
         }
 
         return properties;
+    }
+
+    private static string? GetAllocatedUrl(EndpointReference endpoint)
+    {
+        var networkId = endpoint.ContextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork;
+        // EndpointReference.Url preserves network context but throws while allocation is pending.
+        // Check the matching snapshot first so the optional local URL remains non-blocking.
+        var isAllocated = endpoint.EndpointAnnotation.AllAllocatedEndpoints.Any(
+            endpointSnapshot => endpointSnapshot.NetworkID == networkId && endpointSnapshot.Snapshot.IsValueSet);
+
+        return isAllocated ? endpoint.Url : null;
     }
 
     private static bool IsDevTunnelUrlProperty(string name) =>

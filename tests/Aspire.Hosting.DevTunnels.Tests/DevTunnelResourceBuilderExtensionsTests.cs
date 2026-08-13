@@ -524,6 +524,54 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task ShowTunnelUrlsCommand_UsesTargetEndpointNetworkContext()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var interactionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(interactionService);
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(name: "http");
+        var targetEndpoint = target.GetEndpoint("http");
+        targetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(targetEndpoint.EndpointAnnotation, "localhost", 3000);
+        var containerNetwork = new NetworkIdentifier("container-network");
+        targetEndpoint.EndpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            containerNetwork,
+            new(targetEndpoint.EndpointAnnotation, "target", 8080, EndpointBindingMode.SingleAddress, networkId: containerNetwork));
+        var contextualTargetEndpoint = new EndpointReference(target.Resource, targetEndpoint.EndpointAnnotation, containerNetwork);
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(contextualTargetEndpoint);
+        var port = Assert.Single(tunnel.Resource.Ports);
+        port.LastKnownStatus = new DevTunnelPort(3000, "http")
+        {
+            PortUri = new Uri("https://n4skq32k-3000.use.devtunnels.ms/")
+        };
+
+        var command = Assert.Single(port.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == DevTunnelPortResource.ShowTunnelUrlsCommandName);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+
+        var commandTask = command.ExecuteCommand(new ExecuteCommandContext
+        {
+            ResourceName = port.Name,
+            Services = serviceProvider,
+            Arguments = new InteractionInputCollection([]),
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance
+        });
+
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var result = await commandTask.DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(
+            $"- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>{Environment.NewLine}" +
+            $"- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms>{Environment.NewLine}" +
+            "- **Local endpoint URL:** <http://target:8080>",
+            interaction.Message);
+    }
+
+    [Fact]
     public async Task ResourceReady_PublishesUrlProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
