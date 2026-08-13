@@ -3036,6 +3036,8 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.False(result.Success);
         Assert.False(result.Canceled);
         Assert.Contains(AzureProvisioningController.ConfirmDeleteArgumentName, result.Message, StringComparison.Ordinal);
+        Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
+        Assert.Equal(KnownResourceStates.Running, storageEvent.Snapshot.State?.Text);
         Assert.Empty(deletedResourceIds);
         Assert.DoesNotContain("storage", testBicepProvisioner.ProvisionedLocations.Keys);
 
