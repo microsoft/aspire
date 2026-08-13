@@ -891,6 +891,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
         Assert.Equal(StatusCode.ResourceExhausted, ex.StatusCode);
+
+        fileUploadStore.CancelInteraction(1);
+        fileUploadStore.StartInteraction(1);
+        var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.txt", 1, "File");
+        Assert.True(File.Exists(replacementPath));
     }
 
     [Fact]
@@ -979,9 +984,48 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         requestStream.AddMessage(new UploadFileChunk { FileName = "file.txt", InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => dashboardService.UploadFile(requestStream, context));
+        var exception = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
 
-        Assert.Equal("Interaction '1' is not accepting file uploads.", exception.Message);
+        Assert.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
+        Assert.Equal("Interaction '1' is not accepting file uploads.", exception.Status.Detail);
+    }
+
+    [Fact]
+    public async Task SendInteractionRequestAsync_ClientFileTypeForTextInput_DoesNotAttachFile()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
+        var fileInput = new InteractionInput { Name = "File", InputType = InputType.File };
+        var textInput = new InteractionInput { Name = "Text", InputType = InputType.Text };
+        var resultTask = interactionService.PromptInputsAsync("Inputs", "Enter values", [fileInput, textInput]);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var (fileId, _) = fileUploadStore.CreateEntry("spoofed.txt", interaction.InteractionId, textInput.Name);
+        var value = $"[{{\"Id\":\"{fileId}\",\"Name\":\"spoofed.txt\"}}]";
+
+        var request = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        request.InputsDialog.InputItems.Add(new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = textInput.Name,
+            InputType = Aspire.DashboardService.Proto.V1.InputType.File,
+            Value = value
+        });
+
+        await dashboardServiceData.SendInteractionRequestAsync(request, CancellationToken.None);
+        var result = await resultTask;
+        var resultInputs = Assert.IsType<InteractionInputCollection>(result.Data);
+
+        Assert.Null(resultInputs[textInput.Name].Files);
+        Assert.Equal(value, resultInputs[textInput.Name].Value);
     }
 
     [Fact]
@@ -1061,12 +1105,13 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         ResourceLoggerService? resourceLoggerService = null,
         ResourceNotificationService? resourceNotificationService = null,
         ILoggerFactory? loggerFactory = null,
-        InteractionService? interactionService = null)
+        InteractionService? interactionService = null,
+        IInteractionFileUploadStore? fileUploadStore = null)
     {
         resourceLoggerService ??= new ResourceLoggerService();
         loggerFactory ??= NullLoggerFactory.Instance;
         resourceNotificationService ??= CreateResourceNotificationService(resourceLoggerService);
-        var fileUploadStore = new TestInteractionFileUploadStore();
+        fileUploadStore ??= new TestInteractionFileUploadStore();
         interactionService ??= new InteractionService(
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),

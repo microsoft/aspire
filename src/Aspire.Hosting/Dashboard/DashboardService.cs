@@ -531,7 +531,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
                     string path;
                     interactionId = chunk.InteractionId;
-                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, interactionId.Value, chunk.InputName);
+                    try
+                    {
+                        (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, interactionId.Value, chunk.InputName);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+                    }
                     fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
                 }
 
@@ -551,6 +558,15 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             {
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "Upload stream is empty."));
             }
+
+            // Close and flush the file before marking the upload complete. If disposal fails,
+            // the catch path removes the entry so a partial upload is never retained.
+            await fileStream.DisposeAsync().ConfigureAwait(false);
+            fileStream = null;
+
+            fileUploadStore.CompleteUpload(interactionId!.Value, fileId!);
+
+            return new UploadFileResponse { FileId = fileId };
         }
         catch
         {
@@ -558,8 +574,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             // before attempting deletion — on Windows, open handles prevent file deletion.
             if (fileStream is not null)
             {
-                await fileStream.DisposeAsync().ConfigureAwait(false);
-                fileStream = null;
+                try
+                {
+                    await fileStream.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to close incomplete uploaded file {FileId}.", fileId);
+                }
             }
 
             if (fileId is not null && interactionId is not null)
@@ -569,16 +591,5 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
             throw;
         }
-        finally
-        {
-            if (fileStream is not null)
-            {
-                await fileStream.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-
-        fileUploadStore.CompleteUpload(interactionId!.Value, fileId!);
-
-        return new UploadFileResponse { FileId = fileId };
     }
 }
