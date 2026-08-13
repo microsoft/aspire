@@ -474,6 +474,8 @@ public class DotNetTemplateFactoryTests
                 EnvironmentVariables = new Dictionary<string, string>(),
                 Success = true
             });
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter

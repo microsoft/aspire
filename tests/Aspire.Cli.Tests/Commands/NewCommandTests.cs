@@ -749,6 +749,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             throw new CertificateServiceException("Failed to trust certificates");
         }
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     [Fact]

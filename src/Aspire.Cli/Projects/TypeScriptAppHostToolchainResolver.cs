@@ -156,6 +156,7 @@ internal static class TypeScriptAppHostToolchainResolver
             WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
             PublishExecute = baseRuntimeSpec.PublishExecute,
             ExtensionLaunchCapability = baseRuntimeSpec.ExtensionLaunchCapability,
+            CertificateBundleEnvironmentVariable = baseRuntimeSpec.CertificateBundleEnvironmentVariable,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
     }

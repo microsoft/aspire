@@ -68,6 +68,21 @@ public sealed class RuntimeSpec
     public string? ExtensionLaunchCapability { get; init; }
 
     /// <summary>
+    /// Gets the environment variable that accepts an additional PEM certificate bundle when running an AppHost for this language.
+    /// </summary>
+    /// <remarks>
+    /// When set, the CLI assigns this environment variable a certificate bundle containing the
+    /// ASP.NET Core development certificate before launching the AppHost in run mode. The variable
+    /// is not set when publishing the AppHost. The runtime uses the bundle as additional trusted roots
+    /// for the entire AppHost process, affecting all outbound TLS connections, including connections
+    /// unrelated to Aspire-managed resources. For example:
+    /// <code>
+    /// CertificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS";
+    /// </code>
+    /// </remarks>
+    public string? CertificateBundleEnvironmentVariable { get; init; }
+
+    /// <summary>
     /// Gets files that must exist in the project directory before execution.
     /// If a file in this dictionary is missing, the CLI will create it with the provided content.
     /// This supports upgrade scenarios where new runtime requirements are introduced.

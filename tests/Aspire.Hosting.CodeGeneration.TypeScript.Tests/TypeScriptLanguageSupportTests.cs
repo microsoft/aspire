@@ -256,6 +256,8 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
+        Assert.Equal("NODE_EXTRA_CA_CERTS", _languageSupport.CertificateBundleEnvironmentVariable);
+        Assert.Equal(_languageSupport.CertificateBundleEnvironmentVariable, runtimeSpec.CertificateBundleEnvironmentVariable);
         Assert.Equal("npx", preExecute.Command);
         Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
         Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
