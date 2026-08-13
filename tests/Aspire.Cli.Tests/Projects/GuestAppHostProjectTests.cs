@@ -1377,6 +1377,27 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task ConfigureCertificateBundleEnvironmentAsync_UsesCaseInsensitivePathComparisonOnWindows()
+    {
+        var devCertificatePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "aspire-dev-cert.pem");
+        var project = CreateGuestAppHostProject(environment: TestEnvironment.CreateWindows());
+        var envVars = new Dictionary<string, string>
+        {
+            ["NODE_EXTRA_CA_CERTS"] = devCertificatePath.ToUpperInvariant()
+        };
+
+        await project.ConfigureCertificateBundleEnvironmentAsync(
+            envVars,
+            _workspace.WorkspaceRoot,
+            devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(devCertificatePath, envVars["NODE_EXTRA_CA_CERTS"]);
+    }
+
+    [Fact]
     public async Task ConfigureCertificateBundleEnvironmentAsync_DoesNotAssumeMacOSPathsAreCaseInsensitive()
     {
         var lowerCaseDirectory = Path.Combine(_workspace.WorkspaceRoot.FullName, "certificates");
