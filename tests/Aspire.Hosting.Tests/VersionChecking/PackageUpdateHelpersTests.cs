@@ -215,4 +215,36 @@ public class PackageUpdateHelpersTests
         // Assert
         Assert.Equal(new SemVersion(9, 0, 0), latestVersion);
     }
+
+    [Fact]
+    public void ParsePackageSearchResults_WithCredentialProviderPreamble_ParsesPackages()
+    {
+        // The NuGet Azure Artifacts Credential Provider writes "[CredentialProvider]..." progress lines to stdout
+        // before the JSON payload while `dotnet package search --format json` still exits 0, which previously broke
+        // parsing. See https://github.com/microsoft/aspire/issues/19339.
+        var pollutedStdout =
+            "    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'\n" +
+            "    [CredentialProvider]Requested 8/13/2026 2:36:13 AM but received 8/12/2026 11:37:51 PM\n" +
+            """
+            {
+              "version": 2,
+              "problems": [],
+              "searchResult": [
+                {
+                  "sourceName": "azure-default",
+                  "packages": [
+                    { "id": "Aspire.Hosting.AppHost", "latestVersion": "9.3.1" }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        var packages = PackageUpdateHelpers.ParsePackageSearchResults(pollutedStdout, "Aspire.Hosting.AppHost");
+
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.AppHost", package.Id);
+        Assert.Equal("9.3.1", package.Version);
+        Assert.Equal("azure-default", package.Source);
+    }
 }

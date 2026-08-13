@@ -129,7 +129,7 @@ internal static class PackageUpdateHelpers
     {
         var foundPackages = new List<NuGetPackage>();
 
-        using var document = JsonDocument.Parse(stdout);
+        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout));
         if (!document.RootElement.TryGetProperty("searchResult", out var searchResultsArray))
         {
             return [];
@@ -161,5 +161,26 @@ internal static class PackageUpdateHelpers
         }
 
         return foundPackages;
+    }
+
+    // `dotnet package search <id> --format json` is expected to write a single JSON object to stdout, but some
+    // NuGet credential providers write progress lines to stdout *before* the JSON payload while the command still
+    // exits 0. The common case is the NuGet Azure Artifacts Credential Provider: with an authenticated Azure DevOps
+    // feed configured, captured stdout looks like this (stderr empty, exit code 0):
+    //
+    //     [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'
+    //     [CredentialProvider]Requested 8/13/2026 2:36:13 AM but received 8/12/2026 11:37:51 PM
+    //     {"version":2,"problems":[],"searchResult":[{"sourceName":"azure-default","packages":[ ... ]}]}
+    //
+    // Parsing the whole string as JSON then throws, because the leading '[' is read as the start of an array and
+    // 'C' from "CredentialProvider" is an invalid value start. Skip the preamble by starting at the first '{' so
+    // the JSON object parses. See https://github.com/microsoft/aspire/issues/19339.
+    internal static string ExtractJsonPayload(string stdout)
+    {
+        var start = stdout.IndexOf('{');
+
+        // start == 0: already pure JSON, nothing to trim. start < 0: no object token, so return the input
+        // unchanged and let JsonDocument.Parse throw the same JsonException as before for empty/malformed output.
+        return start > 0 ? stdout[start..] : stdout;
     }
 }

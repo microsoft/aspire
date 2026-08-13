@@ -8,6 +8,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -224,7 +225,11 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return [];
             }
 
-            var result = JsonSerializer.Deserialize(output, BundleSearchJsonContext.Default.BundleSearchResult);
+            // The aspire-managed helper writes the search result as JSON to stdout, but a NuGet credential
+            // provider (e.g. the Azure Artifacts Credential Provider) can prepend "[CredentialProvider]..."
+            // progress lines to that stdout before the payload. Trim any non-JSON preamble before deserializing.
+            // See https://github.com/microsoft/aspire/issues/19339.
+            var result = JsonSerializer.Deserialize(PackageUpdateHelpers.ExtractJsonPayload(output), BundleSearchJsonContext.Default.BundleSearchResult);
             if (result?.Packages is null)
             {
                 return [];
