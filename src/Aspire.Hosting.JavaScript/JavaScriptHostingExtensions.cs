@@ -1183,6 +1183,10 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="builder">The JavaScript resource builder.</param>
     /// <param name="configure">Optional callback to configure <see cref="PublishAsStaticWebsiteOptions"/>.</param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The published container uses a YARP reverse proxy image for static file serving.
@@ -1217,6 +1221,10 @@ public static partial class JavaScriptHostingExtensions
     /// </param>
     /// <param name="configure">Optional callback to configure <see cref="PublishAsStaticWebsiteOptions"/>.</param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The published container uses a YARP reverse proxy image for static file serving and API
@@ -1365,6 +1373,10 @@ public static partial class JavaScriptHostingExtensions
     /// The relative path containing the built runtime files to copy into the published container. Defaults to the application root.
     /// </param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// Use this method for frameworks that produce a Node.js server artifact during the build and recommend

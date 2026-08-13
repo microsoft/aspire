@@ -934,6 +934,15 @@ public static partial class JavaScriptHostingExtensions
 
     private static void ThrowIfUnsupportedDenoDockerfileOptions(IResource resource)
     {
+        if (resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode) &&
+            publishMode.Mode is JavaScriptPublishMode.StaticWebsite or JavaScriptPublishMode.NodeServer)
+        {
+            var publishMethod = publishMode.Mode == JavaScriptPublishMode.StaticWebsite
+                ? nameof(PublishAsStaticWebsite)
+                : nameof(PublishAsNodeServer);
+            throw new InvalidOperationException($"Generated Deno Dockerfiles do not support {publishMethod}. Use AddJavaScriptApp(...).WithDeno() or provide a custom Dockerfile.");
+        }
+
         if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) &&
             !string.Equals(packageManager.ExecutableName, "deno", StringComparison.Ordinal))
         {

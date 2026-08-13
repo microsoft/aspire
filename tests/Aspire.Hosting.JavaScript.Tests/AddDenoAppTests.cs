@@ -345,6 +345,46 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_AddDenoAppPublishAsStaticWebsiteThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .PublishAsStaticWebsite();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        Assert.Equal(
+            "Generated Deno Dockerfiles do not support PublishAsStaticWebsite. Use AddJavaScriptApp(...).WithDeno() or provide a custom Dockerfile.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_AddDenoAppPublishAsNodeServerThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .PublishAsNodeServer("server.js");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        Assert.Equal(
+            "Generated Deno Dockerfiles do not support PublishAsNodeServer. Use AddJavaScriptApp(...).WithDeno() or provide a custom Dockerfile.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_DenoPackageScriptCopiesReferencedMetadataBeforeInstall()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
