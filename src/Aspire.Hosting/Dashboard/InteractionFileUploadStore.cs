@@ -328,7 +328,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             return;
         }
 
-        await _cleanupCts.CancelAsync().ConfigureAwait(false);
+        _cleanupCts.Cancel();
         await _cleanupTask.ConfigureAwait(false);
         _cleanupCts.Dispose();
 
