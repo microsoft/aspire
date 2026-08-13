@@ -791,6 +791,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         var dotnetProjectLaunchResourceArgumentIndex = FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
             er.ModelResource,
             appHostArgList);
+        var dotnetProjectApplicationArgumentBoundaryIndex =
+            dotnetProjectLaunchResourceArgumentIndex is { } boundarySearchStartIndex
+                ? appHostArgList.FindIndex(
+                    boundarySearchStartIndex + 1,
+                    static argument => string.Equals(argument.Value, "--", StringComparison.Ordinal))
+                : -1;
         var launchArgs = new List<LaunchArgument>();
         int? dotnetProjectLaunchArgumentIndex = null;
         var canReuseArgsForProcessFallback = true;
@@ -846,11 +852,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 if (projectLaunchProfileArgs.Count > 0 &&
                     ordinaryAppHostArgumentCount > 0 &&
                     launchToolArgumentCount == 0 &&
-                    HasDotnetApplicationArgumentBoundary())
+                    HasDotnetApplicationArgumentBoundary() &&
+                    dotnetProjectApplicationArgumentBoundaryIndex < 0)
                 {
                     // A prepared project command or explicit `dotnet run`/`dotnet watch` invocation needs a
                     // double-dash before application arguments. Custom IDE launchers receive raw application
-                    // arguments instead.
+                    // arguments instead. An explicit command can already contain that boundary, in which case
+                    // its launch-profile arguments are inserted after the existing separator below.
                     projectLaunchProfileArgs.Insert(0, "--");
                 }
             }
@@ -865,14 +873,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 return dotnetProjectLaunchResourceArgumentIndex is { } index && index >= omittedLaunchToolArgumentCount;
             }
         }
-        // Project launch-profile arguments are application arguments. Append them after an explicit executable
-        // `dotnet run`/`dotnet watch` command so its SDK options stay before the `--` separator. When a custom
-        // launch-tool declaration replaces that command, keep its prefix first and insert profile arguments before
+        // Project launch-profile arguments are application arguments. Place them after an explicit executable
+        // `dotnet run`/`dotnet watch` command so its SDK options stay before the `--` separator. If the command
+        // already has a separator, put profile arguments before its existing application arguments. When a custom
+        // launch-tool declaration replaces the command, keep its prefix first and insert profile arguments before
         // ordinary app-host arguments. Without either form, preserve the existing profile-before-app-host ordering.
         var projectLaunchProfileArgumentInsertIndex =
             dotnetProjectLaunchResourceArgumentIndex is { } projectLaunchResourceArgumentIndex &&
             projectLaunchResourceArgumentIndex >= omittedLaunchToolArgumentCount
-                ? appHostArgList.Count
+                ? dotnetProjectApplicationArgumentBoundaryIndex >= 0
+                    ? dotnetProjectApplicationArgumentBoundaryIndex + 1
+                    : appHostArgList.Count
                 : launchToolArgumentCount > 0
                     ? Math.Min(launchToolArgumentCount, appHostArgList.Count)
                     : 0;
@@ -927,7 +938,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         // Recognize the project-launching SDK verb after supported non-terminating command prefixes:
         //   dotnet run ...
-        //   dotnet [env:ASPNETCORE_ENVIRONMENT=Development] --diagnostics run ...
+        //   dotnet [env:ASPNETCORE_ENVIRONMENT=Development] [env:DOTNET_ENVIRONMENT=Development] --diagnostics run ...
         //   dotnet -d watch ...
         // The System.CommandLine environment directive works for built-in SDK commands such as run, but .NET 10
         // does not resolve the external watch command through it. Response files are also valid CLI inputs, but they
@@ -944,11 +955,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // https://learn.microsoft.com/dotnet/core/tools/dotnet-watch. The environment directive is defined at
         // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/EnvironmentVariablesDirective.cs.
         var projectLaunchArgumentIndex = 0;
-        var hasEnvironmentVariableDirective =
-            projectLaunchArgumentIndex < appHostArgs.Count &&
-            IsDotnetEnvironmentVariableDirective(appHostArgs[projectLaunchArgumentIndex].Value);
-        if (hasEnvironmentVariableDirective)
+        var hasEnvironmentVariableDirective = false;
+        while (projectLaunchArgumentIndex < appHostArgs.Count &&
+            IsDotnetEnvironmentVariableDirective(appHostArgs[projectLaunchArgumentIndex].Value))
         {
+            hasEnvironmentVariableDirective = true;
             projectLaunchArgumentIndex++;
         }
 
@@ -995,21 +1006,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return;
         }
 
-        List<LaunchArgument>? launchProfileArgs = null;
-        var firstExecutableArgumentIndex = launchArgs.FindIndex(static argument => argument.Executable);
-        if (firstExecutableArgumentIndex >= 0 &&
-            projectLaunchIndex > firstExecutableArgumentIndex &&
-            string.Equals(launchArgs[firstExecutableArgumentIndex].Value, "--", StringComparison.Ordinal))
-        {
-            // Executable launch-profile args were composed before the caller-provided project launch command.
-            // Preserve any non-executable launch-tool display prefix, then move the profile segment after
-            // the project launch command so the SDK parses it as application arguments.
-            var launchProfileArgumentCount = projectLaunchIndex - firstExecutableArgumentIndex;
-            launchProfileArgs = launchArgs.GetRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
-            launchArgs.RemoveRange(firstExecutableArgumentIndex, launchProfileArgumentCount);
-            projectLaunchIndex -= launchProfileArgumentCount;
-        }
-
         var argsToInsert = new List<string>();
         if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration) &&
             !ContainsDotnetProjectLaunchOption(launchArgs, "--configuration", "-c"))
@@ -1023,7 +1019,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             argsToInsert.Add("--no-launch-profile");
         }
 
-        if (argsToInsert.Count == 0 && launchProfileArgs is null)
+        if (argsToInsert.Count == 0)
         {
             return;
         }
@@ -1035,14 +1031,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         if (argsToInsert.Count > 0)
         {
             launchArgs.InsertRange(projectLaunchIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
-        }
-
-        if (launchProfileArgs is not null)
-        {
-            // Launch profile args were originally before the app host args, separated by `--`.
-            // Once this path preserves the caller-provided project launch command, those args must
-            // move after the inserted SDK options so the SDK parses them as application args.
-            launchArgs.AddRange(launchProfileArgs);
         }
 
         ReindexExecutableLaunchArgs(launchArgs, executableArgumentStartIndex);

@@ -6205,28 +6205,31 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run", false, null, null)]
-    [InlineData("run", true, null, null)]
-    [InlineData("watch", false, null, null)]
-    [InlineData("watch", true, null, null)]
-    [InlineData("run", false, "-d", null)]
-    [InlineData("watch", false, "--diagnostics", null)]
-    [InlineData("run", false, null, "[env:ASPIRE_PREFIX_PROBE=1]")]
-    [InlineData("run", false, "--diagnostics", "[env:ASPIRE_PREFIX_PROBE=1]")]
+    [InlineData("run", false, null, null, null)]
+    [InlineData("run", true, null, null, null)]
+    [InlineData("watch", false, null, null, null)]
+    [InlineData("watch", true, null, null, null)]
+    [InlineData("run", false, "-d", null, null)]
+    [InlineData("watch", false, "--diagnostics", null, null)]
+    [InlineData("run", false, null, new string[] { "[env:ASPIRE_PREFIX_PROBE=1]" }, null)]
+    [InlineData("run", false, "--diagnostics", new string[] { "[env:ASPIRE_PREFIX_PROBE=1]" }, null)]
+    [InlineData("run", false, "--diagnostics", new string[] { "[env:ASPIRE_PREFIX_PROBE_A=1]", "[env:ASPIRE_PREFIX_PROBE_B=2]" }, null)]
+    [InlineData("run", false, "--diagnostics", new string[] { "[env:ASPIRE_PREFIX_PROBE=1]" }, "app-arg")]
     public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(
         string launchVerb,
         bool useFullDotnetPath,
         string? sdkOption,
-        string? environmentVariableDirective)
+        string[]? environmentVariableDirectives,
+        string? applicationArgument)
     {
         var builder = DistributedApplication.CreateBuilder();
         var dotnetCommand = useFullDotnetPath
             ? Path.GetFullPath(Path.Combine("test-dotnet-root", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"))
             : "dotnet";
         var resourceArgs = new List<string>();
-        if (environmentVariableDirective is not null)
+        if (environmentVariableDirectives is not null)
         {
-            resourceArgs.Add(environmentVariableDirective);
+            resourceArgs.AddRange(environmentVariableDirectives);
         }
 
         if (sdkOption is not null)
@@ -6235,6 +6238,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
 
         resourceArgs.AddRange([launchVerb, "-f", "net10.0-ios"]);
+        if (applicationArgument is not null)
+        {
+            resourceArgs.AddRange(["--", applicationArgument]);
+        }
+
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
         var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
         if (defaultAnnotation is not null)
@@ -6279,27 +6287,50 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(dotnetCommand, exe.Spec.ExecutablePath);
         var expectedArgs = new List<string>();
-        if (environmentVariableDirective is not null)
+        if (environmentVariableDirectives is not null)
         {
-            expectedArgs.Add(environmentVariableDirective);
+            expectedArgs.AddRange(environmentVariableDirectives);
         }
+
         if (sdkOption is not null)
         {
             expectedArgs.Add(sdkOption);
         }
+
         expectedArgs.Add(launchVerb);
         if (GetTestAssemblyConfiguration() is { } configurationName)
         {
             expectedArgs.AddRange(["--configuration", configurationName]);
         }
+
         expectedArgs.AddRange(["--no-launch-profile", "-f", "net10.0-ios", "--", "--profile-arg", "profile value"]);
+        if (applicationArgument is not null)
+        {
+            expectedArgs.Add(applicationArgument);
+        }
+
         Assert.Equal(expectedArgs, exe.Spec.Args);
         Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
-        Assert.Equal(
-            [.. resourceArgs, "--", "--profile-arg", "profile value"],
-            displayArgs.Select(a => a.Argument));
+        var expectedDisplayArgs = new List<string>();
+        if (environmentVariableDirectives is not null)
+        {
+            expectedDisplayArgs.AddRange(environmentVariableDirectives);
+        }
+
+        if (sdkOption is not null)
+        {
+            expectedDisplayArgs.Add(sdkOption);
+        }
+
+        expectedDisplayArgs.AddRange([launchVerb, "-f", "net10.0-ios", "--", "--profile-arg", "profile value"]);
+        if (applicationArgument is not null)
+        {
+            expectedDisplayArgs.Add(applicationArgument);
+        }
+
+        Assert.Equal(expectedDisplayArgs, displayArgs.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
