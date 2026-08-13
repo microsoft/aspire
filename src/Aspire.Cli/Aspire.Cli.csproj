@@ -284,7 +284,11 @@
 
   <ItemGroup>
     <Compile Remove="Templating\Templates\empty-apphost\**\*.cs" />
+    <Compile Remove="Templating\Templates\cs-managed-empty-apphost\**\*.cs" />
     <EmbeddedResource Include="Templating\Templates\empty-apphost\**\*" LogicalName="empty-apphost.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\cs-managed-empty-apphost\**\*" LogicalName="cs-managed-empty-apphost.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="Templating\Templates\ts-starter\**\*" LogicalName="ts-starter.%(RecursiveDir)%(Filename)%(Extension)">

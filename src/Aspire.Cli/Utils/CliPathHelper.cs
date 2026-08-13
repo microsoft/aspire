@@ -73,6 +73,11 @@ internal static class CliPathHelper
         return Path.Combine(aspireHomeDirectory.FullName, StagingNuGetPackagesFolderName);
     }
 
+    internal static string EnsureTrailingSlash(string path)
+        => Path.EndsInDirectorySeparator(path)
+            ? path
+            : path + Path.DirectorySeparatorChar;
+
     /// <summary>
     /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,
     /// truncated to <paramref name="length"/> characters. Returns <see langword="null"/> when

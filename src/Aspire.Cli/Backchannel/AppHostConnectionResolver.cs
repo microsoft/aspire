@@ -8,6 +8,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -135,8 +136,9 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
+            var targetPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                projectFile.FullName,
+                targetPath,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
