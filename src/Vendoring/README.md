@@ -11,7 +11,7 @@ git checkout tags/Instrumentation.ConfluentKafka-0.2.0-alpha.2
 ### Instructions
 
 - Copy files from `src/OpenTelemetry.Instrumentation.ConfluentKafka` to `src/Vendoring/OpenTelemetry.Instrumentation.ConfluentKafka`:
-    - `**\*.cs` minus `AssemblyInfo.cs`, `OpenTelemetryConsumerBuilderExtensions.cs`, `OpenTelemetryProducerBuilderExtensions.cs`, `ReflectionHelpers.cs`
+    - `**\*.cs` minus `AssemblyInfo.cs`, `ConfluentKafkaInstrumentedConsumerBuilderOptions.cs`, `ConfluentKafkaInstrumentedProducerBuilderOptions.cs`, `OpenTelemetryConsumerBuilderExtensions.cs`, `OpenTelemetryProducerBuilderExtensions.cs`, `ReflectionHelpers.cs`
 - Copy files from `src/Shared` to `src/Vendoring/OpenTelemetry.Instrumentation.ConfluentKafka/Shared`:
     - `Guard.cs`
     - `SemanticConventions.cs`

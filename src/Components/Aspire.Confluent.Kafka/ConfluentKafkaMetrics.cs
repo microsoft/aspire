@@ -33,11 +33,11 @@ internal sealed class ConfluentKafkaMetrics
 
         Tx = _meter.CreateCounter<long>(Counters.Tx, description: Descriptions.Tx);
         TxBytes = _meter.CreateCounter<long>(Counters.TxBytes, description: Descriptions.TxBytes);
-        TxMessages = _meter.CreateCounter<long>(Counters.TxMessages, description: Descriptions.TxMessages);
+        TxMessages = _meter.CreateCounter<long>(Counters.TxMessages, unit: "{message}", description: Descriptions.TxMessages);
         TxMessageBytes = _meter.CreateCounter<long>(Counters.TxMessageBytes, description: Descriptions.TxMessageBytes);
         Rx = _meter.CreateCounter<long>(Counters.Rx, description: Descriptions.Rx);
         RxBytes = _meter.CreateCounter<long>(Counters.RxBytes, description: Descriptions.RxBytes);
-        RxMessages = _meter.CreateCounter<long>(Counters.RxMessages, description: Descriptions.RxMessages);
+        RxMessages = _meter.CreateCounter<long>(Counters.RxMessages, unit: "{message}", description: Descriptions.RxMessages);
         RxMessageBytes = _meter.CreateCounter<long>(Counters.RxMessageBytes, description: Descriptions.RxMessageBytes);
     }
 
@@ -63,8 +63,17 @@ internal sealed class ConfluentKafkaMetrics
     public static class Tags
     {
         public const string ClientId = "messaging.client.id";
+        public const string MessagingSystem = "messaging.system";
+        public const string OperationName = "messaging.operation.name";
         public const string Type = "type";
         public const string Name = "name";
+    }
+
+    public static class TagValues
+    {
+        public const string KafkaMessagingSystem = "kafka";
+        public const string SendOperationName = "send";
+        public const string PollOperationName = "poll";
     }
 
     private static class Descriptions
