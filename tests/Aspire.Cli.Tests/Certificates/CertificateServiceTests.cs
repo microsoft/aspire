@@ -217,13 +217,18 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_ExportsPemCertificate()
+    public async Task CertificatePemExport_IsExplicitAndUsesAspireHomeDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHomeDirectory = workspace.CreateDirectory("custom-aspire-home");
         var exportCalled = false;
+        string? exportDirectory = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                aspireHomeDirectory: aspireHomeDirectory);
             options.CertificateToolRunnerFactory = sp =>
             {
                 return new TestCertificateToolRunner
@@ -237,10 +242,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                             Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
                         };
                     },
-                    ExportDevCertificatePublicPemCallback = (path) =>
+                    ExportDevCertificatePublicPemCallback = directory =>
                     {
                         exportCalled = true;
-                        return path;
+                        exportDirectory = directory;
+                        return Path.Combine(directory, "aspire-dev-cert-test.pem");
                     }
                 };
             };
@@ -249,14 +255,19 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
-        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(exportCalled);
+
+        var result = cs.ExportDevCertificatePem(TestContext.Current.CancellationToken);
 
         Assert.True(exportCalled);
-        Assert.NotNull(result.DevCertPemPath);
+        Assert.Equal(Path.Combine(aspireHomeDirectory.FullName, "dev-certs"), exportDirectory);
+        Assert.NotNull(result);
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_PemExportFailure_DoesNotThrow()
+    public void ExportDevCertificatePem_Failure_DoesNotThrow()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -283,10 +294,38 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
-        // Should not throw even when PEM export fails
-        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
-        Assert.NotNull(result);
-        Assert.Null(result.DevCertPemPath);
+        var result = cs.ExportDevCertificatePem(TestContext.Current.CancellationToken);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ExportDevCertificatePem_Cancellation_Throws()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Full),
+                    ExportDevCertificatePublicPemCallback = _ =>
+                    {
+                        cancellationTokenSource.Cancel();
+                        throw new OperationCanceledException(cancellationTokenSource.Token);
+                    }
+                };
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var certificateService = sp.GetRequiredService<ICertificateService>();
+
+        Assert.ThrowsAny<OperationCanceledException>(
+            () => certificateService.ExportDevCertificatePem(cancellationTokenSource.Token));
     }
 
     [Fact]

@@ -1334,7 +1334,7 @@ public class GuestAppHostProjectTests : IDisposable
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_SetsNodeExtraCaCerts_WhenExistingValueIsNotUsable(string? existingValue)
+    public async Task ConfigureCertificateBundleEnvironmentAsync_SetsEnvironmentVariable_WhenExistingValueIsNotUsable(string? existingValue)
     {
         var project = CreateGuestAppHostProject();
         var envVars = new Dictionary<string, string>();
@@ -1343,17 +1343,19 @@ public class GuestAppHostProjectTests : IDisposable
             envVars["NODE_EXTRA_CA_CERTS"] = existingValue;
         }
 
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             "/path/to/cert.pem",
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
         Assert.Equal("/path/to/cert.pem", envVars["NODE_EXTRA_CA_CERTS"]);
     }
 
     [Fact]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_ReusesDevCertificate_WhenAlreadyConfigured()
+    public async Task ConfigureCertificateBundleEnvironmentAsync_ReusesDevCertificate_WhenAlreadyConfigured()
     {
         var devCertificatePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "aspire-dev-cert.pem");
         var project = CreateGuestAppHostProject();
@@ -1362,10 +1364,12 @@ public class GuestAppHostProjectTests : IDisposable
             ["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(devCertificatePath)
         };
 
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(devCertificatePath, envVars["NODE_EXTRA_CA_CERTS"]);
@@ -1373,38 +1377,26 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_DoesNotSet_WhenPemPathIsNull()
+    public async Task ConfigureCertificateBundleEnvironmentAsync_DoesNotSet_WhenPemPathIsNull()
     {
         var project = CreateGuestAppHostProject();
         var envVars = new Dictionary<string, string>();
 
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertPemPath: null,
-            TestContext.Current.CancellationToken);
+            environmentVariableName: "NODE_EXTRA_CA_CERTS",
+            cacheFilePrefix: "typescript-nodejs",
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
     }
 
     [Fact]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_DoesNotSet_WhenLanguageIsNotNodeJs()
+    public async Task ConfigureCertificateBundleEnvironmentAsync_CreatesAndReusesCombinedBundle_WhenAlreadySet()
     {
-        var project = CreateGuestAppHostProject(languageId: "python");
-        var envVars = new Dictionary<string, string>();
-
-        await project.ConfigureNodeCertificateEnvironmentAsync(
-            envVars,
-            _workspace.WorkspaceRoot,
-            "/path/to/cert.pem",
-            TestContext.Current.CancellationToken);
-
-        Assert.False(envVars.ContainsKey("NODE_EXTRA_CA_CERTS"));
-    }
-
-    [Fact]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_CreatesAndReusesCombinedBundle_WhenAlreadySet()
-    {
+        const string configuredNodeExtraCaCertsKey = "Node_Extra_Ca_Certs";
         var homeDirectory = _workspace.CreateDirectory("bundle-home");
         var existingBundlePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "existing-ca-certs.pem");
         var inheritedBundlePath = Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-ca-certs.pem");
@@ -1418,14 +1410,14 @@ public class GuestAppHostProjectTests : IDisposable
         await File.WriteAllTextAsync(inheritedBundlePath, inheritedBundleContents, TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(devCertificatePath, devCertificateContents, TestContext.Current.CancellationToken);
 
-        var environment = new TestEnvironment(new Dictionary<string, string?>
+        var environment = TestEnvironment.CreateWindows(new Dictionary<string, string?>
         {
             ["NODE_EXTRA_CA_CERTS"] = inheritedBundlePath
         });
         var project = CreateGuestAppHostProject(environment: environment, homeDirectory: homeDirectory);
         var envVars = new Dictionary<string, string>
         {
-            ["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(existingBundlePath)
+            [configuredNodeExtraCaCertsKey] = Path.GetFileName(existingBundlePath)
         };
         var expectedBundleContents = Encoding.UTF8.GetBytes($"{devCertificateContents}\n{existingBundleContents}");
         var expectedHash = Convert.ToHexString(XxHash128.Hash(expectedBundleContents)).ToLowerInvariant();
@@ -1434,28 +1426,35 @@ public class GuestAppHostProjectTests : IDisposable
             ".aspire",
             "dev-certs",
             "bundles",
-            $"node-{expectedHash}.pem");
+            $"typescript-nodejs-{expectedHash}.pem");
 
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedBundlePath, envVars["NODE_EXTRA_CA_CERTS"]);
+        Assert.DoesNotContain(configuredNodeExtraCaCertsKey, envVars.Keys);
         Assert.Equal(expectedBundleContents, await File.ReadAllBytesAsync(expectedBundlePath, TestContext.Current.CancellationToken));
 
         var cachedWriteTime = DateTime.UtcNow.AddDays(-1);
         File.SetLastWriteTimeUtc(expectedBundlePath, cachedWriteTime);
         cachedWriteTime = File.GetLastWriteTimeUtc(expectedBundlePath);
-        envVars["NODE_EXTRA_CA_CERTS"] = Path.GetFileName(existingBundlePath);
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        envVars.Remove("NODE_EXTRA_CA_CERTS");
+        envVars[configuredNodeExtraCaCertsKey] = Path.GetFileName(existingBundlePath);
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
         Assert.Equal(cachedWriteTime, File.GetLastWriteTimeUtc(expectedBundlePath));
+        Assert.DoesNotContain(configuredNodeExtraCaCertsKey, envVars.Keys);
 
         if (!OperatingSystem.IsWindows())
         {
@@ -1469,7 +1468,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfigureNodeCertificateEnvironmentAsync_PreservesExistingBundle_WhenCombinationFails()
+    public async Task ConfigureCertificateBundleEnvironmentAsync_PreservesExistingBundle_WhenCombinationFails()
     {
         var interactionService = new TestInteractionService();
         var project = CreateGuestAppHostProject(interactionService: interactionService);
@@ -1480,10 +1479,12 @@ public class GuestAppHostProjectTests : IDisposable
             ["NODE_EXTRA_CA_CERTS"] = "missing-ca-certs.pem"
         };
 
-        await project.ConfigureNodeCertificateEnvironmentAsync(
+        await project.ConfigureCertificateBundleEnvironmentAsync(
             envVars,
             _workspace.WorkspaceRoot,
             devCertificatePath,
+            "NODE_EXTRA_CA_CERTS",
+            "typescript-nodejs",
             TestContext.Current.CancellationToken);
 
         Assert.Equal("missing-ca-certs.pem", envVars["NODE_EXTRA_CA_CERTS"]);

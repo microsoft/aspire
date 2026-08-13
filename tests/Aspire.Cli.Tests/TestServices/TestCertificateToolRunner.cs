@@ -56,10 +56,11 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
             : new CertificateCleanResult { Success = true };
     }
 
-    public string? ExportDevCertificatePublicPem(string outputPath)
+    public string? ExportDevCertificatePublicPem(string outputDirectory, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return ExportDevCertificatePublicPemCallback is not null
-            ? ExportDevCertificatePublicPemCallback(outputPath)
+            ? ExportDevCertificatePublicPemCallback(outputDirectory)
             : null;
     }
 }

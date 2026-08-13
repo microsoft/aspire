@@ -38,16 +38,13 @@ internal sealed class EnsureCertificatesTrustedResult
     /// Gets the underlying result code from the certificate manager.
     /// </summary>
     public EnsureCertificateResult? ResultCode { get; init; }
-
-    /// <summary>
-    /// Gets the path to the exported PEM certificate file, if one was exported.
-    /// </summary>
-    public string? DevCertPemPath { get; init; }
 }
 
 internal interface ICertificateService
 {
     Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
+
+    string? ExportDevCertificatePem(CancellationToken cancellationToken);
 }
 
 internal sealed class CertificateService(
@@ -60,10 +57,8 @@ internal sealed class CertificateService(
     ILogger<CertificateService> logger) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private const string DevCertPemFileName = "aspire-dev-cert.pem";
-
-    internal string DevCertPemPath => Path.Combine(
-        executionContext.HomeDirectory.FullName, ".aspire", "dev-certs", DevCertPemFileName);
+    internal string DevCertDirectory => Path.Combine(
+        executionContext.AspireHomeDirectory.FullName, "dev-certs");
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -127,8 +122,7 @@ internal sealed class CertificateService(
             return new EnsureCertificatesTrustedResult
             {
                 EnvironmentVariables = environmentVariables,
-                Success = true,
-                DevCertPemPath = ExportDevCertificatePem()
+                Success = true
             };
         }
 
@@ -165,8 +159,7 @@ internal sealed class CertificateService(
             EnvironmentVariables = environmentVariables,
             Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode) || partialTrustAccepted,
             WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
-            ResultCode = trustResultCode,
-            DevCertPemPath = ExportDevCertificatePem()
+            ResultCode = trustResultCode
         };
     }
 
@@ -212,11 +205,11 @@ internal sealed class CertificateService(
         }
     }
 
-    private string? ExportDevCertificatePem()
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken)
     {
         try
         {
-            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertPemPath);
+            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertDirectory, cancellationToken);
             if (result is not null)
             {
                 logger.LogDebug("Exported dev certificate public PEM to {Path}", result);
@@ -227,6 +220,10 @@ internal sealed class CertificateService(
             }
 
             return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -15,6 +15,11 @@ public interface ILanguageSupport
     string Language { get; }
 
     /// <summary>
+    /// Gets the environment variable that accepts an additional PEM certificate bundle for this language runtime.
+    /// </summary>
+    string? CertificateBundleEnvironmentVariable => null;
+
+    /// <summary>
     /// Generates scaffold files for a new project.
     /// </summary>
     /// <param name="request">The scaffold request containing project details.</param>

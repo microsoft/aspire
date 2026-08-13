@@ -309,6 +309,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("NODE_EXTRA_CA_CERTS", runtimeSpec.CertificateBundleEnvironmentVariable);
     }
 
     [Fact]
@@ -377,7 +378,8 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 Command = "npx",
                 Args = ["--no-install", "nodemon", "--exec", "npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}"]
             },
-            ExtensionLaunchCapability = "node"
+            ExtensionLaunchCapability = "node",
+            CertificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS"
         };
     }
 

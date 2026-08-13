@@ -12,8 +12,9 @@ internal sealed class TestCertificateService : ICertificateService
         return Task.FromResult(new EnsureCertificatesTrustedResult
         {
             EnvironmentVariables = new Dictionary<string, string>(),
-            Success = true,
-            DevCertPemPath = null
+            Success = true
         });
     }
+
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
 }

@@ -68,6 +68,11 @@ public sealed class RuntimeSpec
     public string? ExtensionLaunchCapability { get; init; }
 
     /// <summary>
+    /// Gets the environment variable that accepts an additional PEM certificate bundle for this language runtime.
+    /// </summary>
+    public string? CertificateBundleEnvironmentVariable { get; init; }
+
+    /// <summary>
     /// Gets files that must exist in the project directory before execution.
     /// If a file in this dictionary is missing, the CLI will create it with the provided content.
     /// This supports upgrade scenarios where new runtime requirements are introduced.
