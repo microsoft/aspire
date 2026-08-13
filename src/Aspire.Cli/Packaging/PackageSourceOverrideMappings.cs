@@ -5,6 +5,16 @@ namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
+    public static string ResolveForWorkingDirectory(string source, DirectoryInfo workingDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+
+        return Uri.TryCreate(source, UriKind.Absolute, out _) || Path.IsPathFullyQualified(source)
+            ? source
+            : Path.GetFullPath(source, workingDirectory.FullName);
+    }
+
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);

@@ -1186,11 +1186,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
-    [Fact]
-    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery()
+    [Theory]
+    [InlineData("https://proxy.example/v3/index.json")]
+    [InlineData("relative-feed")]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery(string sourceOverride)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string sourceOverride = "https://proxy.example/v3/index.json";
+        var expectedSource = sourceOverride == "relative-feed"
+            ? Path.GetFullPath(sourceOverride, workspace.WorkspaceRoot.FullName)
+            : sourceOverride;
         string? discoveryCatchAllSource = null;
 
         var cache = new FakeNuGetPackageCache
@@ -1210,7 +1214,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 discoveryCatchAllSource = (string?)catchAllSource.Attribute("key");
 
                 return Task.FromResult<IEnumerable<NuGetPackage>>(
-                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = sourceOverride, Version = "9.2.0" }]);
+                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = expectedSource, Version = "9.2.0" }]);
             }
         };
         var channel = PackageChannel.CreateExplicitChannel(
@@ -1235,7 +1239,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(sourceOverride, discoveryCatchAllSource);
+        Assert.Equal(expectedSource, discoveryCatchAllSource);
     }
 
     [Theory]

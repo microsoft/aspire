@@ -340,7 +340,7 @@ internal sealed class NewCommand : BaseCommand
         public string? ErrorMessage { get; init; }
     }
 
-    private async Task<ResolveTemplateVersionResult> ResolveCliTemplateVersionAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<ResolveTemplateVersionResult> ResolveCliTemplateVersionAsync(ParseResult parseResult, string? source, CancellationToken cancellationToken)
     {
         return await InteractionService.ShowStatusAsync(
             NewCommandStrings.ResolvingTemplateVersion,
@@ -408,7 +408,7 @@ internal sealed class NewCommand : BaseCommand
 
                 // Apply the source override after selection so it cannot change implicit/explicit channel selection.
                 // Keep the original channel authoritative for persistence because mappings make the adjusted copy explicit.
-                var templateDiscoveryChannel = selectedChannel.WithFallbackSourceOverride(parseResult.GetValue(s_sourceOption));
+                var templateDiscoveryChannel = selectedChannel.WithFallbackSourceOverride(source);
 
                 try
                 {
@@ -453,6 +453,10 @@ internal sealed class NewCommand : BaseCommand
             InteractionService.DisplayError(NewCommandStrings.SourceWithCredentialsCannotBePersisted);
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            source = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, ExecutionContext.WorkingDirectory);
+        }
 
         // Resolve which templates are actually available at runtime (performs
         // async checks like SDK availability). This may be a subset of the
@@ -485,7 +489,7 @@ internal sealed class NewCommand : BaseCommand
         if (ShouldResolveCliTemplateVersion(template) &&
             string.IsNullOrWhiteSpace(version))
         {
-            var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
+            var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, source, cancellationToken);
             if (!resolveResult.Success)
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, resolveResult.ErrorMessage);
