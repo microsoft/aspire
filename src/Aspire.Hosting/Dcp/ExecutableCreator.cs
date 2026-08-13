@@ -865,12 +865,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 return dotnetProjectLaunchResourceArgumentIndex is { } index && index >= omittedLaunchToolArgumentCount;
             }
         }
-        // Project launch-profile arguments are application arguments. When a custom launch-tool declaration replaces
-        // the implicit `dotnet run` scaffold, keep its prefix first and insert profile arguments before ordinary
-        // app-host arguments. Without such a declaration, preserve the existing profile-before-app-host ordering.
-        var projectLaunchProfileArgumentInsertIndex = launchToolArgumentCount > 0
-            ? Math.Min(launchToolArgumentCount, appHostArgList.Count)
-            : 0;
+        // Project launch-profile arguments are application arguments. Append them after an explicit executable
+        // `dotnet run`/`dotnet watch` command so its SDK options stay before the `--` separator. When a custom
+        // launch-tool declaration replaces that command, keep its prefix first and insert profile arguments before
+        // ordinary app-host arguments. Without either form, preserve the existing profile-before-app-host ordering.
+        var projectLaunchProfileArgumentInsertIndex =
+            dotnetProjectLaunchResourceArgumentIndex is { } projectLaunchResourceArgumentIndex &&
+            projectLaunchResourceArgumentIndex >= omittedLaunchToolArgumentCount
+                ? appHostArgList.Count
+                : launchToolArgumentCount > 0
+                    ? Math.Min(launchToolArgumentCount, appHostArgList.Count)
+                    : 0;
 
         // Launch tool arguments (the tool-invocation prefix such as `run ./cmd/api`) are the leading app-host args,
         // and the two decisions about them are independent:
@@ -920,21 +925,60 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return null;
         }
 
-        // Recognize the project-launching SDK verb only immediately after the dotnet executable:
+        // Recognize the project-launching SDK verb after supported non-terminating command prefixes:
         //   dotnet run ...
-        //   dotnet watch ...
-        // Later values belong to another SDK command or the launched application, for example:
+        //   dotnet [env:ASPNETCORE_ENVIRONMENT=Development] --diagnostics run ...
+        //   dotnet -d watch ...
+        // The System.CommandLine environment directive works for built-in SDK commands such as run, but .NET 10
+        // does not resolve the external watch command through it. Response files are also valid CLI inputs, but they
+        // can expand to arbitrary options, commands, or application paths, so do not skip an opaque @file token:
+        //   dotnet @options.rsp run ...
+        // Do not skip arbitrary options. Runtime options introduce an application path rather than an SDK command:
+        //   dotnet --roll-forward LatestMajor app.dll run
+        // Other later values can also belong to another SDK command or the launched application:
         //   dotnet tool run <command>
         //   dotnet exec app.dll watch
-        // They must not be interpreted as the top-level project-launch verb.
-        // See https://learn.microsoft.com/dotnet/core/tools/dotnet-run and
-        // https://learn.microsoft.com/dotnet/core/tools/dotnet-watch.
-        if (appHostArgs.Count > 0 && appHostArgs[0].Value is "run" or "watch")
+        // Those later run/watch values must not be interpreted as the top-level project-launch verb.
+        // See https://learn.microsoft.com/dotnet/core/tools/dotnet,
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-run, and
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-watch. The environment directive is defined at
+        // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/EnvironmentVariablesDirective.cs.
+        var projectLaunchArgumentIndex = 0;
+        var hasEnvironmentVariableDirective =
+            projectLaunchArgumentIndex < appHostArgs.Count &&
+            IsDotnetEnvironmentVariableDirective(appHostArgs[projectLaunchArgumentIndex].Value);
+        if (hasEnvironmentVariableDirective)
         {
-            return 0;
+            projectLaunchArgumentIndex++;
+        }
+
+        while (projectLaunchArgumentIndex < appHostArgs.Count &&
+            IsDotnetSdkDiagnosticOption(appHostArgs[projectLaunchArgumentIndex].Value))
+        {
+            projectLaunchArgumentIndex++;
+        }
+
+        if (projectLaunchArgumentIndex < appHostArgs.Count)
+        {
+            var candidate = appHostArgs[projectLaunchArgumentIndex].Value;
+            if (candidate == "run" || (candidate == "watch" && !hasEnvironmentVariableDirective))
+            {
+                return projectLaunchArgumentIndex;
+            }
         }
 
         return null;
+    }
+
+    private static bool IsDotnetEnvironmentVariableDirective(string argument)
+    {
+        return string.Equals(argument, "[env]", StringComparison.OrdinalIgnoreCase) ||
+            argument.StartsWith("[env:", StringComparison.OrdinalIgnoreCase) && argument.EndsWith(']');
+    }
+
+    private static bool IsDotnetSdkDiagnosticOption(string argument)
+    {
+        return argument is "-d" or "--diagnostics";
     }
 
     private static bool IsExecutableAnnotatedDotnetProject(IResource resource)

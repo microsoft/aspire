@@ -6205,16 +6205,36 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run", false)]
-    [InlineData("run", true)]
-    [InlineData("watch", false)]
-    [InlineData("watch", true)]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(string launchVerb, bool useFullDotnetPath)
+    [InlineData("run", false, null, null)]
+    [InlineData("run", true, null, null)]
+    [InlineData("watch", false, null, null)]
+    [InlineData("watch", true, null, null)]
+    [InlineData("run", false, "-d", null)]
+    [InlineData("watch", false, "--diagnostics", null)]
+    [InlineData("run", false, null, "[env:ASPIRE_PREFIX_PROBE=1]")]
+    [InlineData("run", false, "--diagnostics", "[env:ASPIRE_PREFIX_PROBE=1]")]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedProjectPreservesLaunchProfileArgs(
+        string launchVerb,
+        bool useFullDotnetPath,
+        string? sdkOption,
+        string? environmentVariableDirective)
     {
         var builder = DistributedApplication.CreateBuilder();
         var dotnetCommand = useFullDotnetPath
             ? Path.GetFullPath(Path.Combine("test-dotnet-root", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"))
             : "dotnet";
+        var resourceArgs = new List<string>();
+        if (environmentVariableDirective is not null)
+        {
+            resourceArgs.Add(environmentVariableDirective);
+        }
+
+        if (sdkOption is not null)
+        {
+            resourceArgs.Add(sdkOption);
+        }
+
+        resourceArgs.AddRange([launchVerb, "-f", "net10.0-ios"]);
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
         var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
         if (defaultAnnotation is not null)
@@ -6238,7 +6258,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                     TargetKind = "simulator"
                 },
                 "maui")
-            .WithArgs(launchVerb, "-f", "net10.0-ios");
+            .WithArgs([.. resourceArgs]);
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -6258,7 +6278,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(dotnetCommand, exe.Spec.ExecutablePath);
-        var expectedArgs = new List<string> { launchVerb };
+        var expectedArgs = new List<string>();
+        if (environmentVariableDirective is not null)
+        {
+            expectedArgs.Add(environmentVariableDirective);
+        }
+        if (sdkOption is not null)
+        {
+            expectedArgs.Add(sdkOption);
+        }
+        expectedArgs.Add(launchVerb);
         if (GetTestAssemblyConfiguration() is { } configurationName)
         {
             expectedArgs.AddRange(["--configuration", configurationName]);
@@ -6269,17 +6298,26 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
         Assert.Equal(
-            [launchVerb, "-f", "net10.0-ios", "--", "--profile-arg", "profile value"],
+            [.. resourceArgs, "--", "--profile-arg", "profile value"],
             displayArgs.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(displayArgs, exe.Spec.Args);
     }
 
     [Theory]
-    [InlineData("run", true)]
-    [InlineData("watch", true)]
-    [InlineData("run", false)]
-    [InlineData("watch", false)]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationDoesNotOfferInvalidProcessFallback(string nonLeadingLaunchVerb, bool useExec)
+    [InlineData("run", true, false, null)]
+    [InlineData("watch", true, false, null)]
+    [InlineData("run", false, false, null)]
+    [InlineData("watch", false, false, null)]
+    [InlineData("run", false, true, null)]
+    [InlineData("watch", false, true, null)]
+    [InlineData("watch", false, false, "[env:ASPIRE_PREFIX_PROBE=1]")]
+    [InlineData("run", false, false, "@options.rsp")]
+    [InlineData("watch", false, false, "@options.rsp")]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationDoesNotOfferInvalidProcessFallback(
+        string nonLeadingLaunchVerb,
+        bool useExec,
+        bool useRuntimeOptions,
+        string? commandPrefix)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
@@ -6289,9 +6327,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
         }
 
-        string[] resourceArgs = useExec
-            ? ["exec", "app.dll", nonLeadingLaunchVerb]
-            : ["app.dll", nonLeadingLaunchVerb];
+        string[] resourceArgs = commandPrefix is not null
+            ? [commandPrefix, nonLeadingLaunchVerb]
+            : useRuntimeOptions
+                ? ["--roll-forward", "LatestMajor", "app.dll", nonLeadingLaunchVerb]
+                : useExec
+                    ? ["exec", "app.dll", nonLeadingLaunchVerb]
+                    : ["app.dll", nonLeadingLaunchVerb];
         projectBuilder
             .WithAnnotation(new ExecutableAnnotation
             {
