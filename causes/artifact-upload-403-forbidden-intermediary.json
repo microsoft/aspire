@@ -1,0 +1,16 @@
+{
+  "id": "artifact-upload-403-forbidden-intermediary",
+  "type": "infra-failure",
+  "title": "GitHub artifact upload fails with 403 Forbidden from intermediary during FinalizeArtifact",
+  "error_pattern": "##[error]Failed to FinalizeArtifact: Received non-retryable error: Failed request: (403) Forbidden: Error from intermediary with HTTP status code 403 \"Forbidden\"",
+  "occurrences": [
+    {
+      "run_id": 31656131071,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31656131071",
+      "job": "Tests / Templates-NewUpAndBuildStandaloneTemplateTests / Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest)",
+      "pr_number": 19313,
+      "observed_at": "2026-08-13T01:55:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19327"
+}

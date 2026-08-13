@@ -1,0 +1,47 @@
+{
+  "run_id": 31656131071,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31656131071",
+  "analyzed_at": "2026-08-13T01:55:45Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19313,
+    "title": "Fix Azure Functions task launch in VS Code",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-19284-azure-functions-task",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19313"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-NewUpAndBuildStandaloneTemplateTests / Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest)",
+      "id": 94313402348,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31656131071/job/94313402348",
+      "classification": "transient-infra",
+      "reason": "All 51 tests passed (0 failed). The job only failed during artifact upload post-processing with 'Failed to FinalizeArtifact: Received non-retryable error: Failed request: (403) Forbidden: Error from intermediary'. This is a GitHub Actions artifact storage infrastructure issue unrelated to the PR, which only touches VS Code extension Azure Functions debugger code.",
+      "failed_steps": ["Upload logs, and test results"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, command-palette)",
+      "id": 94313496218,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31656131071/job/94313496218",
+      "classification": "flaky-test",
+      "reason": "The failing E2E test 'Aspire command palette E2E observes multiple AppHost candidates without selecting the wrong one' tests command-palette AppHost discovery logic, an area not touched by this PR (PR only modifies azureFunctions.ts debugger logic and its own azureFunctions tests). Logs show 'Failed to find AppHost configuration files: Canceled', indicating a timing/cancellation race in AppHost discovery rather than a code defect introduced by this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire command palette E2E observes multiple AppHost candidates without selecting the wrong one",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, command-palette)",
+      "error": "The expression evaluated to a falsy value: assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 2)",
+      "stack_trace": "E2eProcessError: ...vscode-extension-tester/out/cli.js run-tests out/test-e2e/test-e2e/commandPalette.e2e.test.js ... exited with code 1\n    at ChildProcess.<anonymous> (D:\\a\\aspire\\aspire\\extension\\scripts\\e2e-process-runner.cjs:92:16)\n    at ChildProcess.emit (node:events:519:28)\n    at maybeClose (node:internal/child_process:1101:16)",
+      "classification": "flaky",
+      "reason": "The test failure occurs in command-palette AppHost candidate discovery logic, which is unrelated to the PR's changes (Azure Functions debugger launch). Logs show 'Failed to find AppHost configuration files: Canceled' warnings suggesting a timing/cancellation race condition during discovery, not a functional regression from this PR."
+    }
+  ],
+  "causes": ["artifact-upload-403-forbidden-intermediary", "vscode-extension-command-palette-e2e-flaky"]
+}

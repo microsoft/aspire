@@ -1,0 +1,17 @@
+{
+  "id": "vscode-extension-command-palette-e2e-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension command palette E2E test 'observes multiple AppHost candidates without selecting the wrong one' fails intermittently on Windows",
+  "test_name": "extension/src/test-e2e/commandPalette.e2e.test.js - Aspire command palette E2E observes multiple AppHost candidates without selecting the wrong one",
+  "error_pattern": "assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 2) evaluated to falsy; Failed to find AppHost configuration files: Canceled; E2eProcessError: ... commandPalette.e2e.test.js exited with code 1",
+  "occurrences": [
+    {
+      "run_id": 31656131071,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31656131071",
+      "job": "Tests / Templates-NewUpAndBuildStandaloneTemplateTests / Templates-NewUpAndBuildStandaloneTemplateTests (windows-latest)",
+      "pr_number": 19313,
+      "observed_at": "2026-08-13T01:55:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19328"
+}
