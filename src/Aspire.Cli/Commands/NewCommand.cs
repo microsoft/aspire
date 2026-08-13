@@ -406,9 +406,13 @@ internal sealed class NewCommand : BaseCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
+                // Apply the source override after selection so it cannot change implicit/explicit channel selection.
+                // Keep the original channel authoritative for persistence because mappings make the adjusted copy explicit.
+                var templateDiscoveryChannel = selectedChannel.WithFallbackSourceOverride(parseResult.GetValue(s_sourceOption));
+
                 try
                 {
-                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                    var packages = (await templateDiscoveryChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
                         .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
