@@ -36,20 +36,20 @@ jobs:
             const commenter = context.payload.comment.user.login;
             
             try {
-              // Check if user is a member of the dotnet org
+              // Check if user is a member of the microsoft org
               const { status } = await github.rest.orgs.checkMembershipForUser({
-                org: 'dotnet',
+                org: 'microsoft',
                 username: commenter
               });
               
               if (status === 204 || status === 302) {
-                core.info(`✅ ${commenter} is a member of dotnet org`);
+                core.info(`✅ ${commenter} is a member of microsoft org`);
                 core.setOutput('is_member', 'true');
                 return;
               }
             } catch (error) {
               if (error.status === 404) {
-                core.warning(`❌ ${commenter} is not a member of dotnet org`);
+                core.warning(`❌ ${commenter} is not a member of microsoft org`);
                 core.setOutput('is_member', 'false');
                 
                 // Post a comment explaining the restriction
@@ -57,7 +57,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: `@${commenter} The \`/deployment-test\` command is restricted to dotnet org members for security reasons (it deploys to real Azure infrastructure).`
+                  body: `@${commenter} The \`/deployment-test\` command is restricted to microsoft org members for security reasons (it deploys to real Azure infrastructure).`
                 });
                 return;
               }
