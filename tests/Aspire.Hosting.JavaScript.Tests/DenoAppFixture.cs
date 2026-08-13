@@ -49,12 +49,14 @@ public abstract class DenoAppFixtureBase(
             options =>
             {
                 options.DisableDashboard = !enableDashboard;
-                options.TrustDeveloperCertificate = enableDashboard;
+                options.TrustDeveloperCertificate = false;
             },
             new TestOutputWrapper(diagnosticMessageSink));
         if (enableDashboard)
         {
-            _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "https://localhost:0";
+            // Keep native telemetry validation independent of development-certificate trust.
+            // Certificate environment mapping is covered separately by AddDenoAppTests.
+            _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:0";
             _builder.Configuration["AppHost:DashboardApiKey"] = DenoTelemetryFixture.DashboardApiKey;
         }
 
