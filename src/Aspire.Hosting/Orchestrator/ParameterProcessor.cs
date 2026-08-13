@@ -544,6 +544,12 @@ public sealed class ParameterProcessor(
                     },
                     cancellationToken).ConfigureAwait(false);
 
+                if (result.Canceled)
+                {
+                    logger.LogDebug("Unresolved parameters notification was dismissed. The notification will not be shown again.");
+                    break;
+                }
+
                 proceedToInputs = result.Data;
             }
 

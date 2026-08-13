@@ -271,7 +271,7 @@ public class ParameterProcessorTests
     }
 
     [Fact]
-    public async Task HandleUnresolvedParametersAsync_WhenUserCancelsInteraction_ParametersRemainUnresolved()
+    public async Task HandleUnresolvedParametersAsync_WhenUserDismissesNotification_DoesNotShowNotificationAgain()
     {
         // Arrange
         var testInteractionService = new TestInteractionService();
@@ -281,22 +281,21 @@ public class ParameterProcessorTests
         parameterWithMissingValue.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Act - Start handling unresolved parameters
-        _ = parameterProcessor.HandleUnresolvedParametersAsync([parameterWithMissingValue], CancellationToken.None);
+        var handleTask = parameterProcessor.HandleUnresolvedParametersAsync([parameterWithMissingValue], CancellationToken.None);
 
         // Wait for the message bar interaction
         var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, messageBarInteraction.Title);
 
-        // Complete the message bar interaction with false (user chose not to enter values)
+        // Dismiss the message bar interaction
         messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
 
-        // Assert that the message bar will show up again if there are still unresolved parameters
-        var nextMessageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(InteractionStrings.ParametersBarTitle, nextMessageBarInteraction.Title);
+        await handleTask.DefaultTimeout();
 
-        // Assert - Parameter should remain unresolved since user cancelled
+        // Assert - Parameter should remain unresolved without another notification
         Assert.NotNull(parameterWithMissingValue.WaitForValueTcs);
         Assert.False(parameterWithMissingValue.WaitForValueTcs.Task.IsCompleted);
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
     }
 
     [Fact]
