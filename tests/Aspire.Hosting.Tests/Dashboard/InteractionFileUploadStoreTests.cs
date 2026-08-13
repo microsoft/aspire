@@ -16,10 +16,10 @@ public class InteractionFileUploadStoreTests
     private const string InputName = "File";
 
     [Fact]
-    public void CreateEntry_ValidFileName_ReturnsIdAndPath()
+    public async Task CreateEntry_ValidFileName_ReturnsIdAndPath()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
 
@@ -30,10 +30,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void GetFilePath_ExistingEntry_ReturnsPath()
+    public async Task GetFilePath_ExistingEntry_ReturnsPath()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "test.txt");
 
@@ -41,19 +41,19 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void GetFilePath_NonexistentEntry_ReturnsNull()
+    public async Task GetFilePath_NonexistentEntry_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         Assert.Null(fileUploadStore.GetFilePath("nonexistent", InteractionId, InputName));
     }
 
     [Fact]
-    public void GetFileName_ExistingEntry_ReturnsFileName()
+    public async Task GetFileName_ExistingEntry_ReturnsFileName()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
 
@@ -61,10 +61,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveEntry_ExistingEntry_DeletesFile()
+    public async Task RemoveEntry_ExistingEntry_DeletesFile()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         Assert.True(File.Exists(filePath));
@@ -76,10 +76,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveEntry_LastFile_RemovesCompletedInteraction()
+    public async Task RemoveEntry_LastFile_RemovesCompletedInteraction()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
@@ -96,10 +96,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveUnreferencedFiles_UploadInProgress_KeepsFile()
+    public async Task RemoveUnreferencedFiles_UploadInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteInteraction(InteractionId, []);
@@ -111,10 +111,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveUnreferencedFiles_UploadCompleteInteractionInProgress_KeepsFile()
+    public async Task RemoveUnreferencedFiles_UploadCompleteInteractionInProgress_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -126,10 +126,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void CancelInteraction_UploadComplete_RemovesFileImmediately()
+    public async Task CancelInteraction_UploadComplete_RemovesFileImmediately()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -141,10 +141,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void CancelInteraction_UploadInProgress_RemovesFileAfterUploadCompletes()
+    public async Task CancelInteraction_UploadInProgress_RemovesFileAfterUploadCompletes()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
 
@@ -160,10 +160,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveUnreferencedFiles_CompleteInteractionWithLiveReference_KeepsFile()
+    public async Task RemoveUnreferencedFiles_CompleteInteractionWithLiveReference_KeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -178,10 +178,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void RemoveUnreferencedFiles_CompleteInteractionWithoutLiveReference_RemovesFile()
+    public async Task RemoveUnreferencedFiles_CompleteInteractionWithoutLiveReference_RemovesFile()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
@@ -201,10 +201,10 @@ public class InteractionFileUploadStoreTests
     [InlineData("/etc/cron.d/evil", "evil")]
     [InlineData("..\\..\\windows\\system32\\evil.exe", "evil.exe")]
     [InlineData("C:\\windows\\system32\\config.sys", "config.sys")]
-    public void CreateEntry_PathTraversalFileName_SanitizesToLeafName(string maliciousFileName, string expectedLeafName)
+    public async Task CreateEntry_PathTraversalFileName_SanitizesToLeafName(string maliciousFileName, string expectedLeafName)
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, maliciousFileName);
 
@@ -216,10 +216,10 @@ public class InteractionFileUploadStoreTests
     [InlineData("")]
     [InlineData("/")]
     [InlineData("\\")]
-    public void CreateEntry_EmptyOrRootOnlyFileName_GeneratesRandomName(string emptyFileName)
+    public async Task CreateEntry_EmptyOrRootOnlyFileName_GeneratesRandomName(string emptyFileName)
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, emptyFileName);
 
@@ -228,10 +228,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_ValidReference_ResolvesCorrectly()
+    public async Task ResolveFileReferences_ValidReference_ResolvesCorrectly()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "cert.pem", "CertInput");
         File.WriteAllText(filePath, "certificate-content");
@@ -247,10 +247,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_DifferentInputName_ReturnsNull()
+    public async Task ResolveFileReferences_DifferentInputName_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
@@ -261,10 +261,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_DifferentInteractionId_ReturnsNull()
+    public async Task ResolveFileReferences_DifferentInteractionId_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
@@ -275,10 +275,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_UnknownId_ReturnsNull()
+    public async Task ResolveFileReferences_UnknownId_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
         var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
@@ -287,10 +287,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_MalformedJson_ReturnsNull()
+    public async Task ResolveFileReferences_MalformedJson_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
         var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
@@ -299,10 +299,10 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_EmptyValue_ReturnsNull()
+    public async Task ResolveFileReferences_EmptyValue_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, "", InteractionId, "TestInput", NullLogger.Instance);
 
@@ -310,7 +310,7 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void Dispose_CleansUpAllFiles()
+    public async Task DisposeAsync_CleansUpAllFiles()
     {
         using var fileSystemService = new TestFileSystemService();
         var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
@@ -321,16 +321,17 @@ public class InteractionFileUploadStoreTests
         Assert.True(File.Exists(filePath1));
         Assert.True(File.Exists(filePath2));
 
-        fileUploadStore.Dispose();
+        await fileUploadStore.DisposeAsync();
+        await fileUploadStore.DisposeAsync();
 
         Assert.Null(fileUploadStore.GetFilePath("anything", InteractionId, InputName));
     }
 
     [Fact]
-    public void CreateEntry_UnknownInteraction_Throws()
+    public async Task CreateEntry_UnknownInteraction_Throws()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
 
         var exception = Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("temp.bin", InteractionId, InputName));
 

@@ -812,7 +812,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
@@ -841,7 +841,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -868,7 +868,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -898,7 +898,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -927,7 +927,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var context = TestServerCallContext.Create();
@@ -944,7 +944,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
@@ -973,10 +973,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ResolveFileReferences_UnknownId_ReturnsNull()
+    public async Task ResolveFileReferences_UnknownId_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
         var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
@@ -985,10 +985,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ResolveFileReferences_MalformedJson_ReturnsNull()
+    public async Task ResolveFileReferences_MalformedJson_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
+        await using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
         var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
