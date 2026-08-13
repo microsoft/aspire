@@ -1,0 +1,29 @@
+{
+  "run_id": 31674298700,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31674298700",
+  "analyzed_at": "2026-08-13T07:06:42Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19322,
+    "title": "Clean up uploaded interaction files",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "cleanup-interaction-file-uploads",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19322"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Garnet / Hosting.Garnet (windows-latest)",
+      "id": 94365806527,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31674298700/job/94365806527",
+      "classification": "transient-infra",
+      "reason": "All 33 tests passed (Test run summary: Passed! total: 33, failed: 0), but subsequent post-test steps (Check for hang dump files, Upload logs/results, Generate test results summary) failed with 'Process completed with exit code -1073741502' (0xC0000142 STATUS_DLL_INIT_FAILED), a known Windows runner process initialization failure unrelated to the PR's code changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-0xc0000142"]
+}
