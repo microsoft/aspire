@@ -42,7 +42,10 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public void StartInteraction(int interactionId)
     {
-        _interactions.TryAdd(interactionId, new FileInteraction());
+        if (_interactions.TryAdd(interactionId, new FileInteraction()))
+        {
+            _logger.LogDebug("Started tracking file uploads for interaction {InteractionId}.", interactionId);
+        }
     }
 
     /// <summary>
@@ -73,6 +76,12 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 
             _files[fileId] = new FileEntry(tempFile, interactionId, inputName);
             interaction.FileIds.Add(fileId);
+            _logger.LogDebug(
+                "Created uploaded file entry {FileId} for interaction {InteractionId}, input {InputName}, and file {FileName}.",
+                fileId,
+                interactionId,
+                inputName,
+                safeName);
             return (fileId, tempFile.Path);
         }
     }
@@ -93,6 +102,12 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
             entry.UploadComplete = true;
             removeEntry = entry.InteractionState == FileInteractionState.Canceled;
         }
+
+        _logger.LogDebug(
+            "Completed upload for file entry {FileId}, interaction {InteractionId}, and input {InputName}.",
+            fileId,
+            entry.InteractionId,
+            entry.InputName);
 
         if (removeEntry)
         {
@@ -126,6 +141,12 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     {
         if (_files.TryRemove(fileId, out var entry))
         {
+            _logger.LogDebug(
+                "Removing uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}.",
+                fileId,
+                entry.InteractionId,
+                entry.InputName);
+
             if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
             {
                 lock (interaction)
@@ -165,6 +186,12 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         }
         _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
 
+        _logger.LogDebug(
+            "Completed file upload tracking for interaction {InteractionId} with {FileCount} uploaded files and {ReferenceCount} file references.",
+            interactionId,
+            fileIds.Length,
+            files.Count);
+
         foreach (var fileId in fileIds)
         {
             if (!_files.TryGetValue(fileId, out var entry))
@@ -198,6 +225,11 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
             fileIds = [.. interaction.FileIds];
         }
         _interactions.TryRemove(KeyValuePair.Create(interactionId, interaction));
+
+        _logger.LogDebug(
+            "Canceled file upload tracking for interaction {InteractionId} with {FileCount} uploaded files.",
+            interactionId,
+            fileIds.Length);
 
         foreach (var fileId in fileIds)
         {
@@ -312,6 +344,11 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         _cleanupCts.Cancel();
         _cleanupTask.GetAwaiter().GetResult();
         _cleanupCts.Dispose();
+
+        _logger.LogDebug(
+            "Disposing file upload store with {FileCount} uploaded files and {InteractionCount} active interactions.",
+            _files.Count,
+            _interactions.Count);
 
         foreach (var entry in _files.Values)
         {
