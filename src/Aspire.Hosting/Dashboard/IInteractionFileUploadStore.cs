@@ -6,7 +6,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Stores uploaded files and maps file IDs to their paths or content.
 /// </summary>
-internal interface IFileUploadStore
+internal interface IInteractionFileUploadStore
 {
     /// <summary>
     /// Registers an interaction that can own uploaded files.

@@ -22,7 +22,7 @@ internal class AppHostRpcTarget(
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options,
     AppHostStartupState startupState,
-    IFileUploadStore fileUploadStore,
+    IInteractionFileUploadStore fileUploadStore,
     IConfiguration configuration)
 {
     private readonly CancellationTokenSource _shutdownCts = new();

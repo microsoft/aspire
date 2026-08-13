@@ -450,7 +450,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -521,7 +521,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -569,7 +569,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -629,7 +629,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -667,7 +667,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -812,7 +812,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
@@ -841,7 +841,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -868,7 +868,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -898,7 +898,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -927,7 +927,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var context = TestServerCallContext.Create();
@@ -944,7 +944,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         fileUploadStore.StartInteraction(1);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
@@ -959,7 +959,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         // Resolve the file reference using the same store
         var json = $"[{{\"Id\":\"{uploadResponse.FileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "CertInput", NullLogger.Instance);
+        var resolvedFiles = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "CertInput", NullLogger.Instance);
 
         Assert.NotNull(resolvedFiles);
         var file = Assert.Single(resolvedFiles);
@@ -976,10 +976,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public void ResolveFileReferences_UnknownId_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
+        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -988,10 +988,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public void ResolveFileReferences_MalformedJson_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
+        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, 1, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -1001,7 +1001,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IHostEnvironment? hostEnvironment = null,
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
-        IFileUploadStore? fileUploadStore = null)
+        IInteractionFileUploadStore? fileUploadStore = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
@@ -1009,7 +1009,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            fileUploadStore ?? new TestFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore());
     }
 
     private static DashboardServiceData CreateDashboardServiceData(
@@ -1021,7 +1021,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         resourceLoggerService ??= new ResourceLoggerService();
         loggerFactory ??= NullLoggerFactory.Instance;
         resourceNotificationService ??= CreateResourceNotificationService(resourceLoggerService);
-        var fileUploadStore = new TestFileUploadStore();
+        var fileUploadStore = new TestInteractionFileUploadStore();
         interactionService ??= new InteractionService(
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),

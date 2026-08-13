@@ -198,14 +198,14 @@ public class DashboardServiceDataTerminalTests
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build(),
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         var data = new DashboardServiceData(
             notifications,
             loggerService,
             NullLogger<DashboardServiceData>.Instance,
             new ResourceCommandService(notifications, loggerService, new ServiceCollection().BuildServiceProvider()),
             interactions,
-            new TestFileUploadStore());
+            new TestInteractionFileUploadStore());
         return (data, notifications, resource);
     }
 

@@ -27,9 +27,9 @@ internal class InteractionService : IInteractionService
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
-    private readonly IFileUploadStore _fileUploadStore;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IFileUploadStore fileUploadStore)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
