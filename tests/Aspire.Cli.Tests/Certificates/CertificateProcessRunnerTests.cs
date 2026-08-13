@@ -48,14 +48,15 @@ public class CertificateProcessRunnerTests
         ProcessStartInfo startInfo;
         if (OperatingSystem.IsWindows())
         {
-            startInfo = new ProcessStartInfo("cmd.exe");
-            startInfo.ArgumentList.Add("/d");
-            startInfo.ArgumentList.Add("/s");
-            startInfo.ArgumentList.Add("/c");
+            startInfo = new ProcessStartInfo("powershell.exe");
+            startInfo.ArgumentList.Add("-NoLogo");
+            startInfo.ArgumentList.Add("-NoProfile");
+            startInfo.ArgumentList.Add("-NonInteractive");
+            startInfo.ArgumentList.Add("-Command");
             startInfo.ArgumentList.Add(
-                $"for /L %i in (1,1,{LineCount}) do @echo {StandardOutputLine} & " +
-                $"for /L %i in (1,1,{LineCount}) do @echo {StandardErrorLine} 1>&2 & " +
-                $"exit /b {ExitCode}");
+                $"1..{LineCount} | ForEach-Object {{ [Console]::Out.WriteLine('{StandardOutputLine}') }}; " +
+                $"1..{LineCount} | ForEach-Object {{ [Console]::Error.WriteLine('{StandardErrorLine}') }}; " +
+                $"exit {ExitCode}");
         }
         else
         {
