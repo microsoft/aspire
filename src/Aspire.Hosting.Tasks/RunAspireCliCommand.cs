@@ -17,6 +17,9 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     private const string ArgumentValueMetadataName = "Value";
     private const string CommandShimPathEnvironmentVariable = "__ASPIRE_MSBUILD_COMMAND_PATH";
     private const string CommandShimArgumentEnvironmentVariablePrefix = "__ASPIRE_MSBUILD_COMMAND_ARGUMENT_";
+#if NETFRAMEWORK
+    private const int ProcessTreeTerminationTimeoutMilliseconds = 5_000;
+#endif
 
     /// <summary>
     /// Gets or sets the executable or command shim to run.
@@ -156,13 +159,12 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 
     private bool TerminateProcess(Process process)
     {
+#if NETFRAMEWORK
+        return TerminateProcessTree(process);
+#else
         try
         {
-#if NETFRAMEWORK
-            process.Kill();
-#else
             process.Kill(entireProcessTree: true);
-#endif
             return true;
         }
         catch (InvalidOperationException)
@@ -175,7 +177,91 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             FailureMessage = $"The timed-out command '{FileName}' could not be terminated: {ex.Message}";
             return false;
         }
+#endif
     }
+
+#if NETFRAMEWORK
+    private bool TerminateProcessTree(Process process)
+    {
+        int processId;
+        try
+        {
+            processId = process.Id;
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the timeout and termination attempt.
+            return true;
+        }
+
+        var taskKillPath = Path.Combine(Environment.SystemDirectory, "taskkill.exe");
+        using var taskKill = new Process
+        {
+            StartInfo = new ProcessStartInfo(
+                taskKillPath,
+                $"/PID {processId.ToString(CultureInfo.InvariantCulture)} /T /F")
+            {
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+
+        try
+        {
+            if (!taskKill.Start())
+            {
+                FailureMessage = $"The process-tree terminator '{taskKillPath}' could not be started.";
+                return false;
+            }
+
+            // taskkill is part of Windows and /T terminates the specified process and its descendants.
+            // Resolve it from the system directory so a restricted or test-modified PATH cannot redirect it.
+            // See https://learn.microsoft.com/windows-server/administration/windows-commands/taskkill.
+            var standardOutputTask = taskKill.StandardOutput.ReadToEndAsync();
+            var standardErrorTask = taskKill.StandardError.ReadToEndAsync();
+
+            if (!taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+            {
+                try
+                {
+                    taskKill.Kill();
+                }
+                catch (InvalidOperationException)
+                {
+                    // The helper exited between the timeout and termination attempt.
+                }
+
+                if (taskKill.HasExited || taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+                {
+                    _ = standardOutputTask.GetAwaiter().GetResult();
+                    _ = standardErrorTask.GetAwaiter().GetResult();
+                }
+
+                FailureMessage = $"The process-tree terminator '{taskKillPath}' did not exit within {ProcessTreeTerminationTimeoutMilliseconds} milliseconds.";
+                return false;
+            }
+
+            var standardOutput = standardOutputTask.GetAwaiter().GetResult();
+            var standardError = standardErrorTask.GetAwaiter().GetResult();
+            if (taskKill.ExitCode != 0)
+            {
+                var details = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+                FailureMessage = $"The process-tree terminator '{taskKillPath}' exited with code {taskKill.ExitCode}." +
+                    (string.IsNullOrWhiteSpace(details) ? string.Empty : $" {details.Trim()}");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            FailureMessage = $"The process-tree terminator '{taskKillPath}' failed: {ex.Message}";
+            return false;
+        }
+    }
+#endif
 
     private void LogProcessOutput(string output)
     {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Security;
 using System.Text.Json;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Sdk.Tests;
 public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 {
     private const string AspireCliVersion = "13.5.0";
+    private const string HangingCommandPidEnvironmentVariable = "ASPIRE_TEST_HANG_PID_PATH";
     private const string SuppressCliRunHookEnvironmentVariable = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
 
     private static readonly string[] s_supportedRids =
@@ -772,6 +774,77 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "This test validates the net472 task under full-framework MSBuild.");
+
+        var msbuildPath = await FindFullFrameworkMSBuildAsync();
+        Assert.SkipUnless(msbuildPath is not null, "Full-framework MSBuild could not be found with vswhere.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCommandDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-command"));
+        CopyFakeCommandHost(fakeCommandDirectory.FullName);
+        var commandShimPath = Path.Combine(fakeCommandDirectory.FullName, "aspire.cmd");
+        await File.WriteAllTextAsync(commandShimPath, """
+            @echo off
+            "%~dp0dotnet.exe" --hang
+            """);
+
+        var childPidPath = Path.Combine(workspace.Path, "child.pid");
+        var taskAssemblyPath = GetAssemblyMetadataPath("AspireHostingTasksNetFrameworkAssemblyPath");
+        var projectPath = Path.Combine(workspace.Path, "RunAspireCliCommand.proj");
+        await File.WriteAllTextAsync(projectPath, $$"""
+            <Project>
+              <UsingTask TaskName="RunAspireCliCommand" AssemblyFile="{{SecurityElement.Escape(taskAssemblyPath)}}" />
+
+              <Target Name="Test">
+                <RunAspireCliCommand FileName="{{SecurityElement.Escape(commandShimPath)}}" TimeoutMilliseconds="5000">
+                  <Output TaskParameter="TimedOut" PropertyName="CommandTimedOut" />
+                  <Output TaskParameter="FailureMessage" PropertyName="CommandFailureMessage" />
+                </RunAspireCliCommand>
+                <Error Condition="'$(CommandTimedOut)' != 'true'" Text="The command did not report a timeout." />
+                <Error Condition="'$(CommandFailureMessage)' == ''" Text="The command did not report a timeout failure." />
+                <Message Text="CommandTimedOut=$(CommandTimedOut)" Importance="High" />
+              </Target>
+            </Project>
+            """);
+
+        int? childProcessId = null;
+        try
+        {
+            var result = await RunProcessWithArgumentsAsync(
+                msbuildPath!,
+                workspace.Path,
+                [projectPath, "-nologo", "-t:Test"],
+                new Dictionary<string, string>
+                {
+                    [HangingCommandPidEnvironmentVariable] = childPidPath
+                },
+                TimeSpan.FromSeconds(30));
+
+            Assert.True(result.ExitCode == 0, result.Output);
+            Assert.Contains("CommandTimedOut=true", result.Output, StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(childPidPath), $"The child process did not record its PID. MSBuild output:{Environment.NewLine}{result.Output}");
+
+            childProcessId = int.Parse(await File.ReadAllTextAsync(childPidPath), CultureInfo.InvariantCulture);
+            using var survivingChild = TryGetProcessById(childProcessId.Value);
+            Assert.Null(survivingChild);
+            childProcessId = null;
+        }
+        finally
+        {
+            if (childProcessId is { } processId)
+            {
+                using var childProcess = TryGetProcessById(processId);
+                if (childProcess is not null && !childProcess.HasExited)
+                {
+                    childProcess.Kill(entireProcessTree: true);
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task BuildUsesEnvironmentAspireHomeWhenMsBuildPropertyDiffers()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1483,6 +1556,34 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return taskAssemblyPath!;
     }
 
+    private static async Task<string?> FindFullFrameworkMSBuildAsync()
+    {
+        var vswherePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            "Microsoft Visual Studio",
+            "Installer",
+            "vswhere.exe");
+        if (!File.Exists(vswherePath))
+        {
+            return null;
+        }
+
+        var result = await RunProcessWithArgumentsAsync(
+            vswherePath,
+            Path.GetDirectoryName(vswherePath)!,
+            ["-latest", "-products", "*", "-requires", "Microsoft.Component.MSBuild", "-find", @"MSBuild\**\Bin\MSBuild.exe"],
+            environment: null,
+            TimeSpan.FromSeconds(30));
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        return result.StandardOutput
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(File.Exists);
+    }
+
     private static string GetAssemblyMetadataPath(string metadataName)
     {
         var path = typeof(AppHostSdkTargetsTests).Assembly
@@ -1651,7 +1752,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var cts = new CancellationTokenSource(timeout);
 
         try
         {
@@ -1669,9 +1770,17 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return (process.ExitCode, output + error);
     }
 
-    private static async Task<DotNetResult> RunDotNetWithArgumentsAsync(string workingDirectory, string[] arguments, IDictionary<string, string>? environment = null)
+    private static Task<DotNetResult> RunDotNetWithArgumentsAsync(string workingDirectory, string[] arguments, IDictionary<string, string>? environment = null)
+        => RunProcessWithArgumentsAsync("dotnet", workingDirectory, arguments, environment, TimeSpan.FromMinutes(3));
+
+    private static async Task<DotNetResult> RunProcessWithArgumentsAsync(
+        string fileName,
+        string workingDirectory,
+        string[] arguments,
+        IDictionary<string, string>? environment,
+        TimeSpan timeout)
     {
-        var startInfo = new ProcessStartInfo("dotnet")
+        var startInfo = new ProcessStartInfo(fileName)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -1711,10 +1820,22 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         catch (OperationCanceledException)
         {
             process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"dotnet {string.Join(' ', arguments)} timed out after 3 minutes.");
+            throw new TimeoutException($"{fileName} {string.Join(' ', arguments)} timed out after {timeout}.");
         }
 
         return new DotNetResult(process.ExitCode, await outputTask, await errorTask);
+    }
+
+    private static Process? TryGetProcessById(int processId)
+    {
+        try
+        {
+            return Process.GetProcessById(processId);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static string GetRepoRoot()
