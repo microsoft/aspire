@@ -548,7 +548,9 @@ public sealed class ParameterProcessor(
                 {
                     logger.LogDebug("Unresolved parameters notification was dismissed. The notification will not be shown again.");
 
-                    // Keep waitForResolution callers blocked until resource commands resolve the remaining parameters.
+                    // OnParameterResolved cancels this token after the last parameter is resolved. Convert that
+                    // cancellation into successful task completion so waitForResolution callers remain blocked
+                    // without surfacing an OperationCanceledException.
                     var allParametersResolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     using var registration = allParametersResolvedToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), allParametersResolved);
                     await allParametersResolved.Task.ConfigureAwait(false);
