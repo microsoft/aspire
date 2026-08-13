@@ -705,6 +705,82 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RetainsPreviousSecretValue_AcrossSeparateConnections()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        // Regression test for the AppHost-scope gap the reviewer identified: every backchannel connection gets its
+        // own AuxiliaryBackchannelRpcTarget (AuxiliaryBackchannelService.HandleClientConnectionAsync). If the
+        // redaction history lived on the target, a client that connected AFTER a secret's value was replaced would
+        // start with an empty set and leak the previous value carried by a lagging snapshot. The history is
+        // AppHost-scoped (the SecretRedactionHistory singleton) and shared by every target, so a value one
+        // connection observed stays redacted for a later, independently constructed connection.
+        var secret = new ParameterResource("secret", _ => "value-a", secret: true);
+        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs.SetResult("value-a");
+
+        var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
+            .WithEnvironment(context => context.EnvironmentVariables["SECRET"] = secret);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await PrimeEnvironmentCallbackCacheAsync(owner.Resource, app.Services).DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-a", true)
+            ]
+        }).DefaultTimeout();
+
+        // First connection observes value-a and records it in the shared, AppHost-scoped history.
+        var firstConnection = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var firstResult = await firstConnection.GetResourceSnapshotsAsync().DefaultTimeout();
+        var firstSnapshot = Assert.Single(firstResult, r => r.Name == "owner");
+        Assert.Null(Assert.Single(firstSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        // The runtime replaces the parameter's resolved value with value-b (as SetParameterValue does by swapping
+        // the completed WaitForValueTcs), but a lagging snapshot still carries value-a.
+        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs.SetResult("value-b");
+
+        await notificationService.PublishUpdateAsync(owner.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("SECRET", "value-a", true)
+            ]
+        }).DefaultTimeout();
+
+        // A second, independently constructed connection that never observed value-a itself must still redact it,
+        // because the redaction history is shared across connections for the life of the AppHost.
+        var secondConnection = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var secondResult = await secondConnection.GetResourceSnapshotsAsync().DefaultTimeout();
+        var secondSnapshot = Assert.Single(secondResult, r => r.Name == "owner");
+
+        // value-a must still be redacted. With per-connection history the fresh connection would start empty and
+        // resolve only value-b, so the stale value-a would be emitted in plaintext.
+        Assert.Null(Assert.Single(secondSnapshot.EnvironmentVariables, e => e.Name == "SECRET").Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_DoesNotInvokeUncachedResourceCallback_AndLeavesItEvaluable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

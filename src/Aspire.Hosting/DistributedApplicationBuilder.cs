@@ -425,6 +425,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
+        // Shared by every per-connection AuxiliaryBackchannelRpcTarget so the describe/watch secret redaction set
+        // outlives an individual connection (https://github.com/microsoft/aspire/issues/19241).
+        _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
 

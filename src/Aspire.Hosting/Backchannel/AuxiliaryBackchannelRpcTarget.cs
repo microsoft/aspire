@@ -33,25 +33,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
 
-    // Add-only accumulators of the secrets discovered over this connection's lifetime, both guarded by
-    // _secretParametersLock. A backchannel connection lives for the duration of a single describe/watch (see
-    // AuxiliaryBackchannelService.HandleClientConnectionAsync), so these span exactly that read session.
-    //
-    // _accumulatedSecretParameters only ever grows: when DCP restarts a resource it forgets and re-evaluates the
-    // resource's callbacks (DcpExecutor.ForgetCachedCallbackResults), which can swap which secret a resource
-    // references. A still-in-flight snapshot from the prior incarnation can carry the old secret, so we keep
-    // trying to resolve every secret parameter we have ever observed rather than only the current pass's set.
-    //
-    // _accumulatedSecretValues also only ever grows, and is required in addition to the parameter set because a
-    // parameter's resolved value can be replaced in place: the runtime "Set parameter" path swaps a completed
-    // ParameterResource.WaitForValueTcs for a new one (ParameterProcessor.SetParameterValue), so re-resolving a
-    // retained parameter later yields only the new value. An already-published or still-current snapshot can
-    // still carry the previous value, so we must keep redacting every secret string we have ever resolved or
-    // that old value would be emitted in plaintext (https://github.com/microsoft/aspire/issues/19241).
-    private readonly HashSet<ParameterResource> _accumulatedSecretParameters = new(ReferenceEqualityComparer.Instance);
-    private readonly HashSet<string> _accumulatedSecretValues = new(StringComparer.Ordinal);
-    private readonly object _secretParametersLock = new();
-
     #region V2 API Methods
 
     /// <summary>
@@ -1241,14 +1222,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <summary>
     /// Collects the resolved values of secret parameters reachable from the application model so they can be
     /// redacted from data sent to clients. Only values that have already been resolved are included; this never
-    /// blocks waiting for interactive parameter resolution. Resolved values are accumulated add-only for the
-    /// connection lifetime, so a value a parameter has since been reassigned away from stays redacted while an
-    /// older snapshot can still carry it.
+    /// blocks waiting for interactive parameter resolution. Resolved values are accumulated add-only in the
+    /// AppHost-scoped <see cref="SecretRedactionHistory"/>, so a value a parameter has since been reassigned away
+    /// from stays redacted while an older snapshot can still carry it.
     /// </summary>
     private async Task<HashSet<string>> GetResolvedSecretParameterValuesAsync(CancellationToken cancellationToken)
     {
         // Resolve the current value of each accumulated secret parameter (peek-only; never blocks on interactive
-        // resolution), then merge into the connection's add-only value set below.
+        // resolution), then merge into the AppHost-scoped add-only value history below.
         var resolvedThisPass = new List<string>();
 
         foreach (var parameter in await GetSecretParametersAsync(cancellationToken).ConfigureAwait(false))
@@ -1282,11 +1263,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // value can be replaced in place (the runtime "Set parameter" path swaps its completed WaitForValueTcs),
         // so re-resolving a retained parameter later yields only the new value; keeping every value we have ever
         // resolved ensures a still-current snapshot carrying the previous value is still redacted.
-        lock (_secretParametersLock)
-        {
-            _accumulatedSecretValues.UnionWith(resolvedThisPass);
-            return [.. _accumulatedSecretValues];
-        }
+        return serviceProvider.GetRequiredService<SecretRedactionHistory>().AddValuesAndSnapshot(resolvedThisPass);
     }
 
     /// <summary>
@@ -1310,20 +1287,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// cached its values, so peeking still observes every secret that a snapshot could expose.
     /// </para>
     /// <para>
-    /// The discovered set is merged into a per-connection, add-only accumulator: it only ever grows for the life
-    /// of this describe/watch. A restart can change which secret a resource references, and a still-in-flight
-    /// snapshot from the prior incarnation can carry the previous value, so the redaction set must never shrink or
-    /// that value would be emitted in plaintext.
+    /// The discovered set is merged into the AppHost-scoped, add-only <see cref="SecretRedactionHistory"/>: it only
+    /// ever grows for the life of the AppHost and is shared across connections. A restart can change which secret a
+    /// resource references, and a still-in-flight snapshot from the prior incarnation can carry the previous value,
+    /// so the redaction set must never shrink or that value would be emitted in plaintext.
     /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
     {
+        var history = serviceProvider.GetRequiredService<SecretRedactionHistory>();
+
         if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
         {
-            lock (_secretParametersLock)
-            {
-                return [.. _accumulatedSecretParameters];
-            }
+            // No model resolved yet; return the secrets accumulated so far without adding any.
+            return history.AddParametersAndSnapshot([]);
         }
 
         var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
@@ -1376,13 +1353,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        // Merge this pass's discoveries into the add-only accumulator and return everything seen so far, so a
-        // secret referenced by an earlier incarnation stays redacted even after a restart re-points the resource.
-        lock (_secretParametersLock)
-        {
-            _accumulatedSecretParameters.UnionWith(secretParameters);
-            return [.. _accumulatedSecretParameters];
-        }
+        // Merge this pass's discoveries into the add-only history and return everything seen so far, so a secret
+        // referenced by an earlier incarnation stays redacted even after a restart re-points the resource.
+        return history.AddParametersAndSnapshot(secretParameters);
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
