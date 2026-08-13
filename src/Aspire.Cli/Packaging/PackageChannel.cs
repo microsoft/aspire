@@ -560,6 +560,27 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return CreateScopedChannelForPackages([packageId]);
     }
 
+    /// <summary>
+    /// Returns a channel with its fallback package source replaced by the specified override.
+    /// </summary>
+    public PackageChannel WithFallbackSourceOverride(string? sourceOverride)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return this;
+        }
+
+        var mappings = (Mappings ?? [])
+            .Where(static mapping => !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal))
+            .Append(new PackageMapping(PackageMapping.AllPackages, sourceOverride))
+            .ToArray();
+
+        // PackageChannel is immutable, so copy the selected channel and replace only its fallback mapping.
+        // Apply this only after channel selection: making an implicit channel explicit earlier changes
+        // channel selection and template-hive behavior.
+        return new PackageChannel(Name, Quality, mappings, nuGetPackageCache, _features, logger, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, _currentCliVersion, validateTemplatePackageMetadataPrefetching);
+    }
+
     public PackageChannel CreateScopedChannelForPackages(IEnumerable<string> packageIds)
     {
         ArgumentNullException.ThrowIfNull(packageIds);
