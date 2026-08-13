@@ -176,27 +176,6 @@ public class InteractionFileUploadStoreTests
         Assert.False(File.Exists(filePath));
     }
 
-    [Fact]
-    public void RemoveUnreferencedFiles_DeletionFails_RetriesOnNextCleanup()
-    {
-        using var fileSystemService = new TestFileSystemService(failFirstTempFileDispose: true);
-        using var fileUploadStore = new InteractionFileUploadStore(fileSystemService);
-
-        var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
-        fileUploadStore.CompleteUpload(fileId);
-        fileUploadStore.CompleteInteraction(InteractionId, []);
-
-        fileUploadStore.RemoveUnreferencedFiles();
-
-        Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
-        Assert.True(File.Exists(filePath));
-
-        fileUploadStore.RemoveUnreferencedFiles();
-
-        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
-        Assert.False(File.Exists(filePath));
-    }
-
     [Theory]
     [InlineData("../../../etc/passwd", "passwd")]
     [InlineData("/etc/cron.d/evil", "evil")]

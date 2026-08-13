@@ -140,34 +140,9 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// </summary>
     public void RemoveEntry(string fileId)
     {
-        if (!_files.TryGetValue(fileId, out var entry))
+        if (!_files.TryRemove(fileId, out var entry))
         {
             return;
-        }
-
-        lock (entry)
-        {
-            entry.RemovalRequested = true;
-
-            try
-            {
-                entry.TempFile.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Failed to remove uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}. Cleanup will be retried.",
-                    fileId,
-                    entry.InteractionId,
-                    entry.InputName);
-                return;
-            }
-
-            if (!_files.TryRemove(KeyValuePair.Create(fileId, entry)))
-            {
-                return;
-            }
         }
 
         if (_interactions.TryGetValue(entry.InteractionId, out var interaction))
@@ -177,6 +152,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 interaction.FileIds.Remove(fileId);
             }
         }
+
+        entry.TempFile.Dispose();
 
         _logger.LogDebug(
             "Removed uploaded file entry {FileId} for interaction {InteractionId} and input {InputName}.",
@@ -277,8 +254,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             bool removeEntry;
             lock (entry)
             {
-                removeEntry = entry.RemovalRequested ||
-                    entry.UploadComplete &&
+                removeEntry = entry.UploadComplete &&
                     (entry.InteractionState == FileInteractionState.Canceled ||
                      entry.InteractionState == FileInteractionState.Complete &&
                      (entry.References is null || entry.References.All(reference => !reference.TryGetTarget(out _))));
@@ -399,7 +375,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         public int InteractionId { get; } = interactionId;
         public string InputName { get; } = inputName;
         public bool UploadComplete { get; set; }
-        public bool RemovalRequested { get; set; }
         public FileInteractionState InteractionState { get; set; }
         public IReadOnlyList<WeakReference<InteractionFile>>? References { get; set; }
     }
