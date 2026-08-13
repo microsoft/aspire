@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget times out intermittently on Windows",
   "test_name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget",
-  "error_pattern": "Expected process exit to win over the still-blocked signaler but it took 00:00:07.2027384.\nat Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 192",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\nat Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 186",
   "occurrences": [
     {
       "run_id": 30055044537,
@@ -25,6 +25,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 19331,
       "observed_at": "2026-08-13T05:49:44Z"
+    },
+    {
+      "run_id": 31739682865,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31739682865",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 16842,
+      "observed_at": "2026-08-13T20:43:05Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18880"

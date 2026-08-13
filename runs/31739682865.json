@@ -1,0 +1,55 @@
+{
+  "run_id": 31739682865,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31739682865",
+  "analyzed_at": "2026-08-13T20:43:05Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 16842,
+    "title": "Add command to show dev tunnel URLs",
+    "author": "maddymontaquila",
+    "state": "closed",
+    "head_branch": "maddymontaquila/dev-tunnel-urls",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/16842"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 94580326201,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31739682865/job/94580326201",
+      "classification": "flaky-test",
+      "reason": "Single test failure (ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget) with a TimeoutException, unrelated to PR changes (which only touch Aspire.Hosting.DevTunnels). Matches a known recurring flaky test with 3 prior occurrences.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (windows-latest)",
+      "id": 94583124103,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31739682865/job/94583124103",
+      "classification": "transient-infra",
+      "reason": "Test host process failed to load dotnet-aot.dll/coreclr.dll (HRESULT 0x8007045A/0x8007054F) and crashed with exit code -1073741502 (0xC0000142), a known Windows runner process-initialization failure unrelated to the PR's DevTunnels changes. Matches a known recurring infra cause with 11 prior occurrences.",
+      "failed_steps": ["Run nuget dependent tests (Windows)", "Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 186\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Test is not related to any file changed by the PR (PR only touches Aspire.Hosting.DevTunnels). This test has timed out intermittently 3 prior times, tracked under cause processguest-blockingsignaler-timeout."
+    },
+    {
+      "name": "Aspire.Templates.Tests.BuildAndRunTemplateTests.BuildAndRunAspireTemplateWithExplicitSdkReference(includeAspireHostingAppHostPackageReference: True)",
+      "job": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (windows-latest)",
+      "error": "System.InvalidOperationException : App exited before startup could complete with exit code -2147450743. [apphost] Failed to load dotnet-aot.dll HRESULT: 0x8007045A; Failed to load coreclr.dll HRESULT: 0x8007054F; Failed to bind to CoreCLR; Failed to create CoreCLR, HRESULT: 0x80008088",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.StartAppHostAsync(...) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:319\nat Aspire.Templates.Tests.BuildAndRunTemplateTests.BuildAndRunAspireTemplateWithExplicitSdkReference(Boolean includeAspireHostingAppHostPackageReference) in /_/tests/Aspire.Templates.Tests/BuildAndRunTemplateTests.cs:126",
+      "classification": "flaky",
+      "reason": "Windows runner-level CoreCLR load failure (0xC0000142 family), unrelated to PR changes; matches known recurring infra cause windows-process-init-failure-0xc0000142."
+    }
+  ],
+  "causes": ["processguest-blockingsignaler-timeout", "windows-process-init-failure-0xc0000142"]
+}
