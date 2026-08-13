@@ -63,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDescription">
-        <source>Shows the public, inspect, and local URLs for the dev tunnel port.</source>
-        <target state="new">Shows the public, inspect, and local URLs for the dev tunnel port.</target>
+        <source>Shows available public, inspect, and local URLs for the dev tunnel port.</source>
+        <target state="new">Shows available public, inspect, and local URLs for the dev tunnel port.</target>
         <note />
       </trans-unit>
       <trans-unit id="ShowTunnelUrlsCommandDisplayName">

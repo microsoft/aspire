@@ -829,7 +829,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
         var hostPrefix = portUri.Host[..hostPrefixLength];
         var hostSuffix = portUri.Host[hostPrefixLength..];
-        return new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri.ToString();
+        return NormalizeUrl(new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri);
     }
 
     private static string GetUserAgent()

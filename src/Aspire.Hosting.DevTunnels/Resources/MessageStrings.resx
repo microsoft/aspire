@@ -154,7 +154,7 @@
     <value>Login with Microsoft</value>
   </data>
   <data name="ShowTunnelUrlsCommandDescription" xml:space="preserve">
-    <value>Shows the public, inspect, and local URLs for the dev tunnel port.</value>
+    <value>Shows available public, inspect, and local URLs for the dev tunnel port.</value>
   </data>
   <data name="ShowTunnelUrlsCommandDisplayName" xml:space="preserve">
     <value>Show tunnel URLs</value>

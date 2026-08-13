@@ -169,7 +169,7 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Shows the public, inspect, and local URLs for the dev tunnel port..
+        ///   Looks up a localized string similar to Shows available public, inspect, and local URLs for the dev tunnel port..
         /// </summary>
         internal static string ShowTunnelUrlsCommandDescription {
             get {
