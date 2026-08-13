@@ -38,38 +38,21 @@ await builder.addJavaScriptApp("frontend", "../frontend", "app.js");
 await builder.build().run();
 ```
 
-### Deno apps
+### Runtime and framework-specific apps
 
-Add a Deno application by specifying its application directory and entrypoint. Deno must be installed
-and available on `PATH` for local development.
+Use the most specific helper for the runtime or framework hosting the app:
 
-**C#**
+| Runtime or framework | C# / TypeScript APIs | Use |
+|---|---|---|
+| Node.js | `AddNodeApp` / `addNodeApp` | Run a JavaScript or TypeScript entry point with Node.js. |
+| Bun | `AddBunApp` / `addBunApp` | Run an entry point with Bun. |
+| Deno | `AddDenoApp` / `addDenoApp` | Run an entry point with Deno. |
+| Vite | `AddViteApp` / `addViteApp` | Run a Vite development server and publish the app as a container. |
+| Next.js | `AddNextJsApp` / `addNextJsApp` | Run and publish a Next.js application. |
 
-```csharp
-var builder = DistributedApplication.CreateBuilder(args);
-
-builder.AddDenoApp("api", "../api", "main.ts")
-       .WithHttpEndpoint(env: "PORT");
-
-builder.Build().Run();
-```
-
-**TypeScript**
-
-```typescript
-import { createBuilder } from "./.aspire/modules/aspire.mjs";
-
-const builder = await createBuilder();
-
-await builder.addDenoApp("api", "../api", "main.ts")
-    .withHttpEndpoint({ env: "PORT" });
-
-await builder.build().run();
-```
-
-`AddDenoApp` runs the entrypoint directly by default. Use `WithDenoTask` or `WithRunScript` for tasks
-defined in `deno.json`, `WithDenoServe` for `deno serve` handlers, and the other `WithDeno*` methods
-to configure permissions, resolution, watch, inspector, and runtime arguments.
+The runtime used for local development must be installed and available on `PATH`. Deno apps run their
+entry point directly by default; use `WithDenoTask`, `WithDenoServe`, and the other `WithDeno*` APIs
+to select another mode or configure permissions and runtime flags.
 
 ## Additional documentation
 
