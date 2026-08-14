@@ -73,6 +73,88 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryGetLinkedWorktreeRoot_CheckoutAliasWithRelativeMetadata_ReturnsCanonicalWorktreeRoot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(
+            Path.Combine(fixtureRoot, "physical", "checkouts", "feature")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "physical", "primary", ".git"),
+            useRelativePaths: true);
+        var aliasRoot = Path.Combine(fixtureRoot, "aliases", "feature");
+        Directory.CreateDirectory(Path.GetDirectoryName(aliasRoot)!);
+
+        try
+        {
+            try
+            {
+                ReparsePoint.CreateOrReplace(aliasRoot, worktreeRoot);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Assert.Skip($"Cannot create a directory symlink or junction in this environment: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Assert.Skip($"Directory symlink or junction creation failed in this environment: {ex.Message}");
+            }
+
+            var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(aliasRoot);
+
+            Assert.NotNull(linkedRoot);
+            Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+        }
+        finally
+        {
+            ReparsePoint.RemoveIfExists(aliasRoot);
+        }
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_AdminAliasWithRelativeBackPointer_ReturnsCanonicalWorktreeRoot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "checkout")).FullName;
+        var adminDirectory = Directory.CreateDirectory(
+            Path.Combine(fixtureRoot, "physical", "primary", ".git", "worktrees", "feature")).FullName;
+        var aliasDirectory = Path.Combine(fixtureRoot, "aliases", "admin");
+        Directory.CreateDirectory(Path.GetDirectoryName(aliasDirectory)!);
+
+        try
+        {
+            try
+            {
+                ReparsePoint.CreateOrReplace(aliasDirectory, adminDirectory);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Assert.Skip($"Cannot create a directory symlink or junction in this environment: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Assert.Skip($"Directory symlink or junction creation failed in this environment: {ex.Message}");
+            }
+
+            var gitFilePath = TestGitWorktree.WriteGitDirFile(worktreeRoot, aliasDirectory);
+            File.WriteAllText(
+                Path.Combine(adminDirectory, "gitdir"),
+                Path.GetRelativePath(adminDirectory, gitFilePath) + Environment.NewLine);
+
+            var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
+
+            Assert.NotNull(linkedRoot);
+            Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+        }
+        finally
+        {
+            ReparsePoint.RemoveIfExists(aliasDirectory);
+        }
+    }
+
+    [Fact]
     public void TryGetLinkedWorktreeRoot_GitDirWithTrailingDirectorySeparator_ReturnsWorktreeRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

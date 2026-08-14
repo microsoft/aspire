@@ -69,7 +69,7 @@ internal static class GitWorktree
 
             if (File.Exists(gitPath))
             {
-                return IsLinkedWorktreeGitFile(gitPath, current)
+                return IsLinkedWorktreeGitFile(gitPath)
                     ? PathNormalizer.ResolveSymlinks(current)
                     : null;
             }
@@ -120,9 +120,9 @@ internal static class GitWorktree
         return string.IsNullOrEmpty(directory) ? fullPath : directory;
     }
 
-    private static bool IsLinkedWorktreeGitFile(string gitFilePath, string worktreeRoot)
+    private static bool IsLinkedWorktreeGitFile(string gitFilePath)
     {
-        if (!TryReadGitDirTarget(gitFilePath, worktreeRoot, out var adminDirectory) ||
+        if (!TryReadGitDirTarget(gitFilePath, out var adminDirectory) ||
             !Directory.Exists(adminDirectory))
         {
             return false;
@@ -139,9 +139,11 @@ internal static class GitWorktree
             return false;
         }
 
+        // Git resolves this back-pointer from the physical admin directory, even when
+        // the checkout's .git file reached that directory through an alias.
         if (!TryReadPath(
-            Path.Combine(adminDirectory, GitDirFileName),
-            adminDirectory,
+            Path.Combine(canonicalAdminDirectory, GitDirFileName),
+            canonicalAdminDirectory,
             out var checkoutGitFile))
         {
             return false;
@@ -150,10 +152,15 @@ internal static class GitWorktree
         return PathsEqual(checkoutGitFile, gitFilePath);
     }
 
-    private static bool TryReadGitDirTarget(string gitFilePath, string worktreeRoot, out string gitDirectory)
+    private static bool TryReadGitDirTarget(string gitFilePath, out string gitDirectory)
     {
         gitDirectory = string.Empty;
-        if (!TryReadFile(gitFilePath, out var contents))
+        // Relative gitdir values are based on the physical directory containing this
+        // metadata file, not the lexical checkout alias used to discover it.
+        var canonicalGitFilePath = CanonicalizePath(gitFilePath);
+        var metadataDirectory = Path.GetDirectoryName(canonicalGitFilePath);
+        if (string.IsNullOrEmpty(metadataDirectory) ||
+            !TryReadFile(canonicalGitFilePath, out var contents))
         {
             return false;
         }
@@ -172,7 +179,7 @@ internal static class GitWorktree
                 return false;
             }
 
-            return TryResolvePath(gitDir, worktreeRoot, out gitDirectory);
+            return TryResolvePath(gitDir, metadataDirectory, out gitDirectory);
         }
 
         return false;

@@ -39,7 +39,7 @@ export function tryGetLinkedWorktreeRoot(startPath: string | undefined): string 
         }
 
         if (isFile(gitPath)) {
-            return isLinkedWorktreeGitFile(gitPath, current) ? current : undefined;
+            return isLinkedWorktreeGitFile(gitPath) ? canonicalizePath(current) : undefined;
         }
 
         const parent = path.dirname(current);
@@ -95,8 +95,8 @@ function getWalkStartDirectory(startPath: string): string {
     return directory || startPath;
 }
 
-function isLinkedWorktreeGitFile(gitFilePath: string, worktreeRoot: string): boolean {
-    const adminDirectory = tryReadGitDirTarget(gitFilePath, worktreeRoot);
+function isLinkedWorktreeGitFile(gitFilePath: string): boolean {
+    const adminDirectory = tryReadGitDirTarget(gitFilePath);
     if (!adminDirectory || !isDirectory(adminDirectory)) {
         return false;
     }
@@ -110,14 +110,21 @@ function isLinkedWorktreeGitFile(gitFilePath: string, worktreeRoot: string): boo
         return false;
     }
 
-    const checkoutGitFile = tryReadPath(path.join(adminDirectory, 'gitdir'), adminDirectory);
+    // Git resolves this back-pointer from the physical admin directory, even when
+    // the checkout's .git file reached that directory through an alias.
+    const checkoutGitFile = tryReadPath(
+        path.join(canonicalAdminDirectory, 'gitdir'),
+        canonicalAdminDirectory);
     return checkoutGitFile !== undefined && pathsEqual(checkoutGitFile, gitFilePath);
 }
 
-function tryReadGitDirTarget(gitFilePath: string, worktreeRoot: string): string | undefined {
+function tryReadGitDirTarget(gitFilePath: string): string | undefined {
+    // Relative gitdir values are based on the physical directory containing this
+    // metadata file, not the lexical checkout alias used to discover it.
+    const canonicalGitFilePath = canonicalizePath(gitFilePath);
     let contents: string;
     try {
-        contents = fs.readFileSync(gitFilePath, 'utf8');
+        contents = fs.readFileSync(canonicalGitFilePath, 'utf8');
     }
     catch {
         return undefined;
@@ -134,7 +141,7 @@ function tryReadGitDirTarget(gitFilePath: string, worktreeRoot: string): string 
             return undefined;
         }
 
-        return path.resolve(worktreeRoot, gitDir);
+        return path.resolve(path.dirname(canonicalGitFilePath), gitDir);
     }
 
     return undefined;
