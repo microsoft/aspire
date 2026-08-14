@@ -53,6 +53,41 @@ suite('gitWorktree', () => {
         assert.strictEqual(tryGetLinkedWorktreeRoot(root), root);
     });
 
+    test('gitdir with a trailing directory separator is detected', () => {
+        const adminDirectory = writeLinkedWorktreeMetadata(root, path.join(root, 'primary', '.git'));
+        fs.writeFileSync(path.join(root, '.git'), `gitdir: ${adminDirectory}${path.sep}\n`);
+
+        assert.strictEqual(tryGetLinkedWorktreeRoot(root), root);
+    });
+
+    test('case-variant back-pointer uses filesystem identity', () => {
+        const adminDirectory = writeLinkedWorktreeMetadata(root, path.join(root, 'primary', '.git'));
+        const gitFilePath = path.join(root, '.git');
+        const caseVariantGitFile = path.join(root, '.GIT');
+        fs.writeFileSync(path.join(adminDirectory, 'gitdir'), `${caseVariantGitFile}\n`);
+        const caseVariantIsGitFile = fs.existsSync(caseVariantGitFile)
+            && fs.realpathSync.native(caseVariantGitFile) === fs.realpathSync.native(gitFilePath);
+
+        assert.strictEqual(tryGetLinkedWorktreeRoot(root), caseVariantIsGitFile ? root : undefined);
+    });
+
+    test('symlink alias back-pointer is detected', function () {
+        const worktreeRoot = path.join(root, 'worktree');
+        const adminDirectory = writeLinkedWorktreeMetadata(worktreeRoot, path.join(root, 'primary', '.git'));
+        const aliasRoot = path.join(root, 'worktree-alias');
+        try {
+            fs.symlinkSync(worktreeRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir');
+        }
+        catch {
+            this.skip();
+            return;
+        }
+
+        fs.writeFileSync(path.join(adminDirectory, 'gitdir'), `${path.join(aliasRoot, '.git')}\n`);
+
+        assert.strictEqual(tryGetLinkedWorktreeRoot(worktreeRoot), worktreeRoot);
+    });
+
     test('submodule inside a linked worktree is not detected', () => {
         const worktreeRoot = path.join(root, 'worktree');
         const adminDirectory = writeLinkedWorktreeMetadata(worktreeRoot, path.join(root, 'primary', '.git'));
@@ -60,6 +95,28 @@ suite('gitWorktree', () => {
         writeGitDirFile(submoduleRoot, path.join(adminDirectory, 'modules', 'dep'));
 
         assert.strictEqual(tryGetLinkedWorktreeRoot(path.join(submoduleRoot, 'AppHost.csproj')), undefined);
+    });
+
+    test('reciprocal back-pointer outside worktrees is not detected', () => {
+        const worktreeRoot = path.join(root, 'worktree');
+        const adminDirectory = path.join(root, 'primary', '.git', 'modules', 'dep');
+        const gitFilePath = writeGitDirFile(worktreeRoot, adminDirectory);
+        fs.writeFileSync(path.join(adminDirectory, 'gitdir'), `${gitFilePath}\n`);
+
+        assert.strictEqual(tryGetLinkedWorktreeRoot(worktreeRoot), undefined);
+    });
+
+    test('back-pointer to a different checkout is not detected', () => {
+        const commonGitDirectory = path.join(root, 'primary', '.git');
+        const worktreeRoot = path.join(root, 'worktree');
+        const adminDirectory = writeLinkedWorktreeMetadata(worktreeRoot, commonGitDirectory);
+        const otherWorktreeRoot = path.join(root, 'other-worktree');
+        const otherGitFile = writeGitDirFile(
+            otherWorktreeRoot,
+            path.join(commonGitDirectory, 'worktrees', 'other'));
+        fs.writeFileSync(path.join(adminDirectory, 'gitdir'), `${otherGitFile}\n`);
+
+        assert.strictEqual(tryGetLinkedWorktreeRoot(worktreeRoot), undefined);
     });
 
     test('decoy worktree pointer without a back-pointer is not detected', () => {

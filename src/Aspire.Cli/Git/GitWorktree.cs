@@ -128,7 +128,7 @@ internal static class GitWorktree
             return false;
         }
 
-        var adminParent = Directory.GetParent(adminDirectory);
+        var adminParent = Directory.GetParent(Path.TrimEndingDirectorySeparator(adminDirectory));
         if (adminParent is null ||
             !adminParent.Name.Equals(WorktreesSegment, StringComparison.OrdinalIgnoreCase))
         {
@@ -223,12 +223,88 @@ internal static class GitWorktree
 
     private static bool PathsEqual(string left, string right)
     {
-        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
         return string.Equals(
-            PathNormalizer.ResolveSymlinks(left),
-            PathNormalizer.ResolveSymlinks(right),
+            CanonicalizePath(left),
+            CanonicalizePath(right),
             comparison);
+    }
+
+    private static string CanonicalizePath(string path)
+    {
+        var resolvedPath = PathNormalizer.ResolveSymlinks(path);
+        if (!OperatingSystem.IsMacOS())
+        {
+            return resolvedPath;
+        }
+
+        var root = Path.GetPathRoot(resolvedPath);
+        if (string.IsNullOrEmpty(root))
+        {
+            return resolvedPath;
+        }
+
+        var segments = resolvedPath[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        var current = root;
+
+        foreach (var segment in segments)
+        {
+            var candidate = Path.Combine(current, segment);
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return resolvedPath;
+            }
+
+            try
+            {
+                string? exactMatch = null;
+                string? caseInsensitiveMatch = null;
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                {
+                    var entryName = Path.GetFileName(entry);
+                    if (entryName.Equals(segment, StringComparison.Ordinal))
+                    {
+                        exactMatch = entry;
+                        break;
+                    }
+
+                    if (caseInsensitiveMatch is null &&
+                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
+                    {
+                        caseInsensitiveMatch = entry;
+                    }
+                }
+
+                if (exactMatch is not null)
+                {
+                    current = exactMatch;
+                }
+                else if (caseInsensitiveMatch is not null)
+                {
+                    // Path APIs preserve the caller's casing. Recover the stored casing only
+                    // when the filesystem resolved the variant, so case-sensitive volumes still
+                    // reject stale paths that differ only by case.
+                    current = caseInsensitiveMatch;
+                }
+                else
+                {
+                    current = candidate;
+                }
+            }
+            catch (IOException)
+            {
+                return resolvedPath;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return resolvedPath;
+            }
+        }
+
+        return current;
     }
 }

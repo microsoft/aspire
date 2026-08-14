@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Git;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Git;
@@ -72,6 +73,86 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryGetLinkedWorktreeRoot_GitDirWithTrailingDirectorySeparator_ReturnsWorktreeRoot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var worktreeRoot = workspace.WorkspaceRoot.FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(worktreeRoot, "primary", ".git"));
+        File.WriteAllText(
+            Path.Combine(worktreeRoot, ".git"),
+            $"gitdir: {adminDirectory}{Path.DirectorySeparatorChar}{Environment.NewLine}");
+
+        var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
+
+        Assert.NotNull(linkedRoot);
+        Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_CaseVariantBackPointer_UsesFilesystemIdentity()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var worktreeRoot = workspace.WorkspaceRoot.FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(worktreeRoot, "primary", ".git"));
+        var caseVariantGitFile = Path.Combine(worktreeRoot, ".GIT");
+        File.WriteAllText(
+            Path.Combine(adminDirectory, "gitdir"),
+            caseVariantGitFile + Environment.NewLine);
+
+        var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
+        var expectedRoot = File.Exists(caseVariantGitFile)
+            ? PathNormalizer.ResolveSymlinks(worktreeRoot)
+            : null;
+
+        Assert.Equal(expectedRoot, linkedRoot);
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_SymlinkAliasBackPointer_ReturnsWorktreeRoot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "primary", ".git"));
+        var aliasRoot = Path.Combine(fixtureRoot, "worktree-alias");
+
+        try
+        {
+            try
+            {
+                ReparsePoint.CreateOrReplace(aliasRoot, worktreeRoot);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Assert.Skip($"Cannot create a directory symlink or junction in this environment: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Assert.Skip($"Directory symlink or junction creation failed in this environment: {ex.Message}");
+            }
+
+            File.WriteAllText(
+                Path.Combine(adminDirectory, "gitdir"),
+                Path.Combine(aliasRoot, ".git") + Environment.NewLine);
+
+            var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
+
+            Assert.NotNull(linkedRoot);
+            Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+        }
+        finally
+        {
+            ReparsePoint.RemoveIfExists(aliasRoot);
+        }
+    }
+
+    [Fact]
     public void TryGetLinkedWorktreeRoot_SubmoduleInsideLinkedWorktree_ReturnsNull()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -86,6 +167,40 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
             Path.Combine(adminDirectory, "modules", "dep"));
 
         Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(Path.Combine(submoduleRoot, "AppHost.csproj")));
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_ReciprocalBackPointerOutsideWorktrees_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        var adminDirectory = Path.Combine(fixtureRoot, "primary", ".git", "modules", "dep");
+        var gitFilePath = TestGitWorktree.WriteGitDirFile(worktreeRoot, adminDirectory);
+        File.WriteAllText(
+            Path.Combine(adminDirectory, "gitdir"),
+            gitFilePath + Environment.NewLine);
+
+        Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot));
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_BackPointerToDifferentCheckout_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var commonGitDirectory = Path.Combine(fixtureRoot, "primary", ".git");
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, commonGitDirectory);
+        var otherWorktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "other-worktree")).FullName;
+        var otherGitFile = TestGitWorktree.WriteGitDirFile(
+            otherWorktreeRoot,
+            Path.Combine(commonGitDirectory, "worktrees", "other"));
+        File.WriteAllText(
+            Path.Combine(adminDirectory, "gitdir"),
+            otherGitFile + Environment.NewLine);
+
+        Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot));
     }
 
     [Fact]
