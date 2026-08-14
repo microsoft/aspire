@@ -1,9 +1,21 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { executeResourceCommand, ResourceCommandRunner } from '../views/resourceCommandExecution';
 import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../data/AppHostDataRepository';
+import { resourceCommandLogOpenFailed } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
+
+// Diagnostic log references are only offered as actions when they parse as absolute, and the opened
+// Uri round-trips through `fsPath`, so both sides have to use the host separator ('\tmp\cli.log' on
+// Windows).
+function p(...segments: string[]): string {
+    return path.join(path.sep, ...segments);
+}
+
+const cliLogPath = p('tmp', 'cli.log');
+const appHostLogPath = p('tmp', 'apphost.log');
 
 suite('executeResourceCommand', () => {
     let sandbox: sinon.SinonSandbox;
@@ -92,8 +104,8 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
-                '📄 See logs at /tmp/cli.log',
-                '🔍 See AppHost logs at /tmp/apphost.log',
+                `📄 See logs at ${cliLogPath}`,
+                `🔍 See AppHost logs at ${appHostLogPath}`,
             ].join('\n')));
 
         const outcome = await executeResourceCommand(
@@ -116,8 +128,8 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Ressource 'app-id' konnte nicht neu gestartet werden.",
-                '📄 Diagnoseprotokoll: /tmp/cli.log',
-                '🔍 AppHost-Protokoll: /tmp/apphost.log',
+                `📄 Diagnoseprotokoll: ${cliLogPath}`,
+                `🔍 AppHost-Protokoll: ${appHostLogPath}`,
             ].join('\n')));
 
         await executeResourceCommand(
@@ -186,7 +198,7 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
-                '📄 See logs at /tmp/cli.log',
+                `📄 See logs at ${cliLogPath}`,
             ].join('\n')));
 
         await executeResourceCommand(
@@ -195,7 +207,7 @@ suite('executeResourceCommand', () => {
             { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
 
         sinon.assert.calledOnce(openDocumentStub);
-        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, '/tmp/cli.log');
+        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, cliLogPath);
         assert.strictEqual(showDocumentStub.calledOnce, true);
         assert.strictEqual(showDocumentStub.firstCall.args[0], document);
         assert.deepStrictEqual(showDocumentStub.firstCall.args[1], { preview: false });
@@ -212,7 +224,7 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
-                '🔍 See AppHost logs at /tmp/apphost.log',
+                `🔍 See AppHost logs at ${appHostLogPath}`,
             ].join('\n')));
 
         await executeResourceCommand(
@@ -221,7 +233,7 @@ suite('executeResourceCommand', () => {
             { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
 
         sinon.assert.calledOnce(openDocumentStub);
-        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, '/tmp/apphost.log');
+        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, appHostLogPath);
         assert.strictEqual(showDocumentStub.calledOnce, true);
         assert.strictEqual(showDocumentStub.firstCall.args[0], document);
         assert.deepStrictEqual(showDocumentStub.firstCall.args[1], { preview: false });
@@ -237,7 +249,7 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
-                '📄 See logs at /tmp/cli.log',
+                `📄 See logs at ${cliLogPath}`,
             ].join('\n')));
 
         const outcome = await executeResourceCommand(
@@ -247,7 +259,7 @@ suite('executeResourceCommand', () => {
 
         assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
         assert.strictEqual(warningStub.calledOnce, true);
-        assert.match(String(warningStub.firstCall.args[0]), /Failed to open resource command log file \/tmp\/cli\.log: access denied/);
+        assert.strictEqual(String(warningStub.firstCall.args[0]), resourceCommandLogOpenFailed(cliLogPath, 'access denied'));
     });
 
     test('reports CLI command output to the user without writing it to extension logs', async () => {

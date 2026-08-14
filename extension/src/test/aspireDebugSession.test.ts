@@ -3255,6 +3255,10 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
     test('launches a Rust AppHost with the Rust debugger', async () => {
         const appHostPath = join(makeTempDir(), 'apphost.rs');
         writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'ms-vscode.cpptools' || extensionId === 'vadimcn.vscode-lldb'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
 
         const parentDebugSession = {
             id: 'aspire-session',

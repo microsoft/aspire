@@ -28,7 +28,7 @@ export type Capability =
 
 export type Capabilities = Capability[];
 
-function isExtensionInstalled(extensionId: string): boolean {
+export function isExtensionInstalled(extensionId: string): boolean {
     const extension = vscode.extensions.getExtension(extensionId);
     return !!extension;
 }

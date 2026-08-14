@@ -8,7 +8,7 @@ import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
 import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
 import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
-import { codeLensCommand, codeLensResourceValueMissing } from '../loc/strings';
+import { codeLensCommand, codeLensResourceValueMissing, codeLensRustAppHostUseAspire } from '../loc/strings';
 import { ResourceState, ResourceType } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
@@ -431,18 +431,22 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
-    test('directs stopped Rust AppHosts to Aspire Run or Debug', async () => {
+    test('renders the stopped Rust AppHost warning as non-clickable text', async () => {
         const appHostPath = p('repo', 'AppHost', 'apphost.rs');
         const content = 'fn main() {\n    let builder = create_builder(None)?;\n}';
         const harness = createHarness({});
 
         const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
-        const warningLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost');
+        const warningLens = lenses.find(lens => lens.command?.title === codeLensRustAppHostUseAspire);
 
         assert.ok(warningLens);
         assert.strictEqual(warningLens.command?.title, '⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
         assert.strictEqual(warningLens.command?.tooltip, 'Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
-        assert.deepStrictEqual(warningLens.command?.arguments, [appHostPath]);
+        // An empty command id keeps the warning from being a link that reveals an AppHost the tree
+        // cannot contain while it is stopped.
+        assert.strictEqual(warningLens.command?.command, '');
+        assert.strictEqual(warningLens.command?.arguments, undefined);
+        assert.ok(!lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost'));
         assert.strictEqual(warningLens.range.start.line, 0);
         harness.dispose();
     });

@@ -170,14 +170,22 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         if (document.languageId === 'rust') {
             const entryPointLine = await parser.findAppHostEntryPointLine?.(document) ?? builderLine;
-            const title = runningAppHostPath ? codeLensRustAppHostAlreadyRunning : codeLensRustAppHostUseAspire;
-            const tooltip = runningAppHostPath ? codeLensRustAppHostAlreadyRunningTooltip : codeLensRustAppHostUseAspireTooltip;
-            lenses.push(new vscode.CodeLens(new vscode.Range(entryPointLine, 0, entryPointLine, 0), {
-                title,
-                command: 'aspire-vscode.codeLensRevealAppHost',
-                tooltip,
-                arguments: [runningAppHostPath ?? document.uri.fsPath],
-            }));
+            const range = new vscode.Range(entryPointLine, 0, entryPointLine, 0);
+            // The tree only holds running AppHosts, so revealing a stopped one has nothing to select.
+            // An empty command id makes VS Code render the warning as plain text instead of a link
+            // whose click does nothing.
+            lenses.push(new vscode.CodeLens(range, runningAppHostPath
+                ? {
+                    title: codeLensRustAppHostAlreadyRunning,
+                    command: 'aspire-vscode.codeLensRevealAppHost',
+                    tooltip: codeLensRustAppHostAlreadyRunningTooltip,
+                    arguments: [runningAppHostPath],
+                }
+                : {
+                    title: codeLensRustAppHostUseAspire,
+                    command: '',
+                    tooltip: codeLensRustAppHostUseAspireTooltip,
+                }));
         }
 
         // Dashboard and log actions require a concretely-running AppHost path. In particular,

@@ -6,10 +6,12 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
+import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { createRustDebuggerExtension, IRustService, RustService } from '../debugger/languages/rust';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { rustDebuggerExtensionNotInstalled } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 type TestChildProcess = Omit<nodeChildProcess.ChildProcessWithoutNullStreams, 'exitCode' | 'signalCode'> & {
@@ -128,6 +130,38 @@ suite('Rust Debugger Extension Tests', () => {
             .find(extension => extension.resourceType === 'rust');
         assert.strictEqual(refreshedExtension?.extensionId, 'vadimcn.vscode-lldb');
         assert.strictEqual(refreshedExtension?.debugAdapter, 'lldb');
+    });
+
+    test('stops a Rust AppHost launch with install guidance when no debugger extension is installed', async () => {
+        sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration');
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.rs',
+                command: 'run',
+            },
+        };
+        const debugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(debugSession, 'createDebugAdapterTrackerCore');
+
+        await debugSession.startAppHost('/workspace/apphost.rs', ['cargo', 'run'], [], true, { forceBuild: false });
+
+        sinon.assert.notCalled(createDebugSessionConfiguration);
+        sinon.assert.calledOnce(showErrorMessage);
+        assert.strictEqual(showErrorMessage.firstCall.args[0], rustDebuggerExtensionNotInstalled(rustExtensionId));
     });
 
     test('builds the crate and debugs the executable the app host resolved', async () => {

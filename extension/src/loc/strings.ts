@@ -180,6 +180,7 @@ export const rustBuildOutputRedacted = vscode.l10n.t('[redacted]');
 export const rustBuildStderrTruncated = (limit: number) => vscode.l10n.t('[cargo stderr truncated to the last {0} characters.]', limit);
 export const rustLaunchConfigurationMissingExecutable = (workingDirectory: string) => vscode.l10n.t('The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.', workingDirectory);
 export const rustWindowsGnuDebuggerUnsupported = (target: string) => vscode.l10n.t('The cppvsdbg debugger cannot debug Rust target {0} because GNU Windows targets use DWARF symbols. Install CodeLLDB or build an MSVC Rust target such as x86_64-pc-windows-msvc.', target);
+export const rustDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;

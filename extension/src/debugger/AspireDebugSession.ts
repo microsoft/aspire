@@ -6,7 +6,8 @@ import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, E
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
-import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut } from "../loc/strings";
+import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled } from "../loc/strings";
+import { isExtensionInstalled } from "../capabilities";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
@@ -1138,6 +1139,15 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         : isRustAppHost
           ? createDefaultRustDebuggerExtension()
           : projectDebuggerExtension;
+
+      // Resource launches are gated by getResourceDebuggerExtensions, which omits Rust when no native
+      // debugger extension is installed. This path builds the descriptor directly, so without the same
+      // gate VS Code fails the session with its raw "configured debug type is not supported" error
+      // instead of telling the user what to install. NoDebug is gated too: it still launches through
+      // the adapter.
+      if (isRustAppHost && debuggerExtension.extensionId && !isExtensionInstalled(debuggerExtension.extensionId)) {
+        throw new Error(rustDebuggerExtensionNotInstalled(debuggerExtension.extensionId));
+      }
 
       // Register the adapter tracker with an app host restart handler.
       // When the user clicks "restart" on the app host child session,
