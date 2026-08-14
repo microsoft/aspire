@@ -86,6 +86,7 @@ function extensionToLanguageId(ext: string): string | undefined {
         case '.mjs':
         case '.cjs':
         case '.js': return 'javascript';
+        case '.rs': return 'rust';
         default: return undefined;
     }
 }

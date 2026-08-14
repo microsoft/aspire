@@ -4,6 +4,7 @@ import { getParserForDocument, getSupportedLanguageIds, getAllParsers, ParsedRes
 // Import parsers so they self-register
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
+import '../editor/parsers/rustAppHostParser';
 
 /**
  * Creates a minimal mock TextDocument for parser testing.
@@ -14,7 +15,7 @@ function createMockDocument(content: string, filePath: string): vscode.TextDocum
         uri: vscode.Uri.file(filePath),
         fileName: filePath,
         isUntitled: false,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
+        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'javascript',
         version: 1,
         isDirty: false,
         isClosed: false,
@@ -73,7 +74,7 @@ function createMockDocument(content: string, filePath: string): vscode.TextDocum
 suite('AppHostResourceParser registry', () => {
     test('getAllParsers returns registered parsers', async () => {
         const parsers = getAllParsers();
-        assert.ok(parsers.length >= 2, 'Should have at least the C# and JS/TS parsers');
+        assert.ok(parsers.length >= 3, 'Should have at least the C#, JS/TS, and Rust parsers');
     });
 
     test('getSupportedLanguageIds returns expected languages', async () => {
@@ -81,6 +82,7 @@ suite('AppHostResourceParser registry', () => {
         assert.ok(ids.includes('csharp'), 'Should support csharp');
         assert.ok(ids.includes('typescript'), 'Should support typescript');
         assert.ok(ids.includes('javascript'), 'Should support javascript');
+        assert.ok(ids.includes('rust'), 'Should support rust');
     });
 
     test('getParserForDocument returns C# parser for .cs AppHost file', async () => {
@@ -101,6 +103,16 @@ suite('AppHostResourceParser registry', () => {
         const parser = await getParserForDocument(doc);
         assert.ok(parser, 'Should find a parser');
         assert.ok(parser!.getSupportedExtensions().includes('.ts'));
+    });
+
+    test('getParserForDocument returns Rust parser for .rs AppHost file', async () => {
+        const doc = createMockDocument(
+            'fn main() {\n    let builder = create_builder(None)?;\n    builder.add_redis("cache")?;\n}',
+            '/test/apphost.rs'
+        );
+        const parser = await getParserForDocument(doc);
+        assert.ok(parser, 'Should find a parser');
+        assert.ok(parser!.getSupportedExtensions().includes('.rs'));
     });
 
     test('getParserForDocument returns JS/TS parser for Node module AppHost files', async () => {
@@ -1916,6 +1928,100 @@ suite('JsTsAppHostParser', () => {
         assert.strictEqual(resources[1].name, 'deploy');
         assert.strictEqual(resources[2].kind, 'resource');
         assert.strictEqual(resources[2].name, 'pg');
+    });
+});
+
+// ============================================================
+// Rust Parser Tests
+// ============================================================
+suite('RustAppHostParser', () => {
+    function getRustParser() {
+        return getAllParsers().find(p => p.getSupportedExtensions().includes('.rs'))!;
+    }
+
+    test('detects AppHost via create_builder call', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            'fn main() {\n    let builder = aspire::create_builder(None)?;\n}',
+            '/test/apphost.rs'
+        );
+
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 1);
+    });
+
+    test('rejects Rust file with AppHost markers only in comments and strings', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                '// let builder = create_builder(None)?;',
+                '/* builder.add_redis("comment")?; */',
+                'let sample = "create_builder(None)";',
+                'let raw = r#"builder.add_redis(\"string\")"#;',
+            ].join('\n'),
+            '/test/main.rs'
+        );
+
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
+        assert.deepStrictEqual(await parser.parseResources(doc), []);
+    });
+
+    test('parses resources, pipeline steps, and fluent statement starts', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                'fn main() {',
+                '    let builder = create_builder(None)?;',
+                '    let cache = builder.add_redis("cache")?',
+                '        .with_data_volume(None)?;',
+                '',
+                '    builder.add_step("publish")?;',
+                '}',
+            ].join('\n'),
+            '/test/apphost.rs'
+        );
+
+        const resources = await parser.parseResources(doc);
+
+        assert.strictEqual(resources.length, 2);
+        assert.deepStrictEqual(
+            resources.map(({ name, methodName, kind, statementStartLine }) => ({ name, methodName, kind, statementStartLine })),
+            [
+                { name: 'cache', methodName: 'add_redis', kind: 'resource', statementStartLine: 2 },
+                { name: 'publish', methodName: 'add_step', kind: 'pipelineStep', statementStartLine: 5 },
+            ]
+        );
+        assert.strictEqual(resources[0].range.start.line, 2);
+        assert.strictEqual(resources[0].range.end.line, 2);
+    });
+
+    test('decodes escaped and raw string resource names', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                'let cache = builder.add_redis("cache\\nprimary")?;',
+                'let db = builder.add_postgres(r#"db\\primary"#)?;',
+            ].join('\n'),
+            '/test/apphost.rs'
+        );
+
+        const resources = await parser.parseResources(doc);
+
+        assert.deepStrictEqual(resources.map(resource => resource.name), ['cache\nprimary', 'db\\primary']);
+    });
+
+    test('ignores calls without a closed string literal first argument', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                'builder.add_redis(resource_name)?;',
+                'builder.add_postgres(b"bytes")?;',
+                'builder.add_container("unterminated)?;',
+            ].join('\n'),
+            '/test/apphost.rs'
+        );
+
+        assert.deepStrictEqual(await parser.parseResources(doc), []);
     });
 });
 
