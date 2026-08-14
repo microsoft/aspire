@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { ErrorCodes, ResponseError } from 'vscode-jsonrpc';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 import { deactivate as deactivateExtension } from '../extension';
 import { extensionLogOutputChannel } from '../utils/logging';
 

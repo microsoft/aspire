@@ -2,15 +2,17 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
-import { spawnCliProcess, terminateCliProcess } from "./languages/cli";
-import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, aspireDashboard, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut } from "../loc/strings";
+import { spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
+import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled } from "../loc/strings";
+import { isExtensionInstalled } from "../capabilities";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
+import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { cleanupRun } from "./runCleanupRegistry";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
@@ -18,19 +20,26 @@ import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } f
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
-import os from "os";
+import { delay } from "../utils/async";
 import { EnvironmentVariables } from "../utils/environment";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import { sendTelemetryEvent } from "../utils/telemetry";
-import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } from "../utils/appHostLanguage";
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
+import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
+import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
 
-export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
-export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
+
+const debugConfigurationsWithSensitiveEnvironment = new WeakSet<AspireResourceExtendedDebugConfiguration>();
+
+export function markDebugConfigurationEnvironmentSensitive(debugConfig: AspireResourceExtendedDebugConfiguration): void {
+  debugConfigurationsWithSensitiveEnvironment.add(debugConfig);
+}
 
 function getOperationKind(value: unknown): AspireOperationKind {
   if (value === undefined || value === null) {
@@ -43,11 +52,11 @@ function getOperationKind(value: unknown): AspireOperationKind {
 }
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
-  if (includeEnvironment && debugConfig.type !== 'maui') {
-    return debugConfig;
-  }
+  if (includeEnvironment && !debugConfigurationsWithSensitiveEnvironment.has(debugConfig)) {
+    if (debugConfig.type !== 'maui') {
+      return debugConfig;
+    }
 
-  if (includeEnvironment) {
     return {
       ...debugConfig,
       environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
@@ -57,12 +66,13 @@ export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtende
   return {
     ...debugConfig,
     env: debugConfig.env ? '<redacted>' : undefined,
+    environment: debugConfig.environment ? '<redacted>' : undefined,
     environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
     msbuildProperties: debugConfig.msbuildProperties instanceof Map ? Object.fromEntries(debugConfig.msbuildProperties) : debugConfig.msbuildProperties,
   };
 }
 
-export class AspireDebugSession implements vscode.DebugAdapter {
+export class AspireDebugSession implements vscode.DebugAdapter, DashboardLauncherHost {
   private static readonly _mauiDebugStartMaxAttempts = 3;
   private static readonly _mauiDebugStartRetryDelayMs = 5000;
   /**
@@ -77,11 +87,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * involved, where per-session timeouts would scale the worst case with the resource count.
    */
   private static readonly _stopSessionsTimeoutMs = 10000;
-   /**
-    * Dashboard browsers are optional UI children. Give their launch/stop a smaller share of the
-    * shutdown budget so a wedged browser adapter cannot starve AppHost and parent teardown.
-    */
-   private static readonly _dashboardStopTimeoutMs = 2000;
   /**
    * How long the cooperative `stopCli` RPC has to bring the CLI down before its process group is
    * signalled. Long enough for the CLI to stop containers and other resources cleanly, short
@@ -104,16 +109,11 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
-  private _dashboardDebugSession: vscode.DebugSession | null = null;
-  private _dashboardStopPromise: Promise<void> | undefined;
-  private _dashboardTerminationDisposable: vscode.Disposable | undefined;
-  private _dashboardTerminationPromise: Promise<void> | undefined;
-  private _resolveDashboardTermination: (() => void) | undefined;
-  private readonly _pendingDashboardDebugSessionStarts = new Set<Promise<void>>();
-  private _dashboardUrl: string | undefined;
+  private readonly _dashboardLauncher = new DashboardLauncher(this);
   private _startupCompleted = false;
   private readonly _onDidChangeState = new EventEmitter<void>();
   private readonly _disposables: vscode.Disposable[] = [];
+  private readonly _pendingStartCancellations = new Set<vscode.Disposable>();
   private _disposed = false;
   // Set as soon as stopDebugging() begins, before it snapshots the resource sessions. Resource
   // starts that land during the shutdown's awaits must not be registered as ordinary sessions:
@@ -160,8 +160,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _appHostStartTimeMs: number | undefined = undefined;
   // Tracks the AppHost-language classification of the launched program so it can
   // be repeated on the matching end event without re-deriving from `configuration`.
-  private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
-  private _appHostLanguageAtLaunchPromise: Promise<'csharp' | 'typescript' | 'unknown'> | undefined = undefined;
+  private _appHostLanguageAtLaunch: AppHostLanguage = 'unknown';
+  private _appHostLanguageAtLaunchPromise: Promise<AppHostLanguage> | undefined = undefined;
   // Resolving telemetry metadata can require project/config reads, so the launch
   // path starts the work in the background and reuses the same result for start/end telemetry.
   private _appHostTargetVersionAtLaunch = 'unknown';
@@ -194,7 +194,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   get dashboardUrl(): string | undefined {
-    return this._dashboardUrl;
+    return this._dashboardLauncher.dashboardUrl;
   }
 
   get startupCompleted(): boolean {
@@ -203,6 +203,26 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   get isDisposed(): boolean {
     return this._disposed;
+  }
+
+  get isStopAttemptInProgress(): boolean {
+    return this._stopAttemptInProgress;
+  }
+
+  get isExtensionShutdownRequested(): boolean {
+    return this._extensionShutdownRequested;
+  }
+
+  get parentSession(): vscode.DebugSession {
+    return this._session;
+  }
+
+  notifyStateChanged(): void {
+    this._onDidChangeState.fire();
+  }
+
+  openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
+    return this._dashboardLauncher.openDashboard(url, browserType);
   }
 
   get cliProcessId(): number | undefined {
@@ -257,6 +277,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
     this._stopAttemptInProgress = true;
     this._stopping = true;
+    this.cancelPendingStartWork();
     let resolveAttempt!: () => void;
     let rejectAttempt!: (reason: unknown) => void;
     const attempt = new Promise<void>((resolve, reject) => {
@@ -296,9 +317,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * post-disposal no-op and the retry-after-failure path in {@link stopDebugging}.
    */
   private get hasSessionsToStop(): boolean {
-    return this._dashboardDebugSession !== null
-      || this._pendingDashboardDebugSessionStarts.size > 0
+    return this._dashboardLauncher.hasSessionsToStop
       || this._pendingDebugSessionStarts.size > 0
+      || this._pendingStartCancellations.size > 0
       || this._resourceDebugSessions.length > 0
       || (this._appHostDebugSession !== undefined && !this._appHostStopped)
       || this._lateResourceStops.length > 0
@@ -352,7 +373,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // the path where a resource is most likely to be left behind. The rejection is kept and
     // rethrown after the AppHost and the synthetic Aspire parent have been stopped.
     const [dashboardResult, ...resourceResults] = await Promise.allSettled([
-      this.stopDashboardWithinBudget(deadline),
+      this._dashboardLauncher.stopDashboardWithinBudget(deadline),
       ...resourceDebugSessions.map(session => this.stopWithinBudget(
         () => session.stopSession(),
         session.session.name,
@@ -658,7 +679,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * wait there hangs the exiting process indefinitely. The timeout is reported through the same
    * `stopFailures` list as an ordinary rejection, so it is surfaced rather than swallowed.
    */
-  private stopWithinBudget(
+  stopWithinBudget(
     operation: () => Thenable<void>,
     sessionName: string,
     deadline: number,
@@ -666,7 +687,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     return this.waitWithinBudget(startStop(operation), sessionName, deadline, onTimeout);
   }
 
-  private waitWithinBudget(
+  waitWithinBudget(
     stop: PromiseLike<void>,
     sessionName: string,
     deadline: number,
@@ -921,7 +942,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
+  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<AppHostLanguage> {
     try {
       const telemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
       this._appHostLanguageAtLaunch = telemetryTargetLanguage !== 'unknown'
@@ -1101,6 +1122,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
   private static readonly _csharpAppHostExtensions = ['.cs', '.csproj'];
+  private static readonly _rustAppHostExtensions = ['.rs'];
 
   private _appHostRestartRequested = false;
   private _preserveAppHostRestartSourceSessionId = false;
@@ -1110,8 +1132,22 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
       const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
+      const isRustAppHost = AspireDebugSession._rustAppHostExtensions.includes(fileExtension);
 
-      const debuggerExtension = isNodeAppHost ? nodeDebuggerExtension : projectDebuggerExtension;
+      const debuggerExtension = isNodeAppHost
+        ? nodeDebuggerExtension
+        : isRustAppHost
+          ? createDefaultRustDebuggerExtension()
+          : projectDebuggerExtension;
+
+      // Resource launches are gated by getResourceDebuggerExtensions, which omits Rust when no native
+      // debugger extension is installed. This path builds the descriptor directly, so without the same
+      // gate VS Code fails the session with its raw "configured debug type is not supported" error
+      // instead of telling the user what to install. NoDebug is gated too: it still launches through
+      // the adapter.
+      if (isRustAppHost && debuggerExtension.extensionId && !isExtensionInstalled(debuggerExtension.extensionId)) {
+        throw new Error(rustDebuggerExtensionNotInstalled(debuggerExtension.extensionId));
+      }
 
       // Register the adapter tracker with an app host restart handler.
       // When the user clicks "restart" on the app host child session,
@@ -1155,6 +1191,17 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           type: 'node',
           ...(runtimeExecutable ? { runtime_executable: runtimeExecutable } : {})
         } as NodeLaunchConfiguration;
+      }
+      else if (isRustAppHost) {
+        // The CLI sends the Cargo command (e.g., ["cargo", "run", "--", ...appHostArgs]).
+        // The Rust debugger builds and launches the executable directly, so only arguments after
+        // Cargo's "--" separator belong to the AppHost process.
+        const separatorIndex = args.indexOf('--');
+        appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        launchConfig = {
+          type: 'rust',
+          working_directory: path.dirname(projectFile),
+        } as RustLaunchConfiguration;
       }
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).
@@ -1460,113 +1507,57 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   /**
-   * Opens the dashboard URL in the specified browser.
-   * For debugChrome/debugEdge/debugFirefox, launches as a child debug session that is stopped by
-   * the ordered shutdown or by the late-start handler when shutdown is already in progress.
+   * Ties a disposable to the final session lifetime. Work that must be canceled before shutdown
+   * awaits pending resource starts should use {@link registerPendingStartCancellation} instead.
+   * Disposing the returned handle detaches it early.
    */
-  async openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
-    extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}.`);
-
-    if (this._disposed || this._stopAttemptInProgress || this._extensionShutdownRequested) {
-      extensionLogOutputChannel.info('Skipping dashboard browser launch because the Aspire session is shutting down.');
-      return;
+  registerDisposable(disposable: vscode.Disposable): vscode.Disposable {
+    if (this._disposed) {
+      disposable.dispose();
+      return { dispose: () => { } };
     }
 
-    this._dashboardUrl = url;
-    this._onDidChangeState.fire();
+    this._disposables.push(disposable);
 
-    switch (browserType) {
-      case 'debugChrome':
-        await this.launchDebugBrowser(url, 'pwa-chrome');
-        break;
+    let detached = false;
+    return {
+      dispose: () => {
+        if (detached) {
+          return;
+        }
 
-      case 'debugEdge':
-        await this.launchDebugBrowser(url, 'pwa-msedge');
-        break;
-
-      case 'debugFirefox':
-        await this.launchDebugBrowser(url, 'firefox');
-        break;
-
-      case 'integratedBrowser':
-        await vscode.commands.executeCommand('simpleBrowser.show', url);
-        break;
-
-      case 'openExternalBrowser':
-      default:
-        // Use VS Code's default external browser handling
-        await vscode.env.openExternal(vscode.Uri.parse(url));
-        break;
-    }
+        detached = true;
+        const index = this._disposables.indexOf(disposable);
+        if (index !== -1) {
+          this._disposables.splice(index, 1);
+        }
+      }
+    };
   }
 
   /**
-   * Launches a browser as a child debug session.
-   * VS Code does not stop this child session when the parent Aspire session terminates, so the
-   * started session is tracked here and stopped explicitly during Aspire session shutdown.
+   * Registers cancellation for work that must finish before a resource debug session can start.
+   * Shutdown invokes these callbacks before it waits for pending starts, preventing that wait from
+   * delaying cancellation of a long-running build until the shutdown timeout.
    */
-  private async launchDebugBrowser(url: string, debugType: 'pwa-chrome' | 'pwa-msedge' | 'firefox'): Promise<void> {
-    const debugConfig: vscode.DebugConfiguration = {
-      type: debugType,
-      name: aspireDashboard,
-      request: 'launch',
-      url: url,
-    };
-
-    // Add type-specific options
-    if (debugType === 'pwa-chrome' || debugType === 'pwa-msedge') {
-      // Don't pause on entry for Chrome/Edge
-      debugConfig.pauseForSourceMap = false;
-    }
-    else if (debugType === 'firefox') {
-      // Firefox debugger requires webRoot; resolve to actual workspace path
-      debugConfig.webRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
-      debugConfig.pathMappings = [];
-    }
-
-    // Register listener before starting so we don't miss the event.
-    // The started session must be matched to *this* Aspire session: concurrent Aspire
-    // debug sessions all launch their dashboard with the same configuration name and
-    // browser type, so name and type alone would let one session adopt (and later close)
-    // another session's browser.
-    const disposable = vscode.debug.onDidStartDebugSession((session) => {
-      if (session.parentSession?.id === this._session.id && session.configuration.name === aspireDashboard && session.type === debugType) {
-        this._dashboardDebugSession = session;
-        disposable.dispose();
-        this.trackDashboardTermination(session);
-        if (this.isShuttingDown) {
-          this.closeDashboardInBackground();
-        }
-      }
-    });
-
-    let didStart: boolean;
-    const start = Promise.resolve(vscode.debug.startDebugging(
-      undefined,
-      debugConfig,
-      this._session));
-    const completion = start.then(() => undefined, () => undefined);
-    this._pendingDashboardDebugSessionStarts.add(completion);
-    try {
-      // Start as a child debug session so it is stopped alongside this session in `dispose`.
-      didStart = await start;
-    }
-    finally {
-      this._pendingDashboardDebugSessionStarts.delete(completion);
-    }
-
-    if (!didStart) {
+  registerPendingStartCancellation(disposable: vscode.Disposable): vscode.Disposable {
+    if (this._disposed || this._stopping) {
       disposable.dispose();
-      extensionLogOutputChannel.warn(`Failed to start debug browser (${debugType}), falling back to default browser`);
-
-      // Falling back after disposal would pop an untracked browser window open during
-      // teardown, long after the user stopped the session.
-      if (this.isShuttingDown) {
-        return;
-      }
-
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+      return { dispose: () => { } };
     }
+
+    this._pendingStartCancellations.add(disposable);
+    return {
+      dispose: () => {
+        this._pendingStartCancellations.delete(disposable);
+      }
+    };
+  }
+
+  private cancelPendingStartWork(): void {
+    const cancellations = [...this._pendingStartCancellations];
+    this._pendingStartCancellations.clear();
+    cancellations.forEach(cancellation => cancellation.dispose());
   }
 
   dispose(): void {
@@ -1594,6 +1585,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     if (this._disposed) {
       return;
     }
+
     this._disposed = true;
     if (!this._preserveAppHostRestartSourceSessionId) {
       delete this.configuration[appHostRestartSourceSessionIdConfigKey];
@@ -1615,11 +1607,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     const debugSessionId = this.debugSessionId;
     const dcpServer = this._dcpServer;
 
-    // Normal teardown awaits this stop as part of stopAllSessions. Keep an idempotent background
-    // fallback for direct finalization during extension shutdown.
-    this.closeDashboardInBackground();
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationDisposable = undefined;
+    this._dashboardLauncher.dispose();
+    this.cancelPendingStartWork();
 
     // Stop child debug sessions first so their `sessionTerminated`
     // notifications can flow back through `AspireDcpServer.sendNotification`
@@ -1667,129 +1656,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         })();
       }, 500);
     }
-  }
-
-  /**
-   * Closes the dashboard browser if closeDashboardOnDebugEnd is enabled.
-   * Handles closing debug browser sessions.
-   */
-  private closeDashboard(): Promise<void> {
-    const aspireConfig = vscode.workspace.getConfiguration('aspire');
-    const shouldClose = aspireConfig.get<boolean>('closeDashboardOnDebugEnd', true);
-
-    if (!shouldClose) {
-      if (this._dashboardDebugSession) {
-        this.clearDashboardDebugSession(this._dashboardDebugSession);
-      }
-      return Promise.resolve();
-    }
-
-    const dashboardDebugSession = this._dashboardDebugSession;
-    if (!dashboardDebugSession) {
-      return Promise.resolve();
-    }
-
-    if (this._dashboardStopPromise) {
-      return this._dashboardStopPromise;
-    }
-
-    extensionLogOutputChannel.info('Closing dashboard browser...');
-    const stopRequest = startStop(() => vscode.debug.stopDebugging(dashboardDebugSession));
-    const stop = this._dashboardTerminationPromise
-      ? Promise.race([stopRequest, this._dashboardTerminationPromise])
-      : stopRequest;
-    const attempt = stop.then(
-      () => {
-        this.clearDashboardDebugSession(dashboardDebugSession);
-        if (this._dashboardStopPromise === attempt) {
-          this._dashboardStopPromise = undefined;
-        }
-        extensionLogOutputChannel.info('Dashboard debug session stopped.');
-      },
-      err => {
-        // A natural termination can race the stop request and remove the session before VS Code
-        // settles the request. The termination event is authoritative: there is nothing left to
-        // retry even if the stale stop request rejects.
-        if (this._dashboardDebugSession !== dashboardDebugSession) {
-          return;
-        }
-        if (this._dashboardStopPromise === attempt) {
-          this._dashboardStopPromise = undefined;
-        }
-        throw err;
-      });
-    this._dashboardStopPromise = attempt;
-
-    return attempt;
-  }
-
-  private async stopDashboardWithinBudget(shutdownDeadline: number): Promise<void> {
-    const deadline = Math.min(shutdownDeadline, Date.now() + AspireDebugSession._dashboardStopTimeoutMs);
-
-    while (this._pendingDashboardDebugSessionStarts.size > 0) {
-      const pendingStarts = [...this._pendingDashboardDebugSessionStarts];
-      const results = await Promise.allSettled(pendingStarts.map(
-        start => this.waitWithinBudget(
-          start,
-          aspireDashboard,
-          deadline,
-          undefined,
-          debugSessionStartTimedOut)));
-      for (let index = 0; index < results.length; index++) {
-        if (results[index].status === 'rejected') {
-          // A browser launch is optional UI work. Do not let a wedged launch block AppHost and
-          // parent teardown; the start-event handler will close the browser if it appears later.
-          this._pendingDashboardDebugSessionStarts.delete(pendingStarts[index]);
-          extensionLogOutputChannel.warn(`Dashboard debug session launch did not settle before shutdown: ${describeStopFailure((results[index] as PromiseRejectedResult).reason)}`);
-        }
-      }
-    }
-
-    await this.stopWithinBudget(
-      () => this.closeDashboard(),
-      this._dashboardDebugSession?.name ?? aspireDashboard,
-      deadline,
-      () => { this._dashboardStopPromise = undefined; });
-  }
-
-  private trackDashboardTermination(session: vscode.DebugSession): void {
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationPromise = new Promise<void>(resolve => {
-      this._resolveDashboardTermination = resolve;
-    });
-    const disposable = vscode.debug.onDidTerminateDebugSession(terminatedSession => {
-      if (terminatedSession.id === session.id) {
-        this.clearDashboardDebugSession(session);
-      }
-    });
-    this._dashboardTerminationDisposable = disposable;
-  }
-
-  private clearDashboardDebugSession(session: vscode.DebugSession): void {
-    if (this._dashboardDebugSession !== session) {
-      return;
-    }
-
-    this._resolveDashboardTermination?.();
-    this._dashboardDebugSession = null;
-    this._dashboardStopPromise = undefined;
-    this._dashboardTerminationDisposable?.dispose();
-    this._dashboardTerminationDisposable = undefined;
-    this._dashboardTerminationPromise = undefined;
-    this._resolveDashboardTermination = undefined;
-  }
-
-  private closeDashboardInBackground(): void {
-    startStop(() => this.closeDashboard()).catch(err => {
-      extensionLogOutputChannel.warn(`Failed to stop dashboard debug session: ${describeStopFailure(err)}`);
-
-      // Once disposal has released this session from the extension context, no later caller can
-      // retry a browser that arrived after the ordered shutdown's launch budget. Give that narrow
-      // finalization race one fresh VS Code stop request before giving up.
-      if (this._disposed && this._dashboardDebugSession) {
-        stopSessionInBackground(() => this.closeDashboard(), 'dashboard debug session after finalization');
-      }
-    });
   }
 
   private sendResponse(request: any, body: any = {}) {
@@ -1844,55 +1710,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Renders a stop failure for an aggregate message. A rejection reason is `unknown`: adapters reject
- * with plain strings and DAP error objects as readily as with Errors.
- */
-function describeStopFailure(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
-}
-
-/**
- * Starts a session stop and always returns a promise.
- *
- * `stopSession()` is contributed by resource debugger extensions and is only typed as returning a
- * `Thenable<void>` - nothing forces the implementation to be `async`. A synchronous throw from one
- * of them would escape the surrounding `.map(...)` callback before `Promise.allSettled` ever saw
- * the array, aborting the whole shutdown and leaving every not-yet-visited resource, the AppHost,
- * and the Aspire parent running. `Promise.allSettled` only absorbs rejected promises, not throws
- * raised while the promise array is being built, so the conversion has to happen here.
- *
- * The call itself stays synchronous (rather than being deferred with `Promise.resolve().then(...)`)
- * so all resource stops are still started eagerly and run concurrently.
- */
-function startStop<T>(operation: () => Thenable<T>): Promise<T> {
-  try {
-    return Promise.resolve(operation());
-  }
-  catch (err) {
-    return Promise.reject(err);
-  }
-}
-
-/**
- * Asks a session to stop without waiting for it, for the paths that cannot await: the late-start
- * handlers, which stop a session that arrived after the shutdown snapshot, and dispose(), whose
- * `Disposable.dispose()` contract returns void.
- *
- * The stop is still a `Thenable` and can reject - `vscode.debug.stopDebugging()` rejects for a
- * session VS Code no longer knows about - and dropping it produced an unhandled promise rejection
- * in the extension host with no indication of which session failed.
- */
-function stopSessionInBackground(operation: () => Thenable<unknown>, description: string): void {
-  startStop(operation).catch(err => {
-    extensionLogOutputChannel.warn(`Failed to stop ${description}: ${describeStopFailure(err)}`);
-  });
-}
-
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {
   const args = [command];
   const separatorIndex = commandArgs.indexOf('--');
@@ -1914,150 +1731,6 @@ function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
   return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
 }
 
-export interface AppHostParentOutput {
-  output: string;
-  category: 'stdout' | 'stderr';
-}
-
-export class AppHostParentOutputFilter {
-  private _continuingDroppedLog = false;
-  private _continuingErrorBlock = false;
-  private _lastCategory: string | undefined;
-
-  filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
-    // Per the DAP spec the `category` field is optional; clients should treat a
-    // missing category as `'console'`. Normalize once at the boundary so state
-    // tracking and per-line classification see a consistent value, and so
-    // category-less debug-adapter output gets the same suppression as `'console'`
-    // instead of being mirrored to the parent debug console as stdout.
-    const normalizedCategory = category ?? 'console';
-
-    if (normalizedCategory === 'debug') {
-      this.resetState();
-      this._lastCategory = normalizedCategory;
-      return undefined;
-    }
-
-    // Continuation state (dropped log / error block) only makes sense within a single
-    // logical stream. When the DAP category changes (e.g. console -> stdout) we are
-    // looking at a different stream and previous indented-continuation context no
-    // longer applies.
-    if (normalizedCategory !== this._lastCategory) {
-      this.resetState();
-    }
-    this._lastCategory = normalizedCategory;
-
-    const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
-    let filteredOutput = '';
-    // If the DAP delivered this chunk on stderr, keep the whole emitted message on
-    // stderr — the channel itself is authoritative regardless of per-line classification.
-    let hasErrorOutput = normalizedCategory === 'stderr';
-
-    for (const segment of segments) {
-      const outputCategory = this.getLineCategory(segment, normalizedCategory);
-      if (outputCategory) {
-        filteredOutput += segment;
-        hasErrorOutput ||= outputCategory === 'stderr';
-      }
-    }
-
-    if (filteredOutput.length === 0) {
-      return undefined;
-    }
-
-    return {
-      output: filteredOutput,
-      category: hasErrorOutput ? 'stderr' : 'stdout'
-    };
-  }
-
-  private getLineCategory(segment: string, category: string): 'stdout' | 'stderr' | undefined {
-    const line = segment.replace(/(?:\r\n|\r|\n)$/, '');
-    const trimmedLine = line.trim();
-
-    if (trimmedLine.length === 0) {
-      return !this._continuingDroppedLog && this.shouldMirrorConsoleOutput(category) ? this.getCurrentCategory(category) : undefined;
-    }
-
-    if (this._continuingDroppedLog && isIndentedContinuation(line)) {
-      return undefined;
-    }
-
-    if (this._continuingErrorBlock && isIndentedContinuation(line)) {
-      return 'stderr';
-    }
-
-    const logSeverity = getConsoleLogSeverity(trimmedLine);
-    if (logSeverity) {
-      this._continuingDroppedLog = logSeverity === 'low';
-      this._continuingErrorBlock = logSeverity === 'severe';
-
-      return logSeverity === 'low' ? undefined : this.getCurrentCategory(category);
-    }
-
-    const isSevereOutput = isSevereRuntimeOutputLine(trimmedLine);
-    this._continuingDroppedLog = false;
-    this._continuingErrorBlock = isSevereOutput;
-
-    if (category === 'console' && !isSevereOutput) {
-      return undefined;
-    }
-
-    return this.getCurrentCategory(category);
-  }
-
-  private shouldMirrorConsoleOutput(category: string): boolean {
-    return category !== 'console' || this._continuingErrorBlock;
-  }
-
-  private getCurrentCategory(category: string): 'stdout' | 'stderr' {
-    return category === 'stderr' || this._continuingErrorBlock ? 'stderr' : 'stdout';
-  }
-
-  private resetState() {
-    this._continuingDroppedLog = false;
-    this._continuingErrorBlock = false;
-  }
-}
-
-function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | undefined {
-  const defaultConsoleLogLevel = /^(trce|dbug|info|warn|fail|crit):\s/.exec(line)?.[1];
-  if (defaultConsoleLogLevel) {
-    return defaultConsoleLogLevel === 'trce' || defaultConsoleLogLevel === 'dbug'
-      ? 'low'
-      : defaultConsoleLogLevel === 'fail' || defaultConsoleLogLevel === 'crit'
-        ? 'severe'
-        : 'normal';
-  }
-
-  // Microsoft.Extensions.Logging "simple" console formatter emits lines shaped like
-  // `<CategoryTypeName>[<EventId>]?: <Level>: <message>`. Real category names are
-  // namespaced .NET type names containing at least one dot (e.g.
-  // `Aspire.Hosting.Health.ResourceHealthCheckService`). Requiring a dot avoids
-  // matching arbitrary user stdout like `"Status: Error: connection refused"`.
-  const simpleConsoleLogLevel = /^[A-Za-z_]\w*(?:\.\w+)+(?:\[[^\]]+\])?:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
-  if (simpleConsoleLogLevel) {
-    return simpleConsoleLogLevel === 'Trace' || simpleConsoleLogLevel === 'Debug'
-      ? 'low'
-      : simpleConsoleLogLevel === 'Error' || simpleConsoleLogLevel === 'Critical'
-        ? 'severe'
-        : 'normal';
-  }
-
-  return undefined;
-}
-
-function isIndentedContinuation(line: string): boolean {
-  return /^\s+\S/.test(line);
-}
-
-function isSevereRuntimeOutputLine(line: string): boolean {
-  // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
-  return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
-    // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
-    || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
-    // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
-    // false positives on user stdout (`"Failed payment retry queued"`, file paths
-    // containing "error", etc.).
-    || /^(?:fatal|critical|panic|aborted|segmentation\s+fault|unhandled\s+exception)\b/i.test(line);
-}
+export { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
+export type { AppHostParentOutput } from "./session/appHostParentOutputFilter";
+export type { DashboardLaunchBehavior, DashboardBrowserType } from "./session/dashboardLauncher";

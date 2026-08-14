@@ -98,7 +98,11 @@ public class ExecutableResourceBuilderExtensionTests
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         var exe = new Executable(new ExecutableSpec());
-        await annotation.LaunchConfigurationAnnotator(exe, "NoDebug", CancellationToken.None);
+        await annotation.LaunchConfigurationAnnotator(
+            exe,
+            LaunchConfigurationTestHelpers.CreateCallbackContext(
+                executable.Resource,
+                ExecutableLaunchMode.NoDebug));
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
@@ -124,14 +128,20 @@ public class ExecutableResourceBuilderExtensionTests
         var syncExecutable = builder.AddExecutable("sync", "command", "workingdirectory")
             .WithDebugSupport(mode => new ExecutableLaunchConfiguration("go") { Mode = mode }, "go");
         var asyncExecutable = builder.AddExecutable("async", "command", "workingdirectory")
-            .WithDebugSupport(async (mode, ct) =>
+            .WithDebugSupport(async (mode, _) =>
             {
                 await Task.Yield();
                 return new ExecutableLaunchConfiguration("go") { Mode = mode };
             }, "go");
 
-        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await syncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
-        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await asyncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(
+                syncExecutable.Resource,
+                LaunchConfigurationTestHelpers.CreateCallbackContext(syncExecutable.Resource)));
+        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(
+                asyncExecutable.Resource,
+                LaunchConfigurationTestHelpers.CreateCallbackContext(asyncExecutable.Resource)));
 
         Assert.Equal(asyncConfiguration.Type, syncConfiguration.Type);
         Assert.Equal(asyncConfiguration.Mode, syncConfiguration.Mode);
@@ -150,7 +160,7 @@ public class ExecutableResourceBuilderExtensionTests
             () => executable.WithDebugSupport(mode => Task.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
 
         Assert.Equal("launchConfigurationProducer", exception.ParamName);
-        Assert.Contains(nameof(CancellationToken), exception.Message);
+        Assert.Equal(CreateAsyncProducerGuardMessage(typeof(Task<ExecutableLaunchConfiguration>), "launchConfigurationProducer"), exception.Message);
     }
 
     [Fact]
@@ -163,6 +173,7 @@ public class ExecutableResourceBuilderExtensionTests
             () => executable.WithDebugSupport(mode => ValueTask.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
 
         Assert.Equal("launchConfigurationProducer", exception.ParamName);
+        Assert.Equal(CreateAsyncProducerGuardMessage(typeof(ValueTask<ExecutableLaunchConfiguration>), "launchConfigurationProducer"), exception.Message);
     }
 
     [Fact]
@@ -315,6 +326,13 @@ public class ExecutableResourceBuilderExtensionTests
         Assert.Collection(annotations,
             annotation => Assert.True(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)),
             annotation => Assert.False(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)));
+    }
+
+    private static string CreateAsyncProducerGuardMessage(Type producerReturnType, string parameterName)
+    {
+        var guidance = $"The launch configuration producer returns '{producerReturnType}'. An asynchronous producer must bind to an asynchronous {nameof(ResourceBuilderExtensions.WithDebugSupport)} overload either by accepting the launch mode and a {nameof(CancellationToken)} or by accepting a {nameof(LaunchConfigurationCallbackContext)}; otherwise the task itself is used as the launch configuration.";
+
+        return new ArgumentException(guidance, parameterName).Message;
     }
 
     [Fact]

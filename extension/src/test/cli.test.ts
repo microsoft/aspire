@@ -7,7 +7,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import * as sinon from 'sinon';
-import { terminateCliProcess } from '../debugger/languages/cli';
+import { terminateCliProcess } from '../utils/process/cliProcess';
 
 suite('CLI process termination', () => {
     teardown(() => {

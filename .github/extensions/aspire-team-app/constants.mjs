@@ -1,6 +1,6 @@
 // Shared constants ported from davidfowl/pr-dashboard frontend/src/constants.ts.
 
-export const currentRelease = "13.4";
+export const currentRelease = "13.5";
 export const hourMs = 1000 * 60 * 60;
 export const dayMs = hourMs * 24;
 

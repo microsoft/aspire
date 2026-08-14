@@ -7,7 +7,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, isSameFileSystemEntry, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as configInfoProvider from '../utils/configInfoProvider';
@@ -121,6 +121,19 @@ suite('AppHost discovery', () => {
         const candidate = findCandidateForEditorFile(appHostPath, [{
             path: appHostPath,
             language: 'typescript/nodejs',
+            status: 'buildable',
+        }]);
+
+        assert.strictEqual(candidate?.path, appHostPath);
+        assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
+    });
+
+    test('keeps Rust AppHost candidate as source file', () => {
+        const appHostPath = buildPath('workspace', 'AppHost', 'apphost.rs');
+
+        const candidate = findCandidateForEditorFile(appHostPath, [{
+            path: appHostPath,
+            language: 'rust',
             status: 'buildable',
         }]);
 
@@ -427,7 +440,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('watches Node module AppHost filenames', async () => {
+        test('watches guest AppHost filenames', async () => {
             const watchedPatterns: string[] = [];
             sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake((pattern) => {
                 watchedPatterns.push(typeof pattern === 'string' ? pattern : pattern.pattern);
@@ -458,6 +471,7 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.js'));
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
+                assert.ok(watchedPatterns.includes('**/apphost.rs'));
             }
             finally {
                 service.dispose();

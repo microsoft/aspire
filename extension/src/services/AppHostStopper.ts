@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 
 const maxRetainedStderrLength = 16 * 1024;

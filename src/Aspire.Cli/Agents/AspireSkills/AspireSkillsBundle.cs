@@ -204,10 +204,6 @@ internal sealed class AspireSkillsBundle
     private static void ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
-        if (string.IsNullOrWhiteSpace(file.Sha256))
-        {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' does not specify a SHA-256 hash.", relativePath, skillName));
-        }
 
         var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
         if (!File.Exists(fullPath))
@@ -215,21 +211,41 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' was not found.", relativePath, skillName));
         }
 
-        var expectedHash = NormalizeSha256(file.Sha256);
-        string actualHash;
-        using (var stream = File.OpenRead(fullPath))
+        // Prefer SHA-512, which current microsoft/aspire-skills builds emit. SHA-256 remains accepted for
+        // bundles published before the switch — notably the attestation-verified v0.0.1 snapshot embedded in
+        // the CLI, whose exact bytes (and therefore its SHA-256 per-file manifest) cannot change without
+        // invalidating its published attestation. Once a signed SHA-512 release is re-embedded, that bundle
+        // carries `sha512` instead and this fallback is no longer exercised.
+        if (!string.IsNullOrWhiteSpace(file.Sha512))
         {
-            actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            VerifyFileHash(fullPath, skillName, relativePath, NormalizeSha512(file.Sha512), static stream => SHA512.HashData(stream), "SHA-512");
         }
-
-        if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+        else if (!string.IsNullOrWhiteSpace(file.Sha256))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed SHA-256 verification.", relativePath, skillName));
+            VerifyFileHash(fullPath, skillName, relativePath, NormalizeSha256(file.Sha256), static stream => SHA256.HashData(stream), "SHA-256");
+        }
+        else
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' does not specify a SHA-512 or SHA-256 hash.", relativePath, skillName));
         }
 
         if (string.Equals(relativePath, SkillFileName, StringComparison.Ordinal))
         {
             ValidateSkillFileFrontmatter(skillName, fullPath);
+        }
+    }
+
+    private static void VerifyFileHash(string fullPath, string skillName, string relativePath, string expectedHash, Func<Stream, byte[]> computeHash, string algorithmName)
+    {
+        string actualHash;
+        using (var stream = File.OpenRead(fullPath))
+        {
+            actualHash = Convert.ToHexString(computeHash(stream)).ToLowerInvariant();
+        }
+
+        if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed {2} verification.", relativePath, skillName, algorithmName));
         }
     }
 
@@ -345,6 +361,14 @@ internal sealed class AspireSkillsBundle
         }
 
         return Path.Combine(segments);
+    }
+
+    internal static string NormalizeSha512(string sha512)
+    {
+        const string prefix = "sha512-";
+        return sha512.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? sha512[prefix.Length..]
+            : sha512;
     }
 
     internal static string NormalizeSha256(string sha256)

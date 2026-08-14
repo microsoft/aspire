@@ -6168,6 +6168,14 @@ tree-sitter-c-sharp@0.23.5:
     node-addon-api "^8.2.2"
     node-gyp-build "^4.8.4"
 
+tree-sitter-rust@0.24.0:
+  version "0.24.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tree-sitter-rust/-/tree-sitter-rust-0.24.0.tgz#efe9104052ae022e98d2cd30018587bd05ce01f3"
+  integrity sha1-7+kQQFKuAi6Y0s0wAYWHvQXOAfM=
+  dependencies:
+    node-addon-api "^8.2.2"
+    node-gyp-build "^4.8.4"
+
 truncate-utf8-bytes@^1.0.0:
   version "1.0.2"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/truncate-utf8-bytes/-/truncate-utf8-bytes-1.0.2.tgz#405923909592d56f78a5818434b0b78489ca5f2b"

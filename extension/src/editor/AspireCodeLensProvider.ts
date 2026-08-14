@@ -3,9 +3,11 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import './parsers/rustAppHostParser';
+import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
+import { isCommandVisibleToUi, isEnabledCommand } from '../views/treePresentation';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
-import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../data/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
 import {
@@ -31,6 +33,10 @@ import {
     codeLensCommand,
     codeLensOpenDashboard,
     codeLensViewAppHostLogs,
+    codeLensRustAppHostAlreadyRunning,
+    codeLensRustAppHostAlreadyRunningTooltip,
+    codeLensRustAppHostUseAspire,
+    codeLensRustAppHostUseAspireTooltip,
     codeLensResourceValueMissing,
 } from '../loc/strings';
 
@@ -160,11 +166,32 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             return;
         }
 
-        // Only emit the lens when the document maps to a concretely-running AppHost.
-        // This prevents stale lenses on AppHost files whose host is not currently running,
-        // and avoids dispatching commands with a `.cs` source path the CLI cannot resolve.
-        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
-        if (appHostPath === undefined) {
+        const runningAppHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
+
+        if (document.languageId === 'rust') {
+            const entryPointLine = await parser.findAppHostEntryPointLine?.(document) ?? builderLine;
+            const range = new vscode.Range(entryPointLine, 0, entryPointLine, 0);
+            // The tree only holds running AppHosts, so revealing a stopped one has nothing to select.
+            // An empty command id makes VS Code render the warning as plain text instead of a link
+            // whose click does nothing.
+            lenses.push(new vscode.CodeLens(range, runningAppHostPath
+                ? {
+                    title: codeLensRustAppHostAlreadyRunning,
+                    command: 'aspire-vscode.codeLensRevealAppHost',
+                    tooltip: codeLensRustAppHostAlreadyRunningTooltip,
+                    arguments: [runningAppHostPath],
+                }
+                : {
+                    title: codeLensRustAppHostUseAspire,
+                    command: '',
+                    tooltip: codeLensRustAppHostUseAspireTooltip,
+                }));
+        }
+
+        // Dashboard and log actions require a concretely-running AppHost path. In particular,
+        // C# source documents cannot safely fall back to their sibling source path here because
+        // the CLI expects the project path.
+        if (runningAppHostPath === undefined) {
             return;
         }
 
@@ -174,14 +201,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             title: codeLensOpenDashboard,
             command: 'aspire-vscode.codeLensOpenDashboard',
             tooltip: codeLensOpenDashboard,
-            arguments: [appHostPath],
+            arguments: [runningAppHostPath],
         }));
 
         lenses.push(new vscode.CodeLens(range, {
             title: codeLensViewAppHostLogs,
             command: 'aspire-vscode.codeLensViewAppHostLogs',
             tooltip: codeLensViewAppHostLogs,
-            arguments: [appHostPath],
+            arguments: [runningAppHostPath],
         }));
     }
 

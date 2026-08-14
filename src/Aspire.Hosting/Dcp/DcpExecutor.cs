@@ -178,7 +178,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     containers = _containerCreator.PrepareObjects().ToArray();
                     _containerCreator.PrepareContainerExecutables();
-                    executables = (await _executableCreator.PrepareObjectsAsync(ct).ConfigureAwait(false)).ToArray();
+                    executables = _executableCreator.PrepareObjects(ct).ToArray();
 
                     prepareResourcesActivity.SetDcpPreparedResourceCounts(containers.Length, executables.Length);
                 }

@@ -3,8 +3,9 @@ import { getParserForDocument } from './parsers/AppHostResourceParser';
 // Trigger parser self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
+import './parsers/rustAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { AppHostDisplayInfo } from '../data/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, StateStyle, HealthStatus } from './resourceConstants';
 

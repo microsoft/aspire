@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
@@ -49,6 +50,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         RunWorkingDirectory = "/repo/src/AppHost",
         RunArguments = "--from-msbuild",
         TargetFramework = "net10.0",
+        TargetFrameworks = "net10.0;net9.0",
     };
 
     private static IEnumerable<string> EnumerateCacheEntries(TemporaryWorkspace workspace)
@@ -95,6 +97,45 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         var hit = await cache.TryGetAsync(new FileInfo(projectFile.FullName), CancellationToken.None).DefaultTimeout();
 
         Assert.Null(hit);
+    }
+
+    [Fact]
+    public async Task CachePayloadContainsOnlyProjectInspectionMetadata()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cache = CreateCache(workspace);
+        var projectFile = CreateProjectFile(workspace);
+
+        await cache.SetAsync(
+            projectFile,
+            cache.GetCacheKey(projectFile),
+            SampleEntry() with { IsUsingCliBundle = true },
+            CancellationToken.None).DefaultTimeout();
+
+        var cachePath = Assert.Single(EnumerateCacheEntries(workspace));
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(cachePath));
+        var propertyNames = document.RootElement
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "aspireHostingVersion",
+                "exitCode",
+                "isAspireHost",
+                "isUsingCliBundle",
+                "runArguments",
+                "runCommand",
+                "runWorkingDirectory",
+                "schemaVersion",
+                "targetFramework",
+                "targetFrameworks",
+                "targetPath",
+                "userSecretsId",
+            ],
+            propertyNames);
     }
 
     [Fact]

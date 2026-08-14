@@ -206,13 +206,9 @@ function setAccentColor(theme) {
     const hover = theme === themeSettingDark ? brandLight : brandPrimary;
     const active = rest;
     const focus = rest;
-    // Fluent design tokens are scoped to an element subtree. The body already receives generated
-    // defaults during Fluent initialization, so use the dashboard's dedicated ancestor to ensure
-    // FAST emits these explicit semantic values and every Fluent Blazor component inherits them.
-    const root = document.getElementById("aspire-design-system");
-    if (!root) {
-        throw new Error("The Aspire design-system token scope was not found.");
-    }
+    // Scope the explicit semantic values to the body so dashboard content and UI mounted directly
+    // under the body inherit the same branded Fluent tokens.
+    const root = document.body;
 
     accentFillRest.setValueFor(root, rest);
     accentFillHover.setValueFor(root, hover);
