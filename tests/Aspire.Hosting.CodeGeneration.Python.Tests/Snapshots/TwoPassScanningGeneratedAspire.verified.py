@@ -1949,6 +1949,7 @@ class InteractionNotificationOptions(typing.TypedDict, total=False):
     LinkUrl: str | None
 
 class InteractionProgressOptions(typing.TypedDict, total=False):
+    Title: str | None
     PrimaryButtonText: str | None
     EnableMessageMarkdown: bool | None
     Work: typing.Callable[[ProgressContext], None]
@@ -3015,10 +3016,9 @@ class AbstractInteractionService:
         )
         return typing.cast(BoolInteractionResult, result)
 
-    def prompt_progress(self, title: str, message: str, *, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+    def prompt_progress(self, message: str, *, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
         """Displays a progress dialog with an indeterminate progress indicator."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
-        rpc_args['title'] = title
         rpc_args['message'] = message
         if options is not None:
             rpc_args['options'] = options

@@ -1168,6 +1168,8 @@ export interface InteractionNotificationOptions {
 
 /** Options for progress dialog prompts. */
 export interface InteractionProgressOptions {
+    /** Gets or sets the optional title of the progress dialog. */
+    title?: string | null;
     /** Gets or sets the primary button text (e.g. "Cancel"). */
     primaryButtonText?: string | null;
     /** Gets or sets a value indicating whether Markdown in the message is rendered. */
@@ -12759,7 +12761,7 @@ export interface InteractionService {
      * Displays a progress dialog with an indeterminate progress indicator.
      * @param options Additional options.
      */
-    promptProgress(title: string, message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
      * Prompts the user for a single input.
      * @param options Additional options.
@@ -12828,7 +12830,7 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * Displays a progress dialog with an indeterminate progress indicator.
      * @param options Additional options.
      */
-    promptProgress(title: string, message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
      * Prompts the user for a single input.
      * @param options Additional options.
@@ -12941,7 +12943,7 @@ class InteractionServiceImpl implements InteractionService {
      * Displays a progress dialog with an indeterminate progress indicator.
      * @param options Additional options.
      */
-    async promptProgress(title: string, message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+    async promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
         const __optionsForRpc = options === undefined || options === null ? options : { ...options };
         if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
             const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
@@ -12955,7 +12957,7 @@ class InteractionServiceImpl implements InteractionService {
                 __optionsForRpcData["work"] = ____optionsForRpcWorkId;
             }
         }
-        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, message };
         if (options !== undefined) rpcArgs.options = __optionsForRpc;
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<BoolInteractionResult>(
@@ -13176,8 +13178,8 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
         return this._promise.then(obj => obj.promptNotification(title, message, options, cancellationToken));
     }
 
-    promptProgress(title: string, message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
-        return this._promise.then(obj => obj.promptProgress(title, message, options, cancellationToken));
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptProgress(message, options, cancellationToken));
     }
 
     promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {

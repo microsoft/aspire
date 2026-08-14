@@ -610,9 +610,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             _progress_cancellation_token = progress_context.cancellation_token()
 
         progress = interaction_service.prompt_progress(
-            "Progress",
             "Completing **work**...",
             options={
+                "Title": "Progress",
                 "PrimaryButtonText": "Cancel",
                 "EnableMessageMarkdown": True,
                 "Work": complete_progress_work,

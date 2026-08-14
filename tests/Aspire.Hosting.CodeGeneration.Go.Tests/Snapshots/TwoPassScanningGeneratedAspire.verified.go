@@ -600,6 +600,7 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 
 // InteractionProgressOptions represents InteractionProgressOptions.
 type InteractionProgressOptions struct {
+	Title *string `json:"Title,omitempty"`
 	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
 	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
 	Work func(arg ProgressContext) `json:"Work,omitempty"`
@@ -608,6 +609,7 @@ type InteractionProgressOptions struct {
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
+	if d.Title != nil { m["Title"] = serializeValue(d.Title) }
 	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
 	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
 	if d.Work != nil {
@@ -18071,7 +18073,7 @@ type InteractionService interface {
 	PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult
 	PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error)
 	PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error)
-	PromptProgress(title string, message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
+	PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
 	Err() error
 }
 
@@ -18425,13 +18427,12 @@ func (s *interactionService) PromptNotification(title string, message string, op
 }
 
 // PromptProgress displays a progress dialog with an indeterminate progress indicator.
-func (s *interactionService) PromptProgress(title string, message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
+func (s *interactionService) PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
 	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
 	}
-	reqArgs["title"] = serializeValue(title)
 	reqArgs["message"] = serializeValue(message)
 	if len(options) > 0 {
 		merged := &PromptProgressOptions{}

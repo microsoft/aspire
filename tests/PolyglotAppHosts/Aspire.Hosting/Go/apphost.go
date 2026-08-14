@@ -750,8 +750,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
 
-		progress, err := interactionService.PromptProgress("Progress", "Completing **work**...", &aspire.PromptProgressOptions{
+		progress, err := interactionService.PromptProgress("Completing **work**...", &aspire.PromptProgressOptions{
 			Options: &aspire.InteractionProgressOptions{
+				Title:                 aspire.StringPtr("Progress"),
 				PrimaryButtonText:     aspire.StringPtr("Cancel"),
 				EnableMessageMarkdown: aspire.BoolPtr(true),
 				Work: func(progressContext aspire.ProgressContext) {
