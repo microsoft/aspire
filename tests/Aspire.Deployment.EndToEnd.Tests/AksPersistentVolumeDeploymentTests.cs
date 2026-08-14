@@ -355,7 +355,18 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             $"FS_GROUP=$(kubectl get statefulset apiservice-statefulset --namespace \"$NS\" -o jsonpath='{{.spec.template.spec.securityContext.fsGroup}}') && " +
             $"test \"$FS_GROUP\" = \"{expectedFsGroup}\" && " +
-            $"echo \"StatefulSet uses fsGroup {expectedFsGroup}\"",
+            // Verify the Linux identity and mount ownership reported as:
+            //   id -u: 1654
+            //   id -G: 1654 2000
+            //   stat -c %g /srv/data: 2000
+            // This proves the write succeeds through group access rather than root privileges.
+            "PROCESS_UID=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- id -u) && " +
+            "PROCESS_GROUPS=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- id -G) && " +
+            "VOLUME_GROUP=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- stat -c %g /srv/data) && " +
+            "test \"$PROCESS_UID\" != \"0\" && " +
+            $"printf ' %s ' \"$PROCESS_GROUPS\" | grep --fixed-strings --quiet ' {expectedFsGroup} ' && " +
+            $"test \"$VOLUME_GROUP\" = \"{expectedFsGroup}\" && " +
+            $"echo \"StatefulSet uses fsGroup {expectedFsGroup}; pod UID is $PROCESS_UID with groups $PROCESS_GROUPS; /srv/data group is $VOLUME_GROUP\"",
             counter);
     }
 
