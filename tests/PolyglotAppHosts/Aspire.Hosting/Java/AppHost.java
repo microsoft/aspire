@@ -391,8 +391,8 @@ void main() throws Exception {
             progressOptions.setWork((progressContext) -> {
                 var _progressCancellationToken = progressContext.cancellationToken();
             });
-            var progress = interactionService.promptProgress("Completing **work**...",
-                new PromptProgressOptions().title("Progress").options(progressOptions));
+            var progress = interactionService.promptProgress("Progress", "Completing **work**...",
+                new PromptProgressOptions().options(progressOptions));
 
             var textOptions = new CreateInteractionInputOptions();
             textOptions.setLabel("Name");
