@@ -44,9 +44,11 @@ public static class RustHostingExtensions
     /// the build rather than to <c>cargo run</c>.
     /// </para>
     /// <para>
-    /// OTLP export and dev certificate trust are configured by default. Rust does not read a port from
-    /// the environment on its own, so bind to the port named by <c>WithHttpEndpoint(env: ...)</c> rather
-    /// than a hard-coded one.
+    /// Aspire configures the OTLP endpoint and development certificate environment variables. The Rust
+    /// application must still enable the transport and TLS features required by its OpenTelemetry SDK and
+    /// load native trust roots when using the development certificate. Rust does not read a port from the
+    /// environment on its own, so bind to the port named by <c>WithHttpEndpoint(env: ...)</c> rather than a
+    /// hard-coded one.
     /// </para>
     /// <para>
     /// When publishing, a multi-stage Dockerfile is generated that builds the crate inside the container;
