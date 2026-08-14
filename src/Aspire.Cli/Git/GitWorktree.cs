@@ -246,7 +246,7 @@ internal static class GitWorktree
     private static string CanonicalizePath(string path)
     {
         var resolvedPath = PathNormalizer.ResolveSymlinks(path);
-        if (!OperatingSystem.IsMacOS())
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsWindows())
         {
             return resolvedPath;
         }
