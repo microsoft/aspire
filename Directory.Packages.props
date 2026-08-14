@@ -109,9 +109,9 @@
     <PackageVersion Include="Deque.AxeCore.Playwright" Version="4.11.3" />
     <PackageVersion Include="DnsClient" Version="1.8.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.34.1" />
-    <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
-    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.80.0" />
-    <PackageVersion Include="Grpc.Tools" Version="2.80.0" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
     <PackageVersion Include="Hex1b" Version="0.163.0" />
     <PackageVersion Include="Hex1b.McpServer" Version="0.163.0" />
     <PackageVersion Include="Hex1b.Tool" Version="0.163.0" />
