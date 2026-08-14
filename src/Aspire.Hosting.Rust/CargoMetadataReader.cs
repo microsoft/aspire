@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace Aspire.Hosting.Rust;
 
@@ -27,7 +28,7 @@ internal interface ICargoMetadataReader
 /// <c>--no-deps</c> additionally stops cargo from resolving or downloading the dependency graph.
 /// See https://doc.rust-lang.org/cargo/commands/cargo-metadata.html
 /// </remarks>
-internal sealed class CargoMetadataReader : ICargoMetadataReader
+internal sealed partial class CargoMetadataReader : ICargoMetadataReader
 {
     internal const int MaximumStandardErrorLength = 4096;
     private const string TruncatedDiagnosticSuffix = "... (truncated)";
@@ -121,7 +122,7 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
 
         if (process.ExitCode != 0)
         {
-            var diagnostic = FormatStandardError(stderr, environment);
+            var diagnostic = FormatStandardError(stderr, environment, startInfo.Environment);
             var diagnosticSuffix = diagnostic.Length > 0 ? $" {diagnostic}" : string.Empty;
             throw new DistributedApplicationException(
                 $"'cargo metadata' failed for the Rust app '{resourceName}' with exit code {process.ExitCode}.{diagnosticSuffix}");
@@ -134,19 +135,45 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
         catch (Exception ex) when (ex is not DistributedApplicationException)
         {
             throw new DistributedApplicationException(
-                $"Unable to read the output of 'cargo metadata' for the Rust app '{resourceName}'. {ex.Message}", ex);
+                $"Unable to read the output of 'cargo metadata' for the Rust app '{resourceName}'. Cargo returned invalid {ex.GetType().Name} output.");
         }
     }
 
-    internal static string FormatStandardError(string standardError, IReadOnlyDictionary<string, string> environment)
+    internal static string FormatStandardError(
+        string standardError,
+        IReadOnlyDictionary<string, string> environment,
+        IEnumerable<KeyValuePair<string, string?>>? inheritedEnvironment = null)
     {
-        // Cargo wrappers and configuration errors can echo values from the resolved resource environment.
+        // Cargo wrappers and configuration errors can echo values from the resolved resource environment or
+        // inherited variables such as CARGO_REGISTRY_TOKEN. Resource values are all user-controlled, while
+        // inherited values are limited to conventional secret-bearing names to preserve useful diagnostics.
         // Redact before truncating so a value that crosses the retained-output boundary cannot leak partially.
+        if (string.IsNullOrWhiteSpace(standardError))
+        {
+            return string.Empty;
+        }
+
         var redacted = standardError;
-        foreach (var value in environment.Values
-            .Where(static value => !string.IsNullOrEmpty(value))
+        var resourceValues = environment
+            .Where(static pair => pair.Value.Length >= 4 || IsSensitiveEnvironmentVariableName(pair.Key))
+            .Select(static pair => pair.Value);
+        var sensitiveInheritedValues = inheritedEnvironment?
+            .Where(static pair => IsSensitiveEnvironmentVariableName(pair.Key) || ContainsCredentialUserInfo(pair.Value))
+            .Select(static pair => pair.Value);
+        var sensitiveValues = resourceValues
+            .Concat(sensitiveInheritedValues ?? [])
+            .OfType<string>()
+            .Where(static value => value.Length > 0)
             .Distinct(StringComparer.Ordinal)
-            .OrderByDescending(static value => value.Length))
+            .Where(value => redacted.Contains(value, StringComparison.Ordinal))
+            .OrderByDescending(static value => value.Length)
+            .ToArray();
+        if (sensitiveValues.Any(static value => value.Length < 4))
+        {
+            return "Cargo stderr omitted because a sensitive environment value was too short to redact safely.";
+        }
+
+        foreach (var value in sensitiveValues)
         {
             redacted = redacted.Replace(value, "***", StringComparison.Ordinal);
         }
@@ -157,10 +184,28 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
             return redacted;
         }
 
+        var retainedLength = MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length;
+        if (char.IsHighSurrogate(redacted[retainedLength - 1]) && char.IsLowSurrogate(redacted[retainedLength]))
+        {
+            retainedLength--;
+        }
+
         return string.Concat(
-            redacted.AsSpan(0, MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length),
+            redacted.AsSpan(0, retainedLength),
             TruncatedDiagnosticSuffix);
     }
+
+    private static bool IsSensitiveEnvironmentVariableName(string name) => SensitiveEnvironmentVariableNamePattern().IsMatch(name);
+
+    private static bool ContainsCredentialUserInfo(string? value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.UserInfo);
+    }
+
+    [GeneratedRegex(
+        @"(?:^|[._-])(?:PGPASSWORD|MYSQL_PWD|tokens?|passwords?|passwd|secrets?|credentials?|api[_-]?keys?|access[_-]?keys?|private[_-]?keys?|client[_-]?secrets?|connection[_-]?strings?)(?:$|[._-])|(?:TOKENS?|PASSWORDS?|PASSWD|SECRETS?|CREDENTIALS?|APIKEYS?|ACCESSKEYS?|PRIVATEKEYS?|CLIENTSECRETS?|CONNECTIONSTRINGS?)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SensitiveEnvironmentVariableNamePattern();
 
     private static void TryKillProcess(Process process)
     {

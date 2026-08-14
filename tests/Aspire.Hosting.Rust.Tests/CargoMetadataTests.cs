@@ -112,6 +112,16 @@ public class CargoMetadataTests
     }
 
     [Fact]
+    public void CargoFailureDiagnosticRedactsValuesBeforeTrimmingWhitespace()
+    {
+        var environment = new Dictionary<string, string> { ["REGISTRY_TOKEN"] = " secret " };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(" secret \n", environment);
+
+        Assert.Equal("***", diagnostic);
+    }
+
+    [Fact]
     public void CargoFailureDiagnosticRedactsBeforeBoundingOutput()
     {
         const string Secret = "secret-value";
@@ -124,6 +134,88 @@ public class CargoMetadataTests
         Assert.Equal(
             $"{new string('x', CargoMetadataReader.MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length)}{TruncatedDiagnosticSuffix}",
             diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticRedactsSensitiveInheritedEnvironmentValues()
+    {
+        var resourceEnvironment = new Dictionary<string, string>();
+        var inheritedEnvironment = new Dictionary<string, string?>
+        {
+            ["GITHUB_TOKEN"] = "ambient-secret",
+            ["PATH"] = "/usr/local/bin"
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            "wrapper echoed ambient-secret but retained /usr/local/bin",
+            resourceEnvironment,
+            inheritedEnvironment);
+
+        Assert.Equal("wrapper echoed *** but retained /usr/local/bin", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticRedactsCredentialUrlsRegardlessOfEnvironmentVariableName()
+    {
+        var inheritedEnvironment = new Dictionary<string, string?>
+        {
+            ["CARGO_REGISTRIES_PRIVATE_INDEX"] = "https://user:secret@example.com/index"
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            "failed to fetch https://user:secret@example.com/index",
+            new Dictionary<string, string>(),
+            inheritedEnvironment);
+
+        Assert.Equal("failed to fetch ***", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticOmitsOutputWhenSensitiveValueIsTooShortToRedactSafely()
+    {
+        var environment = new Dictionary<string, string> { ["API_TOKEN"] = "1" };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError("cargo failed with exit code 1", environment);
+
+        Assert.Equal("Cargo stderr omitted because a sensitive environment value was too short to redact safely.", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticRetainsOutputForUnrelatedShortEnvironmentValues()
+    {
+        var environment = new Dictionary<string, string>
+        {
+            ["PORT"] = "80",
+            ["DEBUG"] = "1"
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError("cargo failed with exit code 1", environment);
+
+        Assert.Equal("cargo failed with exit code 1", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticReturnsEmptyForEmptyStandardError()
+    {
+        var environment = new Dictionary<string, string> { ["API_TOKEN"] = "1" };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(string.Empty, environment);
+
+        Assert.Empty(diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticDoesNotSplitSurrogatePairsWhenTruncated()
+    {
+        const string TruncatedDiagnosticSuffix = "... (truncated)";
+        var retainedLength = CargoMetadataReader.MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length;
+        var standardError = $"{new string('x', retainedLength - 1)}😀tail{new string('y', 20)}";
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            standardError,
+            new Dictionary<string, string>());
+
+        Assert.Equal($"{new string('x', retainedLength - 1)}{TruncatedDiagnosticSuffix}", diagnostic);
     }
 
     [Fact]
