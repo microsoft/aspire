@@ -656,10 +656,22 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.Contains(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ForgetStateCommandName);
         var changeLocationCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName);
-        var locationArgument = Assert.Single(changeLocationCommand.Arguments);
-        Assert.Equal(AzureBicepResource.KnownParameters.Location, locationArgument.Name);
-        Assert.True(locationArgument.Required);
-        Assert.True(locationArgument.Disabled);
+        Assert.Contains("permanently lost", changeLocationCommand.DisplayDescription, StringComparison.Ordinal);
+        Assert.Collection(
+            changeLocationCommand.Arguments,
+            locationArgument =>
+            {
+                Assert.Equal(AzureBicepResource.KnownParameters.Location, locationArgument.Name);
+                Assert.True(locationArgument.Required);
+                Assert.True(locationArgument.Disabled);
+            },
+            confirmDeleteArgument =>
+            {
+                Assert.Equal(AzureProvisioningController.ConfirmDeleteArgumentName, confirmDeleteArgument.Name);
+                Assert.Equal(InputType.Boolean, confirmDeleteArgument.InputType);
+                Assert.Equal("false", confirmDeleteArgument.Value);
+                Assert.Contains("permanently lost", confirmDeleteArgument.Description, StringComparison.Ordinal);
+            });
         Assert.Contains(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.GetAzureResourceCommandName);
         var cancelCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.CancelCommandName);
         var deleteCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.DeleteAzureResourceCommandName);
@@ -2969,6 +2981,71 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task ChangeLocationCommand_RequiresConfirmationBeforeDeletingCachedResource()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testBicepProvisioner = new TestBicepProvisioner();
+        var deletedResourceIds = new List<string>();
+        const string resourceId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage26wmkwq4f4li52";
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(builder, armClientProvider: ProvisioningTestHelpers.CreateArmClientProvider([resourceId], deletedResourceIds), bicepProvisioner: testBicepProvisioner, deploymentStateManager: deploymentStateManager);
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
+        storageSection.Data["Outputs"] = new JsonObject
+        {
+            ["id"] = new JsonObject
+            {
+                ["type"] = "String",
+                ["value"] = resourceId
+            }
+        }.ToJsonString();
+        await deploymentStateManager.SaveSectionAsync(storageSection);
+
+        await notifications.PublishUpdateAsync(storage.Resource, state => state with
+        {
+            State = KnownResourceStates.Running,
+            Properties = [new("azure.location", "westus2")]
+        });
+
+        var changeLocationCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName);
+        var result = await changeLocationCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = storage.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = CreateArguments((AzureBicepResource.KnownParameters.Location, "westus3"))
+        });
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Contains(AzureProvisioningController.ConfirmDeleteArgumentName, result.Message, StringComparison.Ordinal);
+        Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out var storageEvent));
+        Assert.Equal(KnownResourceStates.Running, storageEvent.Snapshot.State?.Text);
+        Assert.Empty(deletedResourceIds);
+        Assert.DoesNotContain("storage", testBicepProvisioner.ProvisionedLocations.Keys);
+
+        storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
+        Assert.False(storageSection.Data.ContainsKey(AzureProvisioningController.LocationOverrideKey));
+    }
+
+    [Fact]
     public async Task ChangeLocationCommand_DeletesCachedResourceBeforeReprovisioningNewLocation()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -3019,6 +3096,7 @@ public class AzureEnvironmentResourceExtensionsTests
 
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync();
         interaction.Inputs[AzureBicepResource.KnownParameters.Location].Value = "westus3";
+        interaction.Inputs[AzureProvisioningController.ConfirmDeleteArgumentName].Value = "true";
         interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
 
         var result = await executionTask;
@@ -3082,7 +3160,9 @@ public class AzureEnvironmentResourceExtensionsTests
             ResourceName = storage.Resource.Name,
             CancellationToken = CancellationToken.None,
             Logger = NullLogger.Instance,
-            Arguments = CreateArguments((AzureBicepResource.KnownParameters.Location, "westus3"))
+            Arguments = CreateArguments(
+                (AzureBicepResource.KnownParameters.Location, "westus3"),
+                (AzureProvisioningController.ConfirmDeleteArgumentName, "true"))
         });
 
         Assert.True(result.Success);
@@ -3142,6 +3222,7 @@ public class AzureEnvironmentResourceExtensionsTests
 
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync();
         interaction.Inputs[AzureBicepResource.KnownParameters.Location].Value = "westus3";
+        interaction.Inputs[AzureProvisioningController.ConfirmDeleteArgumentName].Value = "true";
         interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
 
         var result = await executionTask;
@@ -3204,11 +3285,77 @@ public class AzureEnvironmentResourceExtensionsTests
 
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync();
         interaction.Inputs[AzureBicepResource.KnownParameters.Location].Value = "westus3";
+        interaction.Inputs[AzureProvisioningController.ConfirmDeleteArgumentName].Value = "true";
         interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
 
         var result = await executionTask;
 
         Assert.True(result.Success);
+        Assert.Equal("westus3", testBicepProvisioner.ProvisionedLocations["storage"]);
+
+        storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
+        Assert.Equal("westus3", storageSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ChangeLocationCommand_DoesNotRequireConfirmationWhenCachedResourceIsAlreadyAbsent()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testBicepProvisioner = new TestBicepProvisioner();
+        var deletedResourceIds = new List<string>();
+        const string resourceId = "/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage26wmkwq4f4li52";
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(
+            builder,
+            armClientProvider: ProvisioningTestHelpers.CreateArmClientProvider(Array.Empty<string>(), deletedResourceIds),
+            bicepProvisioner: testBicepProvisioner,
+            deploymentStateManager: deploymentStateManager);
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
+        storageSection.Data["Outputs"] = new JsonObject
+        {
+            ["id"] = new JsonObject
+            {
+                ["type"] = "String",
+                ["value"] = resourceId
+            }
+        }.ToJsonString();
+        await deploymentStateManager.SaveSectionAsync(storageSection);
+
+        await notifications.PublishUpdateAsync(storage.Resource, state => state with
+        {
+            State = KnownResourceStates.Running,
+            Properties = [new("azure.location", "westus2")]
+        });
+
+        var changeLocationCommand = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName);
+        var result = await changeLocationCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = storage.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = CreateArguments((AzureBicepResource.KnownParameters.Location, "westus3"))
+        });
+
+        Assert.True(result.Success);
+        Assert.Empty(deletedResourceIds);
         Assert.Equal("westus3", testBicepProvisioner.ProvisionedLocations["storage"]);
 
         storageSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:storage");
@@ -6009,4 +6156,5 @@ public class AzureEnvironmentResourceExtensionsTests
         public IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(string deploymentId, bool recursive = true, CancellationToken cancellationToken = default)
             => _inner.GetDeploymentOperationsAsync(deploymentId, recursive, cancellationToken);
     }
+
 }

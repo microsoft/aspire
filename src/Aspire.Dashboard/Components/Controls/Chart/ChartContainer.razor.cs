@@ -144,14 +144,16 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
+        var selectedValues = filter.SelectedValues;
+
         // No filter selected.
-        if (filter.SelectedValues.Count == 0)
+        if (selectedValues.Count == 0)
         {
             return false;
         }
 
         var value = OtlpHelpers.GetValue(attributes, filter.Name);
-        foreach (var item in filter.SelectedValues)
+        foreach (var item in selectedValues)
         {
             if (item.Value == value)
             {
@@ -243,15 +245,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
             foreach (var item in filters)
             {
-                item.SelectedValues.Clear();
-
                 if (hasInstrumentChanged)
                 {
                     // Select all by default.
-                    foreach (var v in item.Values)
-                    {
-                        item.SelectedValues.Add(v);
-                    }
+                    item.SetSelectedValues(item.Values);
                 }
                 else
                 {
@@ -264,18 +261,12 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                             ? item.Values
                             : item.Values.Where(newValue => existing.SelectedValues.Any(existingValue => existingValue.Value == newValue.Value));
 
-                        foreach (var v in newSelectedValues)
-                        {
-                            item.SelectedValues.Add(v);
-                        }
+                        item.SetSelectedValues(newSelectedValues);
                     }
                     else
                     {
                         // New filter. Select all by default.
-                        foreach (var v in item.Values)
-                        {
-                            item.SelectedValues.Add(v);
-                        }
+                        item.SetSelectedValues(item.Values);
                     }
                 }
             }

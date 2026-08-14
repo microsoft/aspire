@@ -1394,7 +1394,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
 
         if (information.ExitCode == 0 && information.IsAspireHost)
@@ -1426,7 +1425,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Use the same MSBuild-based inspection as validation so version resolution
         // follows the project model that run/publish already rely on, including
         // SDK-style projects, package references, and Central Package Management.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
         return information.ExitCode == 0 && information.IsAspireHost
             ? information.AspireHostingVersion
@@ -1511,8 +1509,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //    is fine for non-CliBundle AppHosts that don't use WithTerminal() — the lease
         //    is best-effort and a missing layout just means no terminal host env vars.
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
-        var injectDcpAndDashboard = canQueryCliBundleProperty
-            && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
+        var appHostInfo = canQueryCliBundleProperty
+            ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
+            : null;
+        var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
@@ -2278,9 +2278,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var effectiveAppHostFile = context.AppHostFile;
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
-        var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
 
         // Check compatibility for project-based apphosts
         if (!isSingleFileAppHost)
@@ -2304,12 +2301,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 throw exception;
             }
         }
-
-        // See RunAsync for the rationale: terminal host env vars are injected even when
-        // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
-        // not (they would clobber per-RID NuGet metadata).
-        var injectDcpAndDashboardForPublish = await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboardForPublish);
 
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
@@ -2470,14 +2461,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<bool> IsUsingCliBundleAsync(FileInfo projectFile, CancellationToken cancellationToken)
-    {
-        // Reuse the cached MSBuild result so `AspireUseCliBundle` is fetched alongside the
-        // IsAspireHost/version inspection rather than triggering a third project evaluation.
-        var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
-        return info.IsUsingCliBundle;
-    }
-
     private Task<BundleLayoutLease?> AcquireCliBundleLayoutAsync(CancellationToken cancellationToken)
         => _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
 
@@ -2494,28 +2477,32 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // disk) and would otherwise spam the debug log on every run.
             if (injectDcpAndDashboard)
             {
-                _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process.");
+                _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process. The AppHost will resolve configured, inherited, or assembly-metadata paths.");
             }
             // Don't return yet — repo-mode runs (DEBUG, `dotnet run --project src/Aspire.Cli`)
             // can still inject the terminal host path from the just-built artifact even when
             // no bundle layout exists at all (e.g. clean dev machine with no `aspire` install).
         }
 
-        if (!env.ContainsKey("AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
+        if (!HasEnvironmentOverride(env, "AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
         {
             env["AspireCliBundlePath"] = layout.LayoutPath;
         }
 
         if (injectDcpAndDashboard && layout is not null)
         {
-            if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar) && layout.GetDcpPath() is { } dcpPath)
+            if (!IsUsableDcpDirectory(GetEffectiveEnvironmentValue(env, BundleDiscovery.DcpPathEnvVar)) &&
+                layout.GetDcpPath() is { } layoutDcpPath &&
+                IsUsableDcpDirectory(layoutDcpPath))
             {
-                env[BundleDiscovery.DcpPathEnvVar] = dcpPath;
+                env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!env.ContainsKey(BundleDiscovery.DashboardPathEnvVar) && layout.GetManagedPath() is { } managedPath)
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
+                layout.GetManagedPath() is { } layoutManagedPath &&
+                IsUsableDashboardPath(layoutManagedPath))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
             }
         }
 
@@ -2539,13 +2526,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //     "older CLI" diagnostic. Installed CLIs are unaffected because DetectRepositoryRoot
         //     only resolves via env var in release builds.
         //  3) Bundle layout aspire-managed (normal `aspire run` install path).
-        if (!env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar))
+        if (!HasEnvironmentOverride(env, BundleDiscovery.TerminalHostPathEnvVar))
         {
             var terminalHostPath = TryGetRepoLocalManagedPath() ?? layout?.GetManagedPath();
-            if (terminalHostPath is not null)
+            if (terminalHostPath is not null && IsUsableDashboardPath(terminalHostPath))
             {
                 env[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
-                if (!env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+                if (!HasEnvironmentOverride(env, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
                 {
                     env[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
                 }
@@ -2555,11 +2542,20 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         layoutLease?.AddEnvironment(env);
     }
 
-    /// <summary>
-    /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
-    /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
-    /// Returns <c>null</c> in release builds and when no repo-local build exists.
-    /// </summary>
+    private bool HasEnvironmentOverride(IReadOnlyDictionary<string, string> env, string name)
+        => !string.IsNullOrWhiteSpace(GetEffectiveEnvironmentValue(env, name));
+
+    private string? GetEffectiveEnvironmentValue(IReadOnlyDictionary<string, string> env, string name)
+        => env.TryGetValue(name, out var value) ? value : _environment.GetEnvironmentVariable(name);
+
+    private static bool IsUsableDcpDirectory(string? path)
+        => !string.IsNullOrWhiteSpace(path) &&
+            Directory.Exists(path) &&
+            File.Exists(BundleDiscovery.GetDcpExecutablePath(path));
+
+    private static bool IsUsableDashboardPath(string? path)
+        => !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+
     /// <summary>
     /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
     /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).

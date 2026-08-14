@@ -67,9 +67,9 @@ function shouldRunAzureFunctionsE2E(): boolean {
 }
 
 function isAzureFunctionsHostTask(event: { taskName: string; taskSource: string; taskDefinitionType: string }): boolean {
-    // startFuncProcess creates this exact task shape in vscode-azurefunctions 1.22.0.
-    // See https://github.com/microsoft/vscode-azurefunctions/blob/v1.22.0/src/commands/pickFuncProcess.ts.
+    // The Azure Functions extension contributes the literal `func` task type.
+    // Dynamic types such as `func  <buildPath>` are rejected by VS Code 1.130 and later.
     return event.taskName === 'func: host start'
         && event.taskSource === 'func'
-        && event.taskDefinitionType.startsWith('func  ');
+        && event.taskDefinitionType === 'func';
 }

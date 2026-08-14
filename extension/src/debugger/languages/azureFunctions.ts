@@ -1,7 +1,18 @@
-import * as vscode from 'vscode';
+import * as fs from 'fs';
+import http = require('http');
+import https = require('https');
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell, invalidLaunchConfiguration } from '../../loc/strings';
+import {
+    azureFunctionsCmdDelayedExpansion,
+    azureFunctionsCmdPercentArgument,
+    azureFunctionsHostStartupTimedOut,
+    azureFunctionsTaskExitedBeforeStartup,
+    azureFunctionsUnsupportedTaskShell,
+    azureFunctionsWorkerStartupTimedOut,
+    invalidLaunchConfiguration
+} from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
 import { extensionLogOutputChannel } from '../../utils/logging';
@@ -10,31 +21,15 @@ import { DotNetService } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
-
-/**
- * Result from the Azure Functions extension's startFuncProcess API.
- * processId is a string — it's the PID of the dotnet worker process
- * (found via pickChildProcess which searches for a child matching /(dotnet|func)/).
- */
-interface StartFuncProcessResult {
-    processId: string;
-    success: boolean;
-    error?: string;
-}
-
-/**
- * The Azure Functions extension API (v1.10.0).
- * Obtained via the @microsoft/vscode-azext-utils API provider pattern:
- *   ext.exports.getApi('~1.10.0') → AzureFunctionsApi
- */
-interface AzureFunctionsApi {
-    apiVersion: string;
-    startFuncProcess(buildPath: string, args: string[], env: Record<string, string>): Promise<StartFuncProcessResult>;
-}
-
-interface AzureFunctionsApiProvider {
-    getApi(apiVersion: string): AzureFunctionsApi;
-}
+const DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS = 30;
+const FUNC_HOST_DEFAULT_PORT = 7071;
+const POLL_INTERVAL_MS = 100;
+const REQUEST_TIMEOUT_MS = 1_000;
+const TASK_SHUTDOWN_TIMEOUT_MS = 30_000;
+const TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS = 30_000;
+const TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS = 100;
+const TEMP_DIRECTORY_CLEANUP_MAX_ATTEMPTS =
+    TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS / TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS;
 
 type FuncHostTaskShell = 'cmd' | 'fish' | 'powershell' | 'posix';
 
@@ -43,65 +38,488 @@ type TerminalProfileConfiguration = {
     source?: string;
 };
 
-/** Tracks worker PIDs by runId for cleanup. */
-const workerPidsByRunId = new Map<string, number>();
+type WorkerProcessIdDiscovery = {
+    jsonOutputFile: string;
+    initialContents: string;
+};
 
-/** Tracks the VS Code Task executions (func host start) by runId for cleanup. */
-const taskExecutionsByRunId = new Map<string, vscode.TaskExecution>();
+type FuncRunState = {
+    runId: string;
+    task?: vscode.Task;
+    taskExecution?: vscode.TaskExecution;
+    taskProcessId?: number;
+    workerProcessId?: number;
+    ownedTempDirectory?: string;
+    taskExitCode?: number;
+    taskLaunchStarted: boolean;
+    taskExecutionReadyResolved: boolean;
+    taskExecutionReady: Promise<vscode.TaskExecution | undefined>;
+    resolveTaskExecutionReady: (execution: vscode.TaskExecution | undefined) => void;
+    taskStarted: Promise<void>;
+    resolveTaskStarted: () => void;
+    taskExited: Promise<number>;
+    resolveTaskExited: (exitCode: number) => void;
+    taskStartSubscription?: vscode.Disposable;
+    taskEndSubscription?: vscode.Disposable;
+    startupAbortController: AbortController;
+    startupTimeout?: NodeJS.Timeout;
+    shutdownTimeout?: NodeJS.Timeout;
+    tempDirectoryCleanupRetryTimer?: NodeJS.Timeout;
+    tempDirectoryCleanup?: Promise<void>;
+    cleanup?: Promise<void>;
+    stop?: Promise<void>;
+    terminateRequested: boolean;
+    stopRequested: boolean;
+    disposed: boolean;
+};
 
-/** Kill the func host task and worker process for the given runId, if any. */
-function killFuncProcess(runId: string): void {
-    // Terminate the VS Code Task running "func host start"
-    const taskExecution = taskExecutionsByRunId.get(runId);
-    if (taskExecution) {
-        extensionLogOutputChannel.info(`Terminating func host task for runId ${runId}`);
-        taskExecution.terminate();
-        taskExecutionsByRunId.delete(runId);
-    }
+function createFuncRunState(runId: string): FuncRunState {
+    let resolveTaskExecutionReady!: (execution: vscode.TaskExecution | undefined) => void;
+    const taskExecutionReady = new Promise<vscode.TaskExecution | undefined>(resolve => resolveTaskExecutionReady = resolve);
+    let resolveTaskStarted!: () => void;
+    const taskStarted = new Promise<void>(resolve => resolveTaskStarted = resolve);
+    let resolveTaskExited!: (exitCode: number) => void;
+    const taskExited = new Promise<number>(resolve => resolveTaskExited = resolve);
 
-    // Also kill the worker PID directly in case task termination doesn't propagate
-    const pid = workerPidsByRunId.get(runId);
-    if (pid !== undefined) {
-        extensionLogOutputChannel.info(`Killing func worker process for runId ${runId} (pid: ${pid})`);
-        try {
-            process.kill(pid);
-        } catch {
-            // Process may already be dead
-        }
-        workerPidsByRunId.delete(runId);
+    return {
+        runId,
+        taskLaunchStarted: false,
+        taskExecutionReadyResolved: false,
+        taskExecutionReady,
+        resolveTaskExecutionReady,
+        taskStarted,
+        resolveTaskStarted,
+        taskExited,
+        resolveTaskExited,
+        startupAbortController: new AbortController(),
+        terminateRequested: false,
+        stopRequested: false,
+        disposed: false
+    };
+}
+
+function setTaskExecution(state: FuncRunState, execution: vscode.TaskExecution): void {
+    state.taskExecution ??= execution;
+    if (!state.taskExecutionReadyResolved) {
+        state.taskExecutionReadyResolved = true;
+        state.resolveTaskExecutionReady(state.taskExecution);
     }
 }
 
-async function getAzureFunctionsApi(): Promise<AzureFunctionsApi> {
-    const ext = vscode.extensions.getExtension(AF_EXTENSION_ID);
-    if (!ext) {
+function completeTaskExecutionDiscovery(state: FuncRunState): void {
+    if (!state.taskExecutionReadyResolved) {
+        state.taskExecutionReadyResolved = true;
+        state.resolveTaskExecutionReady(undefined);
+    }
+}
+
+function removeOwnedTempDirectory(state: FuncRunState): Promise<void> {
+    if (state.tempDirectoryCleanup) {
+        return state.tempDirectoryCleanup;
+    }
+
+    let resolveCleanup!: () => void;
+    const cleanup = new Promise<void>(resolve => resolveCleanup = resolve);
+    state.tempDirectoryCleanup = cleanup;
+    const tempDirectory = state.ownedTempDirectory;
+    if (!tempDirectory) {
+        resolveCleanup();
+        return cleanup;
+    }
+
+    let attempt = 1;
+    const remove = (): void => {
+        try {
+            fs.rmSync(tempDirectory, { recursive: true, force: true });
+            state.ownedTempDirectory = undefined;
+            state.tempDirectoryCleanupRetryTimer = undefined;
+            resolveCleanup();
+        } catch (error) {
+            if (attempt < TEMP_DIRECTORY_CLEANUP_MAX_ATTEMPTS) {
+                attempt++;
+                // TaskExecution.terminate() only requests termination. Keep retrying for
+                // a bounded shutdown period so Windows can release Core Tools files.
+                state.tempDirectoryCleanupRetryTimer = setTimeout(remove, TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS);
+                state.tempDirectoryCleanupRetryTimer.unref();
+                return;
+            }
+
+            state.tempDirectoryCleanupRetryTimer = undefined;
+            resolveCleanup();
+        }
+    };
+
+    remove();
+    return cleanup;
+}
+
+function finalizeOwnedTempDirectoryRemoval(state: FuncRunState): void {
+    const tempDirectory = state.ownedTempDirectory;
+    if (!tempDirectory) {
+        return;
+    }
+
+    try {
+        fs.rmSync(tempDirectory, { recursive: true, force: true });
+    } catch (error) {
+        extensionLogOutputChannel.warn(`Failed to remove Azure Functions temporary directory ${tempDirectory}: ${error}`);
+    } finally {
+        state.ownedTempDirectory = undefined;
+    }
+}
+
+function disposeFuncRunState(state: FuncRunState): void {
+    if (state.disposed) {
+        return;
+    }
+
+    state.disposed = true;
+    if (state.startupTimeout) {
+        clearTimeout(state.startupTimeout);
+        state.startupTimeout = undefined;
+    }
+    if (state.shutdownTimeout) {
+        clearTimeout(state.shutdownTimeout);
+        state.shutdownTimeout = undefined;
+    }
+    state.taskStartSubscription?.dispose();
+    state.taskStartSubscription = undefined;
+    state.taskEndSubscription?.dispose();
+    state.taskEndSubscription = undefined;
+}
+
+function requestFuncTaskTermination(state: FuncRunState, taskExecution: vscode.TaskExecution): boolean {
+    if (state.terminateRequested) {
+        return true;
+    }
+
+    state.terminateRequested = true;
+    extensionLogOutputChannel.info(`Terminating func host task for runId ${state.runId}`);
+    try {
+        taskExecution.terminate();
+        return true;
+    } catch (error) {
+        extensionLogOutputChannel.warn(`Failed to terminate Azure Functions task for runId ${state.runId}: ${error}`);
+        return false;
+    }
+}
+
+async function terminateFuncTaskAndWaitForExit(state: FuncRunState): Promise<void> {
+    let taskExecution = state.taskExecution;
+    if (!taskExecution && state.taskLaunchStarted) {
+        taskExecution = await state.taskExecutionReady;
+    }
+    if (!taskExecution || state.taskExitCode !== undefined) {
+        return;
+    }
+
+    if (!requestFuncTaskTermination(state, taskExecution)) {
+        return;
+    }
+
+    await new Promise<void>(resolve => {
+        let settled = false;
+        const finish = (): void => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            if (state.shutdownTimeout) {
+                clearTimeout(state.shutdownTimeout);
+                state.shutdownTimeout = undefined;
+            }
+            resolve();
+        };
+
+        void state.taskExited.then(() => finish());
+        state.shutdownTimeout = setTimeout(() => {
+            extensionLogOutputChannel.warn(
+                `Azure Functions task for runId ${state.runId} did not report an exit within ${TASK_SHUTDOWN_TIMEOUT_MS / 1_000} seconds after termination.`);
+            finish();
+        }, TASK_SHUTDOWN_TIMEOUT_MS);
+        state.shutdownTimeout.unref();
+    });
+}
+
+async function runFuncCleanup(state: FuncRunState): Promise<void> {
+    state.startupAbortController.abort();
+    await Promise.all([
+        terminateFuncTaskAndWaitForExit(state),
+        removeOwnedTempDirectory(state)
+    ]);
+    // The task can release its last Windows file lock at the same moment the
+    // bounded retry window ends, so make one final attempt after task shutdown.
+    finalizeOwnedTempDirectoryRemoval(state);
+    disposeFuncRunState(state);
+}
+
+function cleanupFuncRun(state: FuncRunState): Promise<void> {
+    if (state.cleanup) {
+        return state.cleanup;
+    }
+
+    let resolveCleanup!: () => void;
+    let rejectCleanup!: (error: unknown) => void;
+    const cleanup = new Promise<void>((resolve, reject) => {
+        resolveCleanup = resolve;
+        rejectCleanup = reject;
+    });
+    state.cleanup = cleanup;
+    void runFuncCleanup(state).then(resolveCleanup, rejectCleanup);
+
+    return cleanup;
+}
+
+async function activateAzureFunctionsExtension(): Promise<void> {
+    const extension = vscode.extensions.getExtension(AF_EXTENSION_ID);
+    if (!extension) {
         throw new Error(`Azure Functions extension (${AF_EXTENSION_ID}) is not installed`);
     }
-    if (!ext.isActive) {
-        await ext.activate();
-    }
 
-    // The AF extension uses the @microsoft/vscode-azext-utils API provider
-    // pattern. ext.exports has a getApi(version) method that returns the actual API.
-    const provider = ext.exports as AzureFunctionsApiProvider;
-    if (typeof provider?.getApi !== 'function') {
-        throw new Error('Azure Functions extension does not expose the expected getApi provider');
-    }
-
-    return provider.getApi('~1.10.0');
+    // Activating the extension registers its `func` task definition and listeners.
+    // Do not use startFuncProcess: vscode-azurefunctions 1.22.0 creates an unregistered
+    // dynamic task type that VS Code 1.130 and later reject before Core Tools starts.
+    await extension.activate();
 }
 
-function isFuncHostTaskForBuildPath(task: vscode.Task, buildOutputPath: string): boolean {
-    // Azure Functions API v1.10 starts tasks as:
-    //   source: "func"
-    //   ShellExecution.commandLine: "func host start ..."
-    //   ShellExecution.options.cwd: <build output path>
-    // See https://github.com/microsoft/vscode-azurefunctions/blob/v1.22.0/src/commands/pickFuncProcess.ts
-    const execution = task.execution as vscode.ShellExecution | undefined;
-    return task.source === 'func' &&
-        execution?.options?.cwd === buildOutputPath &&
-        typeof execution.commandLine === 'string' &&
-        /^func(?:\.exe)?\s+host\s+start(?:\s|$)/i.test(execution.commandLine);
+function getPickProcessTimeoutSeconds(): number {
+    const configuredTimeout = vscode.workspace.getConfiguration('azureFunctions').get<number>('pickProcessTimeout');
+    return typeof configuredTimeout === 'number' && Number.isFinite(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout
+        : DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS;
+}
+
+function getFuncHostPort(args: string[]): number {
+    for (let index = 0; index < args.length; index++) {
+        const argument = args[index];
+        if ((argument === '--port' || argument === '-p') && index + 1 < args.length) {
+            const port = Number(args[index + 1]);
+            if (Number.isInteger(port) && port > 0 && port <= 65_535) {
+                return port;
+            }
+        }
+
+        const match = /^(?:--port|-p)=(\d+)$/.exec(argument);
+        if (match) {
+            const port = Number(match[1]);
+            if (port > 0 && port <= 65_535) {
+                return port;
+            }
+        }
+    }
+
+    return FUNC_HOST_DEFAULT_PORT;
+}
+
+function createFuncTask(rawArgs: string[], quotedArgs: string[], buildOutputPath: string, env: Record<string, string>): vscode.Task {
+    const commandLine = ['func', 'host', 'start', ...quotedArgs].join(' ');
+    return new vscode.Task(
+        { type: 'func', command: 'host start', args: rawArgs },
+        vscode.TaskScope.Workspace,
+        'func: host start',
+        'func',
+        new vscode.ShellExecution(commandLine, {
+            cwd: buildOutputPath,
+            env
+        }));
+}
+
+function createTaskExitError(exitCode: number): Error {
+    return new Error(azureFunctionsTaskExitedBeforeStartup(exitCode));
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+    if (signal.aborted) {
+        throw signal.reason;
+    }
+}
+
+function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
+
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            signal.removeEventListener('abort', abort);
+            resolve();
+        }, milliseconds);
+        const abort = (): void => {
+            clearTimeout(timeout);
+            signal.removeEventListener('abort', abort);
+            reject(signal.reason);
+        };
+        signal.addEventListener('abort', abort, { once: true });
+    });
+}
+
+async function probeFuncHostStatus(protocol: typeof http | typeof https, port: number, signal: AbortSignal): Promise<boolean> {
+    throwIfAborted(signal);
+
+    return await new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (result: boolean): void => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            signal.removeEventListener('abort', abort);
+            resolve(result);
+        };
+        const fail = (error: unknown): void => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            signal.removeEventListener('abort', abort);
+            reject(error);
+        };
+        const request = protocol.request({
+            hostname: '127.0.0.1',
+            port,
+            path: '/admin/host/status',
+            method: 'GET',
+            rejectUnauthorized: false
+        }, response => {
+            if (response.statusCode !== 200) {
+                response.resume();
+                finish(false);
+                return;
+            }
+
+            let body = '';
+            response.setEncoding('utf8');
+            response.on('data', chunk => body += chunk);
+            response.on('end', () => {
+                try {
+                    const state = (JSON.parse(body) as { state?: unknown }).state;
+                    finish(typeof state === 'string' && state.toLowerCase() === 'running');
+                } catch {
+                    finish(false);
+                }
+            });
+        });
+        const abort = (): void => {
+            request.destroy();
+            fail(signal.reason);
+        };
+        signal.addEventListener('abort', abort, { once: true });
+        request.setTimeout(REQUEST_TIMEOUT_MS, () => {
+            request.destroy();
+            finish(false);
+        });
+        request.on('error', () => signal.aborted ? fail(signal.reason) : finish(false));
+        request.end();
+    });
+}
+
+async function waitForFuncHostRunning(port: number, deadline: number, timeoutSeconds: number, signal: AbortSignal): Promise<void> {
+    while (Date.now() < deadline) {
+        throwIfAborted(signal);
+        if (await probeFuncHostStatus(http, port, signal) || await probeFuncHostStatus(https, port, signal)) {
+            return;
+        }
+
+        await delay(POLL_INTERVAL_MS, signal);
+    }
+
+    throw new Error(azureFunctionsHostStartupTimedOut(timeoutSeconds, port));
+}
+
+function getJsonOutputFileArgument(args: string[]): string | undefined {
+    for (let index = 0; index < args.length; index++) {
+        const argument = args[index];
+        if (argument === '--json-output-file') {
+            return args[index + 1];
+        }
+
+        const match = /^--json-output-file=(.+)$/.exec(argument);
+        if (match) {
+            return match[1];
+        }
+    }
+
+    return undefined;
+}
+
+function ensureFlagEnabled(args: string[], flag: string): void {
+    let firstMatch = -1;
+    for (let i = args.length - 1; i >= 0; i--) {
+        const argument = args[i];
+        if (argument === flag || argument.startsWith(`${flag}=`)) {
+            const value = args[i + 1]?.toLowerCase();
+            if (argument === flag && (value === 'true' || value === 'false')) {
+                args.splice(i + 1, 1);
+            }
+            firstMatch = i;
+            args.splice(i, 1);
+        }
+    }
+
+    args.splice(firstMatch >= 0 ? firstMatch : args.length, 0, flag);
+}
+
+function readJsonOutputFile(jsonOutputFile: string): string | undefined {
+    try {
+        return fs.readFileSync(jsonOutputFile, 'utf8');
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
+            extensionLogOutputChannel.warn(`Failed to read Azure Functions worker startup JSON: ${error}`);
+        }
+    }
+
+    return undefined;
+}
+
+function readWorkerProcessId(discovery: WorkerProcessIdDiscovery): number | undefined {
+    const contents = readJsonOutputFile(discovery.jsonOutputFile);
+    if (contents === undefined) {
+        return undefined;
+    }
+
+    // Core Tools appends newline-delimited JSON. For example:
+    //   {"name":"dotnet-worker-startup","workerProcessId":4242}
+    // Ignore content captured before this launch and use the latest valid worker event;
+    // unrelated lines and a partially-written final line are expected while polling.
+    const launchContents = contents.startsWith(discovery.initialContents)
+        ? contents.slice(discovery.initialContents.length)
+        : contents;
+    let workerProcessId: number | undefined;
+    for (const line of launchContents.split(/\r?\n/)) {
+        if (!line) {
+            continue;
+        }
+
+        try {
+            const event = JSON.parse(line) as { name?: unknown; workerProcessId?: unknown };
+            if (event.name === 'dotnet-worker-startup' &&
+                typeof event.workerProcessId === 'number' &&
+                Number.isInteger(event.workerProcessId) &&
+                event.workerProcessId > 0) {
+                workerProcessId = event.workerProcessId;
+            }
+        } catch {
+            // The final NDJSON line may still be in flight.
+        }
+    }
+
+    return workerProcessId;
+}
+
+async function waitForWorkerProcessId(discovery: WorkerProcessIdDiscovery, deadline: number, timeoutSeconds: number, signal: AbortSignal): Promise<number> {
+    while (Date.now() < deadline) {
+        throwIfAborted(signal);
+        const workerProcessId = readWorkerProcessId(discovery);
+        if (workerProcessId !== undefined) {
+            return workerProcessId;
+        }
+
+        await delay(POLL_INTERVAL_MS, signal);
+    }
+
+    throw new Error(azureFunctionsWorkerStartupTimedOut(timeoutSeconds));
 }
 
 function quoteFuncHostArguments(args: string[] | undefined): string[] {
@@ -236,145 +654,227 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
-        // Register cleanup for this run up-front so that killFuncProcess is called
-        // via the generic cleanupRun path regardless of how the session ends.
-        registerRunCleanup(debugConfiguration.runId, () => killFuncProcess(debugConfiguration.runId));
-
+        const runId = debugConfiguration.runId;
         const projectPath = launchConfig.project_path;
         const dotNetService = new DotNetService(launchOptions.debugSession);
         // project_path from the hosting integration is currently a .csproj file path
         // (resolved by AzureFunctionsProjectMetadata.ResolveProjectPath). If Aspire
         // later supports non-.NET Functions resources, that launch config should carry
         // an explicit language/build contract instead of reusing this .NET project path.
-        // The AF extension API expects the project build output as buildPath.
         // Always build because path-based Functions resources do not have to be ProjectReferences
         // of the AppHost, so an existing target can be stale even after the AppHost was rebuilt.
-        extensionLogOutputChannel.info(`Building Azure Functions project before starting via extension API: ${projectPath}`);
+        extensionLogOutputChannel.info(`Building Azure Functions project before starting func host: ${projectPath}`);
         await dotNetService.buildDotNetProject(projectPath);
         const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
         const buildOutputPath = path.dirname(targetPath);
-        extensionLogOutputChannel.info(`Starting Azure Functions project via extension API: ${projectPath} (buildPath: ${buildOutputPath})`);
+        extensionLogOutputChannel.info(`Starting Azure Functions project with a registered func task: ${projectPath} (buildPath: ${buildOutputPath})`);
 
-        // Only pass DCP-specific env vars to the AF extension. The VS Code Task
-        // it creates already inherits the VS Code process environment, so we
-        // don't need to merge process.env — that would just duplicate values.
+        // ShellExecution inherits the VS Code process environment. Only add the
+        // DCP-specific values so the task environment stays equivalent to the old path.
         const dcpEnv = Object.fromEntries(
             (env ?? []).filter(e => e.value !== undefined).map(e => [e.name, e.value])
         );
-
-        // Start func host via the Azure Functions extension API.
-        // The API creates a VS Code Task running "func host start" from the
-        // build output path, polls /admin/host/status until ready, then finds
-        // the dotnet worker child process and returns its PID.
-        //
-        // The AF extension API has no stopFuncProcess method. Register before calling
-        // startFuncProcess because that API waits for host readiness before returning.
-        const api = await getAzureFunctionsApi();
-        extensionLogOutputChannel.info(`Got Azure Functions API (version ${api.apiVersion}), calling startFuncProcess`);
-
-        let funcExecution: vscode.TaskExecution | undefined;
-        let pendingFuncExitCode: number | undefined;
-        let completeFuncSession: ((exitCode: number) => void) | undefined;
-        const captureFuncExecution = (execution: vscode.TaskExecution): void => {
-            if (funcExecution) {
-                return;
-            }
-
-            funcExecution = execution;
-            extensionLogOutputChannel.info(`Captured func host task for runId ${debugConfiguration.runId}: ${execution.task.name}`);
-            taskExecutionsByRunId.set(debugConfiguration.runId, execution);
-        };
-        const taskStartSubscription = vscode.tasks.onDidStartTaskProcess(event => {
-            if (isFuncHostTaskForBuildPath(event.execution.task, buildOutputPath)) {
-                captureFuncExecution(event.execution);
-            }
+        await activateAzureFunctionsExtension();
+        const state = createFuncRunState(runId);
+        registerRunCleanup(runId, () => {
+            void cleanupFuncRun(state);
         });
-        const taskEndSubscription = launchOptions.debug ? undefined : vscode.tasks.onDidEndTaskProcess(event => {
-            if (event.execution !== funcExecution) {
-                return;
-            }
+        const rawArgs = [...(args ?? [])];
+        const jsonOutputFileArgument = getJsonOutputFileArgument(rawArgs);
+        let workerProcessIdDiscovery: WorkerProcessIdDiscovery;
+        let ownedJsonOutputFileArgument: string | undefined;
+        if (jsonOutputFileArgument) {
+            const jsonOutputFile = path.resolve(buildOutputPath, jsonOutputFileArgument);
+            workerProcessIdDiscovery = {
+                jsonOutputFile,
+                initialContents: readJsonOutputFile(jsonOutputFile) ?? ''
+            };
+        } else {
+            const tempDirectory = fs.mkdtempSync(path.join(buildOutputPath, 'aspire-functions-worker-'));
+            state.ownedTempDirectory = tempDirectory;
+            const jsonOutputFile = path.join(tempDirectory, 'worker-startup.json');
+            workerProcessIdDiscovery = { jsonOutputFile, initialContents: '' };
+            ownedJsonOutputFileArgument = path.relative(buildOutputPath, jsonOutputFile).split(path.sep).join('/');
+        }
+        if (launchOptions.debug) {
+            ensureFlagEnabled(rawArgs, '--dotnet-isolated-debug');
+        }
+        ensureFlagEnabled(rawArgs, '--enable-json-output');
+        if (ownedJsonOutputFileArgument) {
+            rawArgs.push('--json-output-file', ownedJsonOutputFileArgument);
+        }
 
-            let exitCode = event.exitCode ?? 0;
-            // Exit code 143 is SIGTERM on macOS and Linux, matching the normal
-            // debug-adapter termination path in adapterTracker.
-            if ((process.platform === 'darwin' || process.platform === 'linux') && exitCode === 143) {
-                exitCode = 0;
-            }
-
-            if (completeFuncSession) {
-                completeFuncSession(exitCode);
-            } else {
-                // startFuncProcess waits for readiness. Preserve an exit that races with
-                // its return so the already-started session still terminates correctly.
-                pendingFuncExitCode = exitCode;
-            }
-        });
-
-        let result: StartFuncProcessResult;
+        let quotedArgs: string[];
         try {
-            result = await api.startFuncProcess(buildOutputPath, quoteFuncHostArguments(args), dcpEnv);
+            quotedArgs = quoteFuncHostArguments(rawArgs);
         } catch (error) {
-            taskEndSubscription?.dispose();
+            cleanupRun(runId);
             throw error;
-        } finally {
-            taskStartSubscription.dispose();
         }
 
-        if (!result.success) {
-            taskEndSubscription?.dispose();
-            throw new Error(`Azure Functions extension failed to start func host: ${result.error ?? 'unknown error'}`);
-        }
+        state.task = createFuncTask(rawArgs, quotedArgs, buildOutputPath, dcpEnv);
+        let completeSession: ((exitCode: number) => void) | undefined;
+        let completed = false;
+        const complete = (exitCode: number): void => {
+            if (completed) {
+                return;
+            }
 
-        const workerPid = result.processId;
-        extensionLogOutputChannel.info(`Azure Functions worker process started (PID: ${workerPid})`);
+            completed = true;
+            completeSession?.(exitCode);
+        };
 
-        // Track the worker PID for cleanup
-        const workerPidNumber = parseInt(workerPid, 10);
-        workerPidsByRunId.set(debugConfiguration.runId, workerPidNumber);
+        // Register both process listeners before executeTask so a fast task start or
+        // exit cannot race listener registration. Before executeTask resolves, task
+        // object identity identifies this launch; afterward only its exact execution
+        // is accepted.
+        state.taskStartSubscription = vscode.tasks.onDidStartTaskProcess(event => {
+            if (state.taskExecution && event.execution !== state.taskExecution) {
+                return;
+            }
+            if (!state.taskExecution && event.execution.task !== state.task) {
+                return;
+            }
 
-        if (!launchOptions.debug) {
-            const runId = debugConfiguration.runId;
-            let completeSession: (exitCode: number) => void;
-            const termination = new Promise<number>(resolve => {
-                completeSession = resolve;
+            setTaskExecution(state, event.execution);
+            state.taskProcessId = event.processId;
+            state.resolveTaskStarted();
+        });
+        state.taskEndSubscription = vscode.tasks.onDidEndTaskProcess(event => {
+            if (state.taskExecution && event.execution !== state.taskExecution) {
+                return;
+            }
+            if (!state.taskExecution && event.execution.task !== state.task) {
+                return;
+            }
+            if (state.taskExitCode !== undefined) {
+                return;
+            }
+
+            setTaskExecution(state, event.execution);
+            state.taskExitCode = event.exitCode ?? 0;
+            state.startupAbortController.abort(createTaskExitError(state.taskExitCode));
+            state.resolveTaskExited(state.taskExitCode);
+            cleanupRun(runId);
+            if (!launchOptions.debug && completeSession && !state.stopRequested) {
+                let normalizedExitCode = state.taskExitCode;
+                // Exit code 143 is SIGTERM on macOS and Linux, matching the normal
+                // debug-adapter termination path in adapterTracker.
+                if ((process.platform === 'darwin' || process.platform === 'linux') && normalizedExitCode === 143) {
+                    normalizedExitCode = 0;
+                }
+                complete(normalizedExitCode);
+            }
+        });
+
+        try {
+            const timeoutSeconds = getPickProcessTimeoutSeconds();
+            const startupDeadline = Date.now() + timeoutSeconds * 1_000;
+            const startupTimedOut = new Promise<never>((_, reject) => {
+                state.startupTimeout = setTimeout(() => reject(new Error(launchOptions.debug
+                    ? azureFunctionsWorkerStartupTimedOut(timeoutSeconds)
+                    : azureFunctionsHostStartupTimedOut(timeoutSeconds, getFuncHostPort(rawArgs)))), timeoutSeconds * 1_000);
             });
-            let completed = false;
-            const complete = (exitCode: number): void => {
-                if (completed) {
-                    return;
+            state.taskLaunchStarted = true;
+            try {
+                const taskExecution = vscode.tasks.executeTask(state.task).then(execution => {
+                    setTaskExecution(state, execution);
+                    if (state.startupAbortController.signal.aborted && state.taskExitCode === undefined) {
+                        requestFuncTaskTermination(state, execution);
+                    }
+                    return execution;
+                });
+                await Promise.race([taskExecution, startupTimedOut]);
+            } catch (error) {
+                completeTaskExecutionDiscovery(state);
+                throw error;
+            }
+            if (!state.taskProcessId) {
+                await Promise.race([
+                    state.taskStarted,
+                    state.taskExited.then(exitCode => Promise.reject(createTaskExitError(exitCode))),
+                    startupTimedOut
+                ]);
+            }
+
+            const workerProcessId = waitForWorkerProcessId(
+                workerProcessIdDiscovery,
+                startupDeadline,
+                timeoutSeconds,
+                state.startupAbortController.signal);
+            const readiness = launchOptions.debug
+                ? workerProcessId
+                : Promise.all([
+                    waitForFuncHostRunning(
+                        getFuncHostPort(rawArgs),
+                        startupDeadline,
+                        timeoutSeconds,
+                        state.startupAbortController.signal),
+                    workerProcessId
+                ]).then(([, processId]) => processId);
+            const processId = await Promise.race([
+                readiness,
+                state.taskExited.then(exitCode => Promise.reject(createTaskExitError(exitCode))),
+                startupTimedOut
+            ]);
+            if (launchOptions.debug && state.taskExitCode !== undefined) {
+                throw createTaskExitError(state.taskExitCode);
+            }
+            if (state.taskExitCode === undefined) {
+                state.workerProcessId = processId;
+            }
+            extensionLogOutputChannel.info(`Azure Functions process started for runId ${runId} (PID: ${processId})`);
+
+            if (!launchOptions.debug) {
+                const termination = new Promise<number>(resolve => completeSession = resolve);
+                if (state.taskExitCode !== undefined) {
+                    let normalizedExitCode = state.taskExitCode;
+                    if ((process.platform === 'darwin' || process.platform === 'linux') && normalizedExitCode === 143) {
+                        normalizedExitCode = 0;
+                    }
+                    complete(normalizedExitCode);
                 }
 
-                completed = true;
-                taskEndSubscription?.dispose();
-                cleanupRun(runId);
-                completeSession(exitCode);
-            };
-            completeFuncSession = complete;
-            if (pendingFuncExitCode !== undefined) {
-                complete(pendingFuncExitCode);
+                return {
+                    id: runId,
+                    processId,
+                    session: { id: runId } as vscode.DebugSession,
+                    stopSession: () => {
+                        if (!state.stop) {
+                            state.stopRequested = true;
+                            cleanupRun(runId);
+                            state.stop = (state.cleanup ?? Promise.resolve()).then(() => complete(-1));
+                        }
+
+                        return state.stop;
+                    },
+                    termination
+                };
             }
 
-            return {
-                id: runId,
-                processId: workerPidNumber,
-                session: { id: runId } as vscode.DebugSession,
-                stopSession: async () => {
-                    complete(-1);
-                },
-                termination
-            };
+            debugConfiguration.type = 'coreclr';
+            debugConfiguration.request = 'attach';
+            debugConfiguration.processId = String(processId);
+
+            delete debugConfiguration.program;
+            delete debugConfiguration.args;
+            delete debugConfiguration.cwd;
+            delete debugConfiguration.console;
+            delete debugConfiguration.env;
+        } catch (error) {
+            completeTaskExecutionDiscovery(state);
+            cleanupRun(runId);
+            if (state.taskExitCode !== undefined) {
+                throw createTaskExitError(state.taskExitCode);
+            }
+            throw error;
+        } finally {
+            if (state.startupTimeout) {
+                clearTimeout(state.startupTimeout);
+                state.startupTimeout = undefined;
+            }
+            state.taskStartSubscription?.dispose();
+            state.taskStartSubscription = undefined;
         }
-
-        // Configure coreclr attach to the worker process
-        debugConfiguration.type = 'coreclr';
-        debugConfiguration.request = 'attach';
-        debugConfiguration.processId = String(workerPidNumber);
-
-        // Remove launch-mode properties that don't apply to attach
-        delete debugConfiguration.program;
-        delete debugConfiguration.args;
-        delete debugConfiguration.cwd;
-        delete debugConfiguration.console;
-        delete debugConfiguration.env;
     }
 };

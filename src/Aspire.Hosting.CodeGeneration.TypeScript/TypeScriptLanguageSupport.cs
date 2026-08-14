@@ -59,6 +59,9 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     public string Language => LanguageId;
 
     /// <inheritdoc />
+    public string CertificateBundleEnvironmentVariable => "NODE_EXTRA_CA_CERTS";
+
+    /// <inheritdoc />
     public Dictionary<string, string> Scaffold(ScaffoldRequest request)
     {
         var files = new Dictionary<string, string>();
@@ -273,6 +276,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             // apphost.mts as the debug session's displayed identity. Keep in sync with
             // `KnownCapabilities.NodeCompiledAppHost` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
             ExtensionLaunchCapability = "node-compiled-apphost.v1",
+            CertificateBundleEnvironmentVariable = CertificateBundleEnvironmentVariable,
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",

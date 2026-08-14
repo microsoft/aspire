@@ -1298,9 +1298,21 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             float floatValue => JsonValue.Create(floatValue),
             double doubleValue => JsonValue.Create(doubleValue),
             decimal decimalValue => JsonValue.Create(decimalValue),
+            IEnumerable<KeyValuePair<string, string>> properties => ConvertNameValuePropertyToJsonObject(properties),
             System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToJsonArray(enumerable),
             _ => JsonValue.Create(value.ToString())
         };
+    }
+
+    private static JsonObject ConvertNameValuePropertyToJsonObject(IEnumerable<KeyValuePair<string, string>> properties)
+    {
+        var jsonObject = new JsonObject();
+        foreach (var property in properties)
+        {
+            jsonObject[property.Key] = property.Value;
+        }
+
+        return jsonObject;
     }
 
     private static JsonNode? ConvertPropertyValueToLegacyJsonNode(object? value)

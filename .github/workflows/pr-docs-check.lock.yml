@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"00a6f0e2eceaa73675ba389d9188257243ef07dc1eae10dae50decc95a60d368","body_hash":"70bf9f529e94dcb29c921d6e27b76dab0c66c86e580776f9a9af238550740e7e","compiler_version":"v0.85.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.78"}}
-# gh-aw-manifest: {"version":1,"secrets":["ASPIRE_BOT_APP_ID","ASPIRE_BOT_PRIVATE_KEY","COPILOT_GITHUB_TOKEN","GH_AW_CI_TRIGGER_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},{"repo":"actions/create-github-app-token","sha":"1b10c78c7865c340bc4f6099eb2f838309f1e8c3","version":"v3.1.1"},{"repo":"actions/create-github-app-token","sha":"bcd2ba49218906704ab6c1aa796996da409d3eb1","version":"v3.2.0"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"820762786026740c76f36085b0efc47a31fe5020","version":"v7.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"2709137ea6c5b0e19aa621454dc643ea8dc526b1","version":"v0.85.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44","digest":"sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44@sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44","digest":"sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44@sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44","digest":"sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44@sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.8","digest":"sha256:38bbea36cdb46a3c9d04d1db05e672966f5239b431a2022eb35881688e5721d8","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.8@sha256:38bbea36cdb46a3c9d04d1db05e672966f5239b431a2022eb35881688e5721d8"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"},{"image":"ghcr.io/github/github-mcp-server:v1.8.0","digest":"sha256:d5a18c04b92714c309eb46a2305087e91a4dbd80420f6e462656699f95093520","pinned_image":"ghcr.io/github/github-mcp-server:v1.8.0@sha256:d5a18c04b92714c309eb46a2305087e91a4dbd80420f6e462656699f95093520"}],"has_pull_request":true}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"25e0fe19c95e8ba536dd030e20724e289d3c9025acf55d08d90d78d24ac03077","body_hash":"43bd509e196c1c74c40d28da32a72b91cea8a64165f8c1a40e9adb414848b8b6","compiler_version":"v0.85.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.78"}}
+# gh-aw-manifest: {"version":1,"secrets":["ASPIRE_BOT_APP_ID","ASPIRE_BOT_PRIVATE_KEY","COPILOT_GITHUB_TOKEN","GH_AW_CI_TRIGGER_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},{"repo":"actions/create-github-app-token","sha":"1b10c78c7865c340bc4f6099eb2f838309f1e8c3","version":"v3.1.1"},{"repo":"actions/create-github-app-token","sha":"bcd2ba49218906704ab6c1aa796996da409d3eb1","version":"v3.2.0"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"820762786026740c76f36085b0efc47a31fe5020","version":"v7.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"2709137ea6c5b0e19aa621454dc643ea8dc526b1","version":"v0.85.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44","digest":"sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.44@sha256:0d727725c737b58c7bdf51f640cffb928385ec46517e0917c7f1a02f1bada8b4"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44","digest":"sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.44@sha256:b50fbadba138f6e9aba94aca09711335c489bb3b15861220cb66f6092e042dc7"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44","digest":"sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.44@sha256:83e48bbe12c634be8c228a576832fe45f66c529ac3659db92bddbcf2eeb6d627"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.8","digest":"sha256:38bbea36cdb46a3c9d04d1db05e672966f5239b431a2022eb35881688e5721d8","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.8@sha256:38bbea36cdb46a3c9d04d1db05e672966f5239b431a2022eb35881688e5721d8"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"},{"image":"ghcr.io/github/github-mcp-server:v1.8.0","digest":"sha256:d5a18c04b92714c309eb46a2305087e91a4dbd80420f6e462656699f95093520","pinned_image":"ghcr.io/github/github-mcp-server:v1.8.0@sha256:d5a18c04b92714c309eb46a2305087e91a4dbd80420f6e462656699f95093520"}],"has_pull_request":true}
 # This file was automatically generated by gh-aw (v0.85.4). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -44,11 +44,13 @@
 #   - GITHUB_TOKEN
 #
 # Custom actions used:
+#   - actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 #   - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 #   - actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # de0fac2e4500dabe0009e67214ff5f5447ce83dd
 #   - actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
 #   - actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+#   - actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
 #   - actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
 #   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
 #   - actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -227,23 +229,23 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_30261006fcec5b8c_EOF'
+          cat << 'GH_AW_PROMPT_c924f63d142a5e34_EOF'
           <system>
-          GH_AW_PROMPT_30261006fcec5b8c_EOF
+          GH_AW_PROMPT_c924f63d142a5e34_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_30261006fcec5b8c_EOF'
+          cat << 'GH_AW_PROMPT_c924f63d142a5e34_EOF'
           <safe-output-tools>
           Tools: create_pull_request, missing_tool, missing_data, noop, notify_source_pr
-          GH_AW_PROMPT_30261006fcec5b8c_EOF
+          GH_AW_PROMPT_c924f63d142a5e34_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_create_pull_request.md"
-          cat << 'GH_AW_PROMPT_30261006fcec5b8c_EOF'
+          cat << 'GH_AW_PROMPT_c924f63d142a5e34_EOF'
           </safe-output-tools>
-          GH_AW_PROMPT_30261006fcec5b8c_EOF
+          GH_AW_PROMPT_c924f63d142a5e34_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/mcp_cli_tools_prompt.md"
-          cat << 'GH_AW_PROMPT_30261006fcec5b8c_EOF'
+          cat << 'GH_AW_PROMPT_c924f63d142a5e34_EOF'
           <github-context>
           The following GitHub context information is available for this workflow:
           {{#if github.actor}}
@@ -271,7 +273,7 @@ jobs:
           - **workflow-run-id**: __GH_AW_GITHUB_RUN_ID__
           {{/if}}
           - **checkouts**: The following repositories have been checked out and are available in the workspace:
-            - repo `microsoft/aspire.dev` → `$GITHUB_WORKSPACE` (cwd) (**current** - this is the repository you are working on; use this as the target for all GitHub operations unless otherwise specified) [shallow clone, fetch-depth=1 (default)] [additional refs fetched: release/*]
+            - repo `microsoft/aspire.dev` → `$GITHUB_WORKSPACE` (cwd) (**current** - this is the repository you are working on; use this as the target for all GitHub operations unless otherwise specified) [shallow clone, fetch-depth=1 (default)]
             - **Note**: If a branch you need is not in the list above and is not listed as an additional fetched ref, it has NOT been checked out. For private repositories you cannot fetch it. If the branch is required and not available, exit with an error and ask the user to add it to the `fetch:` option of the `checkout:` configuration (e.g., `fetch: ["refs/pulls/open/*"]` for all open PR refs, or `fetch: ["main", "feature/my-branch"]` for specific branches).
             - **Warning: No git credentials are available to the agent.** Credentials are
               intentionally removed after the checkout step for security. This means any git
@@ -285,12 +287,12 @@ jobs:
               stop immediately and report the limitation rather than spending turns trying to work around it.
           </github-context>
 
-          GH_AW_PROMPT_30261006fcec5b8c_EOF
+          GH_AW_PROMPT_c924f63d142a5e34_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_30261006fcec5b8c_EOF'
+          cat << 'GH_AW_PROMPT_c924f63d142a5e34_EOF'
           </system>
           {{#runtime-import .github/workflows/pr-docs-check.md}}
-          GH_AW_PROMPT_30261006fcec5b8c_EOF
+          GH_AW_PROMPT_c924f63d142a5e34_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -459,12 +461,6 @@ jobs:
           persist-credentials: false
           repository: microsoft/aspire.dev
           token: ${{ steps.checkout-app-token-0.outputs.token }}
-      - name: Fetch additional refs for microsoft/aspire.dev
-        env:
-          GH_AW_FETCH_TOKEN: ${{ steps.checkout-app-token-0.outputs.token }}
-        run: |
-          header=$(printf "x-access-token:%s" "${GH_AW_FETCH_TOKEN}" | base64 -w 0)
-          git -c "http.extraheader=Authorization: Basic ${header}" fetch origin --depth=1 '+refs/heads/release/*:refs/remotes/origin/release/*'
       - name: Build checkout manifest for safe-outputs handlers
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -576,6 +572,14 @@ jobs:
             sudo chmod 755 /usr/local/bin/copilot
           fi
           /usr/local/bin/copilot --version
+      - name: Check out pre-agent scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          path: _repos/aspire
+          repository: microsoft/aspire
+          sparse-checkout: |
+            .github/workflows/pr-docs-check
+          sparse-checkout-cone-mode: false
       - id: resolve-target-app-token
         name: Mint app token for target-branch resolver
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
@@ -590,16 +594,8 @@ jobs:
           GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         id: resolve-target
-        name: Resolve target aspire.dev branch
-        run: "set -euo pipefail\n\nmkdir -p .pr-docs-check\nOUT=.pr-docs-check/target.json\n\nif [ -z \"${PR_NUMBER}\" ]; then\n  echo \"ERROR: PR_NUMBER is empty; cannot resolve target branch.\" >&2\n  exit 1\nfi\n# PR_NUMBER reaches this script either from `github.event.pull_request.number`\n# (already an integer at the GitHub Actions layer) or from the\n# `workflow_dispatch` `pr_number` string input (free-form, supplied by a\n# maintainer). Reject anything that isn't a positive integer up front so\n# downstream `jq --argjson` and `gh api` calls produce a clear error\n# instead of an opaque parse failure.\nif ! [[ \"${PR_NUMBER}\" =~ ^[1-9][0-9]*$ ]]; then\n  echo \"ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer.\" >&2\n  exit 1\nfi\n\necho \"Resolving target microsoft/aspire.dev branch for microsoft/aspire#${PR_NUMBER}\"\n# --- 1. Fetch source PR metadata from microsoft/aspire ---------------\n# We need the PR's own milestone, base branch, and body. The body is\n# later scanned for `Closes/Fixes/Resolves #N` linked-issue refs.\nPR_JSON=\"$(mktemp)\"\ngh api \"/repos/microsoft/aspire/pulls/${PR_NUMBER}\" > \"${PR_JSON}\"\n\nPR_MILESTONE_TITLE=\"$(jq -r '.milestone.title // empty' \"${PR_JSON}\")\"\nPR_BASE_REF=\"$(jq -r '.base.ref // empty' \"${PR_JSON}\")\"\nPR_BODY=\"$(jq -r '.body // \"\"' \"${PR_JSON}\")\"\n\necho \"PR milestone : '${PR_MILESTONE_TITLE}'\"\necho \"PR base ref  : '${PR_BASE_REF}'\"\n\n# --- 2. Extract linked issue numbers from the PR body ----------------\n# GitHub recognizes these closing keywords (case-insensitive), with an\n# optional `:` after the keyword, optional `owner/repo`, and a `#N`:\n#\n#   close, closes, closed,\n#   fix,   fixes,  fixed,\n#   resolve, resolves, resolved\n#\n# Examples it must accept:\n#   Fixes #123\n#   Fixes: #123\n#   Closes microsoft/aspire#456\n#   Resolves: microsoft/aspire#789\n#\n# See:\n# https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword\n#\n# Only same-repo refs (no owner/repo, or `microsoft/aspire`) are kept;\n# cross-repo references in linked issues don't help us pick a docs\n# release branch.\n#\n# Implemented in python3 (preinstalled on ubuntu-latest) because POSIX\n# grep -E lacks reliable case-insensitive multiline matching with the\n# exact keyword set we need. We deliberately do NOT swallow parser\n# errors with `|| true`: if python3 fails (e.g., missing on the runner,\n# body too large to pass as argv), the resolver should fail loudly\n# rather than silently pick the wrong branch from an empty linked-issue\n# set.\nLINKED_FILE=\"$(mktemp)\"\n: > \"${LINKED_FILE}\"\npython3 - \"${PR_BODY}\" > \"${LINKED_FILE}\" <<'PY'\nimport re, sys\nbody = sys.argv[1] if len(sys.argv) > 1 else \"\"\npat = re.compile(\n    r'\\b(close[sd]?|fix(?:es|ed)?|resolve[sd]?)\\s*:?\\s+'\n    r'(?:([A-Za-z0-9._-]+/[A-Za-z0-9._-]+))?#(\\d+)\\b',\n    re.IGNORECASE,\n)\nseen = set()\nfor m in pat.finditer(body):\n    repo = (m.group(2) or \"microsoft/aspire\").lower()\n    if repo != \"microsoft/aspire\":\n        continue\n    n = m.group(3)\n    if n in seen:\n        continue\n    seen.add(n)\n    print(n)\nPY\n\nLINKED_ISSUES=()\nwhile IFS= read -r n; do\n  [ -n \"${n}\" ] && LINKED_ISSUES+=(\"${n}\")\ndone < \"${LINKED_FILE}\"\nrm -f \"${LINKED_FILE}\"\n\nif [ \"${#LINKED_ISSUES[@]}\" -gt 0 ]; then\n  echo \"Linked issues : ${LINKED_ISSUES[*]}\"\nelse\n  echo \"Linked issues : <none>\"\nfi\n\n# --- 3. Fetch milestone for each linked issue ------------------------\n# Stop at the first non-empty milestone for the priority resolution\n# below, but record every issue's milestone (or null) for observability.\nLINKED_ISSUE_MILESTONE_TITLE=\"\"\nLINKED_ARR=()\nfor n in \"${LINKED_ISSUES[@]:-}\"; do\n  [ -z \"${n}\" ] && continue\n  ISSUE_JSON=\"$(mktemp)\"\n  # A linked-issue ref may be deleted, transferred, or otherwise\n  # unreadable. Treat fetch failure as \"no milestone\" rather than\n  # aborting the entire workflow.\n  if gh api \"/repos/microsoft/aspire/issues/${n}\" > \"${ISSUE_JSON}\" 2>/dev/null; then\n    m=\"$(jq -r '.milestone.title // empty' \"${ISSUE_JSON}\")\"\n  else\n    m=\"\"\n    echo \"  WARN: could not fetch microsoft/aspire#${n}; treating milestone as empty\"\n  fi\n  rm -f \"${ISSUE_JSON}\"\n  LINKED_ARR+=(\"$(jq -n --arg num \"${n}\" --arg ms \"${m}\" \\\n    '{number: ($num|tonumber), milestone: (if ($ms|length)>0 then $ms else null end)}')\")\n  if [ -z \"${LINKED_ISSUE_MILESTONE_TITLE}\" ] && [ -n \"${m}\" ]; then\n    LINKED_ISSUE_MILESTONE_TITLE=\"${m}\"\n  fi\ndone\n\nif [ \"${#LINKED_ARR[@]}\" -gt 0 ]; then\n  LINKED_ISSUES_JSON=\"$(printf '%s\\n' \"${LINKED_ARR[@]}\" | jq -s '.')\"\nelse\n  LINKED_ISSUES_JSON=\"[]\"\nfi\n\n# --- 4. Pick a candidate target branch -------------------------------\n# Priority (first match wins):\n#   1. PR milestone title (normalized)\n#   2. Linked-issue milestone title (normalized)\n#   3. PR base branch if it matches release/X.Y[.Z]\n#   4. main\n#\n# Milestone normalization: `^v?(\\d+)\\.(\\d+)(?:\\.(\\d+))?` matched as a\n# prefix, so titles like \"13.3\", \"v13.3\", \"13.3 - Preview 1\" all map\n# to release/13.3, and \"13.2.1\" maps to release/13.2.1.\nnormalize_milestone() {\n  local title=\"$1\"\n  local m\n  m=\"$(printf '%s' \"${title}\" | grep -oE '^v?[0-9]+\\.[0-9]+(\\.[0-9]+)?' | head -n1 || true)\"\n  if [ -z \"${m}\" ]; then\n    return 1\n  fi\n  m=\"${m#v}\"\n  printf 'release/%s' \"${m}\"\n}\n\nCANDIDATE=\"\"\nCANDIDATE_SOURCE=\"\"\nCANDIDATE_SOURCE_DETAIL=\"\"\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${PR_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${PR_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"pr_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${PR_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${LINKED_ISSUE_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${LINKED_ISSUE_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"linked_issue_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${LINKED_ISSUE_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [[ \"${PR_BASE_REF}\" =~ ^release/[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]; then\n  CANDIDATE=\"${PR_BASE_REF}\"\n  CANDIDATE_SOURCE=\"pr_base\"\n  CANDIDATE_SOURCE_DETAIL=\"${PR_BASE_REF}\"\nfi\n\nif [ -z \"${CANDIDATE}\" ]; then\n  CANDIDATE=\"main\"\n  CANDIDATE_SOURCE=\"fallback_main\"\n  CANDIDATE_SOURCE_DETAIL=\"no milestone, linked-issue milestone, or release/* base ref resolved\"\nfi\n\necho \"Candidate     : ${CANDIDATE} (source: ${CANDIDATE_SOURCE})\"\n\n# --- 5. Enumerate release/* branches on microsoft/aspire.dev ---------\n# Primary: local git on the current workspace, which is checked out at\n# microsoft/aspire.dev with `release/*` refs fetched into\n# `refs/remotes/origin/release/*` via the workflow `checkout:` block.\n#\n# Fallback: `gh api /repos/microsoft/aspire.dev/branches` paginated.\n# Used if the local fetch produced nothing (e.g., no release branches\n# have been pushed yet, or the fetch silently failed). The GH_TOKEN\n# used here is the aspire-bot installation token minted at the top of\n# `pre-agent-steps`, which has explicit `contents: read` on both\n# microsoft/aspire and microsoft/aspire.dev — the default GITHUB_TOKEN\n# is scoped only to the workflow's own repo and cannot read aspire.dev's\n# branch list reliably.\nENUMERATION_SOURCE=\"\"\nRELEASE_BRANCHES_FILE=\"$(mktemp)\"\n: > \"${RELEASE_BRANCHES_FILE}\"\n\nif git -C \"${GITHUB_WORKSPACE}\" rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n  git -C \"${GITHUB_WORKSPACE}\" for-each-ref \\\n    --format='%(refname:short)' 'refs/remotes/origin/release/*' \\\n    | sed 's|^origin/||' > \"${RELEASE_BRANCHES_FILE}\" || true\nfi\n\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  ENUMERATION_SOURCE=\"git\"\nelse\n  echo \"Local git enumeration returned no release/* branches; falling back to gh api\"\n  if gh api --paginate \"/repos/microsoft/aspire.dev/branches?per_page=100\" \\\n      | jq -r '.[].name | select(startswith(\"release/\"))' \\\n      > \"${RELEASE_BRANCHES_FILE}\" 2>/dev/null; then\n    ENUMERATION_SOURCE=\"gh_api\"\n  else\n    echo \"  WARN: gh api fallback for aspire.dev branches failed; treating list as empty\"\n    : > \"${RELEASE_BRANCHES_FILE}\"\n    ENUMERATION_SOURCE=\"empty\"\n  fi\nfi\n\n# De-duplicate and sort so the JSON output is deterministic across runs.\nsort -u -o \"${RELEASE_BRANCHES_FILE}\" \"${RELEASE_BRANCHES_FILE}\"\n\nAVAILABLE_BRANCHES_JSON=\"$(jq -R -s 'split(\"\\n\") | map(select(length > 0))' \"${RELEASE_BRANCHES_FILE}\")\"\necho \"Release branches on aspire.dev (source=${ENUMERATION_SOURCE}):\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  sed 's/^/  - /' \"${RELEASE_BRANCHES_FILE}\"\nelse\n  echo \"  <none>\"\nfi\n\n# --- 6. Compute the effective target branch --------------------------\n# Policy (in priority order):\n#   1. exact_match: CANDIDATE is a release/* branch that exists on\n#      aspire.dev → use it as-is.\n#   2. latest_release_fallback: aspire.dev has at least one release/*\n#      branch → use the highest-versioned one. This covers both:\n#        - CANDIDATE was `main` (no milestone/linked-issue/base-ref\n#          signal) — docs for upcoming-release work should still land\n#          on the staged release/* branch, not on aspire.dev's main.\n#        - CANDIDATE was a release/* (e.g. release/13.3) that no\n#          longer exists on aspire.dev (already shipped, branch\n#          deleted). The docs site only keeps a release/* branch for\n#          the upcoming release; older release-branch content is\n#          merged into main on aspire.dev as those releases ship.\n#   3. main_fallback: aspire.dev has no release/* at all → use main.\n#\n# Sort release branches with sort -V *after* stripping the\n# \"release/\" prefix so the numeric version compares cleanly:\n# \"release/13.4\" beats \"release/9.5\" (without -V, lexicographic\n# ordering would put 9.5 last; with -V on the bare versions, 13.4\n# comes last).\nLATEST_RELEASE=\"\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  LATEST_RELEASE=\"$(\n    sed -n 's|^release/||p' \"${RELEASE_BRANCHES_FILE}\" \\\n      | sort -V \\\n      | tail -n1 \\\n      | sed 's|^|release/|'\n  )\"\nfi\n\nEFFECTIVE=\"\"\nRESOLUTION=\"\"\nif [ \"${CANDIDATE}\" != \"main\" ] && grep -Fxq \"${CANDIDATE}\" \"${RELEASE_BRANCHES_FILE}\"; then\n  EFFECTIVE=\"${CANDIDATE}\"\n  RESOLUTION=\"exact_match\"\nelif [ -n \"${LATEST_RELEASE}\" ]; then\n  EFFECTIVE=\"${LATEST_RELEASE}\"\n  RESOLUTION=\"latest_release_fallback\"\n  if [ \"${CANDIDATE}\" = \"main\" ]; then\n    echo \"Candidate was main; using latest aspire.dev release branch ${EFFECTIVE}\"\n  else\n    echo \"Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead\"\n  fi\nelse\n  EFFECTIVE=\"main\"\n  RESOLUTION=\"main_fallback\"\n  echo \"No release/* branches on microsoft/aspire.dev; falling back to main\"\nfi\n\nrm -f \"${RELEASE_BRANCHES_FILE}\" \"${PR_JSON}\"\n\necho \"Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})\"\necho \"branch=${EFFECTIVE}\" >> \"${GITHUB_OUTPUT}\"\n\n# --- 7. Emit target.json ---------------------------------------------\njq -n \\\n  --argjson pr_number \"${PR_NUMBER}\" \\\n  --arg pr_base_ref \"${PR_BASE_REF}\" \\\n  --arg candidate \"${CANDIDATE}\" \\\n  --arg candidate_source \"${CANDIDATE_SOURCE}\" \\\n  --arg candidate_source_detail \"${CANDIDATE_SOURCE_DETAIL}\" \\\n  --arg effective \"${EFFECTIVE}\" \\\n  --arg resolution \"${RESOLUTION}\" \\\n  --argjson available \"${AVAILABLE_BRANCHES_JSON}\" \\\n  --arg enumeration_source \"${ENUMERATION_SOURCE}\" \\\n  --argjson linked_issues \"${LINKED_ISSUES_JSON}\" \\\n  '{\n     source_pr_number: $pr_number,\n     source_pr_base_ref: $pr_base_ref,\n     candidate_target_branch: $candidate,\n     candidate_source: $candidate_source,\n     candidate_source_detail: $candidate_source_detail,\n     effective_target_branch: $effective,\n     target_resolution: $resolution,\n     available_release_branches: $available,\n     enumeration_source: $enumeration_source,\n     linked_issues: $linked_issues\n   }' > \"${OUT}\"\n\necho \"--- ${OUT} ---\"\ncat \"${OUT}\"\n"
-      - name: Check out pre-agent scripts
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          path: _repos/aspire
-          repository: microsoft/aspire
-          sparse-checkout: |
-            .github/workflows/pr-docs-check
-          sparse-checkout-cone-mode: false
+        name: Resolve and check out target aspire.dev branch
+        run: "set -euo pipefail\n\nmkdir -p .pr-docs-check\nOUT=.pr-docs-check/target.json\n\nif [ -z \"${PR_NUMBER}\" ]; then\n  echo \"ERROR: PR_NUMBER is empty; cannot resolve target branch.\" >&2\n  exit 1\nfi\n# PR_NUMBER reaches this script either from `github.event.pull_request.number`\n# (already an integer at the GitHub Actions layer) or from the\n# `workflow_dispatch` `pr_number` string input (free-form, supplied by a\n# maintainer). Reject anything that isn't a positive integer up front so\n# downstream `jq --argjson` and `gh api` calls produce a clear error\n# instead of an opaque parse failure.\nif ! [[ \"${PR_NUMBER}\" =~ ^[1-9][0-9]*$ ]]; then\n  echo \"ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer.\" >&2\n  exit 1\nfi\nif ! git -C \"${GITHUB_WORKSPACE}\" rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n  echo \"ERROR: Aspire.dev workspace is not a Git work tree: ${GITHUB_WORKSPACE}\" >&2\n  exit 1\nfi\n\necho \"Resolving target microsoft/aspire.dev branch for microsoft/aspire#${PR_NUMBER}\"\n# --- 1. Fetch source PR metadata from microsoft/aspire ---------------\n# We need the PR's own milestone, base branch, and body. The body is\n# later scanned for `Closes/Fixes/Resolves #N` linked-issue refs.\nPR_JSON=\"$(mktemp)\"\ngh api \"/repos/microsoft/aspire/pulls/${PR_NUMBER}\" > \"${PR_JSON}\"\n\nPR_MILESTONE_TITLE=\"$(jq -r '.milestone.title // empty' \"${PR_JSON}\")\"\nPR_BASE_REF=\"$(jq -r '.base.ref // empty' \"${PR_JSON}\")\"\nPR_BODY=\"$(jq -r '.body // \"\"' \"${PR_JSON}\")\"\n\necho \"PR milestone : '${PR_MILESTONE_TITLE}'\"\necho \"PR base ref  : '${PR_BASE_REF}'\"\n\n# --- 2. Extract linked issue numbers from the PR body ----------------\n# GitHub recognizes these closing keywords (case-insensitive), with an\n# optional `:` after the keyword, optional `owner/repo`, and a `#N`:\n#\n#   close, closes, closed,\n#   fix,   fixes,  fixed,\n#   resolve, resolves, resolved\n#\n# Examples it must accept:\n#   Fixes #123\n#   Fixes: #123\n#   Closes microsoft/aspire#456\n#   Resolves: microsoft/aspire#789\n#\n# See:\n# https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword\n#\n# Only same-repo refs (no owner/repo, or `microsoft/aspire`) are kept;\n# cross-repo references in linked issues don't help us pick a docs\n# release branch.\n#\n# Implemented in python3 (preinstalled on ubuntu-latest) because POSIX\n# grep -E lacks reliable case-insensitive multiline matching with the\n# exact keyword set we need. We deliberately do NOT swallow parser\n# errors with `|| true`: if python3 fails (e.g., missing on the runner,\n# body too large to pass as argv), the resolver should fail loudly\n# rather than silently pick the wrong branch from an empty linked-issue\n# set.\nLINKED_FILE=\"$(mktemp)\"\n: > \"${LINKED_FILE}\"\npython3 - \"${PR_BODY}\" > \"${LINKED_FILE}\" <<'PY'\nimport re, sys\nbody = sys.argv[1] if len(sys.argv) > 1 else \"\"\npat = re.compile(\n    r'\\b(close[sd]?|fix(?:es|ed)?|resolve[sd]?)\\s*:?\\s+'\n    r'(?:([A-Za-z0-9._-]+/[A-Za-z0-9._-]+))?#(\\d+)\\b',\n    re.IGNORECASE,\n)\nseen = set()\nfor m in pat.finditer(body):\n    repo = (m.group(2) or \"microsoft/aspire\").lower()\n    if repo != \"microsoft/aspire\":\n        continue\n    n = m.group(3)\n    if n in seen:\n        continue\n    seen.add(n)\n    print(n)\nPY\n\nLINKED_ISSUES=()\nwhile IFS= read -r n; do\n  [ -n \"${n}\" ] && LINKED_ISSUES+=(\"${n}\")\ndone < \"${LINKED_FILE}\"\nrm -f \"${LINKED_FILE}\"\n\nif [ \"${#LINKED_ISSUES[@]}\" -gt 0 ]; then\n  echo \"Linked issues : ${LINKED_ISSUES[*]}\"\nelse\n  echo \"Linked issues : <none>\"\nfi\n\n# --- 3. Fetch milestone for each linked issue ------------------------\n# Stop at the first non-empty milestone for the priority resolution\n# below, but record every issue's milestone (or null) for observability.\nLINKED_ISSUE_MILESTONE_TITLE=\"\"\nLINKED_ARR=()\nfor n in \"${LINKED_ISSUES[@]:-}\"; do\n  [ -z \"${n}\" ] && continue\n  ISSUE_JSON=\"$(mktemp)\"\n  # A linked-issue ref may be deleted, transferred, or otherwise\n  # unreadable. Treat fetch failure as \"no milestone\" rather than\n  # aborting the entire workflow.\n  if gh api \"/repos/microsoft/aspire/issues/${n}\" > \"${ISSUE_JSON}\" 2>/dev/null; then\n    m=\"$(jq -r '.milestone.title // empty' \"${ISSUE_JSON}\")\"\n  else\n    m=\"\"\n    echo \"  WARN: could not fetch microsoft/aspire#${n}; treating milestone as empty\"\n  fi\n  rm -f \"${ISSUE_JSON}\"\n  LINKED_ARR+=(\"$(jq -n --arg num \"${n}\" --arg ms \"${m}\" \\\n    '{number: ($num|tonumber), milestone: (if ($ms|length)>0 then $ms else null end)}')\")\n  if [ -z \"${LINKED_ISSUE_MILESTONE_TITLE}\" ] && [ -n \"${m}\" ]; then\n    LINKED_ISSUE_MILESTONE_TITLE=\"${m}\"\n  fi\ndone\n\nif [ \"${#LINKED_ARR[@]}\" -gt 0 ]; then\n  LINKED_ISSUES_JSON=\"$(printf '%s\\n' \"${LINKED_ARR[@]}\" | jq -s '.')\"\nelse\n  LINKED_ISSUES_JSON=\"[]\"\nfi\n\n# --- 4. Pick a candidate target branch -------------------------------\n# Priority (first match wins):\n#   1. PR milestone title (normalized)\n#   2. Linked-issue milestone title (normalized)\n#   3. PR base branch if it matches release/X.Y[.Z]\n#   4. main\n#\n# Milestone normalization: `^v?(\\d+)\\.(\\d+)(?:\\.(\\d+))?` matched as a\n# prefix, so titles like \"13.3\", \"v13.3\", \"13.3 - Preview 1\" all map\n# to release/13.3, and \"13.2.1\" maps to release/13.2.1.\nnormalize_milestone() {\n  local title=\"$1\"\n  local m\n  m=\"$(printf '%s' \"${title}\" | grep -oE '^v?[0-9]+\\.[0-9]+(\\.[0-9]+)?' | head -n1 || true)\"\n  if [ -z \"${m}\" ]; then\n    return 1\n  fi\n  m=\"${m#v}\"\n  printf 'release/%s' \"${m}\"\n}\n\nCANDIDATE=\"\"\nCANDIDATE_SOURCE=\"\"\nCANDIDATE_SOURCE_DETAIL=\"\"\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${PR_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${PR_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"pr_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${PR_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${LINKED_ISSUE_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${LINKED_ISSUE_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"linked_issue_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${LINKED_ISSUE_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [[ \"${PR_BASE_REF}\" =~ ^release/[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]; then\n  CANDIDATE=\"${PR_BASE_REF}\"\n  CANDIDATE_SOURCE=\"pr_base\"\n  CANDIDATE_SOURCE_DETAIL=\"${PR_BASE_REF}\"\nfi\n\nif [ -z \"${CANDIDATE}\" ]; then\n  CANDIDATE=\"main\"\n  CANDIDATE_SOURCE=\"fallback_main\"\n  CANDIDATE_SOURCE_DETAIL=\"no milestone, linked-issue milestone, or release/* base ref resolved\"\nfi\n\necho \"Candidate     : ${CANDIDATE} (source: ${CANDIDATE_SOURCE})\"\n\n# --- 5. Enumerate release/* branches on microsoft/aspire.dev ---------\n# Query aspire.dev directly. The generated PR checkout configures origin\n# for microsoft/aspire before this step, so its remote-tracking refs must\n# never be used to infer which branches exist in aspire.dev. The GH_TOKEN\n# used here is the aspire-bot installation token minted at the top of\n# `pre-agent-steps`, which has explicit `contents: read` on both\n# microsoft/aspire and microsoft/aspire.dev — the default GITHUB_TOKEN\n# is scoped only to the workflow's own repo and cannot read aspire.dev's\n# branch list reliably.\nENUMERATION_SOURCE=\"\"\nRELEASE_BRANCHES_FILE=\"$(mktemp)\"\n: > \"${RELEASE_BRANCHES_FILE}\"\n\npython3 \\\n  \"${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/enumerate_release_branches.py\" \\\n  > \"${RELEASE_BRANCHES_FILE}\"\nENUMERATION_SOURCE=\"gh_api\"\n\n# De-duplicate and sort so the JSON output is deterministic across runs.\nsort -u -o \"${RELEASE_BRANCHES_FILE}\" \"${RELEASE_BRANCHES_FILE}\"\n\nAVAILABLE_BRANCHES_JSON=\"$(jq -R -s 'split(\"\\n\") | map(select(length > 0))' \"${RELEASE_BRANCHES_FILE}\")\"\necho \"Release branches on aspire.dev (source=${ENUMERATION_SOURCE}):\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  sed 's/^/  - /' \"${RELEASE_BRANCHES_FILE}\"\nelse\n  echo \"  <none>\"\nfi\n\n# --- 6. Compute the effective target branch --------------------------\n# Policy (in priority order):\n#   1. exact_match: CANDIDATE is a release/* branch that exists on\n#      aspire.dev → use it as-is.\n#   2. latest_release_fallback: aspire.dev has at least one release/*\n#      branch → use the highest-versioned one. This covers both:\n#        - CANDIDATE was `main` (no milestone/linked-issue/base-ref\n#          signal) — docs for upcoming-release work should still land\n#          on the staged release/* branch, not on aspire.dev's main.\n#        - CANDIDATE was a release/* (e.g. release/13.3) that no\n#          longer exists on aspire.dev (already shipped, branch\n#          deleted). The docs site only keeps a release/* branch for\n#          the upcoming release; older release-branch content is\n#          merged into main on aspire.dev as those releases ship.\n#   3. main_fallback: aspire.dev has no release/* at all → use main.\n#\n# Sort release branches with sort -V *after* stripping the\n# \"release/\" prefix so the numeric version compares cleanly:\n# \"release/13.4\" beats \"release/9.5\" (without -V, lexicographic\n# ordering would put 9.5 last; with -V on the bare versions, 13.4\n# comes last).\nLATEST_RELEASE=\"\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  LATEST_RELEASE=\"$(\n    sed -n 's|^release/||p' \"${RELEASE_BRANCHES_FILE}\" \\\n      | sort -V \\\n      | tail -n1 \\\n      | sed 's|^|release/|'\n  )\"\nfi\n\nEFFECTIVE=\"\"\nRESOLUTION=\"\"\nif [ \"${CANDIDATE}\" != \"main\" ] && grep -Fxq \"${CANDIDATE}\" \"${RELEASE_BRANCHES_FILE}\"; then\n  EFFECTIVE=\"${CANDIDATE}\"\n  RESOLUTION=\"exact_match\"\nelif [ -n \"${LATEST_RELEASE}\" ]; then\n  EFFECTIVE=\"${LATEST_RELEASE}\"\n  RESOLUTION=\"latest_release_fallback\"\n  if [ \"${CANDIDATE}\" = \"main\" ]; then\n    echo \"Candidate was main; using latest aspire.dev release branch ${EFFECTIVE}\"\n  else\n    echo \"Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead\"\n  fi\nelse\n  EFFECTIVE=\"main\"\n  RESOLUTION=\"main_fallback\"\n  echo \"No release/* branches on microsoft/aspire.dev; falling back to main\"\nfi\n\nrm -f \"${RELEASE_BRANCHES_FILE}\" \"${PR_JSON}\"\n\necho \"Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})\"\necho \"branch=${EFFECTIVE}\" >> \"${GITHUB_OUTPUT}\"\n\nDOCS_WORK_BRANCH=\"docs/pr-${PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"\n\n# --- 7. Emit target.json ---------------------------------------------\njq -n \\\n  --argjson pr_number \"${PR_NUMBER}\" \\\n  --arg pr_base_ref \"${PR_BASE_REF}\" \\\n  --arg candidate \"${CANDIDATE}\" \\\n  --arg candidate_source \"${CANDIDATE_SOURCE}\" \\\n  --arg candidate_source_detail \"${CANDIDATE_SOURCE_DETAIL}\" \\\n  --arg effective \"${EFFECTIVE}\" \\\n  --arg resolution \"${RESOLUTION}\" \\\n  --arg docs_work_branch \"${DOCS_WORK_BRANCH}\" \\\n  --argjson available \"${AVAILABLE_BRANCHES_JSON}\" \\\n  --arg enumeration_source \"${ENUMERATION_SOURCE}\" \\\n  --argjson linked_issues \"${LINKED_ISSUES_JSON}\" \\\n  '{\n     source_pr_number: $pr_number,\n     source_pr_base_ref: $pr_base_ref,\n     candidate_target_branch: $candidate,\n     candidate_source: $candidate_source,\n     candidate_source_detail: $candidate_source_detail,\n     effective_target_branch: $effective,\n     docs_work_branch: $docs_work_branch,\n     target_resolution: $resolution,\n     available_release_branches: $available,\n     enumeration_source: $enumeration_source,\n     linked_issues: $linked_issues\n   }' > \"${OUT}\"\n\necho \"--- ${OUT} ---\"\ncat \"${OUT}\"\n\n# --- 8. Prepare the target-based documentation work branch ------------\n# The helper fetches only a missing target ref (without shallowifying a\n# full clone), creates a unique branch at the exact target tip, restores\n# trusted agent configuration, and keeps those runtime-only files out of\n# Git patches even if the agent uses broad staging.\npython3 \\\n  \"${GITHUB_WORKSPACE}/_repos/aspire/.github/workflows/pr-docs-check/checkout_target.py\" \\\n  \"${EFFECTIVE}\" \\\n  \"${DOCS_WORK_BRANCH}\"\n"
       - env:
           GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
@@ -1131,6 +1127,7 @@ jobs:
       - detection
       - notify_source_pr
       - safe_outputs
+      - validate-docs-outcome
     if: >
       always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
       needs.activation.outputs.oauth_token_check_failed == 'true' || needs.activation.outputs.stale_lock_file_failed == 'true')
@@ -1650,16 +1647,14 @@ jobs:
         with:
           name: agent
           path: ${{ runner.temp }}/gh-aw/safe-jobs/
-      - name: Mint aspire-bot token (microsoft/aspire)
-        id: aspire-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+      - name: Check out outcome validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         env:
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-          owner: microsoft
-          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-          repositories: aspire
+          path: _validator
+          sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+          sparse-checkout-cone-mode: false
       - name: Mint aspire-bot token (microsoft/aspire.dev)
         id: aspire-dev-token
         if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -1671,9 +1666,50 @@ jobs:
           owner: microsoft
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
           repositories: aspire.dev
+      - name: Resolve drafted PR base
+        id: drafted-pr-base
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${CREATED_PR_URL}" =~ ^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$ ]]; then
+            echo "ERROR: Created PR URL is not a microsoft/aspire.dev pull request." >&2
+            exit 1
+          fi
+
+          ACTUAL_BASE="$(gh api \
+            "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
+            --jq '.base.ref // ""')"
+          if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
+            echo "ERROR: Drafted PR has an invalid target branch." >&2
+            exit 1
+          fi
+
+          echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
+        env:
+          CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
+          GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+      - name: Prepare trusted documentation outcome
+        run: python _validator/.github/workflows/pr-docs-check/validate_outcome.py --agent-output "${GH_AW_AGENT_OUTPUT}" --created-pr-url "${CREATED_PR_URL}" --created-pr-base "${CREATED_PR_BASE}" --github-event-path "${GITHUB_EVENT_PATH}" --write-side-effect-outcome "${RUNNER_TEMP}/pr-docs-check-side-effect-outcome.json"
+        env:
+          CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
+          CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
+      - name: Mint aspire-bot token (microsoft/aspire)
+        id: aspire-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        env:
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          owner: microsoft
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          repositories: aspire
       - name: Post status comment on source PR
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
+          CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
           DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
           DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
@@ -1684,50 +1720,38 @@ jobs:
             const MARKER = '<!-- pr-docs-check:notify-source-pr -->';
             const SUMMARY_MAX = 2000;
 
-            const outputPath = process.env.GH_AW_AGENT_OUTPUT;
+            const outputPath = process.env.CANONICAL_OUTCOME_PATH;
             if (!outputPath || !fs.existsSync(outputPath)) {
-              core.warning(`Agent output file not found at ${outputPath}; skipping comment.`);
+              core.warning(`Canonical outcome file not found at ${outputPath}; skipping comment.`);
               return;
             }
 
-            let payload;
+            let outcome;
             try {
-              payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+              outcome = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
             } catch (e) {
-              core.warning(`Failed to parse agent output: ${e.message}`);
+              core.warning(`Failed to parse canonical outcome: ${e.message}`);
               return;
             }
-            const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-            const item = items.find(i => i && i.type === 'notify_source_pr');
-            if (!item) {
-              core.info('No notify_source_pr item in agent output; nothing to post.');
+            if (!outcome.allow_comment) {
+              core.warning(`Canonical outcome rejected source comment: ${outcome.diagnostic || 'unknown reason'}`);
               return;
             }
 
-            // Source PR number is supplied by the agent. Validate it as a
-            // positive integer with a sane upper bound; the safe-jobs framework
-            // does not pass workflow-context expressions through env: cleanly,
-            // and threat detection has already gated this output.
-            const agentNumber = parseInt(String(item.source_pr_number), 10);
-            if (!Number.isInteger(agentNumber) || agentNumber <= 0 || agentNumber > 10_000_000) {
-              core.warning(`Invalid source_pr_number from agent: ${item.source_pr_number}; skipping comment.`);
-              return;
-            }
-            const sourcePrNumber = agentNumber;
-
-            const result = (item.result || '').toString().trim().toLowerCase();
-            const targetBranch = (item.target_branch || '').toString().trim();
+            const sourcePrNumber = outcome.source_pr_number;
+            const renderKind = (outcome.render_kind || '').toString();
+            const targetBranch = (outcome.target_branch || '').toString().trim();
             const draftUrl = (process.env.DRAFT_PR_URL || '').trim();
             const draftNumber = (process.env.DRAFT_PR_NUMBER || '').trim();
 
             // Bound the agent-supplied summary so a malformed item can't blow up the comment.
-            let summary = (item.summary || '').toString().trim();
+            let summary = (outcome.summary || '').toString().trim();
             if (summary.length > SUMMARY_MAX) {
               summary = summary.slice(0, SUMMARY_MAX) + '\n\n_(summary truncated)_';
             }
 
             let body;
-            if (result === 'drafted' && draftUrl) {
+            if (renderKind === 'drafted') {
               const branchSuffix = targetBranch ? ` targeting \`${targetBranch}\`` : '';
               const numberDisplay = draftNumber || '?';
               body = [
@@ -1739,7 +1763,7 @@ jobs:
                 '> [!NOTE]',
                 '> This draft PR needs human review before merging.'
               ].join('\n');
-            } else if (result === 'drafted') {
+            } else if (renderKind === 'drafted_missing_pr') {
               // Agent intended to draft a PR but the safe-outputs handler did not produce
               // a created_pr_url. Surface this as a failure rather than a "skipped" result.
               body = [
@@ -1750,7 +1774,7 @@ jobs:
                 '',
                 summary
               ].join('\n');
-            } else if (result === 'draft_failed') {
+            } else if (renderKind === 'draft_failed') {
               // Step 5 determined docs WERE required, but Step 10 could not
               // produce a docs PR (e.g. a base-branch/validation error, a
               // protected-file rejection, or an empty/invalid patch). This is
@@ -1766,12 +1790,21 @@ jobs:
                 '',
                 `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
               ].join('\n');
-            } else {
+            } else if (renderKind === 'skipped') {
               body = [
                 MARKER,
                 '✅ No documentation update needed.',
                 '',
                 summary
+              ].join('\n');
+            } else {
+              body = [
+                MARKER,
+                '⚠️ The documentation workflow returned an invalid or inconsistent result and could not confirm the outcome.',
+                '',
+                summary,
+                '',
+                `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
               ].join('\n');
             }
 
@@ -1807,11 +1840,12 @@ jobs:
               issue_number: sourcePrNumber,
               body,
             });
-            core.info(`Posted ${result || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
+            core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
       - name: Request SME review on draft PR
         if: needs.safe_outputs.outputs.created_pr_url != ''
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
+          CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
           DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
@@ -1819,25 +1853,23 @@ jobs:
           script: |
             const fs = require('fs');
 
-            const outputPath = process.env.GH_AW_AGENT_OUTPUT;
+            const outputPath = process.env.CANONICAL_OUTCOME_PATH;
             if (!outputPath || !fs.existsSync(outputPath)) {
-              core.info('Agent output file not found; skipping reviewer request.');
+              core.info('Canonical outcome file not found; skipping reviewer request.');
               return;
             }
-            let payload;
+            let outcome;
             try {
-              payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+              outcome = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
             } catch (e) {
-              core.warning(`Failed to parse agent output: ${e.message}`);
+              core.warning(`Failed to parse canonical outcome: ${e.message}`);
               return;
             }
-            const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
-            const item = items.find(i => i && i.type === 'notify_source_pr');
-            if (!item) {
-              core.info('No notify_source_pr item; skipping reviewer request.');
+            if (!outcome.allow_sme_review) {
+              core.info(`Canonical outcome rejected SME review: ${outcome.diagnostic || 'outcome is not a confirmed draft'}`);
               return;
             }
-            const sme = (item.sme_login || '').toString().trim().replace(/^@/, '');
+            const sme = (outcome.sme_login || '').toString().trim().replace(/^@/, '');
             if (!sme) {
               core.info('No SME login provided; leaving draft PR without an explicit reviewer.');
               return;
@@ -2019,13 +2051,6 @@ jobs:
           persist-credentials: true
           repository: microsoft/aspire.dev
           token: ${{ steps.checkout-app-token-0.outputs.token }}
-      - name: Fetch additional refs for microsoft/aspire.dev
-        if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
-        env:
-          GH_AW_FETCH_TOKEN: ${{ steps.checkout-app-token-0.outputs.token }}
-        run: |
-          header=$(printf "x-access-token:%s" "${GH_AW_FETCH_TOKEN}" | base64 -w 0)
-          git -c "http.extraheader=Authorization: Basic ${header}" fetch origin --depth=1 '+refs/heads/release/*:refs/remotes/origin/release/*'
       - name: Configure Git credentials
         if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
         env:
@@ -2042,9 +2067,46 @@ jobs:
           GH_HOST="${GITHUB_SERVER_URL#https://}"
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
-      - name: Set safe-output patch base fallback
+      - name: Resolve safe-output patch base from canonical agent output
         id: resolve-target
-        run: echo "branch=main" >> "${GITHUB_OUTPUT}"
+        if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+        run: |
+          set -euo pipefail
+          python3 - "${GITHUB_OUTPUT}" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          output_path = Path("/tmp/gh-aw/agent_output.json")
+          try:
+              payload = json.loads(output_path.read_text(encoding="utf-8"))
+          except (OSError, json.JSONDecodeError) as error:
+              raise SystemExit(f"Failed to read canonical agent output: {error}")
+
+          items = payload.get("items") if isinstance(payload, dict) else None
+          create_items = [
+              item
+              for item in items if isinstance(item, dict)
+              and item.get("type") == "create_pull_request"
+          ] if isinstance(items, list) else []
+          if len(create_items) != 1:
+              raise SystemExit(
+                  "Expected exactly one canonical create_pull_request item, "
+                  f"found {len(create_items)}."
+              )
+
+          base_branch = create_items[0].get("base_branch")
+          if (
+              not isinstance(base_branch, str)
+              or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
+              is None
+          ):
+              raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+
+          with open(sys.argv[1], "a", encoding="utf-8") as github_output:
+              github_output.write(f"branch={base_branch}\n")
+          PY
       - name: Process Safe Outputs
         id: process_safe_outputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -2074,3 +2136,72 @@ jobs:
             /tmp/gh-aw/safe-output-items.jsonl
             /tmp/gh-aw/temporary-id-map.json
           if-no-files-found: ignore
+
+  validate-docs-outcome:
+    name: Validate documentation outcome
+    needs:
+      - agent
+      - safe_outputs
+    if: (!cancelled()) && needs.agent.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Configure GH_HOST for enterprise compatibility
+        id: ghes-host-config
+        shell: bash
+        run: | # zizmor: ignore[github-env] - GITHUB_SERVER_URL is set by GitHub Actions, not user input.
+          # Derive GH_HOST from GITHUB_SERVER_URL so the gh CLI targets the correct
+          # GitHub instance (GHES/GHEC). On github.com this is a harmless no-op.
+          GH_HOST="${GITHUB_SERVER_URL#https://}"
+          GH_HOST="${GH_HOST#http://}"
+          echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
+      - name: Check out outcome validator
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+          sparse-checkout-cone-mode: false
+      - name: Download agent output
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: agent
+          path: /tmp/gh-aw/
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: aspire-dev-token
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          owner: microsoft
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          repositories: aspire.dev
+      - name: Resolve drafted PR base
+        id: drafted-pr-base
+        if: needs.safe_outputs.outputs.created_pr_url != ''
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${CREATED_PR_URL}" =~ ^https://github\.com/microsoft/aspire\.dev/pull/([1-9][0-9]*)$ ]]; then
+            echo "ERROR: Created PR URL is not a microsoft/aspire.dev pull request." >&2
+            exit 1
+          fi
+
+          ACTUAL_BASE="$(gh api \
+            "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
+            --jq '.base.ref // ""')"
+          if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
+            echo "ERROR: Drafted PR has an invalid target branch." >&2
+            exit 1
+          fi
+
+          echo "base=${ACTUAL_BASE}" >> "${GITHUB_OUTPUT}"
+        env:
+          CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          GH_TOKEN: ${{ steps.aspire-dev-token.outputs.token }}
+      - name: Require a conclusive documentation outcome
+        run: python .github/workflows/pr-docs-check/validate_outcome.py --agent-output /tmp/gh-aw/agent_output.json --created-pr-url "${CREATED_PR_URL}" --created-pr-base "${CREATED_PR_BASE}" --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
+        env:
+          CREATED_PR_BASE: ${{ steps.drafted-pr-base.outputs.base }}
+          CREATED_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
+          EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}

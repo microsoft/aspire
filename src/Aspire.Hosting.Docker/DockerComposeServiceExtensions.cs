@@ -55,7 +55,7 @@ public static class DockerComposeServiceExtensions
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
     /// <remarks>This overload is not available in polyglot app hosts because <see cref="IManifestExpressionProvider"/> is not ATS-compatible.</remarks>
-    [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot AppHosts.")]
     public static string AsEnvironmentPlaceholder(this IManifestExpressionProvider manifestExpressionProvider, DockerComposeServiceResource dockerComposeService)
     {
         var env = manifestExpressionProvider.ValueExpression.Replace("{", "")
@@ -94,7 +94,7 @@ public static class DockerComposeServiceExtensions
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
     /// <remarks>This overload is not available in polyglot app hosts. Use the builder or manifest-expression overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot app hosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
+    [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot AppHosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
     public static string AsEnvironmentPlaceholder(this ParameterResource parameter, DockerComposeServiceResource dockerComposeService)
     {
         // Placeholder for resolving the actual parameter value

@@ -1231,7 +1231,8 @@ public class ParameterProcessorTests
             new NullLogger<InteractionService>(),
             new DistributedApplicationOptions { DisableDashboard = disableDashboard },
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager

@@ -440,6 +440,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             ],
             runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node-compiled-apphost.v1", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("NODE_EXTRA_CA_CERTS", runtimeSpec.CertificateBundleEnvironmentVariable);
     }
 
     [Fact]
@@ -690,7 +691,8 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 Command = "npx",
                 Args = ["--no-install", "nodemon", "--exec", $"npx --no-install tsc --incremental --tsBuildInfoFile {BuildTsBuildInfoFileName} --outDir {BuildOutputDirectory} --rootDir . --noEmit false -p tsconfig.apphost.json && node \"{{compiledAppHostFile}}\""]
             },
-            ExtensionLaunchCapability = "node-compiled-apphost.v1"
+            ExtensionLaunchCapability = "node-compiled-apphost.v1",
+            CertificateBundleEnvironmentVariable = "NODE_EXTRA_CA_CERTS"
         };
     }
 

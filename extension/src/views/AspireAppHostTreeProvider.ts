@@ -58,6 +58,7 @@ import { collectResourceCommandArguments, ResourceCommandArgumentValue } from '.
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
 import { isCommandCancellation } from '../utils/telemetry';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -83,9 +84,7 @@ function getLinkableResourceUrls(resource: ResourceJson) {
 }
 
 function isSamePath(left: string, right: string): boolean {
-    const resolvedLeft = path.resolve(left);
-    const resolvedRight = path.resolve(right);
-    return getComparisonKey(resolvedLeft) === getComparisonKey(resolvedRight);
+    return isSameFileSystemEntry(left, right);
 }
 
 function getComparisonKey(value: string): string {
@@ -195,7 +194,7 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         public readonly stopping = false
     ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Collapsed);
-        this.id = `workspace-apphost:${getComparisonKey(path.resolve(appHostPath))}`;
+        this.id = `workspace-apphost:${path.resolve(appHostPath)}`;
 
         if (stopping) {
             this.iconPath = new vscode.ThemeIcon('loading~spin');
@@ -712,21 +711,20 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     // When a launching AppHost appears in the running list, clear it from the launch service.
     private _clearLaunchingPathsForRunningAppHosts(): void {
         for (const appHost of this._repository.appHosts) {
-            this._launchService.clearMatchingLaunching(appHost.appHostPath);
+            this._launchService.clearLaunchingForRunningAppHost(appHost.appHostPath);
         }
     }
 
     private _trackStoppingAppHost(appHostPath: string): void {
         const resolvedAppHostPath = this._findKnownRunningAppHostPath(appHostPath) ?? appHostPath;
         const existingKey = this._findStoppingAppHostKey(resolvedAppHostPath);
-        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(resolvedAppHostPath)));
+        const key = existingKey ?? path.normalize(path.resolve(resolvedAppHostPath));
         const existingTimeout = this._stoppingAppHostTimeouts.get(key);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
         }
 
-        // The terminal command does not expose completion/failure, so clear the optimistic
-        // UI state eventually even if no repository refresh arrives after a failed stop.
+        // Keep a safety bound in case no repository refresh arrives after a successful stop.
         const timeout = setTimeout(() => {
             this._clearStoppingAppHost(key, true);
         }, AspireAppHostTreeProvider._stoppingStateSafetyTimeoutMs);
@@ -1405,12 +1403,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    notifyAppHostStopping(appHostPath: string): void {
+    notifyAppHostStopping(appHostPath: string, markStopping = true): void {
         if (!appHostPath) {
             return;
         }
 
-        this._markAppHostStopping(appHostPath);
+        if (markStopping) {
+            this._markAppHostStopping(appHostPath);
+        }
         this._repository.requestAppHostStopRefresh?.(appHostPath);
     }
 
@@ -1430,8 +1430,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         this._markAppHostStopping(appHostPath);
         try {
-            await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
-            this._repository.requestAppHostStopRefresh?.(appHostPath);
+            const result = await this._launchService.stopAppHost(appHostPath);
+            if (result.outcome === 'stopped') {
+                this._repository.requestAppHostStopRefresh?.(appHostPath);
+            } else {
+                const stoppingKey = this._findStoppingAppHostKey(appHostPath);
+                if (stoppingKey) {
+                    this._clearStoppingAppHost(stoppingKey, true);
+                }
+            }
         } catch (err) {
             const stoppingKey = this._findStoppingAppHostKey(appHostPath);
             if (stoppingKey) {

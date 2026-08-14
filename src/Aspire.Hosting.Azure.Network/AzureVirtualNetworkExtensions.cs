@@ -28,7 +28,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -59,7 +59,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -188,7 +188,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -222,7 +222,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", subnetPrefix);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,

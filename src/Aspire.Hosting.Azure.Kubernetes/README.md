@@ -41,6 +41,30 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
     .withComputeEnvironment(aks);
 ```
 
+### Persistent volumes
+
+Add a persistent volume to the AKS environment and mount it into a workload:
+
+**C#**
+
+```csharp
+var data = aks.AddPersistentVolume("data")
+    .WithCapacity("20Gi");
+
+myService.WithPersistentVolume(data, "/data");
+```
+
+**TypeScript**
+
+```typescript
+const data = await aks.addPersistentVolume("data");
+await data.withCapacity("20Gi");
+
+await myService.withKubernetesPersistentVolumeMount(data, "/data");
+```
+
+When no storage class is specified, the generated claim uses the cluster's default storage class. A standard AKS cluster dynamically provisions an Azure managed disk. To request Premium SSD storage explicitly, call `WithStorageClass("managed-csi-premium")` in C# or `withStorageClass("managed-csi-premium")` in TypeScript.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

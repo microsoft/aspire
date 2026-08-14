@@ -187,6 +187,7 @@ internal static class TypeScriptAppHostToolchainResolver
             ExtensionLaunchCapability = usesNativeTypeScriptCompiler
                 ? baseRuntimeSpec.ExtensionLaunchCapability
                 : KnownCapabilities.Node,
+            CertificateBundleEnvironmentVariable = baseRuntimeSpec.CertificateBundleEnvironmentVariable,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
     }
