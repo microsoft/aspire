@@ -239,8 +239,9 @@ public static class KubernetesPersistentVolumeExtensions
     /// <c>mountPath</c> instead. The generated pod uses an Aspire-managed
     /// <c>fsGroup</c> of <c>2000</c> with an <c>OnRootMismatch</c> change policy so
     /// non-root containers can access supported volumes without matching the image's
-    /// primary group. Use <c>PublishAsKubernetesService</c> to customize the pod
-    /// security context when a different group or policy is required.
+    /// primary group. Use
+    /// <see cref="KubernetesServiceExtensions.PublishAsKubernetesService{T}(IResourceBuilder{T}, Action{KubernetesResource})"/>
+    /// to customize the pod security context when a different group or policy is required.
     /// </remarks>
     /// <example>
     /// <code>
@@ -286,8 +287,8 @@ public static class KubernetesPersistentVolumeExtensions
     /// The generated pod uses an Aspire-managed <c>fsGroup</c> of <c>2000</c> with
     /// an <c>OnRootMismatch</c> change policy so non-root containers can access
     /// supported volumes without matching the image's primary group. Use
-    /// <c>PublishAsKubernetesService</c> to customize the pod security context when
-    /// a different group or policy is required.
+    /// <see cref="KubernetesServiceExtensions.PublishAsKubernetesService{T}(IResourceBuilder{T}, Action{KubernetesResource})"/>
+    /// to customize the pod security context when a different group or policy is required.
     /// </remarks>
     /// <example>
     /// <code>
