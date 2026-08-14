@@ -20,6 +20,7 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class MauiOtlpExtensions
 {
+    private const string DcpExecutableTerminatedState = "Terminated";
     private const string OtlpGrpcProtocol = "grpc";
     private const string OtlpHttpProtobufProtocol = "http/protobuf";
 
@@ -453,6 +454,9 @@ public static class MauiOtlpExtensions
     private static bool IsUnavailableState(string? state) =>
         state is not null &&
         (KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState) ||
+         // Resource notifications can expose the raw DCP executable state before it is normalized.
+         // DCP emits "Terminated" when the controller kills the dashboard executable.
+         string.Equals(state, DcpExecutableTerminatedState, StringComparisons.ResourceState) ||
          string.Equals(state, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState));
 
     private static bool IsLocalDashboardBinding(Uri uri) =>
