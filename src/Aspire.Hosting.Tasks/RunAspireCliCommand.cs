@@ -58,6 +58,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     public string? FailureMessage { get; set; }
 
     internal Func<Process, int, bool> WaitForExit { get; set; } = static (process, milliseconds) => process.WaitForExit(milliseconds);
+    internal Func<StreamReader, Task<string>> ReadToEndAsync { get; set; } = static reader => reader.ReadToEndAsync();
 
     public override bool Execute()
     {
@@ -94,36 +95,32 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         }
 
         // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        var standardOutputTask = ReadToEndAsync(process.StandardOutput);
+        var standardErrorTask = ReadToEndAsync(process.StandardError);
 
         if (!WaitForExit(process, TimeoutMilliseconds))
         {
             TimedOut = true;
-            if (!TerminateProcess(process))
-            {
-                return true;
-            }
-
-            // Process termination is asynchronous. Bound the follow-up wait so an unresponsive
-            // process cannot turn the command timeout into an indefinitely hung MSBuild invocation.
-            if (!WaitForExit(process, ProcessTerminationTimeoutMilliseconds))
+            if (TerminateProcess(process) &&
+                !WaitForExit(process, ProcessTerminationTimeoutMilliseconds))
             {
                 FailureMessage ??= $"The timed-out command '{FileName}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
-                return true;
             }
+
+            // WaitForExit reports only the root process's exit after Kill(entireProcessTree: true).
+            // A surviving descendant can retain inherited pipe handles, so timeout cleanup must
+            // never wait for the redirected readers to reach EOF.
+            // See https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks.
+            LogProcessOutputIfCompleted(standardOutputTask);
+            LogProcessOutputIfCompleted(standardErrorTask);
+            FailureMessage ??= $"The command timed out after {TimeoutMilliseconds} milliseconds.";
+            return true;
         }
 
         var standardOutput = standardOutputTask.GetAwaiter().GetResult();
         var standardError = standardErrorTask.GetAwaiter().GetResult();
         LogProcessOutput(standardOutput);
         LogProcessOutput(standardError);
-
-        if (TimedOut)
-        {
-            FailureMessage ??= $"The command timed out after {TimeoutMilliseconds} milliseconds.";
-            return true;
-        }
 
         ExitCode = process.ExitCode;
         return true;
@@ -277,6 +274,26 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             // from becoming a warning-as-error failure because the tool wrote warning-like text.
             Log.LogMessage(MessageImportance.Low, "{0}", output);
         }
+    }
+
+    private void LogProcessOutputIfCompleted(Task<string> outputTask)
+    {
+        if (outputTask.Status == TaskStatus.RanToCompletion)
+        {
+            var output = outputTask.GetAwaiter().GetResult();
+            if (!string.IsNullOrEmpty(output))
+            {
+                LogProcessOutput(output);
+            }
+
+            return;
+        }
+
+        _ = outputTask.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private static string GetArgumentValue(ITaskItem argument)

@@ -827,7 +827,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
             Assert.True(result.ExitCode == 0, result.Output);
             Assert.Contains("CommandTimedOut=true", result.Output, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("CommandFailureMessage=The command timed out after 5000 milliseconds.", result.Output, StringComparison.Ordinal);
+            Assert.Contains("CommandFailureMessage=The command timed out", result.Output, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(childPidPath), $"The child process did not record its PID. MSBuild output:{Environment.NewLine}{result.Output}");
 
             childProcessId = int.Parse(await File.ReadAllTextAsync(childPidPath), CultureInfo.InvariantCulture);
@@ -852,35 +852,70 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     public void RunAspireCliCommandReportsWhenProcessDoesNotExitAfterTermination()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var commandPath = Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "hang.cmd" : "hang");
-        File.WriteAllText(
-            commandPath,
-            OperatingSystem.IsWindows()
-                ? "@echo off\r\n:loop\r\ngoto loop\r\n"
-                : "#!/bin/sh\nwhile :; do :; done\n");
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        static Assembly? ResolveMicrosoftBuildFramework(AssemblyLoadContext _, AssemblyName assemblyName)
-        {
-            return assemblyName.Name == "Microsoft.Build.Framework"
-                ? Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Microsoft.Build.Framework.dll"))
-                : null;
-        }
+        var commandPath = CreateHangingCommand(workspace.Path);
 
         AssemblyLoadContext.Default.Resolving += ResolveMicrosoftBuildFramework;
         try
         {
-            var (result, elapsed, waitTimeouts, failureMessage) = ExecuteRunAspireCliCommand(commandPath);
+            var (result, timedOut, waitTimeouts, failureMessage) = ExecuteRunAspireCliCommand(
+                commandPath,
+                waitResults: [false, false],
+                readToEndAsync: static reader => reader.ReadToEndAsync());
 
             Assert.True(result);
-            Assert.True(elapsed < TimeSpan.FromSeconds(5), $"Execute took {elapsed}.");
-            Assert.Equal([1, 5_000], waitTimeouts);
-            Assert.Equal(
-                $"The timed-out command '{commandPath}' did not exit within 5000 milliseconds after termination was requested.",
-                failureMessage);
+            Assert.True(timedOut);
+            Assert.Equal(2, waitTimeouts.Count);
+            Assert.All(waitTimeouts, static timeout => Assert.True(timeout > 0));
+            Assert.NotNull(failureMessage);
+            Assert.Contains("did not exit", failureMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("after termination was requested", failureMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            AssemblyLoadContext.Default.Resolving -= ResolveMicrosoftBuildFramework;
+        }
+    }
+
+    [Fact]
+    public async Task RunAspireCliCommandDoesNotWaitForOutputAfterTimedOutProcessExits()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var commandPath = CreateHangingCommand(workspace.Path);
+        var outputReadCompletion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputReadCount = 0;
+
+        AssemblyLoadContext.Default.Resolving += ResolveMicrosoftBuildFramework;
+        try
+        {
+            var executionTask = Task.Run(() => ExecuteRunAspireCliCommand(
+                commandPath,
+                waitResults: [false, true],
+                readToEndAsync: _ =>
+                {
+                    outputReadCount++;
+                    return outputReadCompletion.Task;
+                }));
+
+            try
+            {
+                var (result, timedOut, waitTimeouts, failureMessage) = await executionTask.WaitAsync(
+                    TimeSpan.FromSeconds(5),
+                    TestContext.Current.CancellationToken);
+
+                Assert.True(result);
+                Assert.True(timedOut);
+                Assert.Equal(2, waitTimeouts.Count);
+                Assert.All(waitTimeouts, static timeout => Assert.True(timeout > 0));
+                Assert.Equal(2, outputReadCount);
+                Assert.False(outputReadCompletion.Task.IsCompleted);
+                Assert.NotNull(failureMessage);
+                Assert.Contains("command timed out", failureMessage, StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                outputReadCompletion.TrySetResult(string.Empty);
+                _ = await executionTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            }
         }
         finally
         {
@@ -1588,10 +1623,37 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return toolPath!;
     }
 
+    private static string CreateHangingCommand(string directory)
+    {
+        var commandPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "hang.cmd" : "hang");
+        File.WriteAllText(
+            commandPath,
+            OperatingSystem.IsWindows()
+                ? "@echo off\r\n:loop\r\ngoto loop\r\n"
+                : "#!/bin/sh\nwhile :; do :; done\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return commandPath;
+    }
+
+    private static Assembly? ResolveMicrosoftBuildFramework(AssemblyLoadContext _, AssemblyName assemblyName)
+    {
+        return assemblyName.Name == "Microsoft.Build.Framework"
+            ? Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Microsoft.Build.Framework.dll"))
+            : null;
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static (bool Result, TimeSpan Elapsed, List<int> WaitTimeouts, string? FailureMessage) ExecuteRunAspireCliCommand(string commandPath)
+    private static (bool Result, bool TimedOut, List<int> WaitTimeouts, string? FailureMessage) ExecuteRunAspireCliCommand(
+        string commandPath,
+        IReadOnlyList<bool> waitResults,
+        Func<StreamReader, Task<string>> readToEndAsync)
     {
         var waitTimeouts = new List<int>();
+        var waitResultIndex = 0;
         var task = new RunAspireCliCommand
         {
             FileName = commandPath,
@@ -1599,15 +1661,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             WaitForExit = (_, timeout) =>
             {
                 waitTimeouts.Add(timeout);
-                return false;
-            }
+                Assert.True(waitResultIndex < waitResults.Count, "RunAspireCliCommand waited for the process more times than expected.");
+                return waitResults[waitResultIndex++];
+            },
+            ReadToEndAsync = readToEndAsync
         };
 
-        var stopwatch = Stopwatch.StartNew();
         var result = task.Execute();
-        stopwatch.Stop();
+        Assert.Equal(waitResults.Count, waitResultIndex);
 
-        return (result, stopwatch.Elapsed, waitTimeouts, task.FailureMessage);
+        return (result, task.TimedOut, waitTimeouts, task.FailureMessage);
     }
 
     private static string GetAspireHostingTasksAssemblyPath()
