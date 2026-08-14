@@ -106,7 +106,7 @@ internal static class InteractionExports
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
-        string? title,
+        string title,
         string message,
         InteractionProgressOptions? options = null,
         CancellationToken cancellationToken = default)

@@ -18071,7 +18071,7 @@ type InteractionService interface {
 	PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult
 	PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error)
 	PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error)
-	PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
+	PromptProgress(title string, message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
 	Err() error
 }
 
@@ -18425,12 +18425,13 @@ func (s *interactionService) PromptNotification(title string, message string, op
 }
 
 // PromptProgress displays a progress dialog with an indeterminate progress indicator.
-func (s *interactionService) PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
+func (s *interactionService) PromptProgress(title string, message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
 	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
 	}
+	reqArgs["title"] = serializeValue(title)
 	reqArgs["message"] = serializeValue(message)
 	if len(options) > 0 {
 		merged := &PromptProgressOptions{}
@@ -29319,7 +29320,6 @@ func (o *PromptNotificationOptions) ToMap() map[string]any {
 
 // PromptProgressOptions carries optional parameters for PromptProgress.
 type PromptProgressOptions struct {
-	Title *string `json:"title,omitempty"`
 	Options *InteractionProgressOptions `json:"options,omitempty"`
 	CancellationToken *CancellationToken `json:"-"`
 }
@@ -29327,7 +29327,6 @@ type PromptProgressOptions struct {
 func (o *PromptProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	if o.Title != nil { m["title"] = serializeValue(o.Title) }
 	if o.Options != nil { m["options"] = serializeValue(o.Options) }
 	return m
 }

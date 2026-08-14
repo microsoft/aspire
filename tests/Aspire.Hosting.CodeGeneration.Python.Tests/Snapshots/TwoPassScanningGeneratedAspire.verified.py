@@ -3015,12 +3015,11 @@ class AbstractInteractionService:
         )
         return typing.cast(BoolInteractionResult, result)
 
-    def prompt_progress(self, message: str, *, title: str | None = None, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+    def prompt_progress(self, title: str, message: str, *, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
         """Displays a progress dialog with an indeterminate progress indicator."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
         rpc_args['message'] = message
-        if title is not None:
-            rpc_args['title'] = title
         if options is not None:
             rpc_args['options'] = options
         if timeout is not None:

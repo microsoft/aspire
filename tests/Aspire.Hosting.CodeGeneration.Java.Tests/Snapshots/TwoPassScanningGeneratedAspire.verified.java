@@ -15354,25 +15354,22 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
-    public BoolInteractionResult promptProgress(String message, PromptProgressOptions optionsBag) {
-        var title = optionsBag == null ? null : optionsBag.getTitle();
+    public BoolInteractionResult promptProgress(String title, String message, PromptProgressOptions optionsBag) {
         var options = optionsBag == null ? null : optionsBag.getOptions();
         var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
-        return promptProgressImpl(message, title, options, cancellationToken);
+        return promptProgressImpl(title, message, options, cancellationToken);
     }
 
-    public BoolInteractionResult promptProgress(String message) {
-        return promptProgress(message, null);
+    public BoolInteractionResult promptProgress(String title, String message) {
+        return promptProgress(title, message, null);
     }
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
-    private BoolInteractionResult promptProgressImpl(String message, String title, InteractionProgressOptions options, CancellationToken cancellationToken) {
+    private BoolInteractionResult promptProgressImpl(String title, String message, InteractionProgressOptions options, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
         reqArgs.put("message", AspireClient.serializeValue(message));
-        if (title != null) {
-            reqArgs.put("title", AspireClient.serializeValue(title));
-        }
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
@@ -20622,15 +20619,8 @@ import java.util.function.*;
 
 /** Options for PromptProgress. */
 public final class PromptProgressOptions {
-    private String title;
     private InteractionProgressOptions options;
     private CancellationToken cancellationToken;
-
-    public String getTitle() { return title; }
-    public PromptProgressOptions title(String value) {
-        this.title = value;
-        return this;
-    }
 
     public InteractionProgressOptions getOptions() { return options; }
     public PromptProgressOptions options(InteractionProgressOptions value) {

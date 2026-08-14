@@ -12181,13 +12181,11 @@ impl IInteractionService {
     }
 
     /// Displays a progress dialog with an indeterminate progress indicator.
-    pub fn prompt_progress(&self, message: &str, title: Option<&str>, options: Option<InteractionProgressOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
+    pub fn prompt_progress(&self, title: &str, message: &str, options: Option<InteractionProgressOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
         args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
-        if let Some(ref v) = title {
-            args.insert("title".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
         if let Some(ref v) = options {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
