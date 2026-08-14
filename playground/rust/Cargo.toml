@@ -3,16 +3,19 @@ name = "rust-apphost-playground"
 version = "0.1.0"
 edition = "2021"
 
+# The binary has to be called `apphost` because the Rust runtime spec launches the AppHost with
+# `cargo run --bin apphost --` (see AppHostBinaryName in RustLanguageSupport). Scaffolded AppHosts
+# get that name from the template, so the playground has to match it to be launchable the same way.
 [[bin]]
-name = "rust-apphost-playground"
+name = "apphost"
 path = "apphost.rs"
 
+# Only what the generated SDK under .aspire/modules needs. The AppHost itself does no telemetry
+# export; the sample app under ./app owns its OTLP/tonic dependencies.
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 lazy_static = "1.4"
-opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic", "tls-roots", "tls-ring", "internal-logs", "metrics", "logs", "trace"] }
-tonic = { version = "0.14.6", default-features = false, features = ["transport", "tls-native-roots", "tls-ring"] }
 
 # The generated SDK under .aspire/modules is large, and incremental compilation splits it into
 # thousands of codegen units. On macOS debug info stays in those object files, because
