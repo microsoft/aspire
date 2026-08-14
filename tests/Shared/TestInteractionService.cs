@@ -11,6 +11,7 @@ internal enum InteractionType
 {
     Input,
     Inputs,
+    MessageBox,
     Notification,
     Progress
 }
@@ -63,9 +64,11 @@ internal sealed class TestInteractionService : IInteractionService
         return (InteractionResult<bool>)await data.CompletionTcs.Task;
     }
 
-    public Task<InteractionResult<bool>> PromptMessageBoxAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<bool>> PromptMessageBoxAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
+        var data = new InteractionData(InteractionType.MessageBox, title, message, new InteractionInputCollection([]), options, cancellationToken, new TaskCompletionSource<object>());
+        Interactions.Writer.TryWrite(data);
+        return (InteractionResult<bool>)await data.CompletionTcs.Task;
     }
 
     public bool PromptProgressCalled { get; private set; }

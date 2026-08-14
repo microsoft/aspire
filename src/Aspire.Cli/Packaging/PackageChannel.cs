@@ -126,18 +126,26 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        return GetTemplatePackagesAsync(workingDirectory, Mappings, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets template packages using the specified mappings without changing this channel's identity.
+    /// </summary>
+    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, PackageMapping[]? mappings, CancellationToken cancellationToken)
     {
         validateTemplatePackageMetadataPrefetching?.Invoke();
 
         if (PinnedVersion is not null)
         {
-            return [new NuGetPackage { Id = "Aspire.ProjectTemplates", Version = PinnedVersion, Source = SourceDetails }];
+            return [new NuGetPackage { Id = "Aspire.ProjectTemplates", Version = PinnedVersion, Source = ComputeSourceDetails(mappings) }];
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
-        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+        using var tempNuGetConfig = mappings is not null ? await TemporaryNuGetConfig.CreateAsync(mappings) : null;
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {

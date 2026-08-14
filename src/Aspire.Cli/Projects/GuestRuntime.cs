@@ -64,6 +64,11 @@ internal sealed class GuestRuntime
     public string? ExtensionLaunchCapability => _spec.ExtensionLaunchCapability;
 
     /// <summary>
+    /// Gets the environment variable used by the runtime for an additional certificate bundle in run mode.
+    /// </summary>
+    public string? CertificateBundleEnvironmentVariable => _spec.CertificateBundleEnvironmentVariable;
+
+    /// <summary>
     /// Initializes the project environment (e.g., creates a virtual environment and installs dependencies).
     /// Runs each command in <see cref="RuntimeSpec.Initialize"/> sequentially.
     /// </summary>

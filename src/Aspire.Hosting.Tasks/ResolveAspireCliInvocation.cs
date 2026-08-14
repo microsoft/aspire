@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 
 namespace Aspire.Hosting.Tasks;
 
@@ -55,6 +56,12 @@ public sealed class ResolveAspireCliInvocation : Microsoft.Build.Utilities.Task
     /// </summary>
     [Output]
     public string? ResolvedDnxHostArguments { get; set; }
+
+    /// <summary>
+    /// Gets the individual arguments that select DNX on <see cref="ResolvedDnxHostPath"/>.
+    /// </summary>
+    [Output]
+    public ITaskItem[] ResolvedDnxHostArgumentItems { get; set; } = [];
 
     public override bool Execute()
     {
@@ -129,6 +136,12 @@ public sealed class ResolveAspireCliInvocation : Microsoft.Build.Utilities.Task
         // behavior while bypassing cmd.exe, which would reinterpret forwarded AppHost arguments.
         ResolvedDnxHostPath = dotnetPath;
         ResolvedDnxHostArguments = $"exec \"{sdkPath}\" dnx";
+        ResolvedDnxHostArgumentItems =
+        [
+            new TaskItem("exec"),
+            new TaskItem(sdkPath),
+            new TaskItem("dnx")
+        ];
         return true;
     }
 

@@ -57,6 +57,9 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     public string Language => LanguageId;
 
     /// <inheritdoc />
+    public string CertificateBundleEnvironmentVariable => "NODE_EXTRA_CA_CERTS";
+
+    /// <inheritdoc />
     public Dictionary<string, string> Scaffold(ScaffoldRequest request)
     {
         var files = new Dictionary<string, string>();
@@ -252,6 +255,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
             ExtensionLaunchCapability = "node",
+            CertificateBundleEnvironmentVariable = CertificateBundleEnvironmentVariable,
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",

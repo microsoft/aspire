@@ -209,7 +209,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.True(app.Resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, supportsDebugging.LaunchConfigurationType);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            app.Resource,
+            ExecutableLaunchMode.Debug);
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await app.Resource.CreateLaunchConfigurationAsync(callbackContext));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(projectPath, launchConfig.ProjectPath);
@@ -240,7 +244,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var app = builder.AddDotnetProject("svc", projectPath);
 
-        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(await app.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            app.Resource,
+            ExecutableLaunchMode.Debug);
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await app.Resource.CreateLaunchConfigurationAsync(callbackContext));
 
         Assert.False(launchConfig.DisableLaunchProfile);
         Assert.Equal("http", launchConfig.LaunchProfile);
