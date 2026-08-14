@@ -34,6 +34,7 @@ internal sealed class RustCargoArgsCallbackAnnotation(Func<RustCargoArgsCallback
 /// <summary>
 /// Represents callback context for cargo-level command-line arguments.
 /// </summary>
+/// <param name="resource">The Rust application resource whose cargo arguments are being built.</param>
 /// <param name="args">The command-line arguments collection.</param>
 /// <param name="cancellationToken">The cancellation token associated with this callback context.</param>
 /// <remarks>
@@ -42,8 +43,18 @@ internal sealed class RustCargoArgsCallbackAnnotation(Func<RustCargoArgsCallback
 /// starts, so there is nothing for a deferred value such as an endpoint reference to resolve against;
 /// those belong after the <c>--</c> separator and are added with <c>WithArgs</c>.
 /// </remarks>
-public sealed class RustCargoArgsCallbackContext(IList<string> args, CancellationToken cancellationToken = default)
+public sealed class RustCargoArgsCallbackContext(RustAppResource resource, IList<string> args, CancellationToken cancellationToken = default)
 {
+    /// <summary>
+    /// Gets the Rust application resource whose cargo arguments are being built.
+    /// </summary>
+    /// <remarks>
+    /// The same callbacks run for both the local <c>cargo run</c> command line and the generated
+    /// Dockerfile, so a callback that needs to know which resource it is configuring — or that needs to
+    /// read annotations placed on it — reads them from here rather than capturing the resource itself.
+    /// </remarks>
+    public RustAppResource Resource { get; } = resource ?? throw new ArgumentNullException(nameof(resource));
+
     /// <summary>
     /// Gets the list of command-line arguments.
     /// </summary>

@@ -175,7 +175,7 @@ internal static partial class RustDockerfileGenerator
 
         foreach (var annotation in resource.Annotations.OfType<RustCargoArgsCallbackAnnotation>())
         {
-            await annotation.Callback(new RustCargoArgsCallbackContext(args, cancellationToken)).ConfigureAwait(false);
+            await annotation.Callback(new RustCargoArgsCallbackContext(resource, args, cancellationToken)).ConfigureAwait(false);
         }
 
         // Appended last because cargo takes the last occurrence of a flag.

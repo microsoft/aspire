@@ -137,7 +137,6 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.Rust" />
     <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />

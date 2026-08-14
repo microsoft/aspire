@@ -156,6 +156,70 @@ public class RustPublicApiTests
     }
 
     [Fact]
+    public async Task WithCargoArgsCallbackReceivesTheRustResourceInRunMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var observed = new List<RustAppResource>();
+        var app = builder.AddRustApp("api", builder.AppHostDirectory)
+            .WithCargoArgs(context => observed.Add(context.Resource));
+
+        await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.NotEmpty(observed);
+        Assert.All(observed, resource => Assert.Same(app.Resource, resource));
+    }
+
+    [Fact]
+    public async Task WithCargoArgsAsyncCallbackReceivesTheRustResourceInRunMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var observed = new List<RustAppResource>();
+        var app = builder.AddRustApp("api", builder.AppHostDirectory)
+            .WithCargoArgs(context =>
+            {
+                observed.Add(context.Resource);
+                return Task.CompletedTask;
+            });
+
+        await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.NotEmpty(observed);
+        Assert.All(observed, resource => Assert.Same(app.Resource, resource));
+    }
+
+    [Fact]
+    public void RustCargoArgsCallbackContextShouldThrowWhenResourceIsNull()
+    {
+        RustAppResource resource = null!;
+
+        var action = () => new RustCargoArgsCallbackContext(resource, []);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(resource), exception.ParamName);
+    }
+
+    [Fact]
+    public void RustCargoArgsCallbackContextShouldThrowWhenArgsIsNull()
+    {
+        IList<string> args = null!;
+
+        var action = () => new RustCargoArgsCallbackContext(new RustAppResource("api", "/src/rust-app"), args);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(args), exception.ParamName);
+    }
+
+    [Fact]
+    public void RustCargoArgsCallbackContextCarriesTheSuppliedCancellationToken()
+    {
+        using var cts = new CancellationTokenSource();
+
+        var context = new RustCargoArgsCallbackContext(new RustAppResource("api", "/src/rust-app"), [], cts.Token);
+
+        Assert.Equal(cts.Token, context.CancellationToken);
+    }
+
+    [Fact]
     public void AddRustAppEnablesDebuggingSupport()
     {
         var builder = DistributedApplication.CreateBuilder();

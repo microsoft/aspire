@@ -100,7 +100,7 @@ public static class RustHostingExtensions
 
                 foreach (var annotation in resource.Annotations.OfType<RustCargoArgsCallbackAnnotation>())
                 {
-                    await annotation.Callback(new RustCargoArgsCallbackContext(cargoArgs, context.CancellationToken)).ConfigureAwait(false);
+                    await annotation.Callback(new RustCargoArgsCallbackContext(resource, cargoArgs, context.CancellationToken)).ConfigureAwait(false);
                 }
 
                 resource.ResolvedCargoArgs = cargoArgs;

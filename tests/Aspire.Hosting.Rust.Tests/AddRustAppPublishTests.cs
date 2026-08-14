@@ -733,7 +733,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var outputDir = workspace.CreateDirectory("output");
-        var canonicalSourceDir = PathNormalizer.ResolveSymlinks(sourceDir.FullName);
+        var canonicalSourceDir = TestPathNormalizer.ResolveSymlinks(sourceDir.FullName);
 
         if (string.Equals(sourceDir.FullName, canonicalSourceDir, StringComparison.Ordinal))
         {
@@ -767,7 +767,7 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var outputDir = workspace.CreateDirectory("output");
-        var canonicalSourceDir = PathNormalizer.ResolveSymlinks(sourceDir.FullName);
+        var canonicalSourceDir = TestPathNormalizer.ResolveSymlinks(sourceDir.FullName);
         var manifestDirectory = Directory.CreateDirectory(Path.Combine(sourceDir.FullName, "Crates", "API"));
 
         File.WriteAllText(Path.Combine(manifestDirectory.FullName, "Cargo.toml"), "[package]\nname = \"api\"\n");
@@ -1095,6 +1095,25 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
             static l => l.TrimStart().StartsWith("cargo build", StringComparison.Ordinal));
 
         return line.Trim().TrimEnd('\\').TrimEnd().TrimEnd('&').TrimEnd();
+    }
+
+    [Fact]
+    public async Task PublishCargoArgsCallbackReceivesTheRustResource()
+    {
+        // Publishing evaluates the cargo argument callbacks on its own path (Dockerfile generation) rather
+        // than through the run-mode argument pipeline, so the resource has to arrive there too.
+        RustAppResource? configuredResource = null;
+        var observed = new List<RustAppResource>();
+
+        await PublishDockerfileAsync(configureResource: app =>
+        {
+            configuredResource = app.Resource;
+            return app.WithCargoArgs(context => observed.Add(context.Resource));
+        });
+
+        Assert.NotNull(configuredResource);
+        Assert.NotEmpty(observed);
+        Assert.All(observed, resource => Assert.Same(configuredResource, resource));
     }
 
     private async Task<string> PublishDockerfileAsync(

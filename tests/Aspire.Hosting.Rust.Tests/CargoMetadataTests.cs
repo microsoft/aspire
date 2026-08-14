@@ -308,8 +308,8 @@ public class CargoMetadataTests
         // executable without reimplementing CARGO_TARGET_DIR / build.target-dir / workspace resolution.
         Assert.True(Path.IsPathFullyQualified(metadata.TargetDirectory));
         Assert.Equal(
-            PathNormalizer.ResolveSymlinks(Path.Combine(crate.Path, "target")),
-            PathNormalizer.ResolveSymlinks(metadata.TargetDirectory));
+            TestPathNormalizer.ResolveSymlinks(Path.Combine(crate.Path, "target")),
+            TestPathNormalizer.ResolveSymlinks(metadata.TargetDirectory));
 
         // Compiling would have created target/. Its absence is the proof that the host did no build work.
         Assert.False(Directory.Exists(Path.Combine(crate.Path, "target")));

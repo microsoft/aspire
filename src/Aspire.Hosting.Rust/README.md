@@ -77,7 +77,7 @@ builder.AddRustApp("api", "../rust-api")
 | Method | Effect |
 | --- | --- |
 | `WithCargoArgs(params string[] args)` | Appends raw arguments to the cargo command line. Use the methods below to select a target, since debugging and publishing read those to work out which binary cargo produces |
-| `WithCargoArgs(Action<RustCargoArgsCallbackContext> callback)` | Computes cargo arguments when the resource starts. An async `Func<RustCargoArgsCallbackContext, Task>` overload is also available |
+| `WithCargoArgs(Action<RustCargoArgsCallbackContext> callback)` | Computes cargo arguments when the resource starts. The context carries the `RustAppResource` being configured, and an async `Func<RustCargoArgsCallbackContext, Task>` overload is also available |
 | `WithCargoReleaseBuild(bool releaseBuild = true)` | Adds `--release`. Publishing adds it by default, so pass `false` to publish an unoptimized image |
 | `WithCargoLocked(bool locked = true)` | Adds `--locked`, which fails rather than updating `Cargo.lock`. Publishing adds it by default whenever the crate has a lock file, so pass `false` to opt out |
 | `WithCargoFeatures(params string[] features)` | Adds the supplied features to `--features`. Repeated calls accumulate features in call order |
