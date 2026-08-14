@@ -114,7 +114,6 @@ public interface IInteractionService
     /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
     /// </para>
     /// </remarks>
-    /// <param name="title">The optional title of the progress dialog.</param>
     /// <param name="message">The message to display in the progress dialog.</param>
     /// <param name="options">Optional configuration for the progress interaction.</param>
     /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
@@ -123,7 +122,7 @@ public interface IInteractionService
     /// or a canceled result if the user clicked the cancel button.
     /// </returns>
     [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    Task<InteractionResult<bool>> PromptProgressAsync(string? title, string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
+    Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -801,6 +800,11 @@ public class NotificationInteractionOptions : InteractionOptions
 public class ProgressInteractionOptions : InteractionOptions
 {
     internal static ProgressInteractionOptions CreateDefault() => new();
+
+    /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; set; }
 
     /// <summary>
     /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
