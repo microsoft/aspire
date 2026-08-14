@@ -20,6 +20,7 @@ import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
 import os from "os";
+import { delay } from "../utils/async";
 import { EnvironmentVariables } from "../utils/environment";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import { sendTelemetryEvent } from "../utils/telemetry";
@@ -1926,10 +1927,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._onDidChangeState.fire();
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

@@ -4,8 +4,10 @@ import type { AspireAppHostState, AspireExtensionStateSnapshot, AspireResourceCo
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
 import { isSamePath } from './utils/paths/comparison';
+import { stripResourceSuffix } from './utils/urlSchemes';
 
 export { isSamePath };
+export { stripResourceSuffix };
 
 export function createStateSnapshot(
   dataRepository: AppHostDataRepository,
@@ -103,11 +105,6 @@ function cloneResourceCommands(commands: ResourceJson['commands']): Record<strin
     state: command.state,
     visibility: command.visibility,
   }]));
-}
-
-export function stripResourceSuffix(url: string): string {
-  const idx = url.indexOf('/?resource=');
-  return idx !== -1 ? url.substring(0, idx) : url;
 }
 
 export function sanitizeDashboardUrl(url: string | null | undefined): string | undefined {

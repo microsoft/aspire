@@ -150,7 +150,7 @@ async function openDiagnosticLog(filePath: string): Promise<void> {
     }
 }
 
-function getErrorMessage(error: unknown): string {
+export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 

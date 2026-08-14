@@ -42,7 +42,7 @@ import {
     dashboardUrlUnsupported,
     errorMessage,
 } from '../loc/strings';
-import { isLinkableUrl } from '../utils/urlSchemes';
+import { isLinkableUrl, stripResourceSuffix } from '../utils/urlSchemes';
 import {
     AppHostDataRepository,
     AppHostDisplayInfo,
@@ -56,7 +56,7 @@ import {
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
-import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
+import { executeResourceCommand as executeResourceCommandWithUi, getErrorMessage, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
 import { getComparisonKey, isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
@@ -145,11 +145,6 @@ export function getResourceCommandIcon(commandName: string, isEnabled: boolean):
 function appHostIcon(path?: string): vscode.ThemeIcon {
     const icon = path?.endsWith('.csproj') ? 'server-process' : 'file-code';
     return new vscode.ThemeIcon(icon, new vscode.ThemeColor('aspire.brandPurple'));
-}
-
-function stripResourceSuffix(url: string): string {
-    const idx = url.indexOf('/?resource=');
-    return idx !== -1 ? url.substring(0, idx) : url;
 }
 
 class AppHostItem extends vscode.TreeItem {
@@ -1760,8 +1755,4 @@ function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
 
 function resourceMatchesName(resource: ResourceJson, resourceName: string, includeDisplayName: boolean): boolean {
     return resource.name === resourceName || (includeDisplayName && resource.displayName === resourceName);
-}
-
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
