@@ -71,6 +71,19 @@ public class RustPublicApiTests
     }
 
     [Fact]
+    public async Task WithCargoFeaturesAccumulatesAcrossCalls()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var app = builder.AddRustApp("api", builder.AppHostDirectory)
+            .WithCargoFeatures("tokio")
+            .WithCargoFeatures("serde", "tracing");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "--features", "tokio,serde,tracing", "--"], args);
+    }
+
+    [Fact]
     public async Task WithCargoTargetSelectionMethodsMapToCargoArgs()
     {
         var builder = DistributedApplication.CreateBuilder();

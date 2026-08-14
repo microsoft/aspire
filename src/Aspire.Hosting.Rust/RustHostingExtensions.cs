@@ -27,15 +27,16 @@ public static class RustHostingExtensions
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="appDirectory">The directory containing the Rust application files.</param>
+    /// <param name="appDirectory">The working directory for cargo and the Docker build context used when publishing.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
-    /// The resource runs <c>cargo run</c> in <paramref name="appDirectory"/>, which must contain a
-    /// <c>Cargo.toml</c>. Cargo requires the two kinds of argument to be separated by <c>--</c>, so they
-    /// are configured separately: <c>WithCargoArgs</c> adds arguments for cargo itself (before the
-    /// separator) and <c>WithArgs</c> adds arguments for the application (after it).
+    /// The resource runs <c>cargo run</c> in <paramref name="appDirectory"/>. Cargo discovers the manifest
+    /// from that directory by default; use <c>WithCargoManifestPath</c> to select another manifest. Cargo
+    /// requires the two kinds of argument to be separated by <c>--</c>, so they are configured separately:
+    /// <c>WithCargoArgs</c> adds arguments for cargo itself (before the separator) and <c>WithArgs</c> adds
+    /// arguments for the application (after it).
     /// </para>
     /// <para>
     /// Debugging is wired up automatically. In VS Code the resource is built with <c>cargo build</c> and
@@ -272,13 +273,14 @@ public static class RustHostingExtensions
     }
 
     /// <summary>
-    /// Configures cargo features for the Rust application.
+    /// Adds cargo features for the Rust application.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">The features to enable.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>Repeated calls accumulate features in call order.</remarks>
     [AspireExport]
     public static IResourceBuilder<T> WithCargoFeatures<T>(this IResourceBuilder<T> builder, params string[] features)
         where T : RustAppResource
@@ -286,7 +288,10 @@ public static class RustHostingExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(features);
 
-        GetOrAddCargoOptions(builder).Features = features;
+        var options = GetOrAddCargoOptions(builder);
+        options.Features = options.Features is { } existingFeatures
+            ? [.. existingFeatures, .. features]
+            : [.. features];
         return builder;
     }
 

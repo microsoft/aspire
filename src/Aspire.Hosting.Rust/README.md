@@ -59,8 +59,11 @@ await builder.addNodeApp("frontend", "../frontend", "server.js")
 await builder.build().run();
 ```
 
-`appDirectory` is the directory containing `Cargo.toml`. Arguments for your program are passed with
-`.WithArgs(...)`; arguments for cargo itself are passed with `.WithCargoArgs(...)`.
+`appDirectory` is cargo's working directory and the publish build context. Cargo discovers the manifest
+from that directory by default; use `.WithCargoManifestPath(...)` to select another manifest. For
+publishing, the selected manifest and everything it needs must be inside `appDirectory`. Arguments for
+your program are passed with `.WithArgs(...)`; arguments for cargo itself are passed with
+`.WithCargoArgs(...)`.
 
 ### Cargo options
 
@@ -77,7 +80,7 @@ builder.AddRustApp("api", "../rust-api")
 | `WithCargoArgs(Action<RustCargoArgsCallbackContext> callback)` | Computes cargo arguments when the resource starts. An async `Func<RustCargoArgsCallbackContext, Task>` overload is also available |
 | `WithCargoReleaseBuild(bool releaseBuild = true)` | Adds `--release`. Publishing adds it by default, so pass `false` to publish an unoptimized image |
 | `WithCargoLocked(bool locked = true)` | Adds `--locked`, which fails rather than updating `Cargo.lock`. Publishing adds it by default whenever the crate has a lock file, so pass `false` to opt out |
-| `WithCargoFeatures(params string[] features)` | Adds `--features` with the supplied features |
+| `WithCargoFeatures(params string[] features)` | Adds the supplied features to `--features`. Repeated calls accumulate features in call order |
 | `WithCargoBinTarget(string binName)` | Adds `--bin` to select one of several `[[bin]]` targets |
 | `WithCargoExample(string exampleName)` | Adds `--example` to run an example instead of a binary |
 | `WithCargoPackage(string packageName)` | Adds `--package` to select a workspace member |
