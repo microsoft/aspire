@@ -17,6 +17,7 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
+import '../editor/parsers/rustAppHostParser';
 
 // Build platform-native paths so dirname comparison works on Windows too
 // (vscode.Uri.file('/foo/bar').fsPath becomes '\\foo\\bar' on Windows, so we
@@ -31,7 +32,7 @@ function createMockDocument(content: string, filePath: string): vscode.TextDocum
         uri: vscode.Uri.file(filePath),
         fileName: filePath,
         isUntitled: false,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
+        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'javascript',
         version: 1,
         isDirty: false,
         isClosed: false,
@@ -633,6 +634,54 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
     function getStateLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
         return lenses.filter(l => l.command?.command === 'aspire-vscode.codeLensRevealResource');
     }
+
+    test('emits resource state and action lenses for a running Rust AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '    let cache = builder.add_redis("cache")?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({
+            workspaceAppHostPath: appHostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    restart: {
+                        displayName: 'Restart',
+                        description: null,
+                        state: 'Enabled',
+                        visibility: 'Api, Ui',
+                    },
+                },
+            })],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+
+        assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource'));
+        assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensResourceAction'));
+        harness.dispose();
+    });
+
+    test('emits pipeline debug lenses for a stopped Rust AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '    builder.add_step("publish")?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({ workspaceAppHostPath: appHostPath });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const pipelineLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensDebugPipelineStep');
+
+        assert.ok(pipelineLens);
+        assert.deepStrictEqual(pipelineLens.command?.arguments, ['publish']);
+        assert.strictEqual(pipelineLens.range.start.line, 2);
+        harness.dispose();
+    });
 
     test('does not emit resource state lenses for line-commented C# resource calls', async () => {
         const docPath = p('repo', 'AppHost', 'AppHost.cs');
