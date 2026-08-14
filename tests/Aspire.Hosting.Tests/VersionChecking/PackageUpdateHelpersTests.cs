@@ -217,14 +217,14 @@ public class PackageUpdateHelpersTests
     }
 
     [Fact]
-    public void ParsePackageSearchResults_WithCredentialProviderPreamble_ParsesPackages()
+    public void ParsePackageSearchResults_WithCredentialProviderOutputAroundPayload_ParsesExpectedPayload()
     {
-        // The NuGet Azure Artifacts Credential Provider writes "[CredentialProvider]..." progress lines to stdout
-        // before the JSON payload while `dotnet package search --format json` still exits 0, which previously broke
-        // parsing. See https://github.com/microsoft/aspire/issues/19339.
+        // Credential-provider diagnostics use an inherited stdout handle, so braced text or JSON can arrive before
+        // the package-search payload and additional output can arrive after it. The diagnostic JSON deliberately
+        // contains a nested object with the expected shape to ensure only root payload objects are considered.
         var pollutedStdout =
-            "    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'\n" +
-            "    [CredentialProvider]Requested 8/13/2026 2:36:13 AM but received 8/12/2026 11:37:51 PM\n" +
+            "    [CredentialProvider]Acquiring token for request {request-42}\n" +
+            """{"error":{"searchResult":[{"packages":[]}]}}""" + "\n" +
             """
             {
               "version": 2,
@@ -238,7 +238,8 @@ public class PackageUpdateHelpersTests
                 }
               ]
             }
-            """;
+            """ +
+            "\n    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'";
 
         var packages = PackageUpdateHelpers.ParsePackageSearchResults(pollutedStdout, "Aspire.Hosting.AppHost");
 

@@ -113,11 +113,11 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetPackageVersionsAsync_ToleratesCredentialProviderStdoutPreamble()
+    public async Task GetPackageVersionsAsync_ToleratesCredentialProviderOutputAroundPayload()
     {
-        // The aspire-managed search helper's stdout can be polluted by NuGet credential-provider
-        // "[CredentialProvider]..." progress lines written before the JSON payload (the process still exits 0),
-        // which previously broke JSON parsing. See https://github.com/microsoft/aspire/issues/19339.
+        // Credential-provider diagnostics use an inherited stdout handle, so braced text or JSON can arrive before
+        // the package-search payload and additional output can arrive after it. The diagnostic JSON deliberately
+        // contains a nested object with the expected shape to ensure only root payload objects are considered.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var layout = new LayoutConfiguration
@@ -140,9 +140,10 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         };
 
         var pollutedStdout =
-            "    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'\n" +
-            "    [CredentialProvider]Requested 8/13/2026 2:36:13 AM but received 8/12/2026 11:37:51 PM\n" +
-            """{"packages":[{"id":"Aspire.Hosting.Redis","version":"13.3.0","allVersions":["13.3.0","13.2.0"],"source":"nuget.org"}],"totalHits":1}""";
+            "    [CredentialProvider]Acquiring token for request {request-42}\n" +
+            """{"error":{"packages":[]}}""" + "\n" +
+            """{"packages":[{"id":"Aspire.Hosting.Redis","version":"13.3.0","allVersions":["13.3.0","13.2.0"],"source":"nuget.org"}],"totalHits":1}""" +
+            "\n    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'";
 
         var executionFactory = new TestProcessExecutionFactory
         {

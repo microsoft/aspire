@@ -226,10 +226,10 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             }
 
             // The aspire-managed helper writes the search result as JSON to stdout, but a NuGet credential
-            // provider (e.g. the Azure Artifacts Credential Provider) can prepend "[CredentialProvider]..."
-            // progress lines to that stdout before the payload. Trim any non-JSON preamble before deserializing.
+            // provider can write diagnostics before or after that payload. Extract exactly one complete root object
+            // with the expected "packages" array so provider diagnostics cannot be deserialized as the result.
             // See https://github.com/microsoft/aspire/issues/19339.
-            var result = JsonSerializer.Deserialize(PackageUpdateHelpers.ExtractJsonPayload(output), BundleSearchJsonContext.Default.BundleSearchResult);
+            var result = JsonSerializer.Deserialize(PackageUpdateHelpers.ExtractJsonPayload(output, "packages"), BundleSearchJsonContext.Default.BundleSearchResult);
             if (result?.Packages is null)
             {
                 return [];

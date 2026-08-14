@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -129,7 +130,7 @@ internal static class PackageUpdateHelpers
     {
         var foundPackages = new List<NuGetPackage>();
 
-        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout));
+        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout, "searchResult", "packages"));
         if (!document.RootElement.TryGetProperty("searchResult", out var searchResultsArray))
         {
             return [];
@@ -163,24 +164,102 @@ internal static class PackageUpdateHelpers
         return foundPackages;
     }
 
-    // `dotnet package search <id> --format json` is expected to write a single JSON object to stdout, but some
-    // NuGet credential providers write progress lines to stdout *before* the JSON payload while the command still
-    // exits 0. The common case is the NuGet Azure Artifacts Credential Provider: with an authenticated Azure DevOps
-    // feed configured, captured stdout looks like this (stderr empty, exit code 0):
+    // `dotnet package search <id> --format json` is expected to write a single JSON object to stdout, but NuGet
+    // credential providers use an inherited stdout handle. Their diagnostics can therefore appear before or after
+    // the payload while the command still exits 0, and can themselves contain braces or complete JSON objects:
     //
-    //     [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'
-    //     [CredentialProvider]Requested 8/13/2026 2:36:13 AM but received 8/12/2026 11:37:51 PM
+    //     [CredentialProvider]Acquiring token for request {42}
+    //     {"error":{"packages":[]}}
     //     {"version":2,"problems":[],"searchResult":[{"sourceName":"azure-default","packages":[ ... ]}]}
+    //     [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'
     //
-    // Parsing the whole string as JSON then throws, because the leading '[' is read as the start of an array and
-    // 'C' from "CredentialProvider" is an invalid value start. Skip the preamble by starting at the first '{' so
-    // the JSON object parses. See https://github.com/microsoft/aspire/issues/19339.
-    internal static string ExtractJsonPayload(string stdout)
+    // Parse each complete object candidate and validate the expected array shape so a diagnostic object cannot be
+    // mistaken for the payload. Return only the consumed object so trailing provider output is excluded.
+    // See https://github.com/microsoft/aspire/issues/19339.
+    internal static string ExtractJsonPayload(string stdout, string rootArrayPropertyName)
     {
-        var start = stdout.IndexOf('{');
+        return ExtractJsonPayloadCore(stdout, rootArrayPropertyName, itemArrayPropertyName: null);
+    }
 
-        // start == 0: already pure JSON, nothing to trim. start < 0: no object token, so return the input
-        // unchanged and let JsonDocument.Parse throw the same JsonException as before for empty/malformed output.
-        return start > 0 ? stdout[start..] : stdout;
+    internal static string ExtractJsonPayload(string stdout, string rootArrayPropertyName, string itemArrayPropertyName)
+    {
+        return ExtractJsonPayloadCore(stdout, rootArrayPropertyName, itemArrayPropertyName);
+    }
+
+    private static string ExtractJsonPayloadCore(string stdout, string rootArrayPropertyName, string? itemArrayPropertyName)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(stdout);
+        var searchOffset = 0;
+
+        while (searchOffset < utf8.Length)
+        {
+            var relativeCandidateOffset = utf8.AsSpan(searchOffset).IndexOf((byte)'{');
+            if (relativeCandidateOffset < 0)
+            {
+                break;
+            }
+
+            var candidateOffset = searchOffset + relativeCandidateOffset;
+            var candidate = utf8.AsSpan(candidateOffset);
+            var reader = new Utf8JsonReader(candidate);
+
+            try
+            {
+                if (JsonDocument.TryParseValue(ref reader, out var document) && document is not null)
+                {
+                    var consumed = checked((int)reader.BytesConsumed);
+                    using (document)
+                    {
+                        if (HasExpectedShape(document.RootElement, rootArrayPropertyName, itemArrayPropertyName))
+                        {
+                            return Encoding.UTF8.GetString(candidate[..consumed]);
+                        }
+                    }
+
+                    // Do not inspect nested objects inside a complete diagnostic object. A nested object could
+                    // coincidentally have the expected shape even though its containing diagnostic is not the payload.
+                    searchOffset = candidateOffset + consumed;
+                    continue;
+                }
+            }
+            catch (JsonException)
+            {
+                // A diagnostic can contain an unmatched brace or other non-JSON fragment. Advance past this brace
+                // and keep looking for the package-search payload.
+            }
+
+            searchOffset = candidateOffset + 1;
+        }
+
+        // Preserve the existing behavior when no expected payload is present: callers parse the original output
+        // and surface the same JsonException (or handle a valid object with no results) as before.
+        return stdout;
+    }
+
+    private static bool HasExpectedShape(JsonElement root, string rootArrayPropertyName, string? itemArrayPropertyName)
+    {
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty(rootArrayPropertyName, out var rootArray) ||
+            rootArray.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        if (itemArrayPropertyName is null)
+        {
+            return true;
+        }
+
+        foreach (var item in rootArray.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty(itemArrayPropertyName, out var itemArray) ||
+                itemArray.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
