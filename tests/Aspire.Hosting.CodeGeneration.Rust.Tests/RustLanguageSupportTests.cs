@@ -77,6 +77,7 @@ public class RustLanguageSupportTests(ITestOutputHelper outputHelper)
         Assert.Equal("Rust", runtimeSpec.DisplayName);
         Assert.Equal("Rust", runtimeSpec.CodeGenLanguage);
         Assert.Equal(["apphost.rs"], runtimeSpec.DetectionPatterns);
+        Assert.Equal("rust", runtimeSpec.ExtensionLaunchCapability);
         Assert.Equal("cargo", runtimeSpec.Execute.Command);
         Assert.Equal(["run"], runtimeSpec.Execute.Args);
     }

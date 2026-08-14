@@ -48,6 +48,7 @@
     "workspaceContains:**/apphost.js",
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
+    "workspaceContains:**/apphost.rs",
     "onCommand:aspire-vscode.installCli",
     "onCommand:aspire-vscode.verifyCliInstalled",
     "onLanguageModelTool:aspire_apphost_start",
@@ -575,19 +576,19 @@
       "explorer/context": [
         {
           "command": "aspire-vscode.runAppHostCommand",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs)$/i",
           "group": "aspire_actions@1"
         },
         {
           "command": "aspire-vscode.debugAppHostCommand",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs)$/i",
           "group": "aspire_actions@2"
         }
       ],
       "editor/title/run": [
         {
           "command": "aspire-vscode.runAppHostCommand",
-          "when": "(aspire.fileIsAppHost || aspire.workspaceHasAppHost) && aspire.editorSupportsRunDebug",
+          "when": "aspire.fileIsAppHost || (aspire.workspaceHasAppHost && aspire.editorSupportsRunDebug)",
           "group": "navigation@-4"
         },
         {

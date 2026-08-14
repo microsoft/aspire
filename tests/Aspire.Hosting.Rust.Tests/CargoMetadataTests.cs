@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 
@@ -92,6 +93,21 @@ public class CargoMetadataTests
             ["metadata", "--format-version", "1", "--no-deps", "--manifest-path", "/app/Cargo.toml"],
             CargoMetadataReader.BuildArguments("/app/Cargo.toml"));
     }
+
+        [Fact]
+        public void MetadataReaderAsyncStateMachineDoesNotReferenceDcpProcessTypes()
+        {
+          // Guest AppHosts discover integration types under restricted reflection. A generated state-machine
+          // field that closes over an internal Aspire.Hosting type makes the entire integration assembly fail
+          // type discovery before the Rust launch configuration can be produced.
+          var readMethod = typeof(CargoMetadataReader).GetMethod(nameof(CargoMetadataReader.ReadAsync));
+          var stateMachineType = Assert.IsType<AsyncStateMachineAttribute>(
+            Assert.Single(readMethod!.GetCustomAttributes(typeof(AsyncStateMachineAttribute), inherit: false))).StateMachineType;
+
+          Assert.DoesNotContain(
+            stateMachineType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public),
+            field => field.FieldType.ToString().Contains("Aspire.Hosting.Dcp.Process", StringComparison.Ordinal));
+        }
 
     [Fact]
     [RequiresTools(["cargo"])]

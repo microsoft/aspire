@@ -491,6 +491,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             '**/apphost.js',
             '**/apphost.mjs',
             '**/apphost.cjs',
+            '**/apphost.rs',
             `**/${aspireConfigFileName}`,
             '**/.aspire/settings.json',
         ];

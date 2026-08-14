@@ -1,8 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
-using Aspire.Hosting.Dcp.Process;
+using System.Diagnostics;
 
 namespace Aspire.Hosting.Rust;
 
@@ -59,25 +58,30 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
     /// </remarks>
     public async Task<CargoMetadata> ReadAsync(string workingDirectory, string? manifestPath, string resourceName, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken)
     {
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
+        var startInfo = new ProcessStartInfo("cargo")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
 
-        Task<ProcessResult> resultTask;
-        IAsyncDisposable disposable;
+        foreach (var argument in BuildArguments(manifestPath))
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (var (name, value) in environment)
+        {
+            startInfo.Environment[name] = value;
+        }
+
+        using var process = new Process { StartInfo = startInfo };
 
         try
         {
-            (resultTask, disposable) = ProcessUtil.Run(new ProcessSpec("cargo")
-            {
-                ArgumentList = BuildArguments(manifestPath),
-                WorkingDirectory = workingDirectory,
-                EnvironmentVariables = environment.ToDictionary(),
-                // Cargo reports a missing or malformed manifest on stderr with a non-zero exit code, which is
-                // more useful than a generic launch failure, so handle the exit code here instead.
-                ThrowOnNonZeroReturnCode = false,
-                OnOutputData = line => stdout.AppendLine(line),
-                OnErrorData = line => stderr.AppendLine(line)
-            });
+            process.Start();
         }
         catch (Exception ex)
         {
@@ -86,38 +90,58 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
                 $"or supply your own Dockerfile in '{workingDirectory}'. {ex.Message}", ex);
         }
 
-        ProcessResult result;
+        // Drain both redirected streams concurrently so a full pipe cannot block cargo before it exits.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
-        await using (disposable.ConfigureAwait(false))
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(s_timeout);
+
+        try
         {
-            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutSource.CancelAfter(s_timeout);
-
-            try
-            {
-                result = await resultTask.WaitAsync(timeoutSource.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw new DistributedApplicationException(
-                    $"'cargo metadata' for the Rust app '{resourceName}' did not complete within {s_timeout.TotalSeconds:0} seconds.");
-            }
+            await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKillProcess(process);
+            throw new DistributedApplicationException(
+                $"'cargo metadata' for the Rust app '{resourceName}' did not complete within {s_timeout.TotalSeconds:0} seconds.");
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
         }
 
-        if (result.ExitCode != 0)
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
         {
             throw new DistributedApplicationException(
-                $"'cargo metadata' failed for the Rust app '{resourceName}' with exit code {result.ExitCode}. {stderr.ToString().Trim()}");
+                $"'cargo metadata' failed for the Rust app '{resourceName}' with exit code {process.ExitCode}. {stderr.Trim()}");
         }
 
         try
         {
-            return CargoMetadata.Parse(stdout.ToString());
+            return CargoMetadata.Parse(stdout);
         }
         catch (Exception ex) when (ex is not DistributedApplicationException)
         {
             throw new DistributedApplicationException(
                 $"Unable to read the output of 'cargo metadata' for the Rust app '{resourceName}'. {ex.Message}", ex);
+        }
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited while cancellation was being observed.
         }
     }
 }

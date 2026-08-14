@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess, terminateCliProcess } from "./languages/cli";
@@ -11,6 +11,7 @@ import { projectDebuggerExtension } from "./languages/dotnet";
 import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
+import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { cleanupRun } from "./runCleanupRegistry";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
@@ -1111,6 +1112,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
   private static readonly _csharpAppHostExtensions = ['.cs', '.csproj'];
+  private static readonly _rustAppHostExtensions = ['.rs'];
 
   private _appHostRestartRequested = false;
   private _preserveAppHostRestartSourceSessionId = false;
@@ -1120,8 +1122,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
       const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
+      const isRustAppHost = AspireDebugSession._rustAppHostExtensions.includes(fileExtension);
 
-      const debuggerExtension = isNodeAppHost ? nodeDebuggerExtension : projectDebuggerExtension;
+      const debuggerExtension = isNodeAppHost
+        ? nodeDebuggerExtension
+        : isRustAppHost
+          ? createDefaultRustDebuggerExtension()
+          : projectDebuggerExtension;
 
       // Register the adapter tracker with an app host restart handler.
       // When the user clicks "restart" on the app host child session,
@@ -1165,6 +1172,17 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           type: 'node',
           ...(runtimeExecutable ? { runtime_executable: runtimeExecutable } : {})
         } as NodeLaunchConfiguration;
+      }
+      else if (isRustAppHost) {
+        // The CLI sends the Cargo command (e.g., ["cargo", "run", "--", ...appHostArgs]).
+        // The Rust debugger builds and launches the executable directly, so only arguments after
+        // Cargo's "--" separator belong to the AppHost process.
+        const separatorIndex = args.indexOf('--');
+        appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        launchConfig = {
+          type: 'rust',
+          working_directory: path.dirname(projectFile),
+        } as RustLaunchConfiguration;
       }
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).

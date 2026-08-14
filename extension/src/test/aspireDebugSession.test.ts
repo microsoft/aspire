@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
@@ -12,7 +12,7 @@ import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
-import { AspireResourceExtendedDebugConfiguration } from '../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
@@ -3212,6 +3212,60 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         await aspireDebugSession.startAppHost(appHostPath, [], [], true, { forceBuild: false });
 
         assert.strictEqual(trackAppHostDebugSession.calledOnceWithExactly(aspireDebugSession, appHostPath, childDebugSession), true);
+    });
+
+    test('launches a Rust AppHost with the Rust debugger', async () => {
+        const appHostPath = join(makeTempDir(), 'apphost.rs');
+        writeFileSync(appHostPath, '');
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'lldb',
+            request: 'launch',
+            name: 'Rust AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        });
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['cargo', 'run', '--', '--example-argument'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const launchConfig = createDebugSessionConfiguration.firstCall.args[1] as RustLaunchConfiguration;
+        const appHostArgs = createDebugSessionConfiguration.firstCall.args[2];
+        const debuggerExtension = createDebugSessionConfiguration.firstCall.args[5];
+
+        assert.deepStrictEqual(launchConfig, {
+            type: 'rust',
+            working_directory: dirname(appHostPath),
+        });
+        assert.deepStrictEqual(appHostArgs, ['--example-argument']);
+        assert.strictEqual(debuggerExtension.resourceType, 'rust');
     });
 
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {

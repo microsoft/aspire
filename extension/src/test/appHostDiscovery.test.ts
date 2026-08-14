@@ -128,6 +128,19 @@ suite('AppHost discovery', () => {
         assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
     });
 
+    test('keeps Rust AppHost candidate as source file', () => {
+        const appHostPath = buildPath('workspace', 'AppHost', 'apphost.rs');
+
+        const candidate = findCandidateForEditorFile(appHostPath, [{
+            path: appHostPath,
+            language: 'rust',
+            status: 'buildable',
+        }]);
+
+        assert.strictEqual(candidate?.path, appHostPath);
+        assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
+    });
+
     test('returns undefined when no discovered candidate contains C# source file', () => {
         const programPath = buildPath('workspace', 'Web', 'Program.cs');
 
@@ -427,7 +440,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('watches Node module AppHost filenames', async () => {
+        test('watches guest AppHost filenames', async () => {
             const watchedPatterns: string[] = [];
             sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake((pattern) => {
                 watchedPatterns.push(typeof pattern === 'string' ? pattern : pattern.pattern);
@@ -458,6 +471,7 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.js'));
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
+                assert.ok(watchedPatterns.includes('**/apphost.rs'));
             }
             finally {
                 service.dispose();
