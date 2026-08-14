@@ -6222,7 +6222,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task MauiProjectWithLaunchArgsOverrideAndSupportedLaunchConfiguration_StillAppliesMauiLaunchConfiguration(bool useContextOverload)
+    public async Task MauiProjectWithLaunchArgsOverrideAndSupportedLaunchConfiguration_PreservesProjectMetadataAndAppliesMauiLaunchConfiguration(bool useContextOverload)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -6315,12 +6315,25 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
         expectedArgs.AddRange(["-f", "net10.0-android"]);
         Assert.Equal(expectedArgs, executable.Spec.Args);
-        Assert.True(executable.TryGetAnnotationAsObjectList<TestMauiLaunchConfiguration>(
+        Assert.True(executable.Metadata.Annotations.TryGetValue(
             Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigurations));
-        var launchConfiguration = Assert.Single(launchConfigurations);
-        Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
-        Assert.Equal("/mauiapp/MauiApp.csproj", launchConfiguration.ProjectPath);
+            out var launchConfigurationsJson));
+        using var launchConfigurations = JsonDocument.Parse(launchConfigurationsJson);
+        Assert.Collection(
+            launchConfigurations.RootElement.EnumerateArray(),
+            projectLaunchConfiguration =>
+            {
+                Assert.Equal(KnownLaunchConfigurationTypes.Project, projectLaunchConfiguration.GetProperty("type").GetString());
+                Assert.Equal(ExecutableLaunchMode.Debug, projectLaunchConfiguration.GetProperty("mode").GetString());
+                Assert.Equal("TestProject", projectLaunchConfiguration.GetProperty("project_path").GetString());
+                Assert.True(projectLaunchConfiguration.GetProperty("disable_launch_profile").GetBoolean());
+            },
+            mauiLaunchConfiguration =>
+            {
+                Assert.Equal("maui", mauiLaunchConfiguration.GetProperty("type").GetString());
+                Assert.Equal(ExecutableLaunchMode.Debug, mauiLaunchConfiguration.GetProperty("mode").GetString());
+                Assert.Equal("/mauiapp/MauiApp.csproj", mauiLaunchConfiguration.GetProperty("project_path").GetString());
+            });
 
         if (useContextOverload)
         {

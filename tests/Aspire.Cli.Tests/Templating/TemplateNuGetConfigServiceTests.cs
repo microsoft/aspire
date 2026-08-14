@@ -661,6 +661,54 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("stable", selection.Channel.Name);
     }
 
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_ImplicitDiscovery_FindsHierarchicalTemplateFromFileUriMappedLocalChannel()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDir = workspace.CreateDirectory("local-feed");
+        var templatePackagePath = Path.Combine(
+            packagesDir.FullName,
+            "aspire.projecttemplates",
+            "13.4.0",
+            "Aspire.ProjectTemplates.13.4.0.nupkg");
+        Directory.CreateDirectory(Path.GetDirectoryName(templatePackagePath)!);
+        await File.WriteAllTextAsync(templatePackagePath, string.Empty);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+                var localChannel = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", new Uri(packagesDir.FullName).AbsoluteUri)],
+                    new FakeNuGetPackageCache
+                    {
+                        GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+                    },
+                    features: new TestFeatures(),
+                    NullLogger.Instance);
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, localChannel]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        var selection = await service.ResolveTemplatePackageAsync(
+            new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: true),
+            CancellationToken.None);
+
+        Assert.Equal("Aspire.ProjectTemplates", selection.Package.Id);
+        Assert.Equal("13.4.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Explicit, selection.Channel.Type);
+        Assert.Equal("pr-12345", selection.Channel.Name);
+    }
+
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
         var packageSourceMapping = doc.Root!.Element("packageSourceMapping");

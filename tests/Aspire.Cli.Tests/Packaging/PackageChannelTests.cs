@@ -133,6 +133,49 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetTemplatePackagesAsync_UnpinnedChannelWithLocalMappingsOverride_EnumeratesOverrideDirectory()
+    {
+        // `aspire new --source <dir>` hands per-call mappings to an unpinned explicit channel. Local
+        // directory discovery must follow those mappings, not the channel's own Aspire* mapping,
+        // otherwise the override is silently ignored and the channel's directory is listed instead.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var channelPackagesDirectory = workspace.CreateDirectory("channel-packages");
+        var overridePackagesDirectory = workspace.CreateDirectory("override-packages");
+
+        File.WriteAllText(Path.Combine(channelPackagesDirectory.FullName, "Aspire.ProjectTemplates.13.4.0-preview.1.nupkg"), string.Empty);
+
+        // Nested layout mirrors a hierarchical local feed: <id lowercased>/<version>/<id>.<version>.nupkg
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(overridePackagesDirectory.FullName, "aspire.projecttemplates", "13.5.0-preview.2"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.5.0-preview.2.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channelSource = channelPackagesDirectory.FullName.Replace('\\', '/');
+        var overrideSource = overridePackagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Prerelease,
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        var package = Assert.Single(await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(overrideSource),
+            CancellationToken.None).DefaultTimeout());
+
+        Assert.Equal("Aspire.ProjectTemplates", package.Id);
+        Assert.Equal("13.5.0-preview.2", package.Version);
+        Assert.Equal(overrideSource, package.Source);
+    }
+
+    [Fact]
     public async Task GetIntegrationPackagesAsync_WithPinnedLocalSource_ReturnsOnlyPinnedLocalIntegrationPackages()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -232,6 +275,38 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             .ToArray();
 
         Assert.Equal(["Aspire.Hosting.Redis"], packageIds);
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_AndGetPolyglotCompatiblePackageIdsAsync_WithHierarchicalLocalSource_FindsNestedTaggedPackage()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        const string version = "13.4.0-pr.16820.gabcdef";
+
+        CreateHierarchicalPackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", version, "aspire integration hosting cache polyglot");
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly."),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", packageSource),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+        var packageIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.Redis", package.Id);
+        Assert.Equal(version, package.Version);
+        Assert.Equal(packageSource, package.Source);
+        Assert.Equal(["Aspire.Hosting.Redis"], packageIds.OrderBy(id => id, StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
@@ -428,6 +503,23 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsBackedByLocalPackageDirectory_FileUriAspireMapping_ReturnsTrue()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", new Uri(packagesDirectory.FullName).AbsoluteUri),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance);
+
+        Assert.True(channel.IsBackedByLocalPackageDirectory);
+    }
+
+    [Fact]
     public void IsBackedByLocalPackageDirectory_RemoteStableChannel_ReturnsFalse()
     {
         // A real stable channel maps everything to nuget.org, so it is not locally backed.
@@ -505,7 +597,18 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
     private static void CreatePackageWithTags(DirectoryInfo packagesDirectory, string packageId, string version, string tags)
     {
-        var packagePath = Path.Combine(packagesDirectory.FullName, $"{packageId}.{version}.nupkg");
+        CreatePackageWithTags(Path.Combine(packagesDirectory.FullName, $"{packageId}.{version}.nupkg"), packageId, version, tags);
+    }
+
+    private static void CreateHierarchicalPackageWithTags(DirectoryInfo packagesDirectory, string packageId, string version, string tags)
+    {
+        var packagePath = Path.Combine(packagesDirectory.FullName, packageId.ToLowerInvariant(), version, $"{packageId}.{version}.nupkg");
+        Directory.CreateDirectory(Path.GetDirectoryName(packagePath)!);
+        CreatePackageWithTags(packagePath, packageId, version, tags);
+    }
+
+    private static void CreatePackageWithTags(string packagePath, string packageId, string version, string tags)
+    {
         using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
         var entry = archive.CreateEntry($"{packageId}.nuspec");
         using var writer = new StreamWriter(entry.Open());

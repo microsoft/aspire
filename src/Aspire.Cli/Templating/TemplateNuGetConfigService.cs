@@ -349,11 +349,7 @@ internal sealed class TemplateNuGetConfigService(
     private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)
     {
         return VersionHelper.IsLocalBuildChannel(channel.Name) &&
-            channel.Mappings?.Any(static mapping =>
-                mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
-                mapping.PackageFilter != PackageMapping.AllPackages &&
-                !UrlHelper.IsHttpUrl(mapping.Source) &&
-                Directory.Exists(mapping.Source)) == true;
+            channel.Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
     }
 
     /// <summary>

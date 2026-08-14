@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from '../editor/resourceStateUtils';
-import type { ResourceJson, AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import type { ResourceJson, AppHostDisplayInfo } from '../data/AppHostDataRepository';
 import { ResourceState } from '../editor/resourceConstants';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {

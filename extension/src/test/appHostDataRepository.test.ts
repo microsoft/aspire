@@ -7,12 +7,13 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
-import { AppHostDataRepository, AspireCliFailedError, isMatchingAppHostPath, shortenPath } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, AspireCliFailedError, isMatchingAppHostPath, shortenPath } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { errorFetchingAppHosts } from '../loc/strings';
 
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
@@ -1883,6 +1884,67 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             executeCommandStub.restore();
+        }
+    });
+
+    test('describe surfaces the real error when a current CLI rejects a user-supplied option', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        let psOptions: any;
+        const describeOptions: any[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsOutputCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeOptions.push(options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/AppHost.csproj',
+                all_project_file_candidates: ['/workspace/AppHost.csproj'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.ok(psOptions);
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/AppHost.csproj',
+                    appHostPid: 125881,
+                },
+            ]));
+            await waitForMicrotasks();
+            assert.strictEqual(describeOptions.length, 1);
+
+            // The CLI understands `describe`; the AppHost it launched rejected an option the user
+            // supplied. That real failure must survive instead of being reported as a CLI too old
+            // to describe, which would also suppress the normal error/retry behavior.
+            const appHostError = "Unrecognized command or argument '--publisher'.";
+            describeOptions[0].stderrCallback(appHostError);
+            describeOptions[0].exitCallback(1);
+
+            assert.strictEqual(repository.hasError, true);
+            assert.strictEqual(repository.errorMessage, errorFetchingAppHosts(appHostError));
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
         }
     });
 

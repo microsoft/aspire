@@ -604,6 +604,9 @@
     <trans-unit id="command.restore">
       <source xml:lang="en">Restore packages</source>
     </trans-unit>
+    <trans-unit id="command.codeLensRevealAppHost">
+      <source xml:lang="en">Reveal AppHost in Aspire panel</source>
+    </trans-unit>
     <trans-unit id="command.codeLensRevealResource">
       <source xml:lang="en">Reveal resource in Aspire panel</source>
     </trans-unit>
@@ -633,6 +636,15 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestore">
       <source xml:lang="en">Running aspire restore on {0} ...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLabel">
+      <source xml:lang="en">Rust</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDebuggerExtensionNotInstalled">
+      <source xml:lang="en">Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDisplayName">
+      <source xml:lang="en">Rust: {0}</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
@@ -763,6 +775,9 @@
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLaunchConfigurationMissingExecutable">
+      <source xml:lang="en">The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.</source>
+    </trans-unit>
     <trans-unit id="views.appHosts.genericErrorWelcome">
       <source xml:lang="en">The Aspire panel couldn&apos;t load AppHost data right now. See Aspire Extension output for details.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
@@ -774,6 +789,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.azureFunctionsUnsupportedTaskShell">
       <source xml:lang="en">The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustWindowsGnuDebuggerUnsupported">
+      <source xml:lang="en">The cppvsdbg debugger cannot debug Rust target {0} because GNU Windows targets use DWARF symbols. Install CodeLLDB or build an MSVC Rust target such as x86_64-pc-windows-msvc.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
       <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
@@ -910,6 +928,12 @@
     <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
       <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildStderrTruncated">
+      <source xml:lang="en">[cargo stderr truncated to the last {0} characters.]</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildOutputRedacted">
+      <source xml:lang="en">[redacted]</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleUnresolvedPath">
       <source xml:lang="en">an unresolved path</source>
     </trans-unit>
@@ -918,6 +942,18 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithError">
+      <source xml:lang="en">cargo build failed in {0} with error: {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithExitCode">
+      <source xml:lang="en">cargo build failed in {0} with exit code {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildProducedNoExecutable">
+      <source xml:lang="en">cargo build in {0} completed but did not produce a runnable binary. Ensure the crate defines a binary target.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildProducedMultipleExecutables">
+      <source xml:lang="en">cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>

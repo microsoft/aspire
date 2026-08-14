@@ -4,15 +4,15 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
-import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
+import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
-import { AspireResourceExtendedDebugConfiguration } from '../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
@@ -617,6 +617,44 @@ suite('AspireDebugSession tests', () => {
         }
     });
 
+    test('Rust direct-file telemetry reports the AppHost language', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.rs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+            await waitFor(() => spawnStub.calledOnce);
+            const event = fake.events.find(candidate => candidate.name === 'aspire/vscode/debug/apphost/start');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'rust');
+        }
+        finally {
+            restoreReporter();
+        }
+    });
+
     test('emits AppHost start telemetry before target version resolution completes', async () => {
         const tempDir = makeTempDir();
         const appHostPath = join(tempDir, 'apphost.cs');
@@ -835,7 +873,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.dispose();
         await aspireDebugSession.stopDebugging();
@@ -864,13 +902,13 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.dispose();
         await aspireDebugSession.stopDebugging();
 
         sinon.assert.calledOnceWithExactly(stopDebugging, parentDebugSession);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, null);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, null);
     });
 
     test('stopDebugging retries a failed dashboard debug session stop', async () => {
@@ -897,7 +935,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             }
         });
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         await assert.rejects(() => aspireDebugSession.stopDebugging(), /Dashboard stop failed/);
         await aspireDebugSession.stopDebugging();
@@ -1149,7 +1187,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.finalizeForExtensionShutdown();
         await Promise.resolve();
@@ -1197,12 +1235,12 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const openPromise = aspireDebugSession.openDashboard('https://localhost:1234', 'debugEdge');
         await Promise.resolve();
         startSessionCallback?.(foreignDashboardSession);
-        const trackedAfterForeignSession = (aspireDebugSession as any)._dashboardDebugSession;
+        const trackedAfterForeignSession = (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession;
         startSessionCallback?.(ownDashboardSession);
         await openPromise;
 
         assert.strictEqual(trackedAfterForeignSession, null);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, ownDashboardSession);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, ownDashboardSession);
     });
 
     test('launching the dashboard browser stops a session that starts after the Aspire session was disposed', async () => {
@@ -1244,7 +1282,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         await aspireDebugSession.stopDebugging();
 
         assert.strictEqual(stopDebugging.calledWith(dashboardDebugSession), true);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, null);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, null);
     });
 
     test('launching the dashboard browser does not fall back to an external browser after the Aspire session was disposed', async () => {
@@ -1808,6 +1846,41 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             'apphost-session',
             'aspire-session',
         ]);
+    });
+
+    test('stopDebugging cancels pending launch work before awaiting its completion', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = { isDebugConfigEnvironmentLoggingEnabled: () => false };
+        const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            terminalProvider as any,
+            () => { });
+        const pendingStart = aspireDebugSession.beginPendingDebugSessionStart('rust');
+        const cancelPendingBuild = sinon.stub().callsFake(() => pendingStart.dispose());
+
+        aspireDebugSession.registerPendingStartCancellation({ dispose: cancelPendingBuild });
+        const shutdown = aspireDebugSession.stopDebugging();
+
+        assert.strictEqual(cancelPendingBuild.callCount, 1);
+        await shutdown;
+        assert.strictEqual(stopDebugging.callCount, 1);
     });
 
     test('stopDebugging awaits a resource start event that arrives after the original session snapshot', async () => {
@@ -3179,6 +3252,64 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(trackAppHostDebugSession.calledOnceWithExactly(aspireDebugSession, appHostPath, childDebugSession), true);
     });
 
+    test('launches a Rust AppHost with the Rust debugger', async () => {
+        const appHostPath = join(makeTempDir(), 'apphost.rs');
+        writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'ms-vscode.cpptools' || extensionId === 'vadimcn.vscode-lldb'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'lldb',
+            request: 'launch',
+            name: 'Rust AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        });
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['cargo', 'run', '--', '--example-argument'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const launchConfig = createDebugSessionConfiguration.firstCall.args[1] as RustLaunchConfiguration;
+        const appHostArgs = createDebugSessionConfiguration.firstCall.args[2];
+        const debuggerExtension = createDebugSessionConfiguration.firstCall.args[5];
+
+        assert.deepStrictEqual(launchConfig, {
+            type: 'rust',
+            working_directory: dirname(appHostPath),
+        });
+        assert.deepStrictEqual(appHostArgs, ['--example-argument']);
+        assert.strictEqual(debuggerExtension.resourceType, 'rust');
+    });
+
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {
         let restartHandler: ((debugSessionId: string) => boolean) | undefined;
         let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;
@@ -3429,6 +3560,57 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         }
     });
 
+    test('Rust directory telemetry reports the AppHost language', async () => {
+        const appHostDirectory = makeTempDir();
+        writeFileSync(join(appHostDirectory, 'apphost.rs'), 'fn main() {}');
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostDirectory,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: [],
+                totalChildSessions: 0,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            await waitFor(() => spawnStub.calledOnce);
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            aspireDebugSession.dispose();
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'aspire/vscode/debug/apphost/end'));
+
+            const event = fake.events.find(candidate => candidate.name === 'aspire/vscode/debug/apphost/end');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'rust');
+        }
+        finally {
+            restoreReporter();
+        }
+    });
+
     test('uses workspace default candidate only for directory launch telemetry enrichment', async () => {
         const workspaceDir = makeTempDir();
         const appHostDir = join(workspaceDir, 'NestedAppHost');
@@ -3509,12 +3691,16 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             env: {
                 SECRET_TOKEN: 'env-secret',
             },
+            environment: [
+                { name: 'SECRET_TOKEN', value: 'cpp-secret' },
+            ],
             environmentVariables: 'SECRET_TOKEN=maui-secret',
         } as AspireResourceExtendedDebugConfiguration;
 
         const loggableConfig = getLoggableDebugConfiguration(debugConfig, false);
 
         assert.strictEqual(loggableConfig.env, '<redacted>');
+        assert.strictEqual(loggableConfig.environment, '<redacted>');
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
     });
 
@@ -3535,6 +3721,29 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.deepStrictEqual(loggableConfig.env, { SECRET_TOKEN: 'env-secret' });
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
+    });
+
+    test('redacts sensitive debugger environments even when environment logging is enabled', () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'lldb',
+            name: 'Rust',
+            request: 'launch',
+            env: {
+                SECRET_TOKEN: 'env-secret',
+            },
+            environment: [
+                { name: 'SECRET_TOKEN', value: 'cpp-secret' },
+            ],
+        } as AspireResourceExtendedDebugConfiguration;
+        markDebugConfigurationEnvironmentSensitive(debugConfig);
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, true);
+
+        assert.strictEqual(loggableConfig.env, '<redacted>');
+        assert.strictEqual(loggableConfig.environment, '<redacted>');
+        assert.ok(!JSON.stringify(loggableConfig).includes('secret'));
     });
 
     test('responds to breakpoint requests with a DAP breakpoint body', () => {

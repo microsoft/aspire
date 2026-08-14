@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
-import type { ViewMode } from '../views/AppHostDataRepository';
+import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
 import type { AppHostLaunchRequestedEvent } from '../services/AppHostLaunchService';
@@ -228,4 +228,5 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }
     | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
+    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

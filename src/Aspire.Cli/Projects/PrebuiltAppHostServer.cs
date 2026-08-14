@@ -872,8 +872,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         foreach (var mapping in channel.Mappings)
         {
             if (!IsAspireSpecificMapping(mapping) ||
-                UrlHelper.IsHttpUrl(mapping.Source) ||
-                !Directory.Exists(mapping.Source))
+                PackageSourceOverrideMappings.GetNormalizedLocalDirectory(mapping.Source) is not { } localDirectory ||
+                !Directory.Exists(localDirectory))
             {
                 continue;
             }

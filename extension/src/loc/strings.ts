@@ -124,6 +124,9 @@ export const resourceCommandSucceeded = (command: string, resource: string) => v
 export const resourceCommandFailed = (command: string, resource: string, error: string) => vscode.l10n.t("Command '{0}' on '{1}' failed: {2}", command, resource, error);
 export const resourceCommandFailedNoDetail = (command: string, resource: string) => vscode.l10n.t("Command '{0}' on '{1}' failed.", command, resource);
 export const resourceCommandCliNotInstalled = (error: string) => vscode.l10n.t('The Aspire CLI could not be started: {0}', error);
+export const resourceCommandOpenCliLog = vscode.l10n.t('Open CLI Log');
+export const resourceCommandOpenAppHostLog = vscode.l10n.t('Open AppHost Log');
+export const resourceCommandLogOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open resource command log file {0}: {1}', path, error);
 export const resourceCommandOutputOpenFailed = (error: string) => vscode.l10n.t('The command completed, but its output could not be opened: {0}', error);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
@@ -167,6 +170,17 @@ export const unsupportedBrowserDebugTarget = (browser: string, url: string, supp
 export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged. Supported browsers are: {1}.", browser, supportedBrowsers);
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
+export const rustDisplayName = (program: string) => vscode.l10n.t('Rust: {0}', program);
+export const rustLabel = vscode.l10n.t('Rust');
+export const rustBuildFailedWithError = (workingDirectory: string, error: string) => vscode.l10n.t('cargo build failed in {0} with error: {1}.', workingDirectory, error);
+export const rustBuildFailedWithExitCode = (workingDirectory: string, exitCode: string) => vscode.l10n.t('cargo build failed in {0} with exit code {1}.', workingDirectory, exitCode);
+export const rustBuildProducedNoExecutable = (workingDirectory: string) => vscode.l10n.t('cargo build in {0} completed but did not produce a runnable binary. Ensure the crate defines a binary target.', workingDirectory);
+export const rustBuildProducedMultipleExecutables = (workingDirectory: string, targets: string) => vscode.l10n.t('cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.', workingDirectory, targets);
+export const rustBuildOutputRedacted = vscode.l10n.t('[redacted]');
+export const rustBuildStderrTruncated = (limit: number) => vscode.l10n.t('[cargo stderr truncated to the last {0} characters.]', limit);
+export const rustLaunchConfigurationMissingExecutable = (workingDirectory: string) => vscode.l10n.t('The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.', workingDirectory);
+export const rustWindowsGnuDebuggerUnsupported = (target: string) => vscode.l10n.t('The cppvsdbg debugger cannot debug Rust target {0} because GNU Windows targets use DWARF symbols. Install CodeLLDB or build an MSVC Rust target such as x86_64-pc-windows-msvc.', target);
+export const rustDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
@@ -242,6 +256,10 @@ export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
 export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
 export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
 export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');
+export const codeLensRustAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; this AppHost is already running in Aspire');
+export const codeLensRustAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
+export const codeLensRustAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
+export const codeLensRustAppHostUseAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
 
 export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspire AppHost');
 export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');

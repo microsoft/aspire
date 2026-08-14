@@ -7,6 +7,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
@@ -218,6 +219,24 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         var isProjectLaunchConfiguration =
             supportsDebuggingAnnotation.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project;
         var hasProjectLaunchArgsOverride = HasProjectLaunchArgsOverride(er.ModelResource);
+        List<JsonElement>? projectLaunchConfigurationsToPreserve = null;
+
+        if (hasProjectLaunchArgsOverride &&
+            !isProjectLaunchConfiguration &&
+            exe.TryGetAnnotationAsObjectList<JsonElement>(Executable.LaunchConfigurationsAnnotation, out var launchConfigurations))
+        {
+            // Project launch overrides execute as processes, but DCP still consumes the project launch
+            // configuration as project metadata. Preserve those entries while replacing the custom
+            // producer result on restart. The annotation is a JSON array such as:
+            // [{"type":"project",...},{"type":"maui",...}]
+            projectLaunchConfigurationsToPreserve = launchConfigurations
+                .Where(static configuration =>
+                    configuration.ValueKind == JsonValueKind.Object &&
+                    configuration.TryGetProperty("type", out var type) &&
+                    type.ValueKind == JsonValueKind.String &&
+                    type.GetString() is KnownLaunchConfigurationTypes.Project)
+                .ToList();
+        }
 
         // A project launch override already supplies the process invocation. A "project" producer would describe
         // a launch mode that cannot be used, while custom producers can still contribute process-mode metadata.
@@ -282,6 +301,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             // The command line is composed after this point, so Process execution receives the full tool invocation.
             _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
             exe.Spec.ExecutionType = ExecutionType.Process;
+        }
+        finally
+        {
+            if (projectLaunchConfigurationsToPreserve is { Count: > 0 })
+            {
+                var updatedLaunchConfigurations =
+                    exe.TryGetAnnotationAsObjectList<JsonElement>(Executable.LaunchConfigurationsAnnotation, out var customLaunchConfigurations)
+                        ? customLaunchConfigurations
+                        : [];
+                updatedLaunchConfigurations.InsertRange(0, projectLaunchConfigurationsToPreserve);
+                exe.SetAnnotationAsObjectList(Executable.LaunchConfigurationsAnnotation, updatedLaunchConfigurations);
+            }
         }
     }
 

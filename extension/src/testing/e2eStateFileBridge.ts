@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
@@ -13,11 +13,12 @@ import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
 
@@ -671,6 +672,10 @@ async function executeE2eControlCommand(
         cleanupRun(runId);
       }
     }
+    case 'proveAppHostAndResourceDebugging': {
+      markStarted();
+      return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
+    }
     case 'proveMauiResourceDebugging': {
       markStarted();
       return await proveMauiResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
@@ -850,6 +855,7 @@ function getE2eEnvVars(value: unknown): EnvVar[] {
   return value.map(item => ({ name: item.name, value: item.value }));
 }
 
+type AppHostAndResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }>;
 type MauiResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' }>;
 
 interface DebugSessionSnapshot {
@@ -889,6 +895,201 @@ interface DebugAdapterMessageSummary {
   command?: string;
   success?: boolean;
   body?: unknown;
+}
+
+async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider): Promise<unknown> {
+  const appHostPath = getE2eWorkspacePath(command.appHostPath);
+  const appHostSourcePath = getE2eWorkspacePath(command.appHostSourcePath);
+  const resourceSourcePath = getE2eWorkspacePath(command.resourceSourcePath);
+  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E debug proof requires resourceName.');
+  const appHostBreakpointLine = getE2eBreakpointLine(command.appHostBreakpointLine);
+  const resourceBreakpointLine = getE2eBreakpointLine(command.resourceBreakpointLine);
+  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+
+  const debugSessions: DebugSessionSnapshot[] = [];
+  const sessionById = new Map<string, vscode.DebugSession>();
+  const launchRequests: DebugAdapterLaunchRequest[] = [];
+  const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const breakpointRequests: DebugAdapterMessageSummary[] = [];
+  const breakpointResponses: DebugAdapterMessageSummary[] = [];
+
+  const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
+    sessionById.set(session.id, session);
+    debugSessions.push(toDebugSessionSnapshot(session));
+  });
+  const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+    createDebugAdapterTracker(session) {
+      return {
+        onWillReceiveMessage(message) {
+          if (message?.type === 'request' && message.command === 'launch') {
+            launchRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              arguments: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            breakpointRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+        },
+        onDidSendMessage(message) {
+          if (message?.type === 'response' && message.success === false) {
+            debugAdapterResponses.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message),
+            });
+          }
+          if (message?.type === 'response' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            breakpointResponses.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message.body),
+            });
+          }
+          if (message?.type === 'event' && message.event === 'stopped') {
+            stoppedEvents.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              reason: message.body?.reason,
+              threadId: message.body?.threadId,
+            });
+          }
+        }
+      };
+    }
+  });
+
+  const appHostBreakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(appHostSourcePath), new vscode.Position(appHostBreakpointLine, 0)),
+    true);
+  const resourceBreakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(resourceSourcePath), new vscode.Position(resourceBreakpointLine, 0)),
+    true);
+  vscode.debug.addBreakpoints([appHostBreakpoint, resourceBreakpoint]);
+
+  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForE2eValue(
+    `breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+    timeoutMs,
+    async () => {
+      for (const stoppedEvent of stoppedEvents) {
+        if (stoppedEvent.threadId === undefined) {
+          continue;
+        }
+
+        const session = sessionById.get(stoppedEvent.sessionId);
+        if (!session) {
+          continue;
+        }
+
+        let stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> } | undefined;
+        try {
+          stackTrace = await session.customRequest('stackTrace', {
+            threadId: stoppedEvent.threadId,
+            startFrame: 0,
+            levels: 20,
+          });
+        }
+        catch {
+          continue;
+        }
+
+        const matchingFrame = stackTrace?.stackFrames?.find(frame =>
+          typeof frame.source?.path === 'string' && isSamePath(frame.source.path, sourcePath));
+        if (matchingFrame) {
+          return { session, stoppedEvent, stackTrace, matchingFrame };
+        }
+      }
+
+      return undefined;
+    });
+
+  try {
+    const appHostElement = getAppHostElement(appHostTreeProvider, appHostPath);
+    await vscode.commands.executeCommand('aspire-vscode.debugAppHost', appHostElement);
+
+    const appHostHit = await waitForBreakpoint(appHostSourcePath, appHostBreakpointLine);
+    if (appHostHit.matchingFrame.line !== appHostBreakpointLine + 1) {
+      throw new Error(`Expected AppHost breakpoint line ${appHostBreakpointLine + 1}, got ${appHostHit.matchingFrame.line}.`);
+    }
+    await appHostHit.session.customRequest('continue', { threadId: appHostHit.stoppedEvent.threadId });
+
+    const resourceHit = await waitForBreakpoint(resourceSourcePath, resourceBreakpointLine);
+    if (resourceHit.matchingFrame.line !== resourceBreakpointLine + 1) {
+      throw new Error(`Expected resource breakpoint line ${resourceBreakpointLine + 1}, got ${resourceHit.matchingFrame.line}.`);
+    }
+    await resourceHit.session.customRequest('continue', { threadId: resourceHit.stoppedEvent.threadId });
+
+    const aspireDebugSession = await waitForE2eValue(
+      'Aspire AppHost debug startup completion',
+      timeoutMs,
+      () => aspireContext.aspireDebugSessions.find(session =>
+        session.startupCompleted &&
+        typeof session.appHostPath === 'string' &&
+        isSamePath(session.appHostPath, appHostPath)));
+
+    return {
+      proof: 'aspire-apphost-and-resource-debug-breakpoints-hit',
+      appHostPath,
+      resourceName,
+      aspireDebugSessionId: aspireDebugSession.debugSessionId,
+      appHostBreakpoint: {
+        sourcePath: appHostSourcePath,
+        line: appHostBreakpointLine + 1,
+        text: fs.readFileSync(appHostSourcePath, 'utf8').split(/\r?\n/)[appHostBreakpointLine]?.trim(),
+        stoppedEvent: appHostHit.stoppedEvent,
+        matchingStackFrame: appHostHit.matchingFrame,
+        topStackFrame: appHostHit.stackTrace?.stackFrames?.[0],
+      },
+      resourceBreakpoint: {
+        sourcePath: resourceSourcePath,
+        line: resourceBreakpointLine + 1,
+        text: fs.readFileSync(resourceSourcePath, 'utf8').split(/\r?\n/)[resourceBreakpointLine]?.trim(),
+        stoppedEvent: resourceHit.stoppedEvent,
+        matchingStackFrame: resourceHit.matchingFrame,
+        topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
+      },
+      debugSessions,
+      launchRequests,
+      debugAdapterResponses,
+      breakpointRequests,
+      breakpointResponses,
+      stoppedEvents,
+    };
+  }
+  catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}
+Diagnostics:
+${JSON.stringify({
+      debugSessions,
+      launchRequests,
+      debugAdapterResponses,
+      breakpointRequests,
+      breakpointResponses,
+      stoppedEvents,
+    }, undefined, 2)}`);
+  }
+  finally {
+    vscode.debug.removeBreakpoints([appHostBreakpoint, resourceBreakpoint]);
+    sessionSubscription.dispose();
+    trackerRegistration.dispose();
+    await vscode.debug.stopDebugging();
+  }
 }
 
 async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
@@ -1122,6 +1323,9 @@ function redactDebugAdapterArguments(value: unknown): unknown {
   if ('env' in copy) {
     copy.env = '<redacted>';
   }
+  if ('environment' in copy) {
+    copy.environment = '<redacted>';
+  }
   if ('environmentVariables' in copy) {
     copy.environmentVariables = '<redacted>';
   }
@@ -1243,10 +1447,6 @@ async function stopDebuggingForE2E(
 function hasRunningAppHost(state: AspireExtensionStateSnapshot, appHostPath: string): boolean {
   return (state.workspaceAppHost !== undefined && isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
     || state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath));
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function getE2eRequiredString(value: unknown, errorMessage: string): string {

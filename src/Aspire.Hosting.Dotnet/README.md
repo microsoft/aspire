@@ -58,6 +58,22 @@ The resource is launched with `dotnet run --project <path>` (or `dotnet run --fi
 file-based app). Endpoints, environment variables, and service discovery are configured from the
 project's `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
 
+## Publishing
+
+Automatic project publishing for `DotnetProjectResource` is not currently supported. A plain
+`DotnetProjectResource` causes `aspire publish` and `aspire deploy` to fail with an actionable error
+instead of emitting an `executable.v0` manifest containing machine-local paths.
+
+Use one of these alternatives:
+
+- Use `AddProject<TProject>(...)` for a project referenced by a C# AppHost.
+- Use `AddCSharpApp(...)` or `addCSharpApp(...)` for a path-based project or file-based app that
+  should use standard .NET project publishing.
+- Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to configure container publishing
+  explicitly.
+- Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
+  available only during local orchestration.
+
 ## Additional documentation
 
 - https://aspire.dev/integrations/gallery/

@@ -27,8 +27,17 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('javascript')]), 'typescript');
     });
 
+    test('returns rust when every candidate is Rust', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('rust'), c('Rust'), c('rust/cargo')]), 'rust');
+    });
+
     test('returns polyglot for a mix of csharp and typescript', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('typescript')]), 'polyglot');
+    });
+
+    test('returns polyglot when Rust is mixed with another known language', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('rust')]), 'polyglot');
+        assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c('rust')]), 'polyglot');
     });
 
     test('returns polyglot when an unknown language is mixed with a known one', () => {
@@ -45,13 +54,7 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
     });
 
     test('treats only-other as unknown rather than polyglot', () => {
-        // A single non-csharp / non-typescript family with no known sibling
-        // should collapse to "unknown" to avoid polluting the polyglot bucket
-        // with single-language workspaces we just don't classify yet.
-        const result = summarizeAppHostLanguages([c('rust'), c('rust')]);
-        // Behavior: rust collapses to 'other', sawOther = true; sawAny = true;
-        // distinctFamilies = 1 (just other); falls through to final 'unknown'.
-        assert.strictEqual(result, 'unknown');
+        assert.strictEqual(summarizeAppHostLanguages([c('python'), c('python')]), 'unknown');
     });
 });
 
@@ -78,6 +81,10 @@ suite('appHostLanguage.classifyAppHostPath', () => {
         assert.strictEqual(classifyAppHostPath('apphost.cjs'), 'typescript');
     });
 
+    test('classifies Rust source files', () => {
+        assert.strictEqual(classifyAppHostPath('/abs/path/apphost.rs'), 'rust');
+    });
+
     test('returns unknown for unrecognized file extensions and directories', () => {
         assert.strictEqual(classifyAppHostPath('/repo/apphost.py'), 'unknown');
         assert.strictEqual(classifyAppHostPath('/repo/apphost'), 'unknown');
@@ -86,6 +93,7 @@ suite('appHostLanguage.classifyAppHostPath', () => {
     test('classification is case-insensitive', () => {
         assert.strictEqual(classifyAppHostPath('APPHOST.CSPROJ'), 'csharp');
         assert.strictEqual(classifyAppHostPath('AppHost.TS'), 'typescript');
+        assert.strictEqual(classifyAppHostPath('AppHost.RS'), 'rust');
     });
 });
 
@@ -148,6 +156,12 @@ suite('appHostLanguage.classifyAppHostDirectory', () => {
         const dir = makeTempDir();
         writeFileSync(join(dir, 'apphost.cjs'), '');
         assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('classifies directory containing an apphost.rs as rust', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.rs'), 'fn main() {}');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'rust');
     });
 
     test('returns unknown for a directory with no recognized AppHost markers', async () => {
