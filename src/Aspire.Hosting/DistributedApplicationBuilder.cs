@@ -382,7 +382,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
-        _innerBuilder.Services.AddSingleton<ParameterProcessor>();
+        _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
+        {
+            var parameterProcessor = ActivatorUtilities.CreateInstance<ParameterProcessor>(sp);
+            // Wire the AppHost-scoped redaction history after construction (not through the public constructor) so
+            // the processor records resolved secret values as they are assigned/replaced. This populates the
+            // describe/watch redaction set from startup, independent of any backchannel connection, while keeping
+            // ParameterProcessor's public constructor unchanged (https://github.com/microsoft/aspire/issues/19241).
+            parameterProcessor.SecretRedactionHistory = sp.GetRequiredService<SecretRedactionHistory>();
+            return parameterProcessor;
+        });
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();

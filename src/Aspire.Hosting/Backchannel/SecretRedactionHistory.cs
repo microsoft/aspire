@@ -36,9 +36,11 @@ namespace Aspire.Hosting.Backchannel;
 /// </item>
 /// </list>
 /// <para>
-/// This narrows but does not fully close a cold-start residual: a value assigned and then reassigned before any
-/// connection ever observed it is not in the history. In practice the always-on dashboard/CLI watch keeps a
-/// connection open from startup, so the history is populated continuously.
+/// A backchannel connection only observes a secret value once it is open, so a value assigned and then reassigned
+/// before the first connection would otherwise be absent from the history and leak from a lagging snapshot. To close
+/// that cold-start residual, <c>ParameterProcessor</c> also records secret values into this history at the moment it
+/// assigns or replaces them (see its <c>SecretRedactionHistory</c> wiring), independent of any connection. Values
+/// that never flow through the parameter processor still rely on connection-time observation.
 /// </para>
 /// </remarks>
 internal sealed class SecretRedactionHistory
@@ -72,6 +74,19 @@ internal sealed class SecretRedactionHistory
         {
             _values.UnionWith(values);
             return new HashSet<string>(_values, StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Merges <paramref name="values"/> into the history without allocating a snapshot. Used to record secret values
+    /// as they are assigned (see <c>ParameterProcessor</c>), where the caller only writes and never needs to read the
+    /// set back.
+    /// </summary>
+    public void AddValues(IEnumerable<string> values)
+    {
+        lock (_lock)
+        {
+            _values.UnionWith(values);
         }
     }
 }
