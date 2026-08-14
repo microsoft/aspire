@@ -2208,6 +2208,36 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenPackagesOverrideHasNestedDuplicateAspireVersions_ThrowsFailFast()
+    {
+        // Local package discovery walks the override directory recursively, so a duplicate hidden in a
+        // subdirectory is just as ambiguous as a flat one. The guardrail must enumerate recursively too,
+        // otherwise nested duplicates bypass it and NuGet silently resolves the highest version.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        var packagesOverrideDir = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "shipping"));
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, "Aspire.Hosting.13.4.1.nupkg"), string.Empty);
+        var nestedDir = Directory.CreateDirectory(Path.Combine(packagesOverrideDir.FullName, "nested"));
+        File.WriteAllText(Path.Combine(nestedDir.FullName, "Aspire.Hosting.13.4.2.nupkg"), string.Empty);
+        // The same version appearing in more than one directory is not ambiguous, so it must not be reported.
+        File.WriteAllText(Path.Combine(nestedDir.FullName, "Aspire.ProjectTemplates.13.4.2.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesOverrideDir.FullName, "Aspire.ProjectTemplates.13.4.2.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            identityChannel: PackageChannelNames.Daily,
+            identityPackagesDirectory: packagesOverrideDir);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => packagingService.GetChannelsAsync()).DefaultTimeout();
+        Assert.Contains("Aspire.Hosting", ex.Message);
+        Assert.Contains("13.4.1", ex.Message);
+        Assert.Contains("13.4.2", ex.Message);
+        Assert.DoesNotContain("Aspire.ProjectTemplates", ex.Message);
+    }
+
+    [Fact]
     public async Task GetChannelsAsync_WhenPackagesOverrideDirectoryMissing_ThrowsFailFast()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -143,7 +143,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             return [new NuGetPackage { Id = TemplatePackageId, Version = PinnedVersion, Source = ComputeSourceDetails(mappings) }];
         }
 
-        if (GetLocalAspirePackageSource() is { } localPackageSource)
+        // Local directory discovery must follow the caller-supplied mappings (e.g. `--source <dir>`),
+        // not this channel's own mappings, otherwise the override is silently ignored.
+        if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
         {
             return GetTemplatePackagesFromLocalPackageSource(localPackageSource.Source, localPackageSource.PackageSource, cancellationToken);
         }
@@ -233,14 +235,16 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource()
+    private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource() => GetLocalAspirePackageSource(Mappings);
+
+    private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
     {
-        if (Type is not PackageChannelType.Explicit || Mappings is null)
+        if (Type is not PackageChannelType.Explicit || mappings is null)
         {
             return null;
         }
 
-        foreach (var mapping in Mappings)
+        foreach (var mapping in mappings)
         {
             if (!mapping.IsAspireDirectoryMapping)
             {

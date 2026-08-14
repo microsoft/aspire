@@ -133,6 +133,49 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetTemplatePackagesAsync_UnpinnedChannelWithLocalMappingsOverride_EnumeratesOverrideDirectory()
+    {
+        // `aspire new --source <dir>` hands per-call mappings to an unpinned explicit channel. Local
+        // directory discovery must follow those mappings, not the channel's own Aspire* mapping,
+        // otherwise the override is silently ignored and the channel's directory is listed instead.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var channelPackagesDirectory = workspace.CreateDirectory("channel-packages");
+        var overridePackagesDirectory = workspace.CreateDirectory("override-packages");
+
+        File.WriteAllText(Path.Combine(channelPackagesDirectory.FullName, "Aspire.ProjectTemplates.13.4.0-preview.1.nupkg"), string.Empty);
+
+        // Nested layout mirrors a hierarchical local feed: <id lowercased>/<version>/<id>.<version>.nupkg
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(overridePackagesDirectory.FullName, "aspire.projecttemplates", "13.5.0-preview.2"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.5.0-preview.2.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channelSource = channelPackagesDirectory.FullName.Replace('\\', '/');
+        var overrideSource = overridePackagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Prerelease,
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        var package = Assert.Single(await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(overrideSource),
+            CancellationToken.None).DefaultTimeout());
+
+        Assert.Equal("Aspire.ProjectTemplates", package.Id);
+        Assert.Equal("13.5.0-preview.2", package.Version);
+        Assert.Equal(overrideSource, package.Source);
+    }
+
+    [Fact]
     public async Task GetIntegrationPackagesAsync_WithPinnedLocalSource_ReturnsOnlyPinnedLocalIntegrationPackages()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

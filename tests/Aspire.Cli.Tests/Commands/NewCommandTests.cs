@@ -1186,19 +1186,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
-    [Theory]
-    [InlineData("https://proxy.example/v3/index.json", false)]
-    [InlineData("relative-feed", true)]
-    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery(string sourceOverride, bool isRelative)
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var expectedSource = isRelative
-            ? Path.Combine(workspace.WorkspaceRoot.FullName, sourceOverride)
-            : sourceOverride;
-        if (isRelative)
-        {
-            Directory.CreateDirectory(expectedSource);
-        }
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        var expectedSource = sourceOverride;
 
         string? discoveryAspireSource = null;
         string? discoveryFallbackSource = null;
@@ -1255,6 +1248,49 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(expectedSource, discoveryAspireSource);
         Assert.Equal(expectedSource, discoveryFallbackSource);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
+    }
+
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndRelativeLocalSourceOverrideDiscoversTemplatesFromResolvedDirectory()
+    {
+        // A local directory passed to --source is enumerated directly instead of going through
+        // `dotnet package search`, which cannot see hierarchical local feeds. The relative path must
+        // still be resolved against the invocation directory before it is used or persisted.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedSource = Path.Combine(workspace.WorkspaceRoot.FullName, "relative-feed");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(expectedSource, "aspire.projecttemplates", "9.2.0"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [
+                new PackageMapping("Aspire*", "https://channel.example/v3/index.json"),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging --source relative-feed");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
     }
 
@@ -2044,6 +2080,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -2151,6 +2190,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
 
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>

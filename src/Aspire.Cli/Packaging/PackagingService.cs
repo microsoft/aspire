@@ -734,7 +734,10 @@ internal class PackagingService : IPackagingService
         }
 
         var versionsById = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in packagesDirectory.EnumerateFiles("Aspire*.nupkg"))
+        // Enumerate recursively to match how the synthesized channel discovers local packages
+        // (PackageChannel.EnumerateLocalPackageFiles uses SearchOption.AllDirectories), so duplicates
+        // sitting in nested folders cannot slip past this guardrail.
+        foreach (var file in packagesDirectory.EnumerateFiles("Aspire*.nupkg", SearchOption.AllDirectories))
         {
             if (!TryParseNupkgFileName(file.Name, out var id, out var version))
             {
