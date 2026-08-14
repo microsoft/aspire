@@ -465,6 +465,7 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.js',
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
+    'workspaceContains:**/apphost.rs',
     'onCommand:aspire-vscode.installCli',
     'onCommand:aspire-vscode.verifyCliInstalled',
     'onLanguageModelTool:aspire_apphost_start',

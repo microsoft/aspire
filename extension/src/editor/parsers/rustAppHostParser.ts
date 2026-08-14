@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
+import { initializeTreeSitter } from './treeSitter';
 
 /**
  * Rust AppHost resource parser.
@@ -14,7 +15,7 @@ class RustAppHostParser implements AppHostResourceParser {
 
     async isAppHostFile(document: vscode.TextDocument): Promise<boolean> {
         return await withRustTree(document.getText(), tree =>
-            findCall(tree.rootNode, node => getCallName(node) === 'create_builder') !== undefined);
+            findCall(tree.rootNode, isCreateBuilderCall) !== undefined);
     }
 
     async parseResources(document: vscode.TextDocument): Promise<ParsedResource[]> {
@@ -55,9 +56,13 @@ class RustAppHostParser implements AppHostResourceParser {
         });
     }
 
+    async findAppHostEntryPointLine(document: vscode.TextDocument): Promise<number | undefined> {
+        return await withRustTree(document.getText(), tree => findMainFunction(tree.rootNode)?.startPosition.row);
+    }
+
     async findBuilderStatementLine(document: vscode.TextDocument): Promise<number | undefined> {
         return await withRustTree(document.getText(), tree => {
-            const builderCall = findCall(tree.rootNode, node => getCallName(node) === 'create_builder');
+            const builderCall = findCall(tree.rootNode, isCreateBuilderCall);
             return builderCall ? findContainingStatementStartLine(builderCall) : undefined;
         });
     }
@@ -97,18 +102,9 @@ async function getRustLanguage(): Promise<Language> {
 }
 
 async function loadRustLanguage(): Promise<Language> {
-    await Parser.init({
-        locateFile: () => getWebTreeSitterWasmPath(),
-    });
+    await initializeTreeSitter();
 
     return await Language.load(getRustTreeSitterWasmPath());
-}
-
-function getWebTreeSitterWasmPath(): string {
-    const resolvedPath = require.resolve('web-tree-sitter/web-tree-sitter.wasm');
-    return typeof resolvedPath === 'string'
-        ? resolvedPath
-        : resolveBundledWasmAssetPath(require('web-tree-sitter/web-tree-sitter.wasm'));
 }
 
 function getRustTreeSitterWasmPath(): string {
@@ -126,6 +122,20 @@ function findCall(rootNode: TreeSitterNode, predicate: (node: TreeSitterNode) =>
     let result: TreeSitterNode | undefined;
     visit(rootNode, node => {
         if (node.type === 'call_expression' && predicate(node)) {
+            result = node;
+            return false;
+        }
+
+        return true;
+    });
+
+    return result;
+}
+
+function findMainFunction(rootNode: TreeSitterNode): TreeSitterNode | undefined {
+    let result: TreeSitterNode | undefined;
+    visit(rootNode, node => {
+        if (node.type === 'function_item' && node.childForFieldName('name')?.text === 'main') {
             result = node;
             return false;
         }
@@ -167,6 +177,12 @@ function getCallName(call: TreeSitterNode): string | undefined {
     return undefined;
 }
 
+function isCreateBuilderCall(call: TreeSitterNode): boolean {
+    const functionNode = call.childForFieldName('function');
+    return (functionNode?.type === 'identifier' || functionNode?.type === 'scoped_identifier')
+        && getCallName(call) === 'create_builder';
+}
+
 function getCallMemberAccess(call: TreeSitterNode): TreeSitterNode | undefined {
     const functionNode = call.childForFieldName('function');
     return functionNode?.type === 'field_expression' ? functionNode : undefined;
@@ -174,6 +190,10 @@ function getCallMemberAccess(call: TreeSitterNode): TreeSitterNode | undefined {
 
 function getFirstArgument(call: TreeSitterNode): TreeSitterNode | undefined {
     const argumentsNode = call.childForFieldName('arguments');
+    if (argumentsNode?.hasError) {
+        return undefined;
+    }
+
     return argumentsNode?.namedChildren.find(child => !child.isExtra);
 }
 
@@ -191,9 +211,25 @@ function getStringLiteralValue(node: TreeSitterNode): string | undefined {
             return undefined;
         }
 
-        return node.namedChildren
-            .map(child => child.type === 'escape_sequence' ? decodeEscapeSequence(child.text) : child.text)
-            .join('');
+        let value = '';
+        let trimContinuationWhitespace = false;
+        for (const child of node.namedChildren) {
+            if (child.type !== 'escape_sequence') {
+                value += trimContinuationWhitespace ? child.text.replace(/^[ \t\r\n]*/, '') : child.text;
+                trimContinuationWhitespace = false;
+                continue;
+            }
+
+            const decoded = decodeEscapeSequence(child.text);
+            if (decoded === undefined) {
+                return undefined;
+            }
+
+            value += decoded;
+            trimContinuationWhitespace = /^\\\r?\n$/.test(child.text);
+        }
+
+        return value;
     }
 
     if (node.type === 'raw_string_literal') {
@@ -224,7 +260,7 @@ function getRawStringValue(text: string): string | undefined {
         : undefined;
 }
 
-function decodeEscapeSequence(text: string): string {
+function decodeEscapeSequence(text: string): string | undefined {
     switch (text) {
         case '\\0': return '\0';
         case '\\t': return '\t';
@@ -237,15 +273,22 @@ function decodeEscapeSequence(text: string): string {
 
     const asciiEscape = /^\\x(?<value>[0-9a-fA-F]{2})$/.exec(text)?.groups?.value;
     if (asciiEscape) {
-        return String.fromCharCode(Number.parseInt(asciiEscape, 16));
+        const byteValue = Number.parseInt(asciiEscape, 16);
+        return byteValue <= 0x7F ? String.fromCharCode(byteValue) : undefined;
     }
 
     const unicodeEscape = /^\\u\{(?<value>[0-9a-fA-F_]{1,7})\}$/.exec(text)?.groups?.value;
     if (unicodeEscape) {
-        return String.fromCodePoint(Number.parseInt(unicodeEscape.replaceAll('_', ''), 16));
+        const normalizedValue = unicodeEscape.replaceAll('_', '');
+        const codePoint = Number.parseInt(normalizedValue, 16);
+        if (normalizedValue.length === 0 || !Number.isInteger(codePoint) || codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
+            return undefined;
+        }
+
+        return String.fromCodePoint(codePoint);
     }
 
-    return /^\\\r?\n[ \t]*$/.test(text) ? '' : text;
+    return /^\\\r?\n$/.test(text) ? '' : undefined;
 }
 
 function findContainingStatementStartLine(node: TreeSitterNode): number {

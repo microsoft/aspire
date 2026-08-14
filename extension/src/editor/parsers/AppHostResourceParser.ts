@@ -29,6 +29,9 @@ export interface AppHostResourceParser {
     /** Parse resource definitions from the document. */
     parseResources(document: vscode.TextDocument): Promise<ParsedResource[]>;
 
+    /** Locates the AppHost entry point for language-specific editor guidance. */
+    findAppHostEntryPointLine?(document: vscode.TextDocument): Promise<number | undefined>;
+
     /**
      * Locates the line containing the builder construction statement
      * (e.g. `var builder = DistributedApplication.CreateBuilder(args);` for C#,

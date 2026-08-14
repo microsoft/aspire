@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
+import { initializeTreeSitter } from './treeSitter';
 
 /**
  * C# AppHost resource parser.
@@ -109,18 +110,9 @@ async function getCSharpLanguage(): Promise<Language> {
 }
 
 async function loadCSharpLanguage(): Promise<Language> {
-    await Parser.init({
-        locateFile: () => getWebTreeSitterWasmPath(),
-    });
+    await initializeTreeSitter();
 
     return await Language.load(getCSharpTreeSitterWasmPath());
-}
-
-function getWebTreeSitterWasmPath(): string {
-    const resolvedPath = require.resolve('web-tree-sitter/web-tree-sitter.wasm');
-    return typeof resolvedPath === 'string'
-        ? resolvedPath
-        : resolveBundledWasmAssetPath(require('web-tree-sitter/web-tree-sitter.wasm'));
 }
 
 function getCSharpTreeSitterWasmPath(): string {

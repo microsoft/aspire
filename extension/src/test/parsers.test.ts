@@ -1,6 +1,9 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import { getParserForDocument, getSupportedLanguageIds, getAllParsers, ParsedResource } from '../editor/parsers/AppHostResourceParser';
+import { Parser } from 'web-tree-sitter';
+import { AppHostResourceParser, getParserForDocument, getSupportedLanguageIds, getAllParsers, ParsedResource } from '../editor/parsers/AppHostResourceParser';
+import { __resetTreeSitterForTests, initializeTreeSitter } from '../editor/parsers/treeSitter';
 // Import parsers so they self-register
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -83,6 +86,38 @@ suite('AppHostResourceParser registry', () => {
         assert.ok(ids.includes('typescript'), 'Should support typescript');
         assert.ok(ids.includes('javascript'), 'Should support javascript');
         assert.ok(ids.includes('rust'), 'Should support rust');
+    });
+
+    test('initializes Tree-sitter once for concurrent callers', async () => {
+        __resetTreeSitterForTests();
+        const initStub = sinon.stub(Parser, 'init').resolves();
+        try {
+            await Promise.all([initializeTreeSitter(), initializeTreeSitter()]);
+
+            sinon.assert.calledOnce(initStub);
+        }
+        finally {
+            initStub.restore();
+            __resetTreeSitterForTests();
+        }
+    });
+
+    test('retries Tree-sitter initialization after a failure', async () => {
+        __resetTreeSitterForTests();
+        const expectedError = new Error('initialization failed');
+        const initStub = sinon.stub(Parser, 'init');
+        initStub.onFirstCall().rejects(expectedError);
+        initStub.onSecondCall().resolves();
+        try {
+            await assert.rejects(initializeTreeSitter(), error => error === expectedError);
+            await initializeTreeSitter();
+
+            assert.strictEqual(initStub.callCount, 2);
+        }
+        finally {
+            initStub.restore();
+            __resetTreeSitterForTests();
+        }
     });
 
     test('getParserForDocument returns C# parser for .cs AppHost file', async () => {
@@ -1942,12 +1977,26 @@ suite('RustAppHostParser', () => {
     test('detects AppHost via create_builder call', async () => {
         const parser = getRustParser();
         const doc = createMockDocument(
-            'fn main() {\n    let builder = aspire::create_builder(None)?;\n}',
+            '// Rust AppHost\nfn main() {\n    let builder = aspire::create_builder(None)?;\n}',
+            '/test/apphost.rs'
+        );
+        const entryPointParser = parser as AppHostResourceParser & {
+            findAppHostEntryPointLine?(document: vscode.TextDocument): Promise<number | undefined>;
+        };
+
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 2);
+        assert.strictEqual(await entryPointParser.findAppHostEntryPointLine?.(doc), 1);
+    });
+
+    test('detects AppHost via scoped create_builder call', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            'fn main() { let builder = aspire::create_builder(None)?; }',
             '/test/apphost.rs'
         );
 
         assert.strictEqual(await parser.isAppHostFile(doc), true);
-        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 1);
     });
 
     test('rejects Rust file with AppHost markers only in comments and strings', async () => {
@@ -1964,6 +2013,16 @@ suite('RustAppHostParser', () => {
 
         assert.strictEqual(await parser.isAppHostFile(doc), false);
         assert.deepStrictEqual(await parser.parseResources(doc), []);
+    });
+
+    test('rejects method calls named create_builder', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            'fn main() { let builder = factory.create_builder(None)?; }',
+            '/test/main.rs'
+        );
+
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
     });
 
     test('parses resources, pipeline steps, and fluent statement starts', async () => {
@@ -2008,6 +2067,41 @@ suite('RustAppHostParser', () => {
         const resources = await parser.parseResources(doc);
 
         assert.deepStrictEqual(resources.map(resource => resource.name), ['cache\nprimary', 'db\\primary']);
+    });
+
+    test('decodes continued string resource names', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            'let cache = builder.add_redis("cache\\\n        primary")?;',
+            '/test/apphost.rs'
+        );
+
+        const resources = await parser.parseResources(doc);
+
+        assert.deepStrictEqual(resources.map(resource => resource.name), ['cacheprimary']);
+    });
+
+    test('ignores malformed calls', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            'builder.add_redis("cache" invalid)?;',
+            '/test/apphost.rs'
+        );
+
+        assert.deepStrictEqual(await parser.parseResources(doc), []);
+    });
+
+    test('ignores invalid Unicode and non-ASCII byte escapes without throwing', async () => {
+        const parser = getRustParser();
+        for (const source of [
+            'builder.add_postgres("db\\u{110000}")?;',
+            'builder.add_postgres("db\\u{D800}")?;',
+            'builder.add_container("api\\u{_}")?;',
+            'builder.add_mysql("mysql\\xFF")?;',
+        ]) {
+            const doc = createMockDocument(source, '/test/apphost.rs');
+            assert.deepStrictEqual(await parser.parseResources(doc), [], source);
+        }
     });
 
     test('ignores calls without a closed string literal first argument', async () => {
