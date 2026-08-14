@@ -130,7 +130,7 @@ internal static class PackageUpdateHelpers
     {
         var foundPackages = new List<NuGetPackage>();
 
-        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout, "searchResult", "packages"));
+        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout, IsPackageSearchPayload));
         if (!document.RootElement.TryGetProperty("searchResult", out var searchResultsArray))
         {
             return [];
@@ -173,20 +173,10 @@ internal static class PackageUpdateHelpers
     //     {"version":2,"problems":[],"searchResult":[{"sourceName":"azure-default","packages":[ ... ]}]}
     //     [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'
     //
-    // Parse each complete object candidate and validate the expected array shape so a diagnostic object cannot be
+    // Parse each complete object candidate and validate the expected payload shape so a diagnostic object cannot be
     // mistaken for the payload. Return only the consumed object so trailing provider output is excluded.
     // See https://github.com/microsoft/aspire/issues/19339.
-    internal static string ExtractJsonPayload(string stdout, string rootArrayPropertyName)
-    {
-        return ExtractJsonPayloadCore(stdout, rootArrayPropertyName, itemArrayPropertyName: null);
-    }
-
-    internal static string ExtractJsonPayload(string stdout, string rootArrayPropertyName, string itemArrayPropertyName)
-    {
-        return ExtractJsonPayloadCore(stdout, rootArrayPropertyName, itemArrayPropertyName);
-    }
-
-    private static string ExtractJsonPayloadCore(string stdout, string rootArrayPropertyName, string? itemArrayPropertyName)
+    internal static string ExtractJsonPayload(string stdout, Func<JsonElement, bool> isExpectedPayload)
     {
         var utf8 = Encoding.UTF8.GetBytes(stdout);
         var searchOffset = 0;
@@ -210,7 +200,7 @@ internal static class PackageUpdateHelpers
                     var consumed = checked((int)reader.BytesConsumed);
                     using (document)
                     {
-                        if (HasExpectedShape(document.RootElement, rootArrayPropertyName, itemArrayPropertyName))
+                        if (isExpectedPayload(document.RootElement))
                         {
                             return Encoding.UTF8.GetString(candidate[..consumed]);
                         }
@@ -236,25 +226,24 @@ internal static class PackageUpdateHelpers
         return stdout;
     }
 
-    private static bool HasExpectedShape(JsonElement root, string rootArrayPropertyName, string? itemArrayPropertyName)
+    private static bool IsPackageSearchPayload(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Object ||
-            !root.TryGetProperty(rootArrayPropertyName, out var rootArray) ||
-            rootArray.ValueKind != JsonValueKind.Array)
+            !root.TryGetProperty("version", out var version) ||
+            version.ValueKind != JsonValueKind.Number ||
+            !root.TryGetProperty("searchResult", out var searchResults) ||
+            searchResults.ValueKind != JsonValueKind.Array)
         {
             return false;
         }
 
-        if (itemArrayPropertyName is null)
+        foreach (var sourceResult in searchResults.EnumerateArray())
         {
-            return true;
-        }
-
-        foreach (var item in rootArray.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.Object ||
-                !item.TryGetProperty(itemArrayPropertyName, out var itemArray) ||
-                itemArray.ValueKind != JsonValueKind.Array)
+            if (sourceResult.ValueKind != JsonValueKind.Object ||
+                !sourceResult.TryGetProperty("sourceName", out var sourceName) ||
+                sourceName.ValueKind != JsonValueKind.String ||
+                !sourceResult.TryGetProperty("packages", out var packages) ||
+                packages.ValueKind != JsonValueKind.Array)
             {
                 return false;
             }

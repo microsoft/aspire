@@ -117,7 +117,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     {
         // Credential-provider diagnostics use an inherited stdout handle, so braced text or JSON can arrive before
         // the package-search payload and additional output can arrive after it. The diagnostic JSON deliberately
-        // contains a nested object with the expected shape to ensure only root payload objects are considered.
+        // has the expected root array but omits other required bundle-search fields.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var layout = new LayoutConfiguration
@@ -141,7 +141,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
 
         var pollutedStdout =
             "    [CredentialProvider]Acquiring token for request {request-42}\n" +
-            """{"error":{"packages":[]}}""" + "\n" +
+            """{"packages":[]}""" + "\n" +
             """{"packages":[{"id":"Aspire.Hosting.Redis","version":"13.3.0","allVersions":["13.3.0","13.2.0"],"source":"nuget.org"}],"totalHits":1}""" +
             "\n    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'";
 
