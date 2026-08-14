@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
+
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
@@ -1883,5 +1886,37 @@ public class AtsTypeScriptCodeGeneratorTests
                && !id.Contains("ViteApp", StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DenoPublicApis_AreExperimental()
+    {
+        var denoMethods = typeof(JavaScriptHostingExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp) ||
+                method.Name.StartsWith("WithDeno", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(denoMethods);
+        Assert.Contains(denoMethods, method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp));
+        Assert.Contains(denoMethods, method => method.Name.StartsWith("WithDeno", StringComparison.Ordinal));
+
+        Assert.All(denoMethods, method =>
+        {
+            var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        });
+
+        foreach (var type in new[]
+        {
+            typeof(Aspire.Hosting.JavaScript.DenoAppResource),
+            typeof(Aspire.Hosting.JavaScript.DenoInspectMode),
+            typeof(Aspire.Hosting.JavaScript.DenoNodeModulesDirMode),
+            typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
+        })
+        {
+            var experimental = Assert.Single(type.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+        }
     }
 }

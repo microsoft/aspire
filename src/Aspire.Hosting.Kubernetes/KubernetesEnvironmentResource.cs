@@ -468,9 +468,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
 
             // Configure OTLP for resources if dashboard is enabled
-            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboardResource)
             {
-                ConfigureOtlp(r, otlpGrpcEndpoint);
+                ConfigureOtlp(r, dashboardResource);
             }
 
             // Fail the publish if this workload binds a persistent volume owned by a
@@ -545,19 +545,48 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         return null;
     }
 
-    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    private static void ConfigureOtlp(IResource resource, KubernetesAspireDashboardResource dashboard)
     {
-        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        var otlpExporter = GetEffectiveOtlpExporterAnnotation(resource);
+
+        if (resource is IResourceWithEnvironment resourceWithEnv &&
+            otlpExporter is not null)
         {
+            var (otlpEndpoint, protocol) = otlpExporter.RequiredProtocol switch
+            {
+                OtlpProtocol.HttpProtobuf => (dashboard.OtlpHttpEndpoint, "http/protobuf"),
+                OtlpProtocol.HttpJson => (dashboard.OtlpHttpEndpoint, "http/json"),
+                _ => (dashboard.OtlpGrpcEndpoint, "grpc"),
+            };
+
             resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
-                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
                 return Task.CompletedTask;
             }));
         }
     }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     /// <summary>
     /// Resolves a <see cref="ReferenceExpression"/> at deploy time. Used by pipeline steps

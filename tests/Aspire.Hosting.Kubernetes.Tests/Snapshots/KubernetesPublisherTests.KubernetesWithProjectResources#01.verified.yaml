@@ -1,4 +1,4 @@
-parameters:
+﻿parameters:
   project1:
     port_http: 8080
     project1_image: "project1:latest"

@@ -274,6 +274,15 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          - name: Linux
+            shardName: deno-debugger
+            spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
     defaults:
       run:
         shell: pwsh
@@ -330,6 +339,10 @@ jobs:
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
           global-json-file: global.json
+
+      - name: Setup Deno
+        if: ${{ matrix.installDeno }}
+        uses: ./.github/actions/setup-deno
 
       - name: Download VSIX
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

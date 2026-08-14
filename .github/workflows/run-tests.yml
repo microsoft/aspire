@@ -99,6 +99,10 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
+      - name: Setup Deno
+        if: inputs.testShortName == 'Hosting.JavaScript'
+        uses: ./.github/actions/setup-deno
+
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
         # Allow the task to succeed on partial trust.

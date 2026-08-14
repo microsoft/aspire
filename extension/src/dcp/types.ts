@@ -58,7 +58,7 @@ export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration 
 }
 
 export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
-    type: "node" | "bun";
+    type: "node" | "bun" | "deno";
     script_path?: string;
     runtime_executable?: string;
     working_directory?: string;
@@ -69,7 +69,7 @@ export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchCo
 }
 
 export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {
-    return obj && (obj.type === 'node' || obj.type === 'bun');
+    return obj && (obj.type === 'node' || obj.type === 'bun' || obj.type === 'deno');
 }
 
 export type NodeLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "node" };
@@ -82,6 +82,12 @@ export type BunLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { ty
 
 export function isBunLaunchConfiguration(obj: any): obj is BunLaunchConfiguration {
     return obj && obj.type === 'bun';
+}
+
+export type DenoLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "deno" };
+
+export function isDenoLaunchConfiguration(obj: any): obj is DenoLaunchConfiguration {
+    return obj && obj.type === 'deno';
 }
 
 export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguration {
