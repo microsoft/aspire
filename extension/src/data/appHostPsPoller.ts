@@ -396,6 +396,9 @@ export class AppHostPsPoller implements vscode.Disposable {
     }
 
     dispose(): void {
+        // stopPolling owns the interval and child-process teardown, so dispose must route through it
+        // rather than only releasing emitters. It is idempotent, and the repository already calls it first.
+        this.stopPolling();
         this._onDidReceivePsOutput.dispose();
         this._onDidChangePsError.dispose();
         this._onDidRequestClearLoading.dispose();
