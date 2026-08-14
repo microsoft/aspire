@@ -17,10 +17,10 @@ internal static class DistributedApplicationTestFactory
     /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly.
     /// </summary>
     /// <remarks>
-    /// <paramref name="configureBuilder"/> runs *after* the AppHost's Program.cs has already executed, so it can only
-    /// mutate the built application model. It cannot influence configuration the AppHost reads while constructing
-    /// resources. Use <see cref="CreateWithArgsAsync"/> when the AppHost reads a configuration value at
-    /// construction time.
+    /// <paramref name="configureBuilder"/> runs after the AppHost's Program.cs has executed. It can customize the
+    /// testing builder's services, configuration, and application model before <c>BuildAsync</c>, but it cannot
+    /// influence values Program.cs already read while constructing resources. Use <see cref="CreateWithArgsAsync"/>
+    /// for construction-time configuration.
     /// </remarks>
     public static Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput, Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
         => CreateCoreAsync(appHostProgramType, testOutput, args: [], configureBuilder);
