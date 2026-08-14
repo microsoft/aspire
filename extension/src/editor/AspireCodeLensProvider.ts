@@ -4,7 +4,8 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import './parsers/rustAppHostParser';
-import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
+import { isCommandVisibleToUi, isEnabledCommand } from '../views/treePresentation';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../data/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';

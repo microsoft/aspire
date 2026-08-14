@@ -29,7 +29,8 @@ import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace } f
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { installCliCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
-import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
+import { isEnabledCommand } from './views/treePresentation';
 import { AppHostDataRepository, isMatchingAppHostPath } from './data/AppHostDataRepository';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
