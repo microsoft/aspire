@@ -910,7 +910,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                     throw new vscode.CancellationError();
                 }
 
-                const isolated = command === 'run' ? resolveIsolated(undefined, appHostPath) : undefined;
+                const isolated = command === 'run' && resolveIsolated(undefined, appHostPath) ? true : undefined;
                 await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, isolated);
             });
         }

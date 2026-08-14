@@ -155,26 +155,23 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(config.args, ['--isolated']);
     });
 
-    test('launch infers --isolated from a linked worktree AppHost path', async () => {
+    test('launch omits inferred isolation for a primary checkout AppHost path', async () => {
         const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
-        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
-        fs.writeFileSync(
-            path.join(directory, '.git'),
-            `gitdir: ${path.join(directory, '.git', 'worktrees', 'feature')}\n`);
 
         await service.launch(path.join(directory, 'AppHost.csproj'), 'run', true);
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
-        assert.deepStrictEqual(config.args, ['--isolated']);
+        assert.strictEqual(config.args, undefined);
     });
 
-    test('launch does not infer --isolated for non-run commands in a linked worktree', async () => {
-        const directory = createAppHostDirectory('Deploy.csproj', 'Publish.csproj', 'Do.csproj');
+    test('launch only infers --isolated for run commands in a linked worktree', async () => {
+        const directory = createAppHostDirectory('Run.csproj', 'Deploy.csproj', 'Publish.csproj', 'Do.csproj');
         fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
         fs.writeFileSync(
             path.join(directory, '.git'),
             `gitdir: ${path.join(directory, '.git', 'worktrees', 'feature')}\n`);
 
+        await service.launch(path.join(directory, 'Run.csproj'), 'run', true);
         await service.launch(path.join(directory, 'Deploy.csproj'), 'deploy', true);
         await service.launch(path.join(directory, 'Publish.csproj'), 'publish', true);
         await service.launch(path.join(directory, 'Do.csproj'), 'do', true, 'deploy');
@@ -183,6 +180,7 @@ suite('AppHostLaunchService', () => {
             .map(call => call.args[1] as AspireExtendedDebugConfiguration)
             .map(config => ({ command: config.command, args: config.args, step: config.step }));
         assert.deepStrictEqual(configs, [
+            { command: 'run', args: ['--isolated'], step: undefined },
             { command: 'deploy', args: undefined, step: undefined },
             { command: 'publish', args: undefined, step: undefined },
             { command: 'do', args: undefined, step: 'deploy' },
