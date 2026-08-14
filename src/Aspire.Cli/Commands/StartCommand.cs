@@ -45,9 +45,7 @@ internal sealed class StartCommand : BaseCommand
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = AppHostLauncher.ResolveIsolated(
-            parseResult,
-            passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
+        var explicitIsolated = AppHostLauncher.GetExplicitIsolated(parseResult);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -74,10 +72,10 @@ internal sealed class StartCommand : BaseCommand
         {
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
             var debugSessionArgs = new List<string>();
-            if (isolated)
-            {
-                debugSessionArgs.Add("--isolated");
-            }
+            var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
+                explicitIsolated,
+                passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
+            AppHostLauncher.AddIsolatedOption(debugSessionArgs, isolatedOption);
 
             if (noBuild)
             {
@@ -136,7 +134,7 @@ internal sealed class StartCommand : BaseCommand
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
-            isolated,
+            explicitIsolated,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

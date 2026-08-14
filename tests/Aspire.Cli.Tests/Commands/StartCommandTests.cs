@@ -456,8 +456,24 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), workspace.WorkspaceRoot.FullName));
+    }
+
+    [Theory]
+    [InlineData("start", null)]
+    [InlineData("start --isolated", true)]
+    [InlineData("start --isolated false", false)]
+    public void GetExplicitIsolated_PreservesOmittedAndExplicitValues(string commandLine, bool? expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.Equal(expected, AppHostLauncher.GetExplicitIsolated(command.Parse(commandLine)));
     }
 
     [Fact]
@@ -472,17 +488,35 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), workspace.WorkspaceRoot.FullName));
         Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), workspace.WorkspaceRoot.FullName));
     }
 
-    [Fact]
-    public async Task StartCommand_WhenRunningInExtensionFromLinkedWorktree_StartsIsolatedSession()
+    [Theory]
+    [InlineData(true, "start", "--isolated", null)]
+    [InlineData(true, "start --isolated false", "--isolated", "false")]
+    [InlineData(false, "start", null, null)]
+    public async Task StartCommand_WhenRunningInExtension_PropagatesIsolatedOption(
+        bool linkedWorktree,
+        string commandLine,
+        string? expectedFirstArgument,
+        string? expectedSecondArgument)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        File.WriteAllText(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".git"),
-            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+        var gitPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
+        if (linkedWorktree)
+        {
+            File.WriteAllText(
+                gitPath,
+                $"gitdir: {Path.Combine(gitPath, "worktrees", "feature")}\n");
+        }
+        else
+        {
+            Directory.CreateDirectory(gitPath);
+        }
+
         var appHostFile = CreateAppHostFile(workspace);
 
         DebugSessionOptions? options = null;
@@ -514,14 +548,27 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"start --apphost {appHostFile.FullName}");
+        var result = command.Parse($"{commandLine} --apphost {appHostFile.FullName}");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(options);
         Assert.Equal("run", options.Command);
-        Assert.NotNull(options.Args);
-        Assert.Contains("--isolated", options.Args);
+        var actualArgs = options.Args;
+        if (expectedFirstArgument is null)
+        {
+            Assert.Null(actualArgs);
+        }
+        else if (expectedSecondArgument is null)
+        {
+            Assert.NotNull(actualArgs);
+            Assert.Equal([expectedFirstArgument], actualArgs);
+        }
+        else
+        {
+            Assert.NotNull(actualArgs);
+            Assert.Equal([expectedFirstArgument, expectedSecondArgument], actualArgs);
+        }
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)

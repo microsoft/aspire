@@ -81,18 +81,49 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
+    /// Gets the explicitly supplied isolated option value, or <see langword="null"/> when omitted.
+    /// </summary>
+    internal static bool? GetExplicitIsolated(ParseResult parseResult)
+    {
+        return parseResult.GetResult(s_isolatedOption) is { Implicit: false }
+            ? parseResult.GetValue(s_isolatedOption)
+            : null;
+    }
+
+    /// <summary>
+    /// Resolves the isolated option value to propagate to another CLI invocation.
+    /// </summary>
+    internal static bool? ResolveIsolatedOption(bool? explicitIsolated, string? startPath)
+    {
+        return explicitIsolated
+            ?? (GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null ? true : null);
+    }
+
+    /// <summary>
+    /// Appends the isolated option while preserving an explicitly supplied false value.
+    /// </summary>
+    internal static void AddIsolatedOption(List<string> args, bool? isolated)
+    {
+        if (isolated is null)
+        {
+            return;
+        }
+
+        args.Add(s_isolatedOption.Name);
+        if (!isolated.Value)
+        {
+            args.Add("false");
+        }
+    }
+
+    /// <summary>
     /// Resolves whether the AppHost should run isolated. An explicit <c>--isolated</c>
     /// wins; otherwise a linked git worktree infers isolated mode so it does not collide
     /// with the primary checkout on ports or user secrets.
     /// </summary>
     internal static bool ResolveIsolated(ParseResult parseResult, string? startPath)
     {
-        if (parseResult.GetResult(s_isolatedOption) is { Implicit: false })
-        {
-            return parseResult.GetValue(s_isolatedOption);
-        }
-
-        return GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null;
+        return ResolveIsolatedOption(GetExplicitIsolated(parseResult), startPath) ?? false;
     }
 
     /// <summary>
@@ -100,7 +131,7 @@ internal sealed class AppHostLauncher(
     /// </summary>
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
-    /// <param name="isolated">Whether to run in isolated mode.</param>
+    /// <param name="isolated">The explicitly supplied isolated option value, or <see langword="null"/> when omitted.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
@@ -112,7 +143,7 @@ internal sealed class AppHostLauncher(
     public async Task<CommandResult> LaunchDetachedAsync(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
-        bool isolated,
+        bool? isolated,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -150,12 +181,9 @@ internal sealed class AppHostLauncher(
 
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
 
-        // Re-evaluate against the resolved AppHost so `--apphost` in a linked worktree
-        // isolates even when the CLI was invoked from the primary checkout.
-        if (!isolated)
-        {
-            isolated = GitWorktree.TryGetLinkedWorktreeRoot(effectiveAppHostFile.FullName) is not null;
-        }
+        // Infer only when the option was omitted. An explicit false must survive the
+        // parent-to-child launch even when the selected AppHost is in a linked worktree.
+        var isolatedOption = ResolveIsolatedOption(isolated, effectiveAppHostFile.FullName);
 
         // Check for running instance and stop it if found (same behavior as regular run)
         await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);
@@ -163,7 +191,7 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         executionContext.AppHostCliLogFilePath = childLogFile;
-        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
+        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
         // Compute the expected socket prefix for backchannel detection. The AppHost keys its
         // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
@@ -314,7 +342,7 @@ internal sealed class AppHostLauncher(
     private (string ExecutablePath, List<string> ChildArgs) BuildChildProcessArgs(
         FileInfo effectiveAppHostFile,
         string childLogFile,
-        bool isolated,
+        bool? isolated,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs)
     {
@@ -330,10 +358,7 @@ internal sealed class AppHostLauncher(
 
         args.AddRange(globalArgs);
 
-        if (isolated)
-        {
-            args.Add(s_isolatedOption.Name);
-        }
+        AddIsolatedOption(args, isolated);
 
         foreach (var token in additionalArgs)
         {

@@ -3600,6 +3600,69 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(true, "run", "--isolated", null)]
+    [InlineData(true, "run --isolated false", "--isolated", "false")]
+    [InlineData(false, "run", null, null)]
+    public async Task RunCommand_WhenRunningInExtension_PropagatesIsolatedOption(
+        bool linkedWorktree,
+        string commandLine,
+        string? expectedFirstArgument,
+        string? expectedSecondArgument)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var gitPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
+        if (linkedWorktree)
+        {
+            File.WriteAllText(
+                gitPath,
+                $"gitdir: {Path.Combine(gitPath, "worktrees", "feature")}\n");
+        }
+        else
+        {
+            Directory.CreateDirectory(gitPath);
+        }
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"{commandLine} --apphost {appHostFile.FullName}");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        var actualArgs = options.Args;
+        if (expectedFirstArgument is null)
+        {
+            Assert.Null(actualArgs);
+        }
+        else if (expectedSecondArgument is null)
+        {
+            Assert.NotNull(actualArgs);
+            Assert.Equal([expectedFirstArgument], actualArgs);
+        }
+        else
+        {
+            Assert.NotNull(actualArgs);
+            Assert.Equal([expectedFirstArgument, expectedSecondArgument], actualArgs);
+        }
+    }
+
     [Fact]
     public async Task RunCommand_NonInteractive_SkipsExtensionDelegation()
     {

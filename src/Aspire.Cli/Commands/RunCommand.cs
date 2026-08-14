@@ -211,8 +211,22 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
+            var debugSessionArgs = new List<string>();
+            var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
+                AppHostLauncher.GetExplicitIsolated(parseResult),
+                passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
+            AppHostLauncher.AddIsolatedOption(debugSessionArgs, isolatedOption);
+
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                startDebugSession,
+                new DebugSessionOptions
+                {
+                    Command = "run",
+                    Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
+                });
             return CommandResult.Success();
         }
 
@@ -1170,9 +1184,7 @@ internal sealed class RunCommand : BaseCommand
     private Task<CommandResult> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = AppHostLauncher.ResolveIsolated(
-            parseResult,
-            passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
+        var isolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
