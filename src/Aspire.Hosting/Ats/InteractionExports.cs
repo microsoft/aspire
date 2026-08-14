@@ -112,7 +112,7 @@ internal static class InteractionExports
     {
         ArgumentNullException.ThrowIfNull(interactionService);
 
-        var result = await interactionService.PromptProgressAsync(options?.Title, message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptProgressAsync(message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return BoolInteractionResult.From(result);
     }
 
@@ -772,6 +772,7 @@ internal sealed class InteractionProgressOptions
     {
         return new ProgressInteractionOptions
         {
+            Title = Title,
             PrimaryButtonText = PrimaryButtonText,
             EnableMessageMarkdown = EnableMessageMarkdown,
             Work = Work,
