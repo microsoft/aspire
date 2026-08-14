@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';

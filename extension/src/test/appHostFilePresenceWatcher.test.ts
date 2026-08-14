@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { AppHostFilePresenceWatcher } from '../editor/AppHostFilePresenceWatcher';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 // Import parsers so they self-register before the watcher consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';

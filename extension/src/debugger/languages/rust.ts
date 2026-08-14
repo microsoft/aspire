@@ -7,7 +7,7 @@ import { invalidLaunchConfiguration, rustBuildFailedWithError, rustBuildFailedWi
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { AspireDebugSession, markDebugConfigurationEnvironmentSensitive } from "../AspireDebugSession";
-import { mergeCliSpawnEnvironment } from "./cli";
+import { mergeCliSpawnEnvironment } from "../../utils/process/cliProcess";
 import { processGroupSpawnOptions, terminateProcessTree } from "../../utils/processTree";
 
 const rustBuildStderrTailLimit = 8 * 1024;
