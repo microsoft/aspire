@@ -155,7 +155,7 @@ namespace Projects%3B
 
   <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
     <Warning Code="ASPIRE010"
-             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle."
+             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information."
              HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
   </Target>
 
