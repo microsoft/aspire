@@ -75,15 +75,15 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         return CreateTestSpec(
             execute: new CommandSpec
             {
-                Command = "npx",
-                Args = ["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+                Command = "node",
+                Args = ["{compiledAppHostFile}"]
             },
             preExecute:
             [
                 new CommandSpec
                 {
                     Command = "npx",
-                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                    Args = ["--no-install", "tsc", "-p", "tsconfig.apphost.json"]
                 }
             ]);
     }
@@ -196,14 +196,38 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal("run-cmd", launcher.Calls[1].Command);
     }
 
-    [Fact]
-    public async Task RunAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    [Theory]
+    [InlineData("apphost.mts", "node_modules/.tmp/aspire-apphost/apphost.mjs")]
+    [InlineData("apphost.ts", "node_modules/.tmp/aspire-apphost/apphost.js")]
+    public async Task RunAsync_ReplacesCompiledAppHostFilePlaceholder(string appHostRelativePath, string compiledRelativePath)
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, appHostRelativePath));
+        var expectedCompiledPath = Path.Combine(directory.FullName, compiledRelativePath);
+        var spec = CreateTestSpec(execute: new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("node", call.Command);
+        Assert.Equal([expectedCompiledPath], call.Args);
+        Assert.Equal(
+            """{"type":"module"}""",
+            File.ReadAllText(Path.Combine(directory.FullName, "node_modules/.tmp/aspire-apphost/package.json")).Trim());
+    }
+
+    [Fact]
+    public async Task RunAsync_NoBuildSkipsTypeScriptBuildAndRunsCompiledAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var spec = CreateTypeScriptRuntimeSpec();
         var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
-        var appHostFile = new FileInfo("/tmp/apphost.ts");
-        var directory = new DirectoryInfo("/tmp");
+        var directory = workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         var (exitCode, _) = await runtime.RunAsync(
             appHostFile,
@@ -216,8 +240,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         var call = Assert.Single(launcher.Calls);
-        Assert.Equal("npx", call.Command);
-        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName], call.Args);
+        Assert.Equal("node", call.Command);
+        Assert.Equal([Path.Combine(directory.FullName, "node_modules/.tmp/aspire-apphost/apphost.js")], call.Args);
     }
 
     [Fact]
@@ -351,6 +375,68 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_WhenPreExecuteFails_DeletesCompiledOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot;
+        var staleOutputDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "node_modules", ".tmp", "aspire-apphost"));
+        // Simulate a build output file left behind by an earlier, successful compile - this is the
+        // stale-but-runnable file the fix must remove once a later compile attempt fails.
+        var staleOutputFile = Path.Combine(staleOutputDirectory.FullName, "apphost.js");
+        File.WriteAllText(staleOutputFile, "console.log('stale');");
+
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{compiledAppHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "typecheck-cmd",
+                    Args = ["--noEmitOnError"]
+                }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        launcher.ExitCodes.Enqueue(2);
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(2, exitCode);
+        Assert.False(Directory.Exists(staleOutputDirectory.FullName));
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenPreExecuteSucceeds_PreservesCompiledOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot;
+        var outputDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "node_modules", ".tmp", "aspire-apphost"));
+        var outputFile = Path.Combine(outputDirectory.FullName, "apphost.js");
+        File.WriteAllText(outputFile, "console.log('fresh');");
+
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{compiledAppHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "typecheck-cmd",
+                    Args = ["--noEmitOnError"]
+                }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        // A successful pre-execute run must never trigger cleanup - only the failure path should.
+        Assert.True(File.Exists(outputFile));
+    }
+
+    [Fact]
     public async Task RunAsync_WhenExecuteCommandCannotResolve_DoesNotCallAfterAppHostLaunched()
     {
         var spec = CreateTestSpec(execute: new CommandSpec { Command = "missing-cmd", Args = ["{appHostFile}"] });
@@ -468,13 +554,14 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishAsync_NoBuildSkipsTypeScriptTscAndRunsAppHost()
+    public async Task PublishAsync_NoBuildSkipsTypeScriptBuildAndRunsCompiledAppHost()
     {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var spec = CreateTypeScriptRuntimeSpec();
         var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
-        var appHostFile = new FileInfo("/tmp/apphost.ts");
-        var directory = new DirectoryInfo("/tmp");
+        var directory = workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         var (exitCode, _) = await runtime.PublishAsync(
             appHostFile,
@@ -487,8 +574,10 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         var call = Assert.Single(launcher.Calls);
-        Assert.Equal("npx", call.Command);
-        Assert.Equal(["--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName, "--operation", "publish"], call.Args);
+        Assert.Equal("node", call.Command);
+        Assert.Equal(
+            [Path.Combine(directory.FullName, "node_modules/.tmp/aspire-apphost/apphost.js"), "--operation", "publish"],
+            call.Args);
     }
 
     [Fact]

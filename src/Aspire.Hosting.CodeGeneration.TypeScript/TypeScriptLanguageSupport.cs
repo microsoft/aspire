@@ -29,6 +29,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string AppHostBuildOutputDirectory = "./node_modules/.tmp/aspire-apphost";
+    private const string AppHostBuildTsBuildInfoFileName = "./node_modules/.tmp/aspire-apphost.tsbuildinfo";
     private const string AppHostPackageName = "aspire-apphost";
     private const string EslintConfigFileName = "eslint.config.mjs";
 
@@ -148,8 +150,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var scripts = EnsureObject(packageJson, "scripts");
         scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
-        scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
-        scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
+        // --noEmitOnError doesn't remove output from an earlier successful build, so the one-shot build
+        // script deletes stale output on failure. The watch-only script never executes its output;
+        // Aspire's run watch path uses one-shot builds with the same cleanup on every cycle.
+        scripts["aspire:build"] = TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(
+            $"tsc --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}");
+        scripts["aspire:dev"] = $"tsc --watch --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}";
 
         if (!hasExistingPackageJson)
         {
@@ -163,11 +169,23 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
+        EnsureDependency(packageJson, "devDependencies", "@typescript/native", "npm:typescript@^7.0.2");
         EnsureDependency(packageJson, "devDependencies", "eslint", "^10.0.3");
         EnsureDependency(packageJson, "devDependencies", "nodemon", "^3.1.14");
-        EnsureDependency(packageJson, "devDependencies", "tsx", "^4.21.0");
-        EnsureDependency(packageJson, "devDependencies", "typescript", "^5.9.3");
-        EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
+        // TypeScript 7 does not expose the legacy programmatic API yet. Keep TypeScript 6 under
+        // the standard package name for typescript-eslint while @typescript/native supplies tsc.
+        // See https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
+        //
+        // This does NOT create a "tsc" bin collision with @typescript/native: @typescript/typescript6's
+        // own package.json declares its executable as "tsc6", not "tsc" (verified via `npm view
+        // @typescript/typescript6 bin`), so it never contends for the node_modules/.bin/tsc entry that
+        // TypeScriptAppHostToolchainResolver invokes. Only @typescript/native exposes a bin literally
+        // named "tsc", so that bare command is unambiguous across npm, Yarn (both linkers), pnpm, and Bun.
+        // A downstream consequence customers should be aware of: code that does
+        // `require("typescript")`/`import ... from "typescript"` inside the AppHost project resolves to
+        // the TypeScript 6-compatible API from @typescript/typescript6, not TypeScript 7's API.
+        EnsureDependency(packageJson, "devDependencies", "typescript", "npm:@typescript/typescript6@^6.0.2");
+        EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.65.0");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
     }
@@ -254,7 +272,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
-            ExtensionLaunchCapability = "node",
+            // Requires the extension to understand launching the compiled AppHost output while keeping
+            // apphost.mts as the debug session's displayed identity. Keep in sync with
+            // `KnownCapabilities.NodeCompiledAppHost` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+            ExtensionLaunchCapability = "node-compiled-apphost.v1",
             CertificateBundleEnvironmentVariable = CertificateBundleEnvironmentVariable,
             InstallDependencies = new CommandSpec
             {
@@ -266,13 +287,31 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 new CommandSpec
                 {
                     Command = "npx",
-                    Args = ["--no-install", "tsc", "--noEmit", "-p", AppHostTsConfigFileName]
+                    Args =
+                    [
+                        "--no-install",
+                        "tsc",
+                        "--incremental",
+                        "--tsBuildInfoFile", AppHostBuildTsBuildInfoFileName,
+                        "--outDir", AppHostBuildOutputDirectory,
+                        "--rootDir", ".",
+                        // Command-line compiler options always win over tsconfig.json, so this
+                        // unconditionally forces emit. GuestRuntime deletes stale output from an
+                        // earlier successful build if this compilation fails. The remaining flags
+                        // support .ts imports and debugging even when an existing tsconfig isn't migrated.
+                        "--noEmit", "false",
+                        "--noEmitOnError",
+                        "--rewriteRelativeImportExtensions",
+                        "--sourceMap",
+                        "--inlineSources",
+                        "-p", AppHostTsConfigFileName
+                    ]
                 }
             ],
             Execute = new CommandSpec
             {
-                Command = "npx",
-                Args = ["--no-install", "tsx", "--tsconfig", AppHostTsConfigFileName, "{appHostFile}"]
+                Command = "node",
+                Args = ["{compiledAppHostFile}"]
             },
             WatchExecute = new CommandSpec
             {
@@ -285,7 +324,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".aspire/modules/",
-                    "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
+                    "--exec", TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(
+                        $"npx --no-install tsc --incremental --tsBuildInfoFile {AppHostBuildTsBuildInfoFileName} --outDir {AppHostBuildOutputDirectory} --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions --sourceMap --inlineSources -p {AppHostTsConfigFileName}") + $" && node \"{{compiledAppHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

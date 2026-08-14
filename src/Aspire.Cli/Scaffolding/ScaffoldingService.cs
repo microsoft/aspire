@@ -416,7 +416,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
             var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
-            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain, directory);
         }
 
         var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);

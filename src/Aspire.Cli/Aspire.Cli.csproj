@@ -202,6 +202,7 @@
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
+    <Compile Include="$(SharedDir)TypeScriptAppHostBuildCleanup.cs" Link="Utils\TypeScriptAppHostBuildCleanup.cs" />
   </ItemGroup>
 
   <ItemGroup>

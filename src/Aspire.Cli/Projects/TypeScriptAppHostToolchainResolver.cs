@@ -5,6 +5,7 @@ using System.Security;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +29,23 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    private const string MinimumSupportedYarnVersion = "4.18.0";
+    private const string NativeTypeScriptPackageName = "@typescript/native";
+    private const string TypeScriptPackageName = "typescript";
+    // Matches TypeScriptLanguageSupport.CreatePackageJson's "npm:typescript@^7.0.2" scaffold pin.
+    private const string MinimumNativeTypeScriptVersion = "7.0.2";
+    private const string TypeScript6AliasPrefix = "npm:@typescript/typescript6@";
+    // Emitting here (rather than next to the source) is what makes execution a plain `node`/`bun` run of
+    // compiled JavaScript instead of a `tsx`/tsgo in-place transpile, which is most of this feature's
+    // startup win. The tradeoff: the AppHost's `import.meta.url` now resolves under node_modules instead
+    // of next to apphost.mts, so `new URL('./some-asset', import.meta.url)` no longer finds files stored
+    // beside the AppHost source. There's no way to keep both the separate, disposable build output and
+    // the original in-place import.meta.url semantics, so AppHosts that resolve sibling assets this way
+    // need to use a path rooted elsewhere (e.g. process.cwd()) instead.
+    private const string BuildOutputDirectory = "./node_modules/.tmp/aspire-apphost";
+    // Disposable incremental compiler state used to speed up subsequent builds.
+    private const string BuildTsBuildInfoFileName = "./node_modules/.tmp/aspire-apphost.tsbuildinfo";
+    private static readonly string[] s_dependencySectionNames = ["dependencies", "devDependencies"];
 
     public static bool IsTypeScriptLanguage(LanguageInfo? language)
     {
@@ -49,9 +67,13 @@ internal static class TypeScriptAppHostToolchainResolver
 
     internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory, IEnvironment environment)
     {
+        // Workspace-level package manager markers can live in the parent directory, while the
+        // TypeScript aliases that constrain the Yarn version remain in the AppHost package.
+        var appHostRequiresYarnTypeScriptAliasFixes = RequiresYarnTypeScriptAliasFixes(appHostDirectory);
+
         foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory, environment))
         {
-            if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain, out var reason))
+            if (TryGetToolchainFromPackageJson(candidateDirectory, appHostRequiresYarnTypeScriptAliasFixes, out var configuredToolchain, out var reason))
             {
                 return new(configuredToolchain, reason);
             }
@@ -76,14 +98,25 @@ internal static class TypeScriptAppHostToolchainResolver
             {
                 if (IsYarnClassicLockFile(yarnLockFilePath))
                 {
-                    throw CreateYarnClassicNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                    throw CreateYarnVersionNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                }
+
+                if (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                {
+                    throw CreateYarnVersionMetadataRequiredException(yarnLockFilePath, candidateDirectory);
                 }
 
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnLockFileName, candidateDirectory);
             }
 
-            if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnConfigFileName)))
+            var yarnConfigFilePath = Path.Combine(candidateDirectory.FullName, YarnConfigFileName);
+            if (File.Exists(yarnConfigFilePath))
             {
+                if (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(candidateDirectory))
+                {
+                    throw CreateYarnVersionMetadataRequiredException(yarnConfigFilePath, candidateDirectory);
+                }
+
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnConfigFileName, candidateDirectory);
             }
 
@@ -134,14 +167,10 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
+    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain, DirectoryInfo appHostDirectory)
     {
-        if (toolchain == TypeScriptAppHostToolchain.Npm)
-        {
-            return baseRuntimeSpec;
-        }
-
         var tsConfigFileName = GetTsConfigFileName(baseRuntimeSpec);
+        var usesNativeTypeScriptCompiler = UsesNativeTypeScriptCompiler(appHostDirectory);
 
         return new RuntimeSpec
         {
@@ -151,14 +180,47 @@ internal static class TypeScriptAppHostToolchainResolver
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
             InstallDependencies = CreateInstallCommand(toolchain),
-            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
-            Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
-            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
+            PreExecute = [CreateBuildCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)],
+            Execute = CreateExecuteCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler),
+            WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler),
             PublishExecute = baseRuntimeSpec.PublishExecute,
-            ExtensionLaunchCapability = baseRuntimeSpec.ExtensionLaunchCapability,
+            ExtensionLaunchCapability = usesNativeTypeScriptCompiler
+                ? baseRuntimeSpec.ExtensionLaunchCapability
+                : KnownCapabilities.Node,
             CertificateBundleEnvironmentVariable = baseRuntimeSpec.CertificateBundleEnvironmentVariable,
             MigrationFiles = baseRuntimeSpec.MigrationFiles
         };
+    }
+
+    private static bool UsesNativeTypeScriptCompiler(DirectoryInfo appHostDirectory)
+    {
+        var packageJsonPath = Path.Combine(appHostDirectory.FullName, PackageJsonFileName);
+        if (!File.Exists(packageJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var packageJson = JsonNode.Parse(File.ReadAllText(packageJsonPath), documentOptions: ConfigurationHelper.ParseOptions) as JsonObject;
+            var dependencyValue = packageJson is null ? null : GetDependencyVersion(packageJson, NativeTypeScriptPackageName);
+            return dependencyValue is not null && IsNativeTypeScriptAlias(dependencyValue);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException
+            or UnauthorizedAccessException or SecurityException
+            or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsNativeTypeScriptAlias(string dependencyValue)
+    {
+        return NpmVersionHelper.TryParseNpmAlias(dependencyValue, out var packageName, out var packageVersion)
+            && packageName.Equals(TypeScriptPackageName, StringComparison.OrdinalIgnoreCase)
+            && NpmVersionHelper.TryParseNpmVersion(packageVersion, out var declaredVersion)
+            && NpmVersionHelper.TryParseNpmVersion(MinimumNativeTypeScriptVersion, out var minimumVersion)
+            && Semver.SemVersion.ComparePrecedence(declaredVersion, minimumVersion) >= 0;
     }
 
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
@@ -178,123 +240,201 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    private static CommandSpec CreateExecuteCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
-        return
-        [
-            toolchain switch
+        if (!usesNativeTypeScriptCompiler)
+        {
+            return toolchain switch
             {
-                TypeScriptAppHostToolchain.Bun => new CommandSpec
-                {
-                    Command = "bun",
-                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
-                },
-                TypeScriptAppHostToolchain.Yarn => new CommandSpec
-                {
-                    Command = "yarn",
-                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
-                },
-                TypeScriptAppHostToolchain.Pnpm => new CommandSpec
-                {
-                    Command = "pnpm",
-                    Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
-                },
+                TypeScriptAppHostToolchain.Npm => new CommandSpec { Command = "npx", Args = ["--no-install", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Bun => new CommandSpec { Command = "bun", Args = ["run", "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Yarn => new CommandSpec { Command = "yarn", Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
+                TypeScriptAppHostToolchain.Pnpm => new CommandSpec { Command = "pnpm", Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"] },
                 _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
-            }
-        ];
-    }
+            };
+        }
 
-    private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
-    {
         return toolchain switch
         {
-            TypeScriptAppHostToolchain.Bun => new CommandSpec
-            {
-                Command = "bun",
-                Args = ["run", "{appHostFile}"]
-            },
-            TypeScriptAppHostToolchain.Yarn => new CommandSpec
-            {
-                Command = "yarn",
-                Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
-            },
-            TypeScriptAppHostToolchain.Pnpm => new CommandSpec
-            {
-                Command = "pnpm",
-                Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+            TypeScriptAppHostToolchain.Bun => new CommandSpec { Command = "bun", Args = ["run", "{compiledAppHostFile}"] },
+            // Yarn 4 defaults to the Plug'n'Play linker, which has no node_modules tree for plain `node`
+            // to resolve dependencies from. `yarn node` injects the `.pnp.cjs` require hook and the
+            // `.pnp.loader.mjs` ESM loader Yarn's own commands rely on, so the compiled AppHost can
+            // resolve its dependencies (e.g. vscode-jsonrpc) the same way under PnP as it does under the
+            // node-modules linker.
+            TypeScriptAppHostToolchain.Yarn => new CommandSpec { Command = "yarn", Args = ["node", "{compiledAppHostFile}"] },
+            _ => new CommandSpec { Command = "node", Args = ["{compiledAppHostFile}"] }
         };
     }
 
-    private static CommandSpec CreateWatchCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    private static CommandSpec CreateWatchCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
     {
+        var nodemonArgs = toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => new List<string> { "--no-install", "nodemon" },
+            TypeScriptAppHostToolchain.Bun => new List<string> { "run", "nodemon" },
+            TypeScriptAppHostToolchain.Yarn or TypeScriptAppHostToolchain.Pnpm => new List<string> { "exec", "nodemon" },
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+        nodemonArgs.AddRange(
+        [
+            "--signal", "SIGTERM",
+            "--watch", ".",
+            "--ext", "ts,mts",
+            "--ignore", "node_modules/",
+            "--ignore", ".aspire/modules/",
+            "--exec", $"{CreateBuildCommandString(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)} && {CreateRunCommandString(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)}"
+        ]);
+
+        return new CommandSpec
+        {
+            Command = toolchain == TypeScriptAppHostToolchain.Npm ? "npx" : GetCommandName(toolchain),
+            Args = [.. nodemonArgs]
+        };
+    }
+
+    private static CommandSpec CreateBuildCommand(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        return new CommandSpec
+        {
+            Command = toolchain == TypeScriptAppHostToolchain.Npm ? "npx" : GetCommandName(toolchain),
+            Args = CreateBuildCommandArgs(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler)
+        };
+    }
+
+    // The scaffolded package.json (see TypeScriptLanguageSupport.CreatePackageJson) installs TypeScript 7
+    // under the "@typescript/native" alias and the TypeScript 6-compatible shim under the plain "typescript"
+    // name. Only @typescript/native's package.json declares a "tsc" bin; @typescript/typescript6 deliberately
+    // exposes "tsc6" instead, so the bare "tsc" below always resolves to the native TypeScript 7 compiler —
+    // there is no bin collision to disambiguate. This holds across npm, Yarn (node-modules and PnP linkers),
+    // pnpm, and Bun. A literal path such as "node_modules/@typescript/native/bin/tsc" is intentionally NOT
+    // used here because Yarn's PnP linker (the default for Yarn 4) has no node_modules/.bin tree at all;
+    // each toolchain's own "run"/"exec"/npx resolution is required to work under PnP.
+    private static string[] CreateBuildCommandArgs(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        var commandArgs = toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => new List<string> { "--no-install", "tsc" },
+            TypeScriptAppHostToolchain.Bun or TypeScriptAppHostToolchain.Yarn => new List<string> { "run", "tsc" },
+            TypeScriptAppHostToolchain.Pnpm => new List<string> { "exec", "tsc" },
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+
+        if (!usesNativeTypeScriptCompiler)
+        {
+            commandArgs.AddRange(["--noEmit", "-p", tsConfigFileName]);
+            return [.. commandArgs];
+        }
+
+        commandArgs.AddRange(
+        [
+            "--incremental",
+            "--tsBuildInfoFile", BuildTsBuildInfoFileName,
+            // --outDir/--rootDir are forced here (overriding whatever the user's tsconfig.apphost.json
+            // declares) because GuestRuntime.GetCompiledAppHostFilePath computes the emitted file's path
+            // from the same CompiledAppHostOutputDirectory constant without reading the tsconfig. The
+            // scaffolded tsconfig.apphost.json sets outDir/rootDir to these exact values only so the
+            // "aspire:build"/"aspire:dev" package.json scripts - which invoke tsc without these CLI
+            // overrides - emit to the same place.
+            "--outDir", BuildOutputDirectory,
+            "--rootDir", ".",
+            // Command-line compiler options always win over tsconfig.json, so this unconditionally forces
+            // emit. --noEmitOnError blocks new output from a failing compile but leaves output from
+            // an earlier successful compile. GuestRuntime deletes that output when this direct command
+            // fails; the watch command's shell fallback does the same for each nodemon cycle.
+            // --rewriteRelativeImportExtensions avoids TS5096 for tsconfigs that set
+            // "allowImportingTsExtensions" (which otherwise requires "noEmit"); it's a no-op otherwise,
+            // and is only reached once ApplyToRuntimeSpec has confirmed @typescript/native (TypeScript
+            // >= 7.0.2) is in use, so it's always understood. See
+            // https://www.typescriptlang.org/tsconfig/#rewriteRelativeImportExtensions.
+            "--noEmit", "false",
+            "--noEmitOnError",
+            "--rewriteRelativeImportExtensions",
+            "--sourceMap",
+            "--inlineSources",
+            "-p", tsConfigFileName
+        ]);
+
+        return [.. commandArgs];
+    }
+
+    private static string CreateBuildCommandString(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        var command = CreateBuildCommand(toolchain, tsConfigFileName, usesNativeTypeScriptCompiler);
+        var commandString = $"{command.Command} {string.Join(" ", command.Args)}";
+
+        // This string is embedded in nodemon's --exec argument, which nodemon runs through a shell,
+        // so (unlike CreateBuildCommand's CommandSpec above) it can use the shell "||" fallback to
+        // self-clean a stale compile. Each nodemon restart runs one one-shot tsc invocation that
+        // exits normally, so the fallback only fires for that cycle's own failure.
+        return usesNativeTypeScriptCompiler
+            ? TypeScriptAppHostBuildCleanup.AppendShellCleanupOnFailure(commandString)
+            : commandString;
+    }
+
+    private static string CreateRunCommandString(
+        TypeScriptAppHostToolchain toolchain,
+        string tsConfigFileName,
+        bool usesNativeTypeScriptCompiler)
+    {
+        if (usesNativeTypeScriptCompiler)
+        {
+            // Keep this in sync with CreateExecuteCommand: the watch command's nodemon --exec string
+            // must launch the compiled AppHost the same way the non-watch Execute command does.
+            return toolchain switch
+            {
+                TypeScriptAppHostToolchain.Bun => "bun run \"{compiledAppHostFile}\"",
+                TypeScriptAppHostToolchain.Yarn => "yarn node \"{compiledAppHostFile}\"",
+                _ => "node \"{compiledAppHostFile}\""
+            };
+        }
+
         return toolchain switch
         {
-            TypeScriptAppHostToolchain.Bun => new CommandSpec
-            {
-                Command = "bun",
-                Args =
-                [
-                    "run",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
-                ]
-            },
-            TypeScriptAppHostToolchain.Yarn => new CommandSpec
-            {
-                Command = "yarn",
-                Args =
-                [
-                    "exec",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
-                ]
-            },
-            TypeScriptAppHostToolchain.Pnpm => new CommandSpec
-            {
-                Command = "pnpm",
-                Args =
-                [
-                    "exec",
-                    "nodemon",
-                    "--signal", "SIGTERM",
-                    "--watch", ".",
-                    "--ext", "ts,mts",
-                    "--ignore", "node_modules/",
-                    "--ignore", ".aspire/modules/",
-                    "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
-                ]
-            },
+            TypeScriptAppHostToolchain.Npm => $"npx --no-install tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
+            TypeScriptAppHostToolchain.Bun => "bun run \"{appHostFile}\"",
+            TypeScriptAppHostToolchain.Yarn => $"yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
+            TypeScriptAppHostToolchain.Pnpm => $"pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\"",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
 
     private static string GetTsConfigFileName(RuntimeSpec runtimeSpec)
     {
-        var args = runtimeSpec.Execute.Args;
-        for (var i = 0; i < args.Length - 1; i++)
+        foreach (var command in runtimeSpec.PreExecute ?? [])
         {
-            if (args[i].Equals("--tsconfig", StringComparison.Ordinal))
+            for (var i = 0; i < command.Args.Length - 1; i++)
             {
-                return args[i + 1];
+                if (command.Args[i] is "-p" or "--project")
+                {
+                    return command.Args[i + 1];
+                }
             }
         }
 
         return "tsconfig.apphost.json";
     }
 
-    private static bool TryGetToolchainFromPackageJson(DirectoryInfo appHostDirectory, out TypeScriptAppHostToolchain toolchain, out string reason)
+    private static bool TryGetToolchainFromPackageJson(
+        DirectoryInfo appHostDirectory,
+        bool appHostRequiresYarnTypeScriptAliasFixes,
+        out TypeScriptAppHostToolchain toolchain,
+        out string reason)
     {
         toolchain = default;
         reason = string.Empty;
@@ -318,9 +458,12 @@ internal static class TypeScriptAppHostToolchainResolver
             var packageManagerName = packageManager.Split('@', 2)[0];
             if (TryParseToolchain(packageManagerName, out toolchain))
             {
-                if (toolchain == TypeScriptAppHostToolchain.Yarn && IsYarnClassicPackageManager(packageManager))
+                if (toolchain == TypeScriptAppHostToolchain.Yarn &&
+                    (IsYarnClassicPackageManager(packageManager) ||
+                     (appHostRequiresYarnTypeScriptAliasFixes || RequiresYarnTypeScriptAliasFixes(packageJson)) &&
+                     IsUnsupportedYarnPackageManager(packageManager)))
                 {
-                    throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
+                    throw CreateYarnVersionNotSupportedException($"'{packageManager}' in {packageJsonPath}");
                 }
 
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
@@ -352,7 +495,7 @@ internal static class TypeScriptAppHostToolchainResolver
         return result.HasValue;
     }
 
-    private static bool IsYarnClassicPackageManager(string packageManager)
+    private static bool IsUnsupportedYarnPackageManager(string packageManager)
     {
         const string yarnPackageManagerPrefix = "yarn@";
 
@@ -362,15 +505,79 @@ internal static class TypeScriptAppHostToolchainResolver
         }
 
         var version = packageManager[yarnPackageManagerPrefix.Length..];
-        return version.Length > 0 &&
-            version[0] == '1' &&
-            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+        return !NpmVersionHelper.TryParseNpmVersion(version, out var yarnVersion)
+            || !NpmVersionHelper.TryParseNpmVersion(MinimumSupportedYarnVersion, out var minimumVersion)
+            || Semver.SemVersion.ComparePrecedence(yarnVersion, minimumVersion) < 0;
     }
 
-    private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    private static bool IsYarnClassicPackageManager(string packageManager)
     {
-        return new YarnClassicNotSupportedException(
-            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+        const string yarnPackageManagerPrefix = "yarn@";
+
+        return packageManager.StartsWith(yarnPackageManagerPrefix, StringComparison.OrdinalIgnoreCase)
+            && NpmVersionHelper.TryParseNpmVersion(packageManager[yarnPackageManagerPrefix.Length..], out var yarnVersion)
+            && yarnVersion.Major == 1;
+    }
+
+    private static bool RequiresYarnTypeScriptAliasFixes(DirectoryInfo directory)
+    {
+        var packageJsonPath = Path.Combine(directory.FullName, PackageJsonFileName);
+        if (!File.Exists(packageJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var packageJson = JsonNode.Parse(File.ReadAllText(packageJsonPath), documentOptions: ConfigurationHelper.ParseOptions) as JsonObject;
+            return packageJson is not null && RequiresYarnTypeScriptAliasFixes(packageJson);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException
+            or UnauthorizedAccessException or SecurityException
+            or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool RequiresYarnTypeScriptAliasFixes(JsonObject packageJson)
+    {
+        // Yarn 4.18 fixed both the optional TypeScript compatibility patch and direct-dependency binary
+        // selection for the recommended side-by-side TypeScript 6/7 aliases. Older AppHosts that only
+        // reference the JavaScript TypeScript package do not need those fixes and remain compatible.
+        return HasDependency(packageJson, NativeTypeScriptPackageName)
+            || GetDependencyVersion(packageJson, TypeScriptPackageName)?.StartsWith(TypeScript6AliasPrefix, StringComparison.OrdinalIgnoreCase) is true;
+    }
+
+    private static bool HasDependency(JsonObject packageJson, string packageName)
+        => GetDependencyVersion(packageJson, packageName) is not null;
+
+    private static string? GetDependencyVersion(JsonObject packageJson, string packageName)
+    {
+        foreach (var sectionName in s_dependencySectionNames)
+        {
+            if (packageJson[sectionName]?[packageName] is JsonValue value &&
+                value.TryGetValue<string>(out var version))
+            {
+                return version;
+            }
+        }
+
+        return null;
+    }
+
+    private static YarnVersionNotSupportedException CreateYarnVersionNotSupportedException(string upgradeTarget)
+    {
+        return new YarnVersionNotSupportedException(
+            $"Yarn {MinimumSupportedYarnVersion} or later is required for TypeScript AppHosts. Upgrade {upgradeTarget}, or use npm, pnpm, or Bun.");
+    }
+
+    private static YarnVersionNotSupportedException CreateYarnVersionMetadataRequiredException(string markerPath, DirectoryInfo candidateDirectory)
+    {
+        var packageJsonPath = Path.Combine(candidateDirectory.FullName, PackageJsonFileName);
+        return new YarnVersionNotSupportedException(
+            $"Yarn {MinimumSupportedYarnVersion} or later is required for TypeScript AppHosts. " +
+            $"Set \"packageManager\": \"yarn@{MinimumSupportedYarnVersion}\" in {packageJsonPath} so Aspire can verify the Yarn version selected for {markerPath}, or use npm, pnpm, or Bun.");
     }
 
     private static bool IsYarnClassicLockFile(string yarnLockFilePath)

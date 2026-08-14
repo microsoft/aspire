@@ -28,7 +28,15 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// <see langword="true"/> to remove prior package-manager lock files and <c>node_modules</c>
     /// so the selected toolchain can restore from a clean state.
     /// </param>
-    internal static void SetPackageManager(string projectRoot, string toolchain, bool cleanInstallState = false)
+    /// <param name="useYarnNodeModulesLinker">
+    /// <see langword="true"/> to configure Yarn's node-modules linker; <see langword="false"/> to
+    /// exercise Yarn's default Plug'n'Play linker.
+    /// </param>
+    internal static void SetPackageManager(
+        string projectRoot,
+        string toolchain,
+        bool cleanInstallState = false,
+        bool useYarnNodeModulesLinker = true)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectRoot);
         ArgumentException.ThrowIfNullOrEmpty(toolchain);
@@ -42,7 +50,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
         if (!cleanInstallState)
         {
-            ConfigureToolchainFiles(projectRoot, toolchain);
+            ConfigureToolchainFiles(projectRoot, toolchain, useYarnNodeModulesLinker);
             return;
         }
 
@@ -61,7 +69,22 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             Directory.Delete(nodeModulesPath, recursive: true);
         }
 
-        ConfigureToolchainFiles(projectRoot, toolchain);
+        foreach (var pnpFileName in new[] { ".pnp.cjs", ".pnp.loader.mjs" })
+        {
+            var pnpFilePath = Path.Combine(projectRoot, pnpFileName);
+            if (File.Exists(pnpFilePath))
+            {
+                File.Delete(pnpFilePath);
+            }
+        }
+
+        var yarnStatePath = Path.Combine(projectRoot, ".yarn");
+        if (Directory.Exists(yarnStatePath))
+        {
+            Directory.Delete(yarnStatePath, recursive: true);
+        }
+
+        ConfigureToolchainFiles(projectRoot, toolchain, useYarnNodeModulesLinker);
     }
 
     /// <summary>
@@ -71,17 +94,19 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         $"{GetCommandName(toolchain)} install";
 
     /// <summary>
-    /// Gets the no-emit type-check command for a toolchain.
+    /// Gets the incremental AppHost build command for a toolchain.
     /// </summary>
-    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName) =>
-        NormalizeToolchain(toolchain) switch
+    internal static string GetBuildCommand(string toolchain, string tsConfigFileName)
+    {
+        return NormalizeToolchain(toolchain) switch
         {
-            "bun" => $"bun run tsc --noEmit -p {tsConfigFileName}",
-            "yarn" => $"yarn run tsc --noEmit -p {tsConfigFileName}",
-            "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
-            "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
+            "bun" => $"bun run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError --rewriteRelativeImportExtensions -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --incremental --tsBuildInfoFile ./node_modules/.tmp/aspire-apphost.tsbuildinfo --outDir ./node_modules/.tmp/aspire-apphost --rootDir . --noEmit false --noEmitOnError -p {tsConfigFileName} --rewriteRelativeImportExtensions",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
+    }
 
     /// <summary>
     /// Gets the script runner command for a toolchain.
@@ -111,7 +136,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         NormalizeToolchain(toolchain) switch
         {
             "bun" => "bun@1.2.0",
-            "yarn" => "yarn@4.14.1",
+            "yarn" => "yarn@4.18.0",
             "pnpm" => "pnpm@10.0.0",
             "npm" => "npm@10.0.0",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
@@ -150,10 +175,10 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
-    private static void ConfigureToolchainFiles(string projectRoot, string toolchain)
+    private static void ConfigureToolchainFiles(string projectRoot, string toolchain, bool useYarnNodeModulesLinker)
     {
         var yarnConfigPath = Path.Combine(projectRoot, YarnConfigurationFileName);
-        if (NormalizeToolchain(toolchain) == "yarn")
+        if (NormalizeToolchain(toolchain) == "yarn" && useYarnNodeModulesLinker)
         {
             // Yarn 4 defaults to Plug'n'Play, but the generated AppHost/Vite workflows exercised
             // here expect node_modules resolution across tsx, nodemon, and Vite.

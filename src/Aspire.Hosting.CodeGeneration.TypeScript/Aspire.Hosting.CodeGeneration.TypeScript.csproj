@@ -39,6 +39,7 @@
     <Compile Include="$(SharedDir)CodeGeneration\AtsOptionsFlattening.cs" Link="AtsOptionsFlattening.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
+    <Compile Include="$(SharedDir)TypeScriptAppHostBuildCleanup.cs" Link="TypeScriptAppHostBuildCleanup.cs" />
   </ItemGroup>
 
   <ItemGroup>

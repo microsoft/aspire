@@ -624,19 +624,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 }
 
                 // Check if the extension should launch the guest app host (for VS Code debugging).
-                // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
-                // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
-                // only use the extension launcher when the runtime requests it and the extension supports it.
-                if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
-                    && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
-                    && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
+                // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts. The
+                // RuntimeSpec declares the required extension capability (see
+                // KnownCapabilities.NodeCompiledAppHost); only delegate to the extension launcher when
+                // it's requested and supported.
+                var (selectedLauncher, launcherErrorExitCode) = await SelectGuestLauncherAsync(_guestRuntime, appHostFile, context, cancellationToken);
+                if (launcherErrorExitCode is { } errorExitCode)
                 {
-                    launcher = new ExtensionGuestLauncher(extensionInteractionService, appHostFile, context.StartDebugSession);
+                    return errorExitCode;
                 }
-                else
-                {
-                    launcher = _guestRuntime.CreateDefaultLauncher();
-                }
+
+                // SelectGuestLauncherAsync only omits the launcher when it also returns a non-null
+                // error exit code (handled above), so this is always non-null here.
+                launcher = selectedLauncher ?? throw new InvalidOperationException("SelectGuestLauncherAsync returned neither a launcher nor an error exit code.");
 
                 // Start guest apphost - it will connect to AppHost server, define resources.
                 // If launcher is an ExtensionGuestLauncher, it delegates to the VS Code extension.
@@ -676,7 +676,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // A non-zero exit code at this point means either:
-            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute `tsc --noEmit` step)
+            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute build)
             //    failed before the actual AppHost was launched.
             //  - The guest AppHost itself failed (syntax error, unhandled exception, etc).
             //  - The AppHost system escalation killed the guest because the server backchannel never
@@ -1857,6 +1857,49 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
+    /// Picks the launcher used to start the guest AppHost process. Delegates to the VS Code
+    /// extension when the runtime requires an extension capability and the connected extension
+    /// supports it; otherwise falls back to <see cref="GuestRuntime.CreateDefaultLauncher"/>.
+    /// </summary>
+    /// <returns>
+    /// The launcher to use, or a non-null <c>ErrorExitCode</c> (with a null launcher) when the
+    /// extension is missing a capability required for a debug launch.
+    /// </returns>
+    internal async Task<(IGuestProcessLauncher? Launcher, int? ErrorExitCode)> SelectGuestLauncherAsync(
+        GuestRuntime guestRuntime,
+        FileInfo appHostFile,
+        AppHostProjectContext context,
+        CancellationToken cancellationToken)
+    {
+        if (guestRuntime.ExtensionLaunchCapability is not { } requiredCapability
+            || !ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel))
+        {
+            return (guestRuntime.CreateDefaultLauncher(), null);
+        }
+
+        if (await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
+        {
+            return (new ExtensionGuestLauncher(extensionInteractionService, appHostFile, context.StartDebugSession), null);
+        }
+
+        if (!context.Debug)
+        {
+            // Run-without-debugging never attaches a debugger, so the missing capability doesn't
+            // change behavior; run the compiled output directly, same as outside the extension host.
+            return (guestRuntime.CreateDefaultLauncher(), null);
+        }
+
+        // The installed extension predates requiredCapability, so it doesn't know how to attach a
+        // debugger to the compiled AppHost output (see KnownCapabilities.NodeCompiledAppHost).
+        // Falling back to the default launcher here would start the AppHost with no debugger
+        // attached - F5 would look like it worked (dashboard opens, output streams) but no
+        // breakpoint would ever bind. Fail fast instead so the user knows to update the extension.
+        _interactionService.DisplayError(string.Format(
+            System.Globalization.CultureInfo.CurrentCulture, ErrorStrings.ExtensionIncompatibleWithCli, requiredCapability));
+        return (null, CliExitCodes.FailedToDotnetRunAppHost);
+    }
+
+    /// <summary>
     /// Ensures the GuestRuntime is created.
     /// </summary>
     private async Task EnsureRuntimeCreatedAsync(
@@ -1870,7 +1913,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
                 var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
-                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain, directory);
             }
 
             _guestRuntime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _fileLoggerProvider);

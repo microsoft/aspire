@@ -17,6 +17,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestRuntime
 {
+    private const string CompiledAppHostOutputDirectory = "node_modules/.tmp/aspire-apphost";
+
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
@@ -162,7 +164,7 @@ internal sealed class GuestRuntime
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <param name="appHostLaunchOptions">
     /// Optional launch options forwarded to the launcher for the long-running AppHost execute command only.
-    /// Pre-execute commands (e.g. <c>tsc --noEmit</c>) and dependency installation are short-lived and
+    /// Pre-execute commands (e.g. a TypeScript build) and dependency installation are short-lived and
     /// keep today's force-kill behavior, so this is not passed there.
     /// </param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
@@ -183,9 +185,16 @@ internal sealed class GuestRuntime
             : _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        EnsureCompiledOutputModuleTypeMarker(appHostFile, commandSpec.Args);
         if (!useWatchCommand && !noBuild)
         {
-            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            var preExecuteResult = await RunPreExecuteCommandsAsync(
+                appHostFile,
+                directory,
+                environmentVariables,
+                launcher,
+                ReferencesCompiledAppHost(commandSpec.Args),
+                cancellationToken);
             if (preExecuteResult.ExitCode != 0)
             {
                 return preExecuteResult;
@@ -223,9 +232,16 @@ internal sealed class GuestRuntime
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 
         await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        EnsureCompiledOutputModuleTypeMarker(appHostFile, commandSpec.Args);
         if (!noBuild)
         {
-            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            var preExecuteResult = await RunPreExecuteCommandsAsync(
+                appHostFile,
+                directory,
+                environmentVariables,
+                launcher,
+                ReferencesCompiledAppHost(commandSpec.Args),
+                cancellationToken);
             if (preExecuteResult.ExitCode != 0)
             {
                 return preExecuteResult;
@@ -243,6 +259,7 @@ internal sealed class GuestRuntime
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         IGuestProcessLauncher launcher,
+        bool deleteCompiledOutputOnFailure,
         CancellationToken cancellationToken)
     {
         if (_spec.PreExecute is null or { Length: 0 })
@@ -263,11 +280,35 @@ internal sealed class GuestRuntime
             if (exitCode != 0)
             {
                 activity.SetError($"{_spec.DisplayName} pre-execution exited with code {exitCode}.");
+                if (deleteCompiledOutputOnFailure)
+                {
+                    DeleteCompiledOutput(directory);
+                }
                 return (exitCode, output ?? new OutputCollector());
             }
         }
 
         return (0, new OutputCollector());
+    }
+
+    /// <summary>
+    /// Deletes compiled AppHost output after a failed pre-execute command so a later
+    /// <c>aspire run --no-build</c> cannot execute output from an earlier successful build.
+    /// </summary>
+    private void DeleteCompiledOutput(DirectoryInfo directory)
+    {
+        var outputDirectory = Path.Combine(directory.FullName, CompiledAppHostOutputDirectory);
+        try
+        {
+            if (Directory.Exists(outputDirectory))
+            {
+                Directory.Delete(outputDirectory, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to remove stale build output at {Path} after a failed pre-execute command.", outputDirectory);
+        }
     }
 
     private async Task<(int ExitCode, OutputCollector? Output)> ExecuteCommandAsync(
@@ -337,6 +378,37 @@ internal sealed class GuestRuntime
     }
 
     /// <summary>
+    /// Ensures the native TypeScript compiler's output directory declares itself as an ESM package
+    /// before the compiled AppHost is executed.
+    /// </summary>
+    /// <remarks>
+    /// Node determines a bare <c>.js</c> file's module format from the nearest ancestor
+    /// <c>package.json</c>, but package-scope lookup stops at a <c>node_modules</c> boundary. Because
+    /// Aspire emits beneath <c>node_modules/.tmp</c>, the output cannot inherit the source package's
+    /// <c>"type": "module"</c> declaration. An explicit marker keeps emitted <c>.js</c> AppHosts in
+    /// ESM mode for every package manager.
+    /// </remarks>
+    private static void EnsureCompiledOutputModuleTypeMarker(FileInfo appHostFile, string[] commandArgs)
+    {
+        if (!ReferencesCompiledAppHost(commandArgs))
+        {
+            // This runtime's execute/watch command doesn't launch a compiled output file
+            // (e.g. the tsx-based transpile-in-place flow, or a non-TypeScript language), so there's
+            // no compiled output directory to annotate.
+            return;
+        }
+
+        var outputDirectory = Path.Combine(appHostFile.DirectoryName!, CompiledAppHostOutputDirectory);
+        Directory.CreateDirectory(outputDirectory);
+
+        var packageJsonPath = Path.Combine(outputDirectory, "package.json");
+        File.WriteAllText(packageJsonPath, """{"type":"module"}""" + Environment.NewLine);
+    }
+
+    private static bool ReferencesCompiledAppHost(string[] commandArgs) =>
+        commandArgs.Any(static arg => arg.Contains("{compiledAppHostFile}", StringComparison.Ordinal));
+
+    /// <summary>
     /// Creates the default process-based launcher for this runtime.
     /// </summary>
     public ProcessGuestLauncher CreateDefaultLauncher() => new(
@@ -363,6 +435,7 @@ internal sealed class GuestRuntime
         {
             var replaced = arg
                 .Replace("{appHostFile}", appHostFile?.FullName ?? "")
+                .Replace("{compiledAppHostFile}", GetCompiledAppHostFilePath(appHostFile) ?? "")
                 .Replace("{appHostDir}", directory.FullName);
 
             if (replaced.Contains("{args}"))
@@ -389,5 +462,21 @@ internal sealed class GuestRuntime
         }
 
         return result.ToArray();
+    }
+
+    private static string? GetCompiledAppHostFilePath(FileInfo? appHostFile)
+    {
+        if (appHostFile is null)
+        {
+            return null;
+        }
+
+        var compiledFileName = Path.ChangeExtension(appHostFile.Name, appHostFile.Extension.Equals(".mts", StringComparison.OrdinalIgnoreCase) ? ".mjs" : ".js");
+
+        // Combine the compiled output directory and file name as a single forward-slash relative path
+        // before joining it to the app host's directory. Passing them as separate Path.Combine segments
+        // would insert a platform-specific separator (e.g. '\' on Windows) between every segment, producing
+        // a path with mixed separators that doesn't match the forward-slash-only relative path callers expect.
+        return Path.Combine(appHostFile.DirectoryName!, $"{CompiledAppHostOutputDirectory}/{compiledFileName}");
     }
 }
