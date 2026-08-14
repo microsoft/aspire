@@ -873,7 +873,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.dispose();
         await aspireDebugSession.stopDebugging();
@@ -902,13 +902,13 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.dispose();
         await aspireDebugSession.stopDebugging();
 
         sinon.assert.calledOnceWithExactly(stopDebugging, parentDebugSession);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, null);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, null);
     });
 
     test('stopDebugging retries a failed dashboard debug session stop', async () => {
@@ -935,7 +935,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             }
         });
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         await assert.rejects(() => aspireDebugSession.stopDebugging(), /Dashboard stop failed/);
         await aspireDebugSession.stopDebugging();
@@ -1187,7 +1187,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         } as vscode.WorkspaceConfiguration);
         const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
-        (aspireDebugSession as any)._dashboardDebugSession = dashboardDebugSession;
+        (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession = dashboardDebugSession;
 
         aspireDebugSession.finalizeForExtensionShutdown();
         await Promise.resolve();
@@ -1235,12 +1235,12 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const openPromise = aspireDebugSession.openDashboard('https://localhost:1234', 'debugEdge');
         await Promise.resolve();
         startSessionCallback?.(foreignDashboardSession);
-        const trackedAfterForeignSession = (aspireDebugSession as any)._dashboardDebugSession;
+        const trackedAfterForeignSession = (aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession;
         startSessionCallback?.(ownDashboardSession);
         await openPromise;
 
         assert.strictEqual(trackedAfterForeignSession, null);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, ownDashboardSession);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, ownDashboardSession);
     });
 
     test('launching the dashboard browser stops a session that starts after the Aspire session was disposed', async () => {
@@ -1282,7 +1282,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         await aspireDebugSession.stopDebugging();
 
         assert.strictEqual(stopDebugging.calledWith(dashboardDebugSession), true);
-        assert.strictEqual((aspireDebugSession as any)._dashboardDebugSession, null);
+        assert.strictEqual((aspireDebugSession as any)._dashboardLauncher._dashboardDebugSession, null);
     });
 
     test('launching the dashboard browser does not fall back to an external browser after the Aspire session was disposed', async () => {
