@@ -33,12 +33,11 @@ internal sealed class RustLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create src/main.rs
-        files["src/main.rs"] = """
+        files[AppHostFileName] = """
             // Aspire Rust AppHost
             // For more information, see: https://aspire.dev
 
-            #[path = "../.aspire/modules/mod.rs"]
+            #[path = ".aspire/modules/mod.rs"]
             mod aspire;
 
             use aspire::*;
@@ -63,17 +62,14 @@ internal sealed class RustLanguageSupport : ILanguageSupport
             version = "0.1.0"
             edition = "2021"
 
+            [[bin]]
+            name = "apphost"
+            path = "apphost.rs"
+
             [dependencies]
             serde = { version = "1.0", features = ["derive"] }
             serde_json = "1.0"
             lazy_static = "1.4"
-            """;
-
-        // Create the marker file the CLI uses to recognize Rust AppHosts.
-        files[AppHostFileName] = """
-            // Aspire Rust AppHost marker file
-            // This file is used to detect the project type.
-            // The actual entry point is in src/main.rs.
             """;
 
         // Create apphost.run.json with random ports
@@ -136,7 +132,7 @@ internal sealed class RustLanguageSupport : ILanguageSupport
             Execute = new CommandSpec
             {
                 Command = "cargo",
-                Args = ["run"]
+                Args = ["run", "--"]
             }
         };
     }

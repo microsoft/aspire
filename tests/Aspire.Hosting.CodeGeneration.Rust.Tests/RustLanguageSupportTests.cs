@@ -24,8 +24,14 @@ public class RustLanguageSupportTests(ITestOutputHelper outputHelper)
             files.Keys.Order(StringComparer.Ordinal),
             key => Assert.Equal("Cargo.toml", key),
             key => Assert.Equal("apphost.rs", key),
-            key => Assert.Equal("apphost.run.json", key),
-            key => Assert.Equal("src/main.rs", key));
+            key => Assert.Equal("apphost.run.json", key));
+
+        Assert.Contains("#[path = \".aspire/modules/mod.rs\"]", files["apphost.rs"], StringComparison.Ordinal);
+        Assert.Contains("let builder = create_builder(None)?;", files["apphost.rs"], StringComparison.Ordinal);
+        Assert.Contains("app.run(None)?;", files["apphost.rs"], StringComparison.Ordinal);
+        Assert.Contains("[[bin]]", files["Cargo.toml"], StringComparison.Ordinal);
+        Assert.Contains("name = \"apphost\"", files["Cargo.toml"], StringComparison.Ordinal);
+        Assert.Contains("path = \"apphost.rs\"", files["Cargo.toml"], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,6 +85,6 @@ public class RustLanguageSupportTests(ITestOutputHelper outputHelper)
         Assert.Equal(["apphost.rs"], runtimeSpec.DetectionPatterns);
         Assert.Equal("rust", runtimeSpec.ExtensionLaunchCapability);
         Assert.Equal("cargo", runtimeSpec.Execute.Command);
-        Assert.Equal(["run"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "--"], runtimeSpec.Execute.Args);
     }
 }
