@@ -105,7 +105,9 @@ $i = 0
 foreach ($f in $files) {
     $ext = $f.Extension.TrimStart('.').ToLower()
     $label = "${ext}_${i}_" + ($f.Name -replace '[^\w\.-]', '_')
-    $cdfContent += "<hash>$label=`"$($f.FullName)`""
+    # CDF values extend to the end of the line, so quotes become part of the member path.
+    # See https://learn.microsoft.com/windows/win32/seccrypto/makecat
+    $cdfContent += "<hash>$label=$($f.FullName)"
     $i++
 }
 
