@@ -16,9 +16,8 @@ export interface RunCliCommandOptions {
     env?: { name: string; value: string }[];
 }
 
-export class AppHostCliRunner {
+export class AppHostCliRunner implements vscode.Disposable {
     private static readonly _oneShotCommandTimeoutMs = 30000;
-    private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
 
     private _noLogoSupported = true;
     private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
@@ -26,7 +25,7 @@ export class AppHostCliRunner {
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
 
-    _withNoLogo(args: string[]): string[] {
+    withNoLogo(args: string[]): string[] {
         if (!this._noLogoSupported) {
             return args;
         }
@@ -39,12 +38,12 @@ export class AppHostCliRunner {
     // Returns the args to retry with when the installed CLI does not recognize --nologo, or
     // undefined when this failure is unrelated to --nologo. Has the intentional side effect of
     // flipping _noLogoSupported to false the first time the unsupported pattern is observed so
-    // subsequent _withNoLogo calls stop adding the option for the lifetime of the repository.
+    // subsequent withNoLogo calls stop adding the option for the lifetime of the runner.
     //
     // Callers that own their own retry args use the returned value directly; long-lived watch
-    // restarters (describe/ps follow) use _disableNoLogoForRetry below and intentionally discard
-    // the returned args because the watch starter rebuilds args via _withNoLogo.
-    _tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
+    // restarters (describe/ps follow) use disableNoLogoForRetry below and intentionally discard
+    // the returned args because the watch starter rebuilds args via withNoLogo.
+    tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
         if (!isNoLogoUnsupportedOutput(args, stdout, stderr)) {
             return undefined;
         }
@@ -57,15 +56,15 @@ export class AppHostCliRunner {
         return removeRootNoLogoOption(args);
     }
 
-    // Boolean variant of _tryGetNoLogoRetryArgs for watch restarters that rebuild args via
-    // _withNoLogo when they restart. These call sites only need to know "did we just disable
+    // Boolean variant of tryGetNoLogoRetryArgs for watch restarters that rebuild args via
+    // withNoLogo when they restart. These call sites only need to know "did we just disable
     // --nologo support for the rest of this session?" — the recomputed args from
-    // _tryGetNoLogoRetryArgs would be thrown away.
-    _disableNoLogoForRetry(args: string[], stdout: string, stderr: string, operation: string): boolean {
-        return this._tryGetNoLogoRetryArgs(args, stdout, stderr, operation) !== undefined;
+    // tryGetNoLogoRetryArgs would be thrown away.
+    disableNoLogoForRetry(args: string[], stdout: string, stderr: string, operation: string): boolean {
+        return this.tryGetNoLogoRetryArgs(args, stdout, stderr, operation) !== undefined;
     }
 
-    async _runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
+    async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
             throw new AspireCliNotInstalledError(String(error));
         });
@@ -82,7 +81,7 @@ export class AppHostCliRunner {
             const timeoutMs = options.timeoutMs === undefined ? AppHostCliRunner._oneShotCommandTimeoutMs : options.timeoutMs;
             const stdoutBufferLimit = options.stdoutBufferLimit === undefined ? null : options.stdoutBufferLimit;
             const stdout = new LimitedOutputBuffer(stdoutBufferLimit);
-            const stderr = new LimitedOutputBuffer(AppHostCliRunner._oneShotOutputBufferLimit);
+            const stderr = new LimitedOutputBuffer(oneShotOutputBufferLimit);
 
             const settle = (callback: () => void) => {
                 if (settled) {
@@ -123,10 +122,10 @@ export class AppHostCliRunner {
                 stderrCallback: (data) => { stderr.append(data); },
                 exitCallback: (code) => {
                     if (code !== 0) {
-                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout.value, stderr.value, command);
+                        const retryArgs = this.tryGetNoLogoRetryArgs(args, stdout.value, stderr.value, command);
                         if (retryArgs) {
                             settle(() => {
-                                this._runCliCommand(command, retryArgs, options).then(resolve, reject);
+                                this.runCliCommand(command, retryArgs, options).then(resolve, reject);
                             });
                             return;
                         }
@@ -145,11 +144,15 @@ export class AppHostCliRunner {
         });
     }
 
-    _stopOneShotProcesses(): void {
+    stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
             terminateCliProcess(process, 'one-shot aspire command');
         }
         this._oneShotProcesses.clear();
+    }
+
+    dispose(): void {
+        this.stopOneShotProcesses();
     }
 }
 

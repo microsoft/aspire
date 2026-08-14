@@ -459,7 +459,7 @@ export class AppHostDataRepository {
     async fetchRunningAppHostsOnce(cancellationToken?: vscode.CancellationToken): Promise<AppHostDisplayInfo[]> {
         const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>(
             'aspire ps',
-            this._cliRunner._withNoLogo(['ps', '--format', 'json']),
+            this._cliRunner.withNoLogo(['ps', '--format', 'json']),
             { cancellationToken });
         return Array.isArray(appHosts) ? appHosts : [appHosts];
     }
@@ -514,7 +514,7 @@ export class AppHostDataRepository {
         }
 
         try {
-            const output = await this._cliRunner._runCliCommand(`aspire resource ${commandName}`, args, {
+            const output = await this._cliRunner.runCliCommand(`aspire resource ${commandName}`, args, {
                 timeoutMs: null,
                 stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
                 cancellationToken,
@@ -545,7 +545,7 @@ export class AppHostDataRepository {
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._stopPolling();
         this._stopAllDescribes();
-        this._cliRunner._stopOneShotProcesses();
+        this._cliRunner.dispose();
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
@@ -1019,7 +1019,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
-            const args = this._cliRunner._withNoLogo(['describe', '--follow', '--format', 'json']);
+            const args = this._cliRunner.withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -1061,7 +1061,7 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    if (code !== 0 && this._cliRunner._disableNoLogoForRetry(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow --apphost ${appHostPath}`)) {
+                    if (code !== 0 && this._cliRunner.disableNoLogoForRetry(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow --apphost ${appHostPath}`)) {
                         this._describeStreams.delete(appHostPath);
                         this._startDescribe(appHostPath, forceIncludeDisabledCommands);
                         return;
@@ -1302,7 +1302,7 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._cliRunner._runCliCommand(command, args, options);
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);
@@ -1312,7 +1312,7 @@ export class AppHostDataRepository {
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._cliRunner._withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._cliRunner.withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
         return snapshot.resources ?? [];
     }
 
@@ -1471,7 +1471,7 @@ export class AppHostDataRepository {
             }
         };
 
-        const args = this._cliRunner._withNoLogo(['ps', '--follow', '--format', 'json']);
+        const args = this._cliRunner.withNoLogo(['ps', '--follow', '--format', 'json']);
         const psFollowStdout = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
         const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
@@ -1503,7 +1503,7 @@ export class AppHostDataRepository {
                 }
 
                 if (code !== 0) {
-                    if (this._cliRunner._disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
+                    if (this._cliRunner.disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
                         this._startPsFollow();
                         return;
                     }
@@ -1551,7 +1551,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = true;
         const fetchVersion = ++this._psFetchVersion;
 
-        const args = this._cliRunner._withNoLogo(['ps', '--format', 'json']);
+        const args = this._cliRunner.withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
@@ -1582,7 +1582,7 @@ export class AppHostDataRepository {
             && !this._disposed
             && (force || this._dataActive);
         const pollingGeneration = this._psPollingGeneration;
-        const args = this._cliRunner._withNoLogo(['ps', '--format', 'json']);
+        const args = this._cliRunner.withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
                 return;
@@ -1869,7 +1869,7 @@ export class AppHostDataRepository {
                 removePsProcess();
                 if (!callbackInvoked) {
                     if ((code ?? 1) !== 0) {
-                        const retryArgs = this._cliRunner._tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
+                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
                         if (retryArgs) {
                             this._runPsCommand(retryArgs, callback, options);
                             return;
