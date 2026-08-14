@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E } from './helpers/fixtures';
+import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
 
@@ -13,10 +13,21 @@ suite('Aspire dynamic debug configuration E2E', function () {
     const firstFolderPath = path.join(fixtureRoot, 'first');
     const secondFolderPath = path.join(fixtureRoot, 'second');
     const appHostPath = path.join(secondFolderPath, 'apphost.cs');
+    let appHostPidBeforeStop: number | undefined;
+
+    setup(() => {
+        appHostPidBeforeStop = undefined;
+    });
 
     teardown(async () => {
         await runE2eTeardown([
+            () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
+            () => stopAppHostIfRunning(appHostPath),
+            () => appHostPidBeforeStop === undefined
+                ? undefined
+                : waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000),
+            () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceFoldersForE2E(),
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => removePath(fixtureRoot, { recursive: true, force: true }),
