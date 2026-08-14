@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
+import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
@@ -471,6 +471,56 @@ suite('spawnCliProcess tests', () => {
                 'Spawning Aspire CLI process: C:\\Tools\\aspire.exe run; cwd=C:\\workspace; noDebug=false; debugSessionId=debug-session-id; ASPIRE_CLI_START_TIMEOUT=300');
         }
         finally {
+            platformStub.restore();
+        }
+    });
+    test('terminates the process tree with taskkill on Windows rather than signalling the child', () => {
+        // Regression coverage for the Windows CI break: `terminateCliProcess` deliberately never
+        // calls `child.kill` on Windows, because killing the leader there orphans its descendants.
+        // A test that asserts on `child.kill` therefore passes on POSIX and fails on Windows.
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const spawned: Array<{ command: string; args: readonly string[] }> = [];
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').callsFake(((command: string, args: readonly string[]) => {
+            spawned.push({ command, args });
+            return Object.assign(new EventEmitter(), { unref: () => { } }) as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
+        }) as unknown as typeof nodeChildProcess.spawn);
+        const child = createTestChildProcess(4747);
+
+        try {
+            terminateCliProcess(child, 'test Aspire CLI');
+
+            assert.deepStrictEqual(spawned, [{ command: 'taskkill.exe', args: ['/pid', '4747', '/t'] }]);
+            assert.strictEqual(child.kill.callCount, 0);
+        }
+        finally {
+            spawnStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('force terminates a POSIX process group immediately without waiting for the grace period', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('linux');
+        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        const clock = sinon.useFakeTimers();
+        const childProcess = createTestChildProcess(4646);
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+        const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+
+        try {
+            const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['run'], { createProcessGroup: true });
+            terminateCliProcess(child, 'test Aspire CLI', { force: true });
+
+            // No SIGTERM and no escalation timer: a caller that is itself shutting down cannot rely
+            // on an `unref`'d timer still being there five seconds later.
+            assert.deepStrictEqual(processKillStub.args, [[-4646, 'SIGKILL']]);
+
+            await clock.tickAsync(5000);
+            assert.strictEqual(processKillStub.callCount, 1);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            processKillStub.restore();
             platformStub.restore();
         }
     });

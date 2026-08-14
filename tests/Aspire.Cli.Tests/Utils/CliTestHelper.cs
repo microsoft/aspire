@@ -453,7 +453,8 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
             ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry, configuration);
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -509,7 +510,10 @@ internal sealed class CliServiceCollectionTestOptions
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>());
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var logger = serviceProvider.GetRequiredService<ILogger<CertificateService>>();
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, environment, executionContext, logger);
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>

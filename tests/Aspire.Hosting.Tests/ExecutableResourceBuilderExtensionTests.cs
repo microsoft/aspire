@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
@@ -97,7 +98,11 @@ public class ExecutableResourceBuilderExtensionTests
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         var exe = new Executable(new ExecutableSpec());
-        await annotation.LaunchConfigurationAnnotator(exe, "NoDebug", CancellationToken.None);
+        await annotation.LaunchConfigurationAnnotator(
+            exe,
+            LaunchConfigurationTestHelpers.CreateCallbackContext(
+                executable.Resource,
+                ExecutableLaunchMode.NoDebug));
         Assert.Equal("ms-python.python", annotation.LaunchConfigurationType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var annotations));
@@ -123,14 +128,20 @@ public class ExecutableResourceBuilderExtensionTests
         var syncExecutable = builder.AddExecutable("sync", "command", "workingdirectory")
             .WithDebugSupport(mode => new ExecutableLaunchConfiguration("go") { Mode = mode }, "go");
         var asyncExecutable = builder.AddExecutable("async", "command", "workingdirectory")
-            .WithDebugSupport(async (mode, ct) =>
+            .WithDebugSupport(async (mode, _) =>
             {
                 await Task.Yield();
                 return new ExecutableLaunchConfiguration("go") { Mode = mode };
             }, "go");
 
-        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await syncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
-        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(await asyncExecutable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var syncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(
+                syncExecutable.Resource,
+                LaunchConfigurationTestHelpers.CreateCallbackContext(syncExecutable.Resource)));
+        var asyncConfiguration = Assert.IsType<ExecutableLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(
+                asyncExecutable.Resource,
+                LaunchConfigurationTestHelpers.CreateCallbackContext(asyncExecutable.Resource)));
 
         Assert.Equal(asyncConfiguration.Type, syncConfiguration.Type);
         Assert.Equal(asyncConfiguration.Mode, syncConfiguration.Mode);
@@ -149,7 +160,7 @@ public class ExecutableResourceBuilderExtensionTests
             () => executable.WithDebugSupport(mode => Task.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
 
         Assert.Equal("launchConfigurationProducer", exception.ParamName);
-        Assert.Contains(nameof(CancellationToken), exception.Message);
+        Assert.Equal(CreateAsyncProducerGuardMessage(typeof(Task<ExecutableLaunchConfiguration>), "launchConfigurationProducer"), exception.Message);
     }
 
     [Fact]
@@ -162,14 +173,122 @@ public class ExecutableResourceBuilderExtensionTests
             () => executable.WithDebugSupport(mode => ValueTask.FromResult(new ExecutableLaunchConfiguration("go") { Mode = mode }), "go"));
 
         Assert.Equal("launchConfigurationProducer", exception.ParamName);
+        Assert.Equal(CreateAsyncProducerGuardMessage(typeof(ValueTask<ExecutableLaunchConfiguration>), "launchConfigurationProducer"), exception.Message);
     }
 
     [Fact]
-    public async Task WithDebugSupportArgsCallbackRunsWhenItsAnnotationIsActive()
+    public async Task WithLaunchToolArgsLeadTheCommandLine()
     {
-        // A single WithDebugSupport call whose annotation is active (last) must run its
-        // argument-rewriting callback. This verifies the normal single-integration path
-        // independently of the multiple-annotation behavior below.
+        // The launch tool arguments are the tool-invocation prefix, so they always come first and the program's own
+        // arguments follow, regardless of the launch configuration in effect.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("launch-tool-arg", arg),
+            arg => Assert.Equal("base-arg", arg));
+    }
+
+    [Fact]
+    public async Task ProcessArgumentValuesAsyncIncludesLaunchToolArgsForExecutables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithLaunchToolArgs(context => context.Args.Add("launch-tool-arg"));
+        var args = new List<string>();
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        await executable.Resource.ProcessArgumentValuesAsync(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            (_, value, exception, _) =>
+            {
+                Assert.Null(exception);
+                args.Add(Assert.IsType<string>(value));
+            },
+            NullLogger.Instance);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal(["launch-tool-arg", "base-arg"], args);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WithLaunchToolArgsAreOrderIndependent(bool launchToolArgsFirst)
+    {
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the launch tool arguments used to
+        // be applied by an ordinary WithArgs callback that *removed* the prefix, which only worked when
+        // WithDebugSupport happened to be called after the callback that added it. Declaring the prefix separately
+        // instead of subtracting it must produce the same command line either way.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go"]
+        });
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
+
+        if (launchToolArgsFirst)
+        {
+            executable
+                .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
+                .WithArgs("base-arg");
+        }
+        else
+        {
+            executable
+                .WithArgs("base-arg")
+                .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go");
+        }
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("base-arg", arg));
+    }
+
+    [Fact]
+    public async Task WithLaunchToolArgsSurviveAnArgsCallbackThatClearsTheList()
+    {
+        // No WithArgs callback can observe or clear the tool-invocation prefix: it is evaluated separately and resolved
+        // ahead of the arguments those callbacks produce.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("launch-tool-arg"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
+            .WithArgs("discarded")
+            .WithArgs(ctx =>
+            {
+                ctx.Args.Clear();
+                ctx.Args.Add("only-arg");
+            });
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("launch-tool-arg", arg),
+            arg => Assert.Equal("only-arg", arg));
+    }
+
+    [Fact]
+    public async Task WithLaunchToolArgsRemainInTheAppModelDuringADebugSession()
+    {
+        // Withholding the prefix is a DCP-level concern. The application model must keep describing the real
+        // command line so the dashboard, the manifest and GetArgumentValuesAsync() consumers stay accurate.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -181,76 +300,43 @@ public class ExecutableResourceBuilderExtensionTests
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
             .WithArgs("base-arg")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
 
         Assert.Collection(args,
-            arg => Assert.Equal("base-arg", arg),
-            arg => Assert.Equal("rewritten-arg", arg));
-    }
-
-    [Fact]
-    public async Task WithDebugSupportArgsCallbackDoesNotRunWhenLaterDebugSupportSupersedesIt()
-    {
-        // WithDebugSupport is append-only and SupportsDebugging() only consults the LAST
-        // SupportsDebuggingAnnotation. A resource can gain debug support from more than one caller: e.g. a
-        // Go/Python integration that rewrites the entrypoint args (rewritesArgumentsForDebugging: true),
-        // followed by a second WithDebugSupport that does not. Once the later annotation supersedes the
-        // first, the first call's arg-rewriting callback must NOT fire; otherwise it would strip/append
-        // args while the active annotation reports RewritesArgumentsForDebugging == false and
-        // ExecutableCreator would offer a Process fallback built from the mangled arguments.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-
-        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
-        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
-        {
-            ProtocolsSupported = ["test"],
-            SupportedLaunchConfigurations = ["go", "project"]
-        });
-
-        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithArgs("base-arg")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"))
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("project"), "project");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
-
-        Assert.Collection(args,
+            arg => Assert.Equal("run", arg),
             arg => Assert.Equal("base-arg", arg));
     }
 
     [Fact]
-    public void WithDebugSupportReportsRewritesArgumentsWhenResourceSupportsArgs()
+    public void WithLaunchToolArgsAreOwnedByMatchingLaunchConfigurationType()
     {
-        // A resource that carries command-line arguments (IResourceWithArgs) actually gets the
-        // arg-rewriting callback attached, so the annotation must advertise that it rewrites args.
+        // The tool invocation is owned by the launch configuration type it was declared with, so a launch configuration
+        // of a different type does not claim it.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("project"), "project");
 
-        var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
-        Assert.True(annotation.RewritesArgumentsForDebugging);
+        var annotations = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().ToList();
+        Assert.Collection(annotations,
+            annotation => Assert.True(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)),
+            annotation => Assert.False(executable.Resource.HasLaunchToolArgsOwnedBy(annotation)));
     }
 
-    [Fact]
-    public void WithDebugSupportDoesNotReportRewritesArgumentsWhenResourceHasNoArgs()
+    private static string CreateAsyncProducerGuardMessage(Type producerReturnType, string parameterName)
     {
-        // If a caller supplies an argsCallback for a resource that is not IResourceWithArgs, the callback
-        // is never registered and the arguments are left unchanged. The annotation must therefore report
-        // RewritesArgumentsForDebugging == false so ExecutableCreator still offers the Process fallbacks.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var guidance = $"The launch configuration producer returns '{producerReturnType}'. An asynchronous producer must bind to an asynchronous {nameof(ResourceBuilderExtensions.WithDebugSupport)} overload either by accepting the launch mode and a {nameof(CancellationToken)} or by accepting a {nameof(LaunchConfigurationCallbackContext)}; otherwise the task itself is used as the launch configuration.";
 
-        var resource = builder.AddResource(new DebuggableResourceWithoutArgs("noargs"))
-            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go", ctx => ctx.Args.Add("rewritten-arg"));
-
-        var annotation = resource.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
-        Assert.False(annotation.RewritesArgumentsForDebugging);
+        return new ArgumentException(guidance, parameterName).Message;
     }
 
     [Fact]
-    public void WithDebugSupportDoesNotReportRewritesArgumentsWhenNoArgsCallbackProvided()
+    public void WithDebugSupportDoesNotOwnLaunchToolArgsWithoutWithLaunchToolArgs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -258,8 +344,62 @@ public class ExecutableResourceBuilderExtensionTests
             .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
 
         var annotation = executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
-        Assert.False(annotation.RewritesArgumentsForDebugging);
+        Assert.False(executable.Resource.HasLaunchToolArgsOwnedBy(annotation));
     }
 
-    private sealed class DebuggableResourceWithoutArgs(string name) : Resource(name);
+    [Fact]
+    public async Task WithLaunchToolArgsAreRegisteredInPublishMode()
+    {
+        // Debug support is run-mode only, but the launch tool arguments describe how the resource is invoked in general and
+        // must survive into the manifest and generated container images.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go");
+
+        Assert.Empty(executable.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource);
+
+        Assert.Collection(args,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("base-arg", arg));
+    }
+
+    [Fact]
+    public async Task WithLaunchToolArgsAreNotCarriedIntoAPublishedContainer()
+    {
+        // PublishAsDockerFile reuses the executable's annotations for the generated container resource, but a
+        // container invokes the program through the image's ENTRYPOINT, so repeating the tool prefix in the
+        // container's arguments would run the wrong command.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithArgs("base-arg")
+            .WithLaunchToolArgs(ctx => ctx.Args.Add("run"), ownedByLaunchConfigurationType: "go")
+            .WithDebugSupport(_ => new ExecutableLaunchConfiguration("go"), "go")
+            .PublishAsDockerFile();
+
+        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(container);
+
+        Assert.Empty(args);
+
+        var processedArgs = new List<string>();
+#pragma warning disable CS0618 // Type or member is obsolete
+        await container.ProcessArgumentValuesAsync(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            (_, value, exception, _) =>
+            {
+                Assert.Null(exception);
+                processedArgs.Add(Assert.IsType<string>(value));
+            },
+            NullLogger.Instance);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Empty(processedArgs);
+    }
 }

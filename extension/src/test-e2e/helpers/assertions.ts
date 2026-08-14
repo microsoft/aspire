@@ -6,6 +6,7 @@ import type { AspireAppHostState as AppHostState, AspireDebugSessionState, Aspir
 import { getControlFilePath, getPrimaryAppHostProjectPath, getStateFilePath, getWorkspaceRoot } from './paths';
 
 type CommandInvocation = ExtensionE2EStateFile['commandInvocations'][number];
+type BrowserDebugSession = ExtensionE2EStateFile['browserDebugSessions'][number];
 interface Deadline {
     readonly started: number;
     readonly timeoutMs: number;
@@ -103,6 +104,27 @@ export async function waitForHttpText(url: string, expectedText: string, timeout
 
 export async function waitForNoDebugSessions(timeoutMs = 90000): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(file => file.state.debugSessions.length === 0, 'debug sessions to stop', timeoutMs);
+}
+
+export async function waitForBrowserDebugSession(timeoutMs = 120000): Promise<BrowserDebugSession> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.browserDebugSessions.some(session => session.parentSessionType === 'aspire'),
+        'dashboard browser debug session to start',
+        timeoutMs);
+    const session = file.browserDebugSessions.find(candidate => candidate.parentSessionType === 'aspire');
+    if (!session) {
+        throw new Error('Dashboard browser debug session was not found even though the state predicate matched.');
+    }
+
+    return session;
+}
+
+export async function waitForNoBrowserDebugSessions(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
+    return await waitForExtensionState(file => file.browserDebugSessions.length === 0, 'browser debug sessions to terminate', timeoutMs);
+}
+
+export function getBrowserDebugSessions(): readonly BrowserDebugSession[] {
+    return readStateFile().browserDebugSessions;
 }
 
 export async function waitForTaskProcessEvent(

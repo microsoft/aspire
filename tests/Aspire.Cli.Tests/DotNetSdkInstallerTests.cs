@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Semver;
 
@@ -17,12 +18,34 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WhenDotNetIsAvailable_ReturnsTrue()
     {
-        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration());
+        var installer = CreateDotNetSdkInstaller();
 
         // This test assumes the test environment has .NET SDK installed
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
 
         Assert.True(success);
+    }
+
+    [Fact]
+    public async Task CheckAsync_UsesResolvedDotNetPath()
+    {
+        string? capturedDotNetPath = null;
+        var environment = new TestEnvironment();
+        var installer = CreateDotNetSdkInstaller(environment: environment, createProcessStartInfo: (dotnetPath, arguments) =>
+        {
+            capturedDotNetPath = dotnetPath;
+            return new ProcessStartInfo(dotnetPath, arguments)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+        });
+
+        await installer.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(DotNetSdkInstaller.ResolveDotNetPath(environment), capturedDotNetPath);
     }
 
     [Fact]
@@ -38,7 +61,7 @@ public class DotNetSdkInstallerTests
         try
         {
             var startInfo = await CreateBlockingDotNetShimAsync(tempDirectory, parentPidFile, childPidFile);
-            var installer = new DotNetSdkInstaller(CreateEmptyConfiguration(), _ => startInfo);
+            var installer = CreateDotNetSdkInstaller(createProcessStartInfo: (_, _) => startInfo);
             var checkTask = installer.CheckAsync(cancellationTokenSource.Token);
 
             parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(parentPidFile, TestContext.Current.CancellationToken)
@@ -65,7 +88,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_WithMinimumVersion_WhenDotNetIsAvailable_ReturnsTrue()
     {
         var configuration = CreateConfigurationWithOverride("8.0.0");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // This test assumes the test environment has .NET SDK installed with a version >= 8.0.0
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -77,7 +100,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_WithActualMinimumVersion_BehavesCorrectly()
     {
         var configuration = CreateConfigurationWithOverride(DotNetSdkInstaller.MinimumSdkVersion);
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // Use the actual minimum version constant and check the behavior
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -91,7 +114,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_WithHighMinimumVersion_ReturnsFalse()
     {
         var configuration = CreateConfigurationWithOverride("99.0.0");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // Use an unreasonably high version that should not exist
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -103,7 +126,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_WithInvalidMinimumVersion_ReturnsFalse()
     {
         var configuration = CreateConfigurationWithOverride("invalid.version");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // Use an invalid version string
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -115,7 +138,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_UsesArchitectureSpecificCommand()
     {
         var configuration = CreateConfigurationWithOverride("8.0.0");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // This test verifies that the architecture-specific command is used
         // Since the implementation adds --arch flag, it should still work correctly
@@ -129,7 +152,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_UsesOverrideMinimumSdkVersion_WhenConfigured()
     {
         var configuration = CreateConfigurationWithOverride("8.0.0");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // The installer should use the override version instead of the constant
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -141,7 +164,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_UsesDefaultMinimumSdkVersion_WhenNotConfigured()
     {
-        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration());
+        var installer = CreateDotNetSdkInstaller();
 
         // Call the parameterless method that should use the default constant
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -153,7 +176,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_UsesMinimumSdkVersion()
     {
-        var installer = new DotNetSdkInstaller(CreateEmptyConfiguration());
+        var installer = CreateDotNetSdkInstaller();
 
         // Call the parameterless method that should use the minimum SDK version
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -166,7 +189,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_UsesOverrideVersion_WhenOverrideConfigured()
     {
         var configuration = CreateConfigurationWithOverride("8.0.0");
-        var installer = new DotNetSdkInstaller(configuration);
+        var installer = CreateDotNetSdkInstaller(configuration);
 
         // The installer should use the override version instead of the baseline constant
         var (success, _, _) = await installer.CheckAsync().DefaultTimeout();
@@ -274,6 +297,19 @@ public class DotNetSdkInstallerTests
     private static IConfiguration CreateEmptyConfiguration()
     {
         return new ConfigurationBuilder().Build();
+    }
+
+    private static DotNetSdkInstaller CreateDotNetSdkInstaller(
+        IConfiguration? configuration = null,
+        IEnvironment? environment = null,
+        Func<string, string, ProcessStartInfo>? createProcessStartInfo = null)
+    {
+        configuration ??= CreateEmptyConfiguration();
+        environment ??= new TestEnvironment();
+
+        return createProcessStartInfo is null
+            ? new DotNetSdkInstaller(configuration, environment)
+            : new DotNetSdkInstaller(configuration, environment, createProcessStartInfo);
     }
 
     private static IConfiguration CreateConfigurationWithOverride(string overrideVersion)

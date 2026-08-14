@@ -137,9 +137,11 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
     <InternalsVisibleTo Include="Aspire.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />

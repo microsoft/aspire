@@ -8,7 +8,7 @@ import waitForExpect from 'wait-for-expect';
 import { AspireGutterDecorationProvider, classifyState } from '../editor/AspireGutterDecorationProvider';
 import { ResourceState } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
+import { AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 
 function p(...segments: string[]): string {
     return path.join(path.sep, ...segments);
@@ -20,7 +20,7 @@ function createMockDocument(content: string, filePath: string): vscode.TextDocum
         uri: vscode.Uri.file(filePath),
         fileName: filePath,
         isUntitled: false,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
+        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'javascript',
         version: 1,
         isDirty: false,
         isClosed: false,
@@ -147,6 +147,35 @@ suite('AspireGutterDecorationProvider', () => {
 
     test('FailedToStart with a non-zero exit code uses the error decoration category', () => {
         assert.strictEqual(classifyState(ResourceState.FailedToStart, '', '', 1), 'error');
+    });
+
+    test('emits resource decorations for a running Rust AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '    let cache = builder.add_redis("cache")?;',
+            '}',
+        ].join('\n');
+        const document = createMockDocument(content, appHostPath);
+        const runningAppHost = makeAppHost(appHostPath, [makeResource('cache')]);
+        const decorationCalls: vscode.DecorationOptions[][] = [];
+        const editor = {
+            document,
+            setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly vscode.DecorationOptions[]) => {
+                decorationCalls.push([...options]);
+            },
+        } as unknown as vscode.TextEditor;
+        sandbox.stub(vscode.window, 'visibleTextEditors').value([editor]);
+
+        const provider = new AspireGutterDecorationProvider(makeTreeProvider({ appHosts: [runningAppHost] }));
+
+        await waitForExpect(() => {
+            const decorations = decorationCalls.flat();
+            assert.strictEqual(decorations.length, 1);
+            assert.strictEqual(decorations[0].range.start.line, 2);
+        });
+        provider.dispose();
     });
 
     test('does not emit resource decorations from a different running AppHost', () => {

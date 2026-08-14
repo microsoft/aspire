@@ -27,13 +27,15 @@ internal class InteractionService : IInteractionService
     private readonly DistributedApplicationOptions _distributedApplicationOptions;
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
 
-    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration)
+    public InteractionService(ILogger<InteractionService> logger, DistributedApplicationOptions distributedApplicationOptions, IServiceProvider serviceProvider, IConfiguration configuration, IInteractionFileUploadStore fileUploadStore)
     {
         _logger = logger;
         _distributedApplicationOptions = distributedApplicationOptions;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
+        _fileUploadStore = fileUploadStore;
     }
 
     public bool IsAvailable
@@ -157,6 +159,7 @@ internal class InteractionService : IInteractionService
 
         // Create the collection early to validate names and generate missing ones
         var inputCollection = new InteractionInputCollection(inputs);
+        var hasFileInputs = inputs.Any(input => input.InputType == InputType.File);
 
         // Validate inputs.
         for (var i = 0; i < inputs.Count; i++)
@@ -190,6 +193,10 @@ internal class InteractionService : IInteractionService
             options ??= InputsDialogInteractionOptions.Default;
 
             var newState = new Interaction(title, message, options, new Interaction.InputsInteractionInfo(inputCollection), interactionCts.Token);
+            if (hasFileInputs)
+            {
+                _fileUploadStore.StartInteraction(newState.InteractionId);
+            }
             AddInteractionUpdate(newState);
 
             using var _ = cancellationToken.Register(OnInteractionCancellation, state: newState);
@@ -236,9 +243,12 @@ internal class InteractionService : IInteractionService
             }
 
             var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
-            return completion.State is not IReadOnlyList<InteractionInput> inputState
-                ? InteractionResult.Cancel<InteractionInputCollection>()
-                : InteractionResult.Ok(new InteractionInputCollection(inputState));
+            if (completion.State is not IReadOnlyList<InteractionInput> inputState)
+            {
+                return InteractionResult.Cancel<InteractionInputCollection>();
+            }
+
+            return InteractionResult.Ok(new InteractionInputCollection(inputState));
         }
         finally
         {
@@ -392,10 +402,17 @@ internal class InteractionService : IInteractionService
     private void OnInteractionCancellation(object? newState)
     {
         var interactionState = (Interaction)newState!;
+        var completion = new InteractionCompletionState { Complete = true };
 
-        interactionState.State = Interaction.InteractionState.Complete;
-        interactionState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
-        AddInteractionUpdate(interactionState);
+        lock (_onInteractionUpdatedLock)
+        {
+            if (!_interactionCollection.Contains(interactionState.InteractionId))
+            {
+                return;
+            }
+
+            CompleteInteractionCore(interactionState, completion);
+        }
     }
 
     private void AddInteractionUpdate(Interaction interactionUpdate)
@@ -479,14 +496,37 @@ internal class InteractionService : IInteractionService
 
             if (result.Complete)
             {
-                interactionState.CompletionTcs.TrySetResult(result);
-                interactionState.State = Interaction.InteractionState.Complete;
-                _interactionCollection.Remove(interactionId);
+                CompleteInteractionCore(interactionState, result);
             }
-
-            // Either broadcast out the interaction is complete, or its updated state.
-            OnInteractionUpdated?.Invoke(interactionState);
+            else
+            {
+                // Broadcast the updated interaction when validation failed or input state changed.
+                OnInteractionUpdated?.Invoke(interactionState);
+            }
         }
+    }
+
+    private void CompleteInteractionCore(Interaction interactionState, InteractionCompletionState completion)
+    {
+        Debug.Assert(Monitor.IsEntered(_onInteractionUpdatedLock));
+
+        if (interactionState.InteractionInfo is Interaction.InputsInteractionInfo inputsInfo &&
+            inputsInfo.Inputs.Any(input => input.InputType == InputType.File))
+        {
+            if (completion.State is IReadOnlyList<InteractionInput>)
+            {
+                _fileUploadStore.CompleteInteraction(interactionState.InteractionId);
+            }
+            else
+            {
+                _fileUploadStore.CancelInteraction(interactionState.InteractionId);
+            }
+        }
+
+        interactionState.State = Interaction.InteractionState.Complete;
+        interactionState.CompletionTcs.TrySetResult(completion);
+        _interactionCollection.Remove(interactionState.InteractionId);
+        OnInteractionUpdated?.Invoke(interactionState);
     }
 
     /// <summary>

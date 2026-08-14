@@ -60,7 +60,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
-    <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 
   <ItemGroup>

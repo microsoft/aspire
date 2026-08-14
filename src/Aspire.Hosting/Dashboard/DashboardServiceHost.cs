@@ -50,7 +50,7 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceLoggerService resourceLoggerService,
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
-        IFileSystemService fileSystemService)
+        IInteractionFileUploadStore fileUploadStore)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
@@ -109,8 +109,7 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
-            builder.Services.AddSingleton(fileSystemService);
-            builder.Services.AddSingleton<IFileUploadStore, FileUploadStore>();
+            builder.Services.AddSingleton(fileUploadStore);
 
             builder.WebHost.ConfigureKestrel(ConfigureKestrel);
 

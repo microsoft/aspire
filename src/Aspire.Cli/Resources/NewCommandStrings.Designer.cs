@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SourceDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("SourceDirectoryNotFound", resourceCulture);
+            }
+        }
+
         public static string SourceWithCredentialsCannotBePersisted {
             get {
                 return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);

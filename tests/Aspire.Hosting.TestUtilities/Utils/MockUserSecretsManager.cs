@@ -11,15 +11,17 @@ namespace Aspire.Hosting.Tests.Utils;
 internal sealed class MockUserSecretsManager : IUserSecretsManager
 {
     private readonly bool _canSetSecret;
+    private readonly bool _isAvailable;
 
-    public MockUserSecretsManager(bool canSetSecret = true)
+    public MockUserSecretsManager(bool canSetSecret = true, bool? isAvailable = null)
     {
         _canSetSecret = canSetSecret;
+        _isAvailable = isAvailable ?? canSetSecret;
     }
 
     public Dictionary<string, string> Secrets { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    public bool IsAvailable => _canSetSecret;
+    public bool IsAvailable => _isAvailable;
 
     public string FilePath => "/mock/path/secrets.json";
 

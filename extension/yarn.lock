@@ -2869,10 +2869,10 @@ fast-levenshtein@^3.0.0:
   dependencies:
     fastest-levenshtein "^1.0.7"
 
-fast-uri@3.1.4, fast-uri@^3.0.1:
-  version "3.1.4"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.4.tgz#3b3daf9ce68f41f956df0b505132c0cfce9ec7af"
-  integrity sha1-Oz2vnOaPQflW3wtQUTLAz86ex68=
+fast-uri@3.1.5, fast-uri@^3.0.1:
+  version "3.1.5"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.5.tgz#610f37419a030270430cecd68d74e3d4d96725d0"
+  integrity sha1-YQ83QZoDAnBDDOzWjXTj1NlnJdA=
 
 fastest-levenshtein@^1.0.12, fastest-levenshtein@^1.0.7:
   version "1.0.16"
@@ -3949,10 +3949,10 @@ js-tokens@^4.0.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-tokens/-/js-tokens-4.0.0.tgz"
   integrity sha1-GSA/tZmR35jjoocFDUZHzerzJJk=
 
-js-yaml@4.3.0, js-yaml@^4.1.0, js-yaml@^4.1.1:
-  version "4.3.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-yaml/-/js-yaml-4.3.0.tgz#d1900572a7f7cf0b5f540c83673e60bad3436592"
-  integrity sha1-0ZAFcqf3zwtfVAyDZz5gutNDZZI=
+js-yaml@4.3.1, js-yaml@^4.1.0, js-yaml@^4.1.1:
+  version "4.3.1"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/js-yaml/-/js-yaml-4.3.1.tgz#01216c001d67f48e2cd560d708c7af21090a3848"
+  integrity sha1-ASFsAB1n9I4s1WDXCMevIQkKOEg=
   dependencies:
     argparse "^2.0.1"
 
@@ -6164,6 +6164,14 @@ tree-sitter-c-sharp@0.23.5:
   version "0.23.5"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tree-sitter-c-sharp/-/tree-sitter-c-sharp-0.23.5.tgz"
   integrity sha512-xJGOeXPMmld0nES5+080N/06yY6LQi+KWGWV4LfZaZe6srJPtUtfhIbRSN7EZN6IaauzW28v6W4QHFwmeUW6HQ==
+  dependencies:
+    node-addon-api "^8.2.2"
+    node-gyp-build "^4.8.4"
+
+tree-sitter-rust@0.24.0:
+  version "0.24.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tree-sitter-rust/-/tree-sitter-rust-0.24.0.tgz#efe9104052ae022e98d2cd30018587bd05ce01f3"
+  integrity sha1-7+kQQFKuAi6Y0s0wAYWHvQXOAfM=
   dependencies:
     node-addon-api "^8.2.2"
     node-gyp-build "^4.8.4"

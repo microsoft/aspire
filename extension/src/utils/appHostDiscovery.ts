@@ -1,47 +1,35 @@
 import * as path from 'path';
-import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
-import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
+import { aspireConfigFileName } from './cliTypes';
 import { isNoLogoUnsupportedOutput, noLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
-import { classifyAppHostPath, projectContentsReferencesRunnableAspireAppHost, summarizeAppHostLanguages } from './appHostLanguage';
+import { classifyAppHostPath, summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
-import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import { isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 import { ConfigInfoProvider } from './configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
+import { isSamePath } from './paths/comparison';
+import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
+import { createLsStreamCandidateHandler, parseCandidateOutput, parseLegacyGetAppHostsOutput, toCandidatesFromLegacySearchResult } from './appHostCandidateParsing';
+import { discoverProjectAppHostsFromWorkspaceFiles, findConfiguredAppHostPaths, formatErrorMessage } from './appHostProjectFiles';
+import { findCandidateForEditorFile, findWorkspaceDefaultCandidate, getDebugTargetForCandidate, sortCandidatesByPath } from './appHostCandidateSelection';
+import type { CandidateAppHostDisplayInfo, IncrementalCandidateCallback } from './appHostCandidateTypes';
 
-// Mirrors the `aspire ls --format json` candidate shape documented in
-// docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
-// this shape so extension code can keep using the modern discovery contract.
-export interface CandidateAppHostDisplayInfo {
-    path: string;
-    language: string | null;
-    status: string;
-    selected?: boolean;
-}
-
-export interface AppHostCandidate {
-    relativePath: string;
-    path: string;
-    language: string;
-    status: string;
-}
-
-export interface AppHostProjectSearchResult {
-    selected_project_file: string | null;
-    all_project_file_candidates: string[];
-    app_host_candidates: AppHostCandidate[];
-}
-
-interface LegacyAppHostProjectSearchResult {
-    selected_project_file: string | null;
-    all_project_file_candidates: string[];
-}
+export { isSamePath };
+export { isSameFileSystemEntry };
+export { getFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
+export type { FileSystemEntryDescriptor } from './paths/fileSystemIdentity';
+export { findCandidateForEditorFile };
+export { getDebugTargetForCandidate };
+export { findConfiguredAppHostPaths };
+export { getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, selectWorkspaceAppHostPath } from './appHostCandidateSelection';
+export { formatAppHostLanguage } from './appHostLanguage';
+export type { AppHostCandidate, AppHostProjectSearchResult, CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
 type AppHostDiscoverySource = 'ls' | 'legacy-get-apphosts' | 'workspace-files' | 'all';
 
@@ -49,10 +37,6 @@ interface AppHostDiscoveryResult {
     source: Exclude<AppHostDiscoverySource, 'all'>;
     candidates: CandidateAppHostDisplayInfo[];
 }
-
-// Best-effort notification for candidates discovered before the final result is available.
-// Buffered discovery does not invoke this callback; the returned promise remains authoritative.
-type IncrementalCandidateCallback = (candidate: CandidateAppHostDisplayInfo) => void;
 
 interface CachedAppHostDiscovery {
     promise: Promise<CandidateAppHostDisplayInfo[]>;
@@ -246,6 +230,21 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         const result = await this.discover(folder);
         return findCandidateForEditorFile(filePath, result);
+    }
+
+    forgetWorkspaceFolder(workspaceFolder: vscode.WorkspaceFolder): void {
+        const key = path.resolve(workspaceFolder.uri.fsPath);
+        this._cache.delete(key);
+        const watchers = this._watchers.get(key);
+        if (watchers) {
+            watchers.forEach(watcher => watcher.dispose());
+            this._watchers.delete(key);
+        }
+        const pendingInvalidationTimer = this._pendingInvalidationTimers.get(key);
+        if (pendingInvalidationTimer) {
+            clearTimeout(pendingInvalidationTimer);
+            this._pendingInvalidationTimers.delete(key);
+        }
     }
 
     dispose(): void {
@@ -476,6 +475,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             '**/apphost.js',
             '**/apphost.mjs',
             '**/apphost.cjs',
+            '**/apphost.rs',
             `**/${aspireConfigFileName}`,
             '**/.aspire/settings.json',
         ];
@@ -514,17 +514,17 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
 
         const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
-        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSamePath(candidate.path, configuredPath)))
+        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSameFileSystemEntry(candidate.path, configuredPath)))
             ?? configuredPaths[0];
         if (!configuredPath) {
             return candidates;
         }
 
-        const matchingCandidate = candidates.find(candidate => isSamePath(candidate.path, configuredPath));
+        const matchingCandidate = candidates.find(candidate => isSameFileSystemEntry(candidate.path, configuredPath));
         if (matchingCandidate) {
             return candidates.map(candidate => ({
                 ...candidate,
-                selected: isSamePath(candidate.path, configuredPath),
+                selected: isSameFileSystemEntry(candidate.path, configuredPath),
             }));
         }
 
@@ -756,32 +756,6 @@ function emitAppHostDiscoveryTelemetry(
     });
 }
 
-function createLsStreamCandidateHandler(onCandidate: IncrementalCandidateCallback): (line: string) => void {
-    return line => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-            return;
-        }
-
-        let parsed: unknown;
-        try {
-            // `aspire ls --format json --stream` emits newline-delimited JSON, one candidate per line:
-            //   {"path":"/repo/AppHost/AppHost.csproj","language":"csharp","status":"buildable"}
-            // Treat malformed lines as a failed stream instead of accepting a truncated partial result.
-            parsed = JSON.parse(trimmed);
-        }
-        catch {
-            throw new Error('aspire ls --stream returned malformed JSON.');
-        }
-
-        if (!isLsCandidate(parsed)) {
-            throw new Error('aspire ls --stream returned a candidate with an unexpected shape.');
-        }
-
-        onCandidate(toDisplayCandidate(parsed));
-    };
-}
-
 function notifyCandidateProgressCallback(callback: IncrementalCandidateCallback, candidate: CandidateAppHostDisplayInfo): void {
     try {
         callback(candidate);
@@ -795,289 +769,6 @@ function throwIfCliCommandFailed(result: CliProcessResult, includeStdout = true)
     if (result.exitCode !== 0) {
         throw new Error(result.stderr.trim() || (includeStdout ? result.stdout.trim() : '') || `exit code ${result.exitCode ?? 1}`);
     }
-}
-
-export function findCandidateForEditorFile(filePath: string, candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    const matchingCandidate = candidates.find(candidate => isSamePath(candidate.path, filePath));
-    if (matchingCandidate) {
-        return matchingCandidate;
-    }
-
-    if (path.extname(filePath).toLowerCase() !== '.cs') {
-        return undefined;
-    }
-
-    // IMPORTANT: `aspire ls` is still the source of truth for what is a valid AppHost.
-    // This block does not discover AppHosts by reading C# source files or by deciding
-    // that a project "looks like" an AppHost. It only handles the editor affordance gap
-    // in the current CLI shape:
-    //
-    //   aspire ls --format json
-    //   [
-    //     { "path": "/repo/AppHost/AppHost.csproj", "language": "csharp", "status": "buildable" }
-    //   ]
-    //
-    // For SDK-style .NET AppHosts the launch target is the `.csproj`, but users usually
-    // have `Program.cs` or another C# source file open when they invoke Run/Debug from
-    // the editor or debug picker. Until the CLI returns source identity/project membership
-    // in the candidate payload, treat C# files under a candidate `.csproj` directory as
-    // editor aliases for that candidate. Pick the deepest candidate directory so nested
-    // AppHost candidates prefer their own project over an outer candidate. Keep this
-    // heuristic bounded to C# project candidates from `aspire ls` and remove it when the
-    // CLI can report the canonical source file or owning project for each candidate.
-    const projectCandidate = candidates
-        .filter(candidate => isCSharpProjectCandidate(candidate) && isCSharpSourceFileForProjectCandidate(filePath, candidate.path))
-        .sort((left, right) => path.dirname(right.path).length - path.dirname(left.path).length)[0];
-    return projectCandidate;
-}
-
-function findWorkspaceDefaultCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    return findSingleSelectedBuildableCandidate(candidates) ?? findOnlyBuildableCandidate(candidates);
-}
-
-export function getDebugTargetForCandidate(candidate: CandidateAppHostDisplayInfo): string {
-    return candidate.path;
-}
-
-export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.WorkspaceFolder, candidates: readonly CandidateAppHostDisplayInfo[]): AppHostProjectSearchResult {
-    const appHostCandidates = candidates.map(candidate => toAppHostCandidate(workspaceFolder, candidate));
-    const selectedAppHostPath = (findSingleSelectedBuildableCandidate(candidates) ?? findOnlyCandidateIfBuildable(candidates))?.path ?? null;
-    const effectiveAppHostCandidates = selectedAppHostPath && !appHostCandidates.some(candidate => isSamePath(candidate.path, selectedAppHostPath))
-        ? [...appHostCandidates, toConfiguredAppHostCandidate(workspaceFolder, selectedAppHostPath)]
-        : appHostCandidates;
-    const buildableCandidates = effectiveAppHostCandidates.filter(isBuildableAppHostCandidate);
-
-    return {
-        selected_project_file: selectedAppHostPath && buildableCandidates.some(candidate => isSamePath(candidate.path, selectedAppHostPath))
-            ? selectedAppHostPath
-            : null,
-        all_project_file_candidates: buildableCandidates.map(candidate => candidate.path),
-        app_host_candidates: effectiveAppHostCandidates,
-    };
-}
-
-export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
-    return candidate.status === 'buildable';
-}
-
-export function formatAppHostLanguage(language: string): string | undefined {
-    if (!language) {
-        return undefined;
-    }
-
-    switch (language.toLowerCase()) {
-        case 'csharp':
-            return 'C#';
-        case 'typescript':
-        case 'typescript/nodejs':
-            return 'TypeScript';
-        default:
-            return language.charAt(0).toUpperCase() + language.slice(1);
-    }
-}
-
-export async function selectWorkspaceAppHostPath(workspaceFolder: vscode.WorkspaceFolder, candidates: readonly CandidateAppHostDisplayInfo[]): Promise<string | undefined> {
-    const selectedCandidate = findSingleSelectedBuildableCandidate(candidates);
-    if (selectedCandidate) {
-        return selectedCandidate.path;
-    }
-
-    const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
-    for (const configuredPath of configuredPaths) {
-        const candidate = candidates.find(candidate => isBuildableCandidate(candidate) && isSamePath(candidate.path, configuredPath));
-        if (candidate) {
-            return candidate.path;
-        }
-    }
-
-    return findOnlyCandidateIfBuildable(candidates)?.path;
-}
-
-export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder, cancellationToken?: vscode.CancellationToken): Promise<string[]> {
-    let newConfigFiles: vscode.Uri[];
-    let legacySettingsFiles: vscode.Uri[];
-    try {
-        const excludePattern = getAppHostDiscoveryExcludeGlob();
-        [newConfigFiles, legacySettingsFiles] = await Promise.all([
-            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, `**/${aspireConfigFileName}`), excludePattern, appHostDiscoveryFindFilesMaxResults, cancellationToken),
-            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/.aspire/settings.json'), excludePattern, appHostDiscoveryFindFilesMaxResults, cancellationToken),
-        ]);
-    }
-    catch (error) {
-        extensionLogOutputChannel.warn(`Failed to find AppHost configuration files: ${formatErrorMessage(error)}`);
-        return [];
-    }
-
-    const newConfigDirs = new Set(newConfigFiles.map(uri => path.dirname(uri.fsPath)));
-    const filteredLegacyFiles = legacySettingsFiles.filter(legacyUri => {
-        const projectRoot = path.dirname(path.dirname(legacyUri.fsPath));
-        return !newConfigDirs.has(projectRoot);
-    });
-
-    const configuredPaths: string[] = [];
-    for (const uri of [...newConfigFiles, ...filteredLegacyFiles]) {
-        try {
-            const json = await readJsonFile(uri);
-            const appHostPath = getAppHostPathFromConfig(json);
-            if (appHostPath) {
-                configuredPaths.push(path.isAbsolute(appHostPath) ? appHostPath : path.join(path.dirname(uri.fsPath), appHostPath));
-            }
-        }
-        catch {
-        }
-    }
-
-    return configuredPaths;
-}
-
-function toAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, candidate: CandidateAppHostDisplayInfo): AppHostCandidate {
-    return {
-        relativePath: path.relative(workspaceFolder.uri.fsPath, candidate.path),
-        path: candidate.path,
-        language: candidate.language ?? '',
-        status: candidate.status,
-    };
-}
-
-function toConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, appHostPath: string): AppHostCandidate {
-    return {
-        relativePath: path.relative(workspaceFolder.uri.fsPath, appHostPath),
-        path: appHostPath,
-        language: '',
-        status: 'buildable',
-    };
-}
-
-function sortCandidatesByPath(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
-    return [...candidates].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-}
-
-function parseCandidateOutput(output: string): CandidateAppHostDisplayInfo[] {
-    const trimmed = output.trim();
-    if (!trimmed) {
-        return [];
-    }
-
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed)) {
-        const appHosts = parsed
-            .filter(isLsCandidate)
-            .map(candidate => toDisplayCandidate(candidate));
-
-        const unexpectedCandidateCount = parsed.length - appHosts.length;
-        if (unexpectedCandidateCount > 0) {
-            extensionLogOutputChannel.warn(`AppHost discovery returned ${unexpectedCandidateCount} candidate(s) with an unexpected shape; ignoring those entries.`);
-        }
-
-        return appHosts;
-    }
-
-    if (isAppHostProjectSearchResult(parsed)) {
-        return parsed.app_host_candidates.map(candidate => ({
-            ...toDisplayCandidate(candidate),
-            selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidate.path),
-        }));
-    }
-
-    if (isLegacyAppHostProjectSearchResult(parsed)) {
-        return toCandidatesFromLegacySearchResult(parsed);
-    }
-
-    throw new Error('AppHost discovery returned an unexpected output shape.');
-}
-
-async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
-    // This is the final fallback after both CLI discovery paths fail. Do not cap the
-    // project scan here: VS Code returns only the first maxResults matches, which can
-    // hide the only AppHost in a large workspace.
-    const projectUris = (await Promise.all([
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), getAppHostDiscoveryExcludeGlob()),
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.fsproj'), getAppHostDiscoveryExcludeGlob()),
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.vbproj'), getAppHostDiscoveryExcludeGlob()),
-    ])).flat();
-    const candidates: CandidateAppHostDisplayInfo[] = [];
-    for (const uri of projectUris.sort((left, right) => left.fsPath.localeCompare(right.fsPath))) {
-        let projectContents: string;
-        try {
-            projectContents = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-        }
-        catch (error) {
-            extensionLogOutputChannel.warn(`Failed to read possible AppHost project ${uri.fsPath}: ${formatErrorMessage(error)}`);
-            continue;
-        }
-
-        if (isAppHostProject(projectContents)) {
-            candidates.push({
-                path: uri.fsPath,
-                language: getProjectLanguage(uri.fsPath),
-                status: 'buildable',
-            });
-        }
-    }
-
-    return candidates;
-}
-
-function isAppHostProject(projectContents: string): boolean {
-    return projectContentsReferencesRunnableAspireAppHost(projectContents);
-}
-
-function getProjectLanguage(projectPath: string): string {
-    return path.extname(projectPath).toLowerCase() === '.fsproj'
-        ? 'fsharp'
-        : path.extname(projectPath).toLowerCase() === '.vbproj'
-            ? 'visualbasic'
-            : 'csharp';
-}
-
-function parseLegacyGetAppHostsOutput(output: string): LegacyAppHostProjectSearchResult {
-    // `aspire extension get-apphosts` prints a single JSON object:
-    //   {"selected_project_file":"/repo/AppHost/AppHost.csproj","all_project_file_candidates":["/repo/AppHost/AppHost.csproj"]}
-    // Older builds can include log lines, so scan for the first line with the expected shape.
-    for (const line of output.split(/\r?\n/)) {
-        try {
-            const parsed = JSON.parse(line);
-            if (isLegacyAppHostProjectSearchResult(parsed)) {
-                return parsed;
-            }
-        }
-        catch {
-        }
-    }
-
-    const parsed = JSON.parse(output.trim());
-    if (isLegacyAppHostProjectSearchResult(parsed)) {
-        return parsed;
-    }
-
-    throw new Error('aspire extension get-apphosts returned an unexpected output shape.');
-}
-
-function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
-    return !!obj
-        && typeof obj === 'object'
-        && typeof (obj as CandidateAppHostDisplayInfo).path === 'string'
-        && typeof (obj as CandidateAppHostDisplayInfo).language === 'string'
-        && typeof (obj as CandidateAppHostDisplayInfo).status === 'string';
-}
-
-function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCandidate): CandidateAppHostDisplayInfo {
-    const displayCandidate: CandidateAppHostDisplayInfo = {
-        path: candidate.path,
-        language: candidate.language,
-        status: candidate.status,
-    };
-
-    const selected = 'selected' in candidate ? candidate.selected : undefined;
-    if (selected !== undefined) {
-        displayCandidate.selected = selected;
-    }
-
-    return displayCandidate;
-}
-
-function formatErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
 
 function throwIfCancellationRequested(cancellationToken?: vscode.CancellationToken): void {
@@ -1114,88 +805,4 @@ function withCancellation<T>(promise: Promise<T>, cancellationToken?: vscode.Can
                 reject(error);
             });
     });
-}
-
-function isLegacyAppHostProjectSearchResult(obj: unknown): obj is LegacyAppHostProjectSearchResult {
-    return !!obj
-        && typeof obj === 'object'
-        && (typeof (obj as LegacyAppHostProjectSearchResult).selected_project_file === 'string' || (obj as LegacyAppHostProjectSearchResult).selected_project_file === null)
-        && Array.isArray((obj as LegacyAppHostProjectSearchResult).all_project_file_candidates);
-}
-
-function isAppHostProjectSearchResult(obj: unknown): obj is AppHostProjectSearchResult {
-    return !!obj
-        && typeof obj === 'object'
-        && (typeof (obj as AppHostProjectSearchResult).selected_project_file === 'string' || (obj as AppHostProjectSearchResult).selected_project_file === null)
-        && Array.isArray((obj as AppHostProjectSearchResult).app_host_candidates)
-        && (obj as AppHostProjectSearchResult).app_host_candidates.every(candidate =>
-            candidate
-            && typeof candidate.relativePath === 'string'
-            && typeof candidate.path === 'string'
-            && typeof candidate.language === 'string'
-            && typeof candidate.status === 'string');
-}
-
-function toCandidatesFromLegacySearchResult(parsed: LegacyAppHostProjectSearchResult): CandidateAppHostDisplayInfo[] {
-    return parsed.all_project_file_candidates.filter(candidate => typeof candidate === 'string').map(candidatePath => ({
-        path: candidatePath,
-        language: 'csharp',
-        status: 'buildable',
-        selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidatePath),
-    }));
-}
-
-function isCSharpProjectCandidate(candidate: CandidateAppHostDisplayInfo): boolean {
-    // Only `.csproj` candidates can own nearby C# source files for the editor alias
-    // heuristic above. Modern `aspire ls` candidates include the CLI language id
-    // (`language: "csharp"`). Legacy `aspire extension get-apphosts` fallback
-    // candidates are adapted to that modern C# shape before reaching here. That
-    // preserves old CLI support while keeping the compatibility gap local to
-    // candidate adaptation/matching.
-    return path.extname(candidate.path).toLowerCase() === '.csproj'
-        && candidate.language?.toLowerCase() === 'csharp';
-}
-
-function isBuildableCandidate(candidate: CandidateAppHostDisplayInfo): boolean {
-    return candidate.status === 'buildable';
-}
-
-function findSingleSelectedBuildableCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    const selectedCandidates = candidates.filter(candidate => candidate.selected && isBuildableCandidate(candidate));
-    return selectedCandidates.length === 1 ? selectedCandidates[0] : undefined;
-}
-
-function findOnlyBuildableCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    const buildableCandidates = candidates.filter(isBuildableCandidate);
-    return buildableCandidates.length === 1 ? buildableCandidates[0] : undefined;
-}
-
-function findOnlyCandidateIfBuildable(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    return candidates.length === 1 && isBuildableCandidate(candidates[0]) ? candidates[0] : undefined;
-}
-
-function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: string): boolean {
-    const projectDirectory = path.dirname(path.resolve(projectPath));
-    const sourcePath = path.resolve(filePath);
-    const comparison = process.platform === 'win32' || process.platform === 'darwin'
-        ? 'case-insensitive'
-        : 'case-sensitive';
-    const normalizedProjectDirectory = comparison === 'case-insensitive' ? projectDirectory.toLowerCase() : projectDirectory;
-    const normalizedSourcePath = comparison === 'case-insensitive' ? sourcePath.toLowerCase() : sourcePath;
-    const relativePath = path.relative(normalizedProjectDirectory, normalizedSourcePath);
-    return relativePath !== ''
-        && !relativePath.startsWith('..')
-        && !path.isAbsolute(relativePath)
-        && !relativePath.split(path.sep).some(segment => segment.toLowerCase() === 'bin' || segment.toLowerCase() === 'obj');
-}
-
-function isSamePath(left: string, right: string): boolean {
-    const comparison = process.platform === 'win32' || process.platform === 'darwin'
-        ? 'case-insensitive'
-        : 'case-sensitive';
-    const resolvedLeft = path.resolve(left);
-    const resolvedRight = path.resolve(right);
-    return comparison === 'case-insensitive'
-        ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
-        : resolvedLeft === resolvedRight;
 }

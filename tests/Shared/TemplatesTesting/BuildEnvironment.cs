@@ -160,7 +160,11 @@ public class BuildEnvironment
         }
 
         sdkForTemplatePath = Path.GetFullPath(sdkForTemplatePath);
-        DefaultBuildArgs = string.Empty;
+        // The generated AppHost project opts into the CLI bundle, so an environment variable
+        // cannot disable it: project properties override properties imported from the environment.
+        // Template tests use repo-built DCP and dashboard packages instead of an installed bundle,
+        // so pass the opt-out as a global MSBuild property that the project cannot override.
+        DefaultBuildArgs = "/p:AspireUseCliBundle=false";
         NuGetPackagesPath = UsesCustomDotNet ? Path.Combine(AppContext.BaseDirectory, $"nuget-cache-{Guid.NewGuid()}") : null;
         EnvVars = new Dictionary<string, string>();
         if (UsesCustomDotNet)

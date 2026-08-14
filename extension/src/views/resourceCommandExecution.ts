@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import {
     AppHostDataRepository,
     AspireCliFailedError,
     AspireCliNotInstalledError,
     filterResourceCommandStatusOutput,
-} from './AppHostDataRepository';
+} from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 import {
     resourceCommandCliNotInstalled,
     resourceCommandFailed,
     resourceCommandFailedNoDetail,
+    resourceCommandLogOpenFailed,
+    resourceCommandOpenAppHostLog,
+    resourceCommandOpenCliLog,
     resourceCommandOutputOpenFailed,
     resourceCommandRunning,
     resourceCommandSucceeded,
@@ -99,11 +103,13 @@ async function handleFailure(
     }
 
     if (error instanceof AspireCliFailedError) {
-        const detail = getFailureDetail(error, request);
+        const failure = getFailurePresentation(error, request);
+        const detail = failure.detail;
         extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${error.command} exited with code ${error.exitCode}.`);
-        vscode.window.showErrorMessage(detail
-            ? resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(detail))
-            : resourceCommandFailedNoDetail(request.commandName, displayName));
+        const message = detail
+            ? getFailureMessage(request.commandName, displayName, detail)
+            : resourceCommandFailedNoDetail(request.commandName, displayName);
+        void showFailureNotification(message, failure);
         return await tryRenderCommandOutput(renderOutput, request, error.stdout);
     }
 
@@ -135,20 +141,110 @@ async function tryRenderCommandOutput(
     }
 }
 
-function getErrorMessage(error: unknown): string {
+async function openDiagnosticLog(filePath: string): Promise<void> {
+    try {
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+        await vscode.window.showTextDocument(document, { preview: false });
+    } catch (error) {
+        vscode.window.showWarningMessage(resourceCommandLogOpenFailed(filePath, getErrorMessage(error)));
+    }
+}
+
+export function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function getFailureDetail(error: AspireCliFailedError, request: ResourceCommandExecutionRequest): string | undefined {
+interface FailurePresentation {
+    detail?: string;
+    cliLogPath?: string;
+    appHostLogPath?: string;
+}
+
+async function showFailureNotification(message: string, failure: FailurePresentation): Promise<void> {
+    try {
+        const actions = [
+            ...(failure.cliLogPath ? [resourceCommandOpenCliLog] : []),
+            ...(failure.appHostLogPath ? [resourceCommandOpenAppHostLog] : []),
+        ];
+        const selectedAction = await vscode.window.showErrorMessage(message, ...actions);
+        const selectedLogPath = selectedAction === resourceCommandOpenCliLog
+            ? failure.cliLogPath
+            : selectedAction === resourceCommandOpenAppHostLog
+                ? failure.appHostLogPath
+                : undefined;
+        if (selectedLogPath) {
+            await openDiagnosticLog(selectedLogPath);
+        }
+    } catch (error) {
+        extensionLogOutputChannel.error(`Failed to handle resource command failure notification: ${getErrorMessage(error)}`);
+    }
+}
+
+function getFailurePresentation(error: AspireCliFailedError, request: ResourceCommandExecutionRequest): FailurePresentation {
     const stderr = filterResourceCommandStatusOutput(error.stderr, request.resourceName, request.commandName);
     const stdout = filterResourceCommandStatusOutput(error.stdout, request.resourceName, request.commandName);
-    const detail = [stderr, stdout]
-        .flatMap(value => value.split(/\r?\n/))
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .join('\n');
+    const stderrLines = stderr.split(/\r?\n/);
+    const detailLines: string[] = [];
+    let cliLogPath: string | undefined;
+    let appHostLogPath: string | undefined;
 
-    return detail.length > 0 ? detail : undefined;
+    for (const line of stderrLines) {
+        const trimmedLine = line.trim();
+        const parsedCliLogPath = getDiagnosticLogPath(trimmedLine, '📄', 'See logs at ');
+        const parsedAppHostLogPath = getDiagnosticLogPath(trimmedLine, '🔍', 'See AppHost logs at ');
+        if (parsedCliLogPath) {
+            cliLogPath = parsedCliLogPath;
+        } else if (parsedAppHostLogPath) {
+            appHostLogPath = parsedAppHostLogPath;
+        } else if (trimmedLine.length > 0) {
+            detailLines.push(trimmedLine);
+        }
+    }
+
+    detailLines.push(...stdout
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0));
+
+    const detail = detailLines.join('\n');
+
+    return {
+        detail: detail.length > 0 ? detail : undefined,
+        cliLogPath,
+        appHostLogPath,
+    };
+}
+
+function getDiagnosticLogPath(line: string, icon: string, englishPrefix: string): string | undefined {
+    if (line.startsWith(icon)) {
+        const text = line.slice(icon.length).trim();
+        for (let index = 0; index < text.length; index++) {
+            if (index > 0 && !/\s/u.test(text[index - 1])) {
+                continue;
+            }
+
+            const candidate = text.slice(index).trim();
+            if (path.isAbsolute(candidate)) {
+                return candidate;
+            }
+        }
+
+        return undefined;
+    }
+
+    if (line.startsWith(englishPrefix)) {
+        const candidate = line.slice(englishPrefix.length).trim();
+        return path.isAbsolute(candidate) ? candidate : undefined;
+    }
+
+    return undefined;
+}
+
+function getFailureMessage(commandName: string, displayName: string, detail: string): string {
+    const boundedDetail = limitFailureDetailForDisplay(detail);
+    return detail.startsWith('❌') || /^Failed to\b/u.test(detail)
+        ? boundedDetail
+        : resourceCommandFailed(commandName, displayName, boundedDetail);
 }
 
 function limitFailureDetailForDisplay(detail: string): string {

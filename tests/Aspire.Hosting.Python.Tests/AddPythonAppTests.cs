@@ -1165,14 +1165,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(EntrypointType.Module, entrypointAnnotation.Type);
         Assert.Equal("uvicorn", entrypointAnnotation.Entrypoint);
 
-        // Verify arguments
+        // Arguments for the previous entrypoint are cleared, while arguments added after the switch remain.
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(resource, TestServiceProvider.Instance);
 
-        Assert.Equal(4, commandArguments.Count);
-        Assert.Equal("-m", commandArguments[0]);
-        Assert.Equal("uvicorn", commandArguments[1]);
-        Assert.Equal("main:app", commandArguments[2]);
-        Assert.Equal("--reload", commandArguments[3]);
+        Assert.Equal(["-m", "uvicorn", "main:app", "--reload"], commandArguments);
     }
 
     [Fact]
@@ -1383,7 +1379,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithDebugSupport_RemovesScriptArgumentForScriptEntrypoint()
+    public async Task WithDebugSupport_KeepsScriptArgumentInTheAppModelForScriptEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1415,10 +1411,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         // Use ArgumentEvaluator to get the resolved argument list (after callbacks are applied)
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(resource, app.Services);
 
-        // Verify the script path was removed but other args remain
+        // The entrypoint stays in the app model even during a debug session; withholding it from the launched
+        // program is handled when the DCP executable is created (see DcpExecutorTests).
         Assert.Collection(commandArguments,
+            arg => Assert.Equal("main.py", arg),
             arg => Assert.Equal("arg1", arg),
             arg => Assert.Equal("arg2", arg));
+
+        // The "python" launch configuration owns the launch tool arguments, which is what makes DCP withhold them.
+        var debugAnnotation = resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
+        Assert.True(resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
     }
 
     [Fact]
@@ -1461,7 +1463,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithDebugSupport_RemovesModuleArgumentsForModuleEntrypoint()
+    public async Task WithDebugSupport_KeepsModuleArgumentsInTheAppModelForModuleEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1493,9 +1495,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         // Use ArgumentEvaluator to get the resolved argument list (after callbacks are applied)
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(resource, app.Services);
 
-        // Verify "-m" and module name were removed but other args remain
+        // The entrypoint stays in the app model even during a debug session; withholding it from the launched
+        // program is handled when the DCP executable is created (see DcpExecutorTests).
         Assert.Collection(commandArguments,
+            arg => Assert.Equal("-m", arg),
+            arg => Assert.Equal("flask", arg),
             arg => Assert.Equal("run", arg));
+
+        // The "python" launch configuration owns the launch tool arguments, which is what makes DCP withhold them.
+        var debugAnnotation = resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
+        Assert.True(resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
     }
 
     [Fact]
@@ -1624,7 +1633,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "python");
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<PythonLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,
