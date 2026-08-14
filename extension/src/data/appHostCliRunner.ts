@@ -6,6 +6,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { aspireCliCommandTimedOut, aspireCommandOutputTruncated } from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { AspireCliFailedError, AspireCliNotInstalledError } from './appHostCliContracts';
+import { normalizeResourceCommandStatusLine } from './resourceCommandStatusOutput';
 
 export const oneShotOutputBufferLimit = 64 * 1024;
 
@@ -217,13 +218,6 @@ function getOutputTruncationMarker(limit: number): string {
 
 function takeLast(value: string, count: number): string {
     return count === 0 ? '' : value.slice(-count);
-}
-
-export function normalizeResourceCommandStatusLine(line: string): string {
-    return line
-        .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-        .trim()
-        .replace(/^[✅✔✓]\s*/, '');
 }
 
 export function parseCliJsonOutput<T>(stdout: string): T {

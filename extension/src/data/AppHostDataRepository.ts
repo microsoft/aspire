@@ -13,10 +13,13 @@ import { getComparisonKey, isProjectFileToSourceFileMatch } from '../utils/paths
 import { FileSystemEntryDescriptorIndex } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
 import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
-import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, LimitedOutputBuffer, normalizeResourceCommandStatusLine, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
+import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
+import { AppHostPsPoller } from './appHostPsPoller';
+import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
+export { filterResourceCommandStatusOutput };
 
 interface WorkspaceFolderAppHostCandidates {
     readonly workspaceFolder: vscode.WorkspaceFolder;
@@ -104,21 +107,10 @@ export class AppHostDataRepository {
     // directly because the in-memory state has merged resources, while `ps` no longer emits them
     // (#17479) — see _handlePsOutput for the rationale.
     private _appHostsSnapshot = '[]';
-    private _pollingInterval: ReturnType<typeof setInterval> | undefined;
-    private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
-    private _psPollingGeneration = 0;
-    private _psFetchVersion = 0;
-    private _supportsPsFollow = true;
-    private _fetchInProgress = false;
-    // Prevents a second `ps --follow` start while the first one is still resolving the CLI path.
-    private _psFollowStartPending = false;
     private _postStopRefreshTimers = new Map<string, PostStopRefreshTimer>();
-    private _authoritativeSnapshotInProgress = false;
-    private _authoritativeSnapshotPending = false;
-    private _authoritativeSnapshotPendingForce = false;
     private _runtimeSnapshotAfterWorkspaceDiscovery = false;
-    private _authoritativeSnapshotRequestId = 0;
-    private _activeAuthoritativeSnapshotRequestId: number | undefined;
+    private readonly _psPoller: AppHostPsPoller;
+    private readonly _psPollerDisposable: vscode.Disposable;
 
     // ── Per-AppHost describe streams ──
     // Every running AppHost has one `aspire describe --follow --apphost <path>`
@@ -165,6 +157,17 @@ export class AppHostDataRepository {
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
         this._cliRunner = new AppHostCliRunner(_terminalProvider);
+        this._psPoller = new AppHostPsPoller(
+            _terminalProvider,
+            this._cliRunner,
+            () => this._disposed,
+            () => this._dataActive,
+            () => this._clearPostStopRefreshTimers());
+        this._psPollerDisposable = vscode.Disposable.from(
+            this._psPoller.onDidReceivePsOutput(psOutput => this._handlePsOutput(psOutput.stdout, psOutput.canCompleteGlobalLoading)),
+            this._psPoller.onDidChangePsError(message => this._setPsError(message)),
+            this._psPoller.onDidRequestClearLoading(() => this._clearLoading()),
+            this._psPoller.onDidStartPsFollow(() => this._handlePsFollowStarted()));
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
@@ -190,7 +193,7 @@ export class AppHostDataRepository {
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
             if ((e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
-                this._startPsPolling();
+                this._psPoller.startPsPolling();
             }
         });
         // Kick off the CLI capability probe eagerly (fire-and-forget) so the cached describe gate is
@@ -344,7 +347,7 @@ export class AppHostDataRepository {
         }
         this._reconcileDescribes();
         if (this._dataActive) {
-            this._refreshAppHostsFromAuthoritativeSnapshot();
+            this._psPoller.refreshAppHostsFromAuthoritativeSnapshot();
         }
     }
 
@@ -359,7 +362,7 @@ export class AppHostDataRepository {
         }
 
         this._clearErrors();
-        this._refreshAppHostsFromAuthoritativeSnapshot(forceSnapshot);
+        this._psPoller.refreshAppHostsFromAuthoritativeSnapshot(forceSnapshot);
     }
 
     requestAppHostStopRefresh(appHostPath: string): void {
@@ -387,7 +390,7 @@ export class AppHostDataRepository {
                 return;
             }
 
-            this._refreshAppHostsFromAuthoritativeSnapshot();
+            this._psPoller.refreshAppHostsFromAuthoritativeSnapshot();
             if (remainingAttempts > 1) {
                 this._schedulePostStopRefresh(appHostPath, remainingAttempts - 1);
             }
@@ -540,16 +543,17 @@ export class AppHostDataRepository {
     dispose(): void {
         this._disposed = true;
         this._clearPostStopRefreshTimers();
-        this._authoritativeSnapshotPending = false;
-        this._authoritativeSnapshotPendingForce = false;
+        this._psPoller.clearPendingAuthoritativeSnapshot();
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
-        this._stopPolling();
+        this._psPoller.stopPolling();
         this._stopAllDescribes();
         this._cliRunner.dispose();
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
         this._workspaceFoldersChangeDisposable.dispose();
+        this._psPollerDisposable.dispose();
+        this._psPoller.dispose();
         this._onDidChangeData.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
@@ -572,18 +576,15 @@ export class AppHostDataRepository {
         }
 
         if (this._dataActive) {
-            const pollingActive = this._pollingInterval !== undefined
-                || this._psProcesses.size > 0
-                || this._fetchInProgress
-                || this._psFollowStartPending;
+            const pollingActive = this._psPoller.pollingActive;
             if (!pollingActive) {
-                this._startPsPolling();
-                if (refreshBeforeFollowOnResume && this._supportsPsFollow && this._appHosts.length > 0) {
-                    this._refreshAppHostsFromAuthoritativeSnapshot();
+                this._psPoller.startPsPolling();
+                if (refreshBeforeFollowOnResume && this._psPoller.supportsPsFollow && this._appHosts.length > 0) {
+                    this._psPoller.refreshAppHostsFromAuthoritativeSnapshot();
                 }
             }
         } else {
-            this._stopPolling();
+            this._psPoller.stopPolling();
         }
 
         this._reconcileDescribes();
@@ -831,7 +832,7 @@ export class AppHostDataRepository {
             this._clearErrors();
             this._syncPolling();
             if (refreshRuntimeStateAfterDiscovery && this._dataActive && this._viewMode === 'workspace') {
-                this._refreshAppHostsFromAuthoritativeSnapshot(true);
+                this._psPoller.refreshAppHostsFromAuthoritativeSnapshot(true);
             }
             this._updateWorkspaceContext({ clearLoading: true });
             return;
@@ -1113,7 +1114,7 @@ export class AppHostDataRepository {
                     this._attachResourcesToAppHosts();
                     this._onDidChangeData.fire();
                     this._scheduleDescribeRestart(appHostPath, stream);
-                    this._refreshAppHostsFromAuthoritativeSnapshot();
+                    this._psPoller.refreshAppHostsFromAuthoritativeSnapshot();
                 },
                 errorCallback: (error) => {
                     if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
@@ -1145,7 +1146,7 @@ export class AppHostDataRepository {
                     this._attachResourcesToAppHosts();
                     this._onDidChangeData.fire();
                     this._scheduleDescribeRestart(appHostPath, stream);
-                    this._refreshAppHostsFromAuthoritativeSnapshot();
+                    this._psPoller.refreshAppHostsFromAuthoritativeSnapshot();
                 }
             });
             stream.process = describeProcess;
@@ -1166,7 +1167,7 @@ export class AppHostDataRepository {
 
     private _scheduleDescribeRestart(appHostPath: string, stream: DescribeStream): void {
         const delay = stream.restartDelay;
-        const nextDelay = Math.max(delay, Math.min(delay * 2, this._getPollingIntervalMs()));
+        const nextDelay = Math.max(delay, Math.min(delay * 2, this._psPoller.getPollingIntervalMs()));
         extensionLogOutputChannel.info(`Restarting describe --follow --apphost ${appHostPath} in ${delay}ms`);
         stream.restartTimer = setTimeout(() => {
             stream.restartTimer = undefined;
@@ -1374,249 +1375,13 @@ export class AppHostDataRepository {
 
     // ── ps polling ──
 
-    private _startPsPolling(): void {
-        // Restarting `ps` polling is routine while the workspace AppHost discovery result settles, the
-        // polling interval changes, or the view resumes. Keep explicit post-stop refreshes alive across
-        // those restarts; otherwise a debug-session stop can lose the authoritative `aspire ps` snapshot
-        // that clears a stale global AppHost row.
-        this._stopPolling({ clearPostStopRefreshTimers: false });
-        if (this._supportsPsFollow) {
-            this._startPsFollow();
-            return;
-        }
-
-        this._startPsIntervalPolling();
-    }
-
-    private _startPsIntervalPolling(fetchImmediately = true): void {
-        if (this._pollingInterval) {
-            clearInterval(this._pollingInterval);
-            this._pollingInterval = undefined;
-        }
-
-        const intervalMs = this._getPollingIntervalMs();
-        if (fetchImmediately) {
-            this._fetchAppHosts();
-        }
-        this._pollingInterval = setInterval(() => {
-            if (!this._disposed) {
-                this._fetchAppHosts();
-            }
-        }, intervalMs);
-    }
-
-    // Most callers are leaving the polling lifecycle and should cancel post-stop refreshes. Internal
-    // restarts keep those timers so a pending AppHost-stop reconciliation is not lost.
-    private _stopPolling(options?: { clearPostStopRefreshTimers?: boolean }): void {
-        this._psPollingGeneration++;
-        this._psFetchVersion++;
-        this._fetchInProgress = false;
-        this._psFollowStartPending = false;
-        this._authoritativeSnapshotInProgress = false;
-        this._authoritativeSnapshotPending = false;
-        this._authoritativeSnapshotPendingForce = false;
-        this._activeAuthoritativeSnapshotRequestId = undefined;
-        if (options?.clearPostStopRefreshTimers ?? true) {
-            this._clearPostStopRefreshTimers();
-        }
-        if (this._pollingInterval) {
-            clearInterval(this._pollingInterval);
-            this._pollingInterval = undefined;
-            extensionLogOutputChannel.info(`aspire ps polling stopped`);
-        }
-        for (const psProcess of this._psProcesses) {
-            terminateCliProcess(psProcess, 'aspire ps');
-        }
-        this._psProcesses.clear();
-    }
-
-    private _getPollingIntervalMs(): number {
-        const config = vscode.workspace.getConfiguration('aspire');
-        const interval = getConfiguredNumber(config, 'appHostsPollingInterval')
-            ?? getConfiguredNumber(config, 'globalAppHostsPollingInterval')
-            ?? config.get<number>('appHostsPollingInterval', 30000);
-        return Math.max(interval, 1000);
-    }
-
-    private async _startPsFollow(): Promise<void> {
-        const fetchVersion = ++this._psFetchVersion;
-        this._psFollowStartPending = true;
-        let cliPath: string;
-        try {
-            cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        } catch (error) {
-            if (this._isCurrentPsFetch(fetchVersion)) {
-                this._psFollowStartPending = false;
-                const errorMessage = errorFetchingAppHosts(String(error));
-                extensionLogOutputChannel.warn(errorMessage);
-                this._setPsError(errorMessage);
-                this._clearLoading();
-                this._supportsPsFollow = false;
-                this._startPsIntervalPolling(false);
-            }
-            return;
-        }
-        if (!this._isCurrentPsFetch(fetchVersion)) {
-            return;
-        }
-
-        let psProcess: ChildProcessWithoutNullStreams | undefined;
-        let psProcessCompletedSynchronously = false;
-        let callbackInvoked = false;
-        const removePsProcess = () => {
-            if (psProcess) {
-                this._psProcesses.delete(psProcess);
-            } else {
-                psProcessCompletedSynchronously = true;
-            }
-        };
-
-        const args = this._cliRunner.withNoLogo(['ps', '--follow', '--format', 'json']);
-        const psFollowStdout = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
-        const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
-
-        psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
-            createProcessGroup: true,
-            noExtensionVariables: true,
-            stdoutCallback: (data) => {
-                psFollowStdout.append(data);
-            },
-            lineCallback: (line) => {
-                if (!this._isCurrentPsFetch(fetchVersion) || line.trim().length === 0) {
-                    return;
-                }
-
-                this._setPsError(undefined);
-                this._handlePsOutput(line, false);
-            },
-            stderrCallback: (data) => {
-                psFollowStderr.append(data);
-            },
-            exitCallback: (code) => {
-                removePsProcess();
-                if (callbackInvoked) {
-                    return;
-                }
-                callbackInvoked = true;
-                if (!this._isCurrentPsFetch(fetchVersion)) {
-                    return;
-                }
-
-                if (code !== 0) {
-                    if (this._cliRunner.disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
-                        this._startPsFollow();
-                        return;
-                    }
-
-                    this._supportsPsFollow = false;
-                    extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
-                    this._startPsIntervalPolling();
-                    return;
-                }
-
-                this._startPsIntervalPolling();
-            },
-            errorCallback: (error) => {
-                removePsProcess();
-                if (callbackInvoked) {
-                    return;
-                }
-                callbackInvoked = true;
-                if (!this._isCurrentPsFetch(fetchVersion)) {
-                    return;
-                }
-
-                extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
-                this._supportsPsFollow = false;
-                this._startPsIntervalPolling();
-            }
-        });
-        if (!psProcessCompletedSynchronously) {
-            this._psProcesses.add(psProcess);
-        }
-
-        this._psFollowStartPending = false;
+    private _handlePsFollowStarted(): void {
         this._setGlobalLoading(false);
         if (this._viewMode === 'global') {
             const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
             vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
             vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         }
-    }
-
-    private _fetchAppHosts(): void {
-        if (this._fetchInProgress || this._disposed || !this._dataActive) {
-            return;
-        }
-        this._fetchInProgress = true;
-        const fetchVersion = ++this._psFetchVersion;
-
-        const args = this._cliRunner.withNoLogo(['ps', '--format', 'json']);
-        this._runPsCommand(args, (code, stdout, stderr) => {
-            if (code === 0) {
-                this._setPsError(undefined);
-                this._handlePsOutput(stdout, true);
-            } else {
-                this._clearLoading();
-                this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
-            }
-            this._fetchInProgress = false;
-        }, { fetchVersion });
-    }
-
-    private _refreshAppHostsFromAuthoritativeSnapshot(force = false): void {
-        if (this._disposed || (!force && !this._dataActive)) {
-            return;
-        }
-
-        if (this._authoritativeSnapshotInProgress) {
-            this._authoritativeSnapshotPending = true;
-            this._authoritativeSnapshotPendingForce ||= force;
-            return;
-        }
-
-        this._authoritativeSnapshotInProgress = true;
-        const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
-        this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
-        const isCurrentSnapshot = () => this._activeAuthoritativeSnapshotRequestId === snapshotRequestId
-            && !this._disposed
-            && (force || this._dataActive);
-        const pollingGeneration = this._psPollingGeneration;
-        const args = this._cliRunner.withNoLogo(['ps', '--format', 'json']);
-        this._runPsCommand(args, (code, stdout, stderr) => {
-            if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
-                return;
-            }
-
-            if (pollingGeneration !== this._psPollingGeneration) {
-                this._activeAuthoritativeSnapshotRequestId = undefined;
-                this._authoritativeSnapshotInProgress = false;
-                return;
-            }
-
-            if (!this._disposed && (force || this._dataActive)) {
-                if (code === 0) {
-                    this._setPsError(undefined);
-                    this._handlePsOutput(stdout, true);
-                } else {
-                    this._clearLoading();
-                    this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
-                }
-            }
-
-            this._activeAuthoritativeSnapshotRequestId = undefined;
-            this._authoritativeSnapshotInProgress = false;
-            if (this._authoritativeSnapshotPending) {
-                const pendingForce = this._authoritativeSnapshotPendingForce;
-                this._authoritativeSnapshotPending = false;
-                this._authoritativeSnapshotPendingForce = false;
-                this._refreshAppHostsFromAuthoritativeSnapshot(pendingForce);
-            }
-        }, { force, isCurrent: isCurrentSnapshot });
-    }
-
-    private _isCurrentPsFetch(fetchVersion: number): boolean {
-        return !this._disposed && this._dataActive && fetchVersion === this._psFetchVersion;
     }
 
     private _updateLoadingContext(): void {
@@ -1815,89 +1580,6 @@ export class AppHostDataRepository {
         return isOpenAppHostPath || isSelectedWorkspaceAppHostPath || isWorkspaceCandidatePath || isPathInWorkspace(appHost.appHostPath);
     }
 
-    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean; isCurrent?: () => boolean }): Promise<void> {
-        const fetchVersion = options?.fetchVersion;
-        const force = options?.force === true;
-        const isCurrentPsCommand = () => {
-            if (options?.isCurrent) {
-                return options.isCurrent();
-            }
-
-            if (fetchVersion !== undefined) {
-                return this._isCurrentPsFetch(fetchVersion);
-            }
-
-            return !this._disposed && (force || this._dataActive);
-        };
-
-        let cliPath: string;
-        try {
-            cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        } catch (error) {
-            if (isCurrentPsCommand()) {
-                const rawErrorMessage = String(error);
-                extensionLogOutputChannel.warn(errorFetchingAppHosts(rawErrorMessage));
-                callback(1, '', rawErrorMessage);
-            }
-            return;
-        }
-
-        if (!isCurrentPsCommand()) {
-            return;
-        }
-
-        let stdout = '';
-        let stderr = '';
-        let callbackInvoked = false;
-
-        let psProcess: ChildProcessWithoutNullStreams | undefined;
-        let psProcessCompletedSynchronously = false;
-        const removePsProcess = () => {
-            if (psProcess) {
-                this._psProcesses.delete(psProcess);
-            } else {
-                psProcessCompletedSynchronously = true;
-            }
-        };
-
-        psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
-            createProcessGroup: true,
-            noExtensionVariables: true,
-            stdoutCallback: (data) => { stdout += data; },
-            stderrCallback: (data) => { stderr += data; },
-            exitCallback: (code) => {
-                removePsProcess();
-                if (!callbackInvoked) {
-                    if ((code ?? 1) !== 0) {
-                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
-                        if (retryArgs) {
-                            this._runPsCommand(retryArgs, callback, options);
-                            return;
-                        }
-                    }
-
-                    callbackInvoked = true;
-                    if (isCurrentPsCommand()) {
-                        callback(code ?? 1, stdout, stderr);
-                    }
-                }
-            },
-            errorCallback: (error) => {
-                removePsProcess();
-                extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
-                if (!callbackInvoked) {
-                    callbackInvoked = true;
-                    if (isCurrentPsCommand()) {
-                        callback(1, stdout, stderr || error.message);
-                    }
-                }
-            }
-        });
-        if (!psProcessCompletedSynchronously) {
-            this._psProcesses.add(psProcess);
-        }
-    }
-
 }
 
 function formatWorkspaceFolderDiscoveryError(error: WorkspaceFolderDiscoveryError): string {
@@ -1958,83 +1640,6 @@ function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly W
         appHostCandidates: combinedAppHostCandidates,
         selectedAppHostPath: selectedAppHostPath ?? null,
     };
-}
-
-function getConfiguredNumber(config: vscode.WorkspaceConfiguration, key: string): number | undefined {
-    const inspection = config.inspect<number>(key);
-    return inspection?.workspaceFolderValue
-        ?? inspection?.workspaceValue
-        ?? inspection?.globalValue;
-}
-
-export function filterResourceCommandStatusOutput(output: string, resourceName: string, commandName: string): string {
-    if (!output) {
-        return '';
-    }
-
-    const filteredLines = output
-        .split(/\r?\n/)
-        .filter(line => !isResourceCommandStatusLine(line, resourceName, commandName));
-
-    while (filteredLines.length > 0 && filteredLines[0].trim().length === 0) {
-        filteredLines.shift();
-    }
-
-    while (filteredLines.length > 0 && filteredLines[filteredLines.length - 1].trim().length === 0) {
-        filteredLines.pop();
-    }
-
-    return filteredLines.join('\n');
-}
-
-function isResourceCommandStatusLine(line: string, resourceName: string, commandName: string): boolean {
-    const normalized = normalizeResourceCommandStatusLine(line);
-
-    return getResourceCommandStatusLines(resourceName, commandName).includes(normalized);
-}
-
-function getResourceCommandStatusLines(resourceName: string, commandName: string): string[] {
-    // Older CLIs emitted resource command status to stdout before the command value, for example:
-    //   Restarting resource 'cache'...
-    //   Resource 'cache' restarted successfully.
-    //   Executing command 'echo-arguments' on resource 'cache'...
-    //   Command 'echo-arguments' executed successfully on resource 'cache'.
-    // Keep this compatibility filter narrow so real command output is preserved.
-    const lines = [
-        `Validating and executing command '${commandName}' on resource '${resourceName}'...`,
-        `Executing command '${commandName}' on resource '${resourceName}'...`,
-        `Command '${commandName}' executed successfully on resource '${resourceName}'.`,
-    ];
-
-    const knownCommand = getKnownResourceCommandStatus(commandName);
-    if (knownCommand) {
-        lines.push(
-            `${knownCommand.progressVerb} resource '${resourceName}'...`,
-            `Resource '${resourceName}' ${knownCommand.pastTenseVerb} successfully.`);
-    }
-
-    return lines;
-}
-
-function getKnownResourceCommandStatus(commandName: string): { progressVerb: string; pastTenseVerb: string } | undefined {
-    switch (commandName) {
-        case 'start':
-            return { progressVerb: 'Starting', pastTenseVerb: 'started' };
-        case 'stop':
-            return { progressVerb: 'Stopping', pastTenseVerb: 'stopped' };
-        case 'restart':
-            return { progressVerb: 'Restarting', pastTenseVerb: 'restarted' };
-        case 'rebuild':
-            return { progressVerb: 'Rebuilding', pastTenseVerb: 'rebuilt' };
-        case 'set-parameter':
-        case 'parameter-set':
-            return { progressVerb: 'Setting parameter for', pastTenseVerb: 'set' };
-        case 'delete-parameter':
-        case 'parameter-delete':
-            return { progressVerb: 'Deleting parameter for', pastTenseVerb: 'deleted' };
-        default:
-            return undefined;
-    }
 }
 
 function isPathInWorkspace(filePath: string): boolean {
