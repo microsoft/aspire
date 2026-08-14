@@ -30,3 +30,26 @@ export function isAppHostSourceFile(value: string): boolean {
 export function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
     return (isProjectFile(left) && isAppHostSourceFile(right)) || (isAppHostSourceFile(left) && isProjectFile(right));
 }
+
+export function isAppHostPathUnderFolder(appHostPath: string | undefined, folderPath: string | undefined): boolean {
+    if (!appHostPath || !folderPath) {
+        return false;
+    }
+
+    const normalizedAppHostPath = getComparisonKey(path.normalize(appHostPath));
+    const normalizedFolderPath = getComparisonKey(path.normalize(folderPath));
+    if (normalizedAppHostPath === normalizedFolderPath) {
+        return false;
+    }
+
+    const folderPrefix = normalizedFolderPath.endsWith(path.sep) ? normalizedFolderPath : `${normalizedFolderPath}${path.sep}`;
+    return normalizedAppHostPath.startsWith(folderPrefix);
+}
+
+export function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {
+    if (!left || !right) {
+        return false;
+    }
+
+    return getComparisonKey(path.normalize(left)) === getComparisonKey(path.normalize(right));
+}

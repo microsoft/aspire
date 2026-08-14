@@ -5,21 +5,23 @@ import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli'
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
-import { getComparisonKey, isProjectFileToSourceFileMatch } from '../utils/paths/comparison';
+import { getComparisonKey, isAppHostPathUnderFolder, isSameAppHostPath } from '../utils/paths/comparison';
 import { FileSystemEntryDescriptorIndex } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
 import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
+import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } from './appHostPathMatching';
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
 export { filterResourceCommandStatusOutput };
+export { isAppHostPathUnderFolder, isMatchingAppHostPath };
 
 interface WorkspaceFolderAppHostCandidates {
     readonly workspaceFolder: vscode.WorkspaceFolder;
@@ -1640,61 +1642,4 @@ function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly W
         appHostCandidates: combinedAppHostCandidates,
         selectedAppHostPath: selectedAppHostPath ?? null,
     };
-}
-
-function isPathInWorkspace(filePath: string): boolean {
-    return vscode.workspace.workspaceFolders?.some(workspaceFolder => {
-        const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-        return relativePath !== ''
-            && !relativePath.startsWith('..')
-            && !path.isAbsolute(relativePath);
-    }) ?? false;
-}
-
-export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
-    if (!left || !right) {
-        return false;
-    }
-
-    if (isSameFileSystemEntry(left, right)) {
-        return true;
-    }
-
-    const normalizedLeft = path.normalize(left);
-    const normalizedRight = path.normalize(right);
-
-    // `aspire extension get-apphosts` resolves a project file while `aspire ps`
-    // can report the AppHost source file. Match by directory only for that
-    // project/source-file shape so sibling AppHost projects don't collapse into
-    // the same workspace AppHost.
-    return isSameFileSystemEntry(path.dirname(normalizedLeft), path.dirname(normalizedRight))
-        && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
-}
-
-export function isAppHostPathUnderFolder(appHostPath: string | undefined, folderPath: string | undefined): boolean {
-    if (!appHostPath || !folderPath) {
-        return false;
-    }
-
-    const normalizedAppHostPath = getComparisonKey(path.normalize(appHostPath));
-    const normalizedFolderPath = getComparisonKey(path.normalize(folderPath));
-    if (normalizedAppHostPath === normalizedFolderPath) {
-        return false;
-    }
-
-    const folderPrefix = normalizedFolderPath.endsWith(path.sep) ? normalizedFolderPath : `${normalizedFolderPath}${path.sep}`;
-    return normalizedAppHostPath.startsWith(folderPrefix);
-}
-
-function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {
-    if (!left || !right) {
-        return false;
-    }
-
-    return getComparisonKey(path.normalize(left)) === getComparisonKey(path.normalize(right));
-}
-
-function isMatchingAppHostInstance(left: AppHostDisplayInfo, right: AppHostDisplayInfo): boolean {
-    return left.appHostPid === right.appHostPid
-        && isSameAppHostPath(left.appHostPath, right.appHostPath);
 }
