@@ -78,6 +78,12 @@ export class AppHostCliRunner implements vscode.Disposable {
             let settled = false;
             let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
             let cliProcess: ChildProcessWithoutNullStreams | undefined;
+            // spawnCliProcess can invoke the exit/error callback before it returns (a synchronous
+            // spawn failure), which settles this command while `cliProcess` is still unassigned.
+            // Remember that so the finished handle is never added to _oneShotProcesses below, where
+            // it would be retained for the lifetime of the runner. Mirrors the synchronous-completion
+            // guard in AppHostPsPoller.
+            let settledBeforeTracking = false;
             let cancellationRegistration: vscode.Disposable | undefined;
             const timeoutMs = options.timeoutMs === undefined ? AppHostCliRunner._oneShotCommandTimeoutMs : options.timeoutMs;
             const stdoutBufferLimit = options.stdoutBufferLimit === undefined ? null : options.stdoutBufferLimit;
@@ -101,6 +107,8 @@ export class AppHostCliRunner implements vscode.Disposable {
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
                         terminateCliProcess(cliProcess, command);
                     }
+                } else {
+                    settledBeforeTracking = true;
                 }
                 callback();
             };
@@ -141,6 +149,17 @@ export class AppHostCliRunner implements vscode.Disposable {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
                 },
             });
+            if (settledBeforeTracking) {
+                // Already settled from inside spawnCliProcess, so settle() could not see this handle:
+                // never track it, and terminate it if it is somehow still alive (a cancellation or
+                // timeout that raced the spawn would otherwise orphan a live process).
+                if (cliProcess.exitCode === null && !cliProcess.killed) {
+                    terminateCliProcess(cliProcess, command);
+                }
+
+                return;
+            }
+
             this._oneShotProcesses.add(cliProcess);
         });
     }
@@ -256,27 +275,75 @@ export function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], std
     // `describe` either print top-level help such as:
     //   Uso:
     //   aspire <comando> [opciones]
-    // or reject stable tokens from the attempted invocation, such as `describe` or `--follow`.
+    // or reject a stable token from the attempted invocation, such as `describe` or `--follow`.
     const normalizedOutput = output.toLowerCase();
     return lines.some(isAspireCommandHelpSyntaxLine)
-        || containsQuotedCliToken(output, 'describe')
-        || containsQuotedCliToken(output, '--follow')
-        || containsQuotedCliToken(output, '--format')
-        || containsQuotedCliToken(output, '--apphost')
         || (normalizedOutput.includes('usage:') && normalizedOutput.includes('commands:'))
-        || normalizedOutput.includes('unknown command')
-        || normalizedOutput.includes('unrecognized command')
-        || normalizedOutput.includes('unrecognized option')
-        || normalizedOutput.includes('is not a recognized command');
+        || lines.some(isRejectedDescribeInvocationLine);
+}
+
+// The tokens the extension itself sends when it starts a describe stream (see
+// AppHostDataRepository._startDescribe). Compatibility detection is scoped to these because only a
+// CLI that rejects one of them is too old to describe.
+const describeInvocationTokens: readonly string[] = ['describe', '--follow', '--format', '--apphost', '--include-disabled-commands', noLogoOption];
+
+// Recognizes a CLI line that rejects part of the describe invocation the extension sent, e.g.:
+//   English:  Unrecognized command or argument 'describe'.
+//   Spanish:  No se encuentra el recurso '--follow'.
+//   Unquoted: Unrecognized command or argument --follow
+// Matching happens per line and only for the extension's own tokens, because a *current* CLI can
+// fail for reasons that quote a user-supplied option, e.g. an AppHost that reports
+// `Unrecognized command or argument '--publisher'.`. Treating those as an unsupported `describe`
+// would replace the real error with an "update the Aspire CLI" banner and mark it a CLI-wide
+// compatibility failure, hiding the actual problem.
+function isRejectedDescribeInvocationLine(line: string): boolean {
+    // A line that quotes an option the extension never passed is a report about that option, so it
+    // says nothing about whether the CLI understands `describe`.
+    if (getQuotedOptionTokens(line).some(token => !describeInvocationTokens.includes(token))) {
+        return false;
+    }
+
+    // The rejection wording is localized but the quoted token is not, so a quoted token of ours is
+    // enough on its own and keeps this detection locale-independent.
+    if (describeInvocationTokens.some(token => containsQuotedCliToken(line, token))) {
+        return true;
+    }
+
+    // Some CLIs echo the rejected token unquoted. Those only count together with the (English)
+    // rejection wording, because a bare token can otherwise appear in ordinary diagnostic prose.
+    const normalizedLine = line.toLowerCase();
+    const reportsUnrecognizedToken = normalizedLine.includes('unknown command')
+        || normalizedLine.includes('unrecognized command')
+        || normalizedLine.includes('unrecognized option')
+        || normalizedLine.includes('is not a recognized command');
+
+    return reportsUnrecognizedToken && describeInvocationTokens.some(token => containsBareCliToken(line, token));
 }
 
 function isAspireCommandHelpSyntaxLine(line: string): boolean {
     return /^aspire(?:\.exe)?\s+(?:<[^>]+>|\[[^\]]+\])(?:\s|$)/i.test(normalizeResourceCommandStatusLine(line));
 }
 
+const cliTokenQuotePattern = `[\\'"\`\\u2018\\u2019\\u201C\\u201D]`;
+
+function getQuotedOptionTokens(line: string): string[] {
+    const quotedTokenPattern = new RegExp(`${cliTokenQuotePattern}([^\\'"\`\\u2018\\u2019\\u201C\\u201D]+)${cliTokenQuotePattern}`, 'g');
+
+    return [...line.matchAll(quotedTokenPattern)]
+        .map(match => match[1].toLowerCase())
+        .filter(token => token.startsWith('-'));
+}
+
 function containsQuotedCliToken(output: string, token: string): boolean {
-    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`[\\'"\`\\u2018\\u2019\\u201C\\u201D]${escapedToken}[\\'"\`\\u2018\\u2019\\u201C\\u201D]`).test(output);
+    return new RegExp(`${cliTokenQuotePattern}${escapeRegExp(token)}${cliTokenQuotePattern}`, 'i').test(output);
+}
+
+function containsBareCliToken(output: string, token: string): boolean {
+    return new RegExp(`(^|\\s)${escapeRegExp(token)}($|[\\s,.;:)\\]])`, 'i').test(output);
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
