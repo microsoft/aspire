@@ -24,6 +24,7 @@ import {
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity, type AppHostIdentityRelation } from '../utils/appHostIdentity';
+import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
 interface LaunchCall {
     appHostPath: string;
@@ -850,9 +851,7 @@ suite('AppHost lifecycle language model tools', () => {
 
         test('honors explicit isolated false in a linked worktree', async () => {
             fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
-            fs.writeFileSync(
-                path.join(workspaceRoot, '.git'),
-                `gitdir: ${path.join(workspaceRoot, '.git', 'worktrees', 'feature')}\n`);
+            writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
 
             const result = await service.start(
                 { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: false },
@@ -865,9 +864,7 @@ suite('AppHost lifecycle language model tools', () => {
 
         test('infers isolated when starting from a linked worktree', async () => {
             fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
-            fs.writeFileSync(
-                path.join(workspaceRoot, '.git'),
-                `gitdir: ${path.join(workspaceRoot, '.git', 'worktrees', 'feature')}\n`);
+            writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
 
             const tool = new AppHostStartLanguageModelTool(service);
             const prepared = await tool.prepareInvocation(

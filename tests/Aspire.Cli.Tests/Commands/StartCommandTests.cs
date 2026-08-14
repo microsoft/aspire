@@ -446,9 +446,9 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     public void ResolveIsolated_LinkedWorktree_InfersIsolated()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        File.WriteAllText(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".git"),
-            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -508,9 +508,9 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var gitPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
         if (linkedWorktree)
         {
-            File.WriteAllText(
-                gitPath,
-                $"gitdir: {Path.Combine(gitPath, "worktrees", "feature")}\n");
+            TestGitWorktree.WriteLinkedWorktreeMetadata(
+                workspace.WorkspaceRoot.FullName,
+                Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
         }
         else
         {

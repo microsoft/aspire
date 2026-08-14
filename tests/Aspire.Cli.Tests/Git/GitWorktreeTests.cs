@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Git;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Git;
@@ -20,14 +21,35 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void TryGetLinkedWorktreeRoot_LinkedWorktree_ReturnsWorktreeRoot()
+    public void TryGetLinkedWorktreeRoot_StandardCommonGitDirectory_ReturnsWorktreeRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var worktreeRoot = workspace.WorkspaceRoot.FullName;
-        WriteGitDirFile(worktreeRoot, $"gitdir: {Path.Combine(worktreeRoot, ".git", "worktrees", "feature")}");
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "primary", ".git"));
         var appHostPath = Path.Combine(worktreeRoot, "AppHost", "AppHost.csproj");
 
         var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(appHostPath);
+
+        Assert.NotNull(linkedRoot);
+        Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+    }
+
+    [Theory]
+    [InlineData("repo.git")]
+    [InlineData("separate-git")]
+    public void TryGetLinkedWorktreeRoot_NonDotGitCommonDirectory_ReturnsWorktreeRoot(string commonGitDirectoryName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, commonGitDirectoryName));
+
+        var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
 
         Assert.NotNull(linkedRoot);
         Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
@@ -38,7 +60,10 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var worktreeRoot = workspace.WorkspaceRoot.FullName;
-        WriteGitDirFile(worktreeRoot, "gitdir: ../.git/worktrees/feature\n");
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(worktreeRoot, "primary", ".git"),
+            useRelativePaths: true);
 
         var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
 
@@ -47,12 +72,44 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryGetLinkedWorktreeRoot_SubmoduleInsideLinkedWorktree_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "primary", ".git"));
+        var submoduleRoot = Directory.CreateDirectory(Path.Combine(worktreeRoot, "extern", "dep")).FullName;
+        TestGitWorktree.WriteGitDirFile(
+            submoduleRoot,
+            Path.Combine(adminDirectory, "modules", "dep"));
+
+        Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(Path.Combine(submoduleRoot, "AppHost.csproj")));
+    }
+
+    [Fact]
+    public void TryGetLinkedWorktreeRoot_DecoyWithoutBackPointer_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        TestGitWorktree.WriteGitDirFile(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "primary", ".git", "worktrees", "stale"));
+
+        Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot));
+    }
+
+    [Fact]
     public void TryGetLinkedWorktreeRoot_SubmoduleGitFile_ReturnsNull()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
         var submoduleRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "extern", "dep")).FullName;
-        WriteGitDirFile(submoduleRoot, $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "modules", "dep")}");
+        TestGitWorktree.WriteGitDirFile(
+            submoduleRoot,
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "modules", "dep"));
         var appHostPath = Path.Combine(submoduleRoot, "AppHost.csproj");
 
         Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(appHostPath));
@@ -75,7 +132,7 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
         var primaryRoot = workspace.WorkspaceRoot.FullName;
         Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
         var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
-        WriteGitDirFile(worktreeRoot, $"gitdir: {Path.Combine(primaryRoot, ".git", "worktrees", "feature")}");
+        TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
         var nestedAppHost = Path.Combine(worktreeRoot, "AppHost.csproj");
         var primaryAppHost = Path.Combine(primaryRoot, "AppHost.csproj");
 
@@ -92,14 +149,11 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
         var primaryRoot = workspace.WorkspaceRoot.FullName;
         Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
         var submoduleRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, "extern", "dep")).FullName;
-        WriteGitDirFile(submoduleRoot, $"gitdir: {Path.Combine(primaryRoot, ".git", "modules", "dep")}");
+        TestGitWorktree.WriteGitDirFile(
+            submoduleRoot,
+            Path.Combine(primaryRoot, ".git", "modules", "dep"));
         var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
 
         Assert.True(GitWorktree.IsSameWorktreeScope(submoduleAppHost, primaryRoot));
-    }
-
-    private static void WriteGitDirFile(string worktreeRoot, string contents)
-    {
-        File.WriteAllText(Path.Combine(worktreeRoot, ".git"), contents);
     }
 }

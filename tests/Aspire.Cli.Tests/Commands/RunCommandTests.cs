@@ -3614,9 +3614,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var gitPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
         if (linkedWorktree)
         {
-            File.WriteAllText(
-                gitPath,
-                $"gitdir: {Path.Combine(gitPath, "worktrees", "feature")}\n");
+            TestGitWorktree.WriteLinkedWorktreeMetadata(
+                workspace.WorkspaceRoot.FullName,
+                Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
         }
         else
         {

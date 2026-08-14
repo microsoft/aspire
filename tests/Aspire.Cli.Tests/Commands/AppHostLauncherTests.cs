@@ -1158,10 +1158,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public void SetLinkedWorktree()
         {
-            var gitPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".git");
-            File.WriteAllText(
-                gitPath,
-                $"gitdir: {Path.Combine(gitPath, "worktrees", "feature")}\n");
+            TestGitWorktree.WriteLinkedWorktreeMetadata(
+                _workspace.WorkspaceRoot.FullName,
+                Path.Combine(_workspace.WorkspaceRoot.FullName, "common", ".git"));
         }
 
         public string CreateMatchingSocketFile(int pid)

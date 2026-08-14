@@ -224,9 +224,9 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
         var worktreeRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".worktrees", "feature")).FullName;
-        File.WriteAllText(
-            Path.Combine(worktreeRoot, ".git"),
-            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
 
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();

@@ -9,16 +9,29 @@ namespace Aspire.Cli.Git;
 /// Detects git linked worktrees from the filesystem without spawning git.
 /// </summary>
 /// <remarks>
-/// A linked worktree stores a <c>.git</c> file whose <c>gitdir:</c> line points at
-/// <c>&lt;main&gt;/.git/worktrees/&lt;name&gt;</c>. The primary checkout has a <c>.git</c>
-/// directory. Submodules also use a <c>.git</c> file, but their gitdir points at
-/// <c>.git/modules/</c> and must not be treated as linked worktrees.
-/// See https://git-scm.com/docs/git-worktree
+/// Git stores linked-worktree metadata in these shapes:
+/// <code>
+/// Standard:   /repo/.git/worktrees/feature
+/// Bare:       /repo.git/worktrees/feature
+/// Separate:   /separate-git/worktrees/feature
+/// Submodule:  /repo/.git/worktrees/feature/modules/dependency
+///
+/// /checkout/.git:
+/// gitdir: /repo/.git/worktrees/feature
+///
+/// /repo/.git/worktrees/feature/gitdir:
+/// /checkout/.git
+/// </code>
+/// The admin directory's <c>gitdir</c> back-pointer distinguishes a real linked worktree
+/// from stale metadata, while requiring its direct parent to be <c>worktrees</c> excludes
+/// submodules nested under a linked worktree's <c>modules</c> directory.
+/// See <see href="https://git-scm.com/docs/git-worktree">Git worktree documentation</see>.
 /// </remarks>
 internal static class GitWorktree
 {
     private const int MaxAncestorWalks = 64;
     private const string GitDirPrefix = "gitdir:";
+    private const string GitDirFileName = "gitdir";
     private const string GitDirectoryName = ".git";
     private const string WorktreesSegment = "worktrees";
 
@@ -54,9 +67,11 @@ internal static class GitWorktree
                 return null;
             }
 
-            if (File.Exists(gitPath) && IsLinkedWorktreeGitFile(gitPath, current))
+            if (File.Exists(gitPath))
             {
-                return PathNormalizer.ResolveSymlinks(current);
+                return IsLinkedWorktreeGitFile(gitPath, current)
+                    ? PathNormalizer.ResolveSymlinks(current)
+                    : null;
             }
 
             var parent = Directory.GetParent(current);
@@ -107,24 +122,38 @@ internal static class GitWorktree
 
     private static bool IsLinkedWorktreeGitFile(string gitFilePath, string worktreeRoot)
     {
-        string contents;
-        try
-        {
-            contents = File.ReadAllText(gitFilePath);
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        if (!TryReadGitDirTarget(gitFilePath, worktreeRoot, out var adminDirectory) ||
+            !Directory.Exists(adminDirectory))
         {
             return false;
         }
 
-        // Linked worktree .git files look like:
-        // gitdir: /repo/.git/worktrees/feature
-        // gitdir: ../.git/worktrees/feature
-        // Submodule files use gitdir: .../.git/modules/<name> and must not match.
+        var adminParent = Directory.GetParent(adminDirectory);
+        if (adminParent is null ||
+            !adminParent.Name.Equals(WorktreesSegment, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!TryReadPath(
+            Path.Combine(adminDirectory, GitDirFileName),
+            adminDirectory,
+            out var checkoutGitFile))
+        {
+            return false;
+        }
+
+        return PathsEqual(checkoutGitFile, gitFilePath);
+    }
+
+    private static bool TryReadGitDirTarget(string gitFilePath, string worktreeRoot, out string gitDirectory)
+    {
+        gitDirectory = string.Empty;
+        if (!TryReadFile(gitFilePath, out var contents))
+        {
+            return false;
+        }
+
         foreach (var rawLine in contents.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var line = rawLine.Trim();
@@ -139,37 +168,57 @@ internal static class GitWorktree
                 return false;
             }
 
-            string absoluteGitDir;
-            try
-            {
-                absoluteGitDir = Path.IsPathRooted(gitDir)
-                    ? Path.GetFullPath(gitDir)
-                    : Path.GetFullPath(Path.Combine(worktreeRoot, gitDir));
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
-            {
-                return false;
-            }
-
-            return ContainsGitWorktreesSegment(absoluteGitDir);
+            return TryResolvePath(gitDir, worktreeRoot, out gitDirectory);
         }
 
         return false;
     }
 
-    private static bool ContainsGitWorktreesSegment(string gitDirPath)
+    private static bool TryReadPath(string filePath, string relativeTo, out string resolvedPath)
     {
-        var segments = gitDirPath.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
-        for (var i = 1; i < segments.Length; i++)
+        resolvedPath = string.Empty;
+        if (!TryReadFile(filePath, out var contents))
         {
-            if (segments[i].Equals(WorktreesSegment, StringComparison.OrdinalIgnoreCase) &&
-                segments[i - 1].Equals(GitDirectoryName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return false;
         }
 
-        return false;
+        var value = contents.Trim();
+        return value.Length > 0 && TryResolvePath(value, relativeTo, out resolvedPath);
+    }
+
+    private static bool TryReadFile(string filePath, out string contents)
+    {
+        try
+        {
+            contents = File.ReadAllText(filePath);
+            return true;
+        }
+        catch (IOException)
+        {
+            contents = string.Empty;
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            contents = string.Empty;
+            return false;
+        }
+    }
+
+    private static bool TryResolvePath(string value, string relativeTo, out string resolvedPath)
+    {
+        try
+        {
+            resolvedPath = Path.IsPathRooted(value)
+                ? Path.GetFullPath(value)
+                : Path.GetFullPath(Path.Combine(relativeTo, value));
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
+        {
+            resolvedPath = string.Empty;
+            return false;
+        }
     }
 
     private static bool PathsEqual(string left, string right)

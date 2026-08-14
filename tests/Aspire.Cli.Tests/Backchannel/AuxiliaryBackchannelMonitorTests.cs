@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -71,9 +72,7 @@ public class AuxiliaryBackchannelMonitorTests
             var primaryRoot = tempRoot.FullName;
             Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
             var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
-            File.WriteAllText(
-                Path.Combine(worktreeRoot, ".git"),
-                $"gitdir: {Path.Combine(primaryRoot, ".git", "worktrees", "feature")}\n");
+            TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
 
             var primaryAppHost = Path.Combine(primaryRoot, "AppHost.csproj");
             var nestedAppHost = Path.Combine(worktreeRoot, "AppHost.csproj");
@@ -98,9 +97,9 @@ public class AuxiliaryBackchannelMonitorTests
             var primaryRoot = tempRoot.FullName;
             Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
             var submoduleRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, "extern", "dep")).FullName;
-            File.WriteAllText(
-                Path.Combine(submoduleRoot, ".git"),
-                $"gitdir: {Path.Combine(primaryRoot, ".git", "modules", "dep")}\n");
+            TestGitWorktree.WriteGitDirFile(
+                submoduleRoot,
+                Path.Combine(primaryRoot, ".git", "modules", "dep"));
 
             var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
             Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, primaryRoot));

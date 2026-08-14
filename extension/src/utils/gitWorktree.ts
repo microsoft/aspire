@@ -10,9 +10,20 @@ const worktreesSegment = 'worktrees';
  * Returns the linked worktree root that contains `startPath`, or `undefined` when the
  * path is in the primary checkout, a submodule, or not a git repository.
  *
- * A linked worktree stores a `.git` file whose `gitdir:` line points at
- * `<main>/.git/worktrees/<name>`. The primary checkout has a `.git` directory.
- * Submodule `.git` files point at `.git/modules/` and are not treated as worktrees.
+ * Git stores linked-worktree metadata in these shapes:
+ *   Standard:  /repo/.git/worktrees/feature
+ *   Bare:      /repo.git/worktrees/feature
+ *   Separate:  /separate-git/worktrees/feature
+ *   Submodule: /repo/.git/worktrees/feature/modules/dependency
+ *
+ *   /checkout/.git:
+ *   gitdir: /repo/.git/worktrees/feature
+ *
+ *   /repo/.git/worktrees/feature/gitdir:
+ *   /checkout/.git
+ *
+ * The admin `gitdir` back-pointer rejects stale metadata, while requiring the admin
+ * directory's direct parent to be `worktrees` excludes linked-worktree submodules.
  * See https://git-scm.com/docs/git-worktree
  */
 export function tryGetLinkedWorktreeRoot(startPath: string | undefined): string | undefined {
@@ -27,8 +38,8 @@ export function tryGetLinkedWorktreeRoot(startPath: string | undefined): string 
             return undefined;
         }
 
-        if (isFile(gitPath) && isLinkedWorktreeGitFile(gitPath, current)) {
-            return current;
+        if (isFile(gitPath)) {
+            return isLinkedWorktreeGitFile(gitPath, current) ? current : undefined;
         }
 
         const parent = path.dirname(current);
@@ -85,16 +96,28 @@ function getWalkStartDirectory(startPath: string): string {
 }
 
 function isLinkedWorktreeGitFile(gitFilePath: string, worktreeRoot: string): boolean {
+    const adminDirectory = tryReadGitDirTarget(gitFilePath, worktreeRoot);
+    if (!adminDirectory || !isDirectory(adminDirectory)) {
+        return false;
+    }
+
+    if (path.basename(path.dirname(adminDirectory)).toLowerCase() !== worktreesSegment) {
+        return false;
+    }
+
+    const checkoutGitFile = tryReadPath(path.join(adminDirectory, 'gitdir'), adminDirectory);
+    return checkoutGitFile !== undefined && pathsEqual(checkoutGitFile, gitFilePath);
+}
+
+function tryReadGitDirTarget(gitFilePath: string, worktreeRoot: string): string | undefined {
     let contents: string;
     try {
         contents = fs.readFileSync(gitFilePath, 'utf8');
     }
     catch {
-        return false;
+        return undefined;
     }
 
-    // gitdir: /repo/.git/worktrees/feature
-    // gitdir: ../.git/worktrees/feature
     for (const rawLine of contents.split(/\r?\n/)) {
         const line = rawLine.trim();
         if (!line.toLowerCase().startsWith(gitDirPrefix)) {
@@ -103,28 +126,41 @@ function isLinkedWorktreeGitFile(gitFilePath: string, worktreeRoot: string): boo
 
         const gitDir = line.slice(gitDirPrefix.length).trim();
         if (gitDir.length === 0) {
-            return false;
+            return undefined;
         }
 
-        const absoluteGitDir = path.isAbsolute(gitDir)
-            ? path.normalize(gitDir)
-            : path.resolve(worktreeRoot, gitDir);
-        return containsGitWorktreesSegment(absoluteGitDir);
+        return path.resolve(worktreeRoot, gitDir);
     }
 
-    return false;
+    return undefined;
 }
 
-function containsGitWorktreesSegment(gitDirPath: string): boolean {
-    const segments = gitDirPath.split(/[/\\]/).filter(segment => segment.length > 0);
-    for (let i = 1; i < segments.length; i++) {
-        if (segments[i].toLowerCase() === worktreesSegment &&
-            segments[i - 1].toLowerCase() === gitDirectoryName) {
-            return true;
-        }
+function tryReadPath(filePath: string, relativeTo: string): string | undefined {
+    try {
+        const value = fs.readFileSync(filePath, 'utf8').trim();
+        return value.length > 0 ? path.resolve(relativeTo, value) : undefined;
     }
+    catch {
+        return undefined;
+    }
+}
 
-    return false;
+function pathsEqual(left: string, right: string): boolean {
+    const canonicalLeft = canonicalizePath(left);
+    const canonicalRight = canonicalizePath(right);
+    return process.platform === 'win32'
+        ? canonicalLeft.toLowerCase() === canonicalRight.toLowerCase()
+        : canonicalLeft === canonicalRight;
+}
+
+function canonicalizePath(value: string): string {
+    const resolved = path.resolve(value);
+    try {
+        return fs.realpathSync.native(resolved);
+    }
+    catch {
+        return resolved;
+    }
 }
 
 function isDirectory(target: string): boolean {

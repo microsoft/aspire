@@ -12,6 +12,7 @@ import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCanc
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
+import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
 interface RecordedEvent {
     name: string;
@@ -178,9 +179,7 @@ suite('AppHostLaunchService', () => {
     test('launch only infers --isolated for run commands in a linked worktree', async () => {
         const directory = createAppHostDirectory('Run.csproj', 'Deploy.csproj', 'Publish.csproj', 'Do.csproj');
         fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
-        fs.writeFileSync(
-            path.join(directory, '.git'),
-            `gitdir: ${path.join(directory, '.git', 'worktrees', 'feature')}\n`);
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
 
         await service.launch(path.join(directory, 'Run.csproj'), 'run', true);
         await service.launch(path.join(directory, 'Deploy.csproj'), 'deploy', true);
