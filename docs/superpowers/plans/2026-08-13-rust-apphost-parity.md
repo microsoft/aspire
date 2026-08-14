@@ -10,18 +10,57 @@
 
 ---
 
+### Task 0: Redact persistent Cargo diagnostics
+
+**Consumed by:** nothing
+
+**Files:**
+- Modify: `src/Aspire.Hosting.Rust/CargoMetadataReader.cs`
+- Modify: `tests/Aspire.Hosting.Rust.Tests/CargoMetadataTests.cs`
+
+- [x] **Step 1: Add failing redaction and bounding tests**
+
+Add direct tests for a diagnostic helper that assert resource environment values are replaced with `***`, overlapping values are redacted longest-first, empty values are ignored, and output longer than 4 KiB is truncated only after redaction.
+
+- [x] **Step 2: Run focused tests and verify they fail**
+
+```bash
+dotnet test --project tests/Aspire.Hosting.Rust.Tests/Aspire.Hosting.Rust.Tests.csproj --no-launch-profile -- --filter-class "*.CargoMetadataTests" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Expected: compile failure because the diagnostic helper does not exist.
+
+- [x] **Step 3: Implement safe Cargo stderr formatting**
+
+Add an internal helper that replaces distinct nonempty environment values in descending length order, trims the result, and truncates the redacted text to 4 KiB with an explicit truncation suffix. Use it in the nonzero-exit exception instead of raw `stderr.Trim()`.
+
+- [x] **Step 4: Run focused tests**
+
+Run the same filtered test command from Step 2.
+
+Expected: all `CargoMetadataTests` pass.
+
+- [x] **Step 5: Commit and resolve the review thread**
+
+```bash
+git add src/Aspire.Hosting.Rust/CargoMetadataReader.cs tests/Aspire.Hosting.Rust.Tests/CargoMetadataTests.cs
+git commit -m "Redact Cargo metadata diagnostics"
+```
+
 ### Task 1: Rust AppHost editor parser
 
 **Consumed by:** Task 2 — CodeLens, gutter, and open-file tests consume the registered parser.
 
 **Files:**
 - Create: `extension/src/editor/parsers/rustAppHostParser.ts`
+- Modify: `extension/package.json`
+- Modify: `extension/yarn.lock`
 - Modify: `extension/src/editor/parsers/AppHostResourceParser.ts`
 - Modify: `extension/src/editor/AspireCodeLensProvider.ts`
 - Modify: `extension/src/editor/AspireGutterDecorationProvider.ts`
 - Modify: `extension/src/test/parsers.test.ts`
 
-- [ ] **Step 1: Add failing registry and parser tests**
+- [x] **Step 1: Add failing registry and parser tests**
 
 Add the Rust parser import, map `.rs` mock documents to `languageId: 'rust'`, assert `getSupportedLanguageIds()` contains `rust`, and add a `RustAppHostParser` suite covering:
 
@@ -42,7 +81,7 @@ const appHost = [
 
 Assert detection, builder line, resource name/method/range/statement start, `add_step` classification, multiple calls, raw and escaped string decoding, and rejection of calls found only in line comments, nested block comments, normal strings, raw strings, or malformed input.
 
-- [ ] **Step 2: Run the parser tests and verify they fail**
+- [x] **Step 2: Run the parser tests and verify they fail**
 
 Run:
 
@@ -54,7 +93,7 @@ yarn run unit-test --grep "AppHostResourceParser registry|RustAppHostParser"
 
 Expected: failures because no Rust parser or Rust language ID is registered.
 
-- [ ] **Step 3: Implement the Rust parser**
+- [x] **Step 3: Implement the Rust parser**
 
 Create a self-registering parser with this public shape:
 
@@ -83,11 +122,11 @@ class RustAppHostParser implements AppHostResourceParser {
 registerParser(new RustAppHostParser());
 ```
 
-Implement a single-pass scanner that skips whitespace, `//` comments, nested `/* */` comments, character literals, byte literals, normal/byte strings, and raw strings; emits identifiers and punctuation; recognizes identifier call expressions; parses only a closed first string argument; and tracks the start offset after the previous semicolon or opening brace. Preserve the call start through the first string argument as the `vscode.Range`. Decode normal Rust string escapes and retain raw-string contents.
+Load `tree-sitter-rust/tree-sitter-rust.wasm` through the existing `web-tree-sitter` package, following the C# parser's lazy language initialization and disposal pattern. Walk `call_expression` nodes, read identifier and field-expression function names, accept only closed string-literal first arguments, and use the containing `let_declaration` or `expression_statement` for `statementStartLine`. Preserve the call member start through the first string argument as the `vscode.Range`; decode normal Rust string escapes and retain raw-string contents.
 
 Add `.rs -> rust` in `extensionToLanguageId`, and statically import the parser beside the C# and JS/TS parser imports in both editor providers.
 
-- [ ] **Step 4: Run parser tests and lint**
+- [x] **Step 4: Run parser tests and lint**
 
 Run:
 
@@ -100,10 +139,10 @@ yarn run lint
 
 Expected: focused tests pass and ESLint reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
-git add extension/src/editor/parsers/rustAppHostParser.ts extension/src/editor/parsers/AppHostResourceParser.ts extension/src/editor/AspireCodeLensProvider.ts extension/src/editor/AspireGutterDecorationProvider.ts extension/src/test/parsers.test.ts
+git add extension/package.json extension/yarn.lock extension/src/editor/parsers/rustAppHostParser.ts extension/src/editor/parsers/AppHostResourceParser.ts extension/src/editor/AspireCodeLensProvider.ts extension/src/editor/AspireGutterDecorationProvider.ts extension/src/test/parsers.test.ts
 git commit -m "Add Rust AppHost editor parser"
 ```
 
@@ -116,7 +155,7 @@ git commit -m "Add Rust AppHost editor parser"
 - Modify: `extension/src/test/aspireGutterDecorationProvider.test.ts`
 - Modify: `extension/src/test/appHostFilePresenceWatcher.test.ts`
 
-- [ ] **Step 1: Add focused Rust consumer tests**
+- [x] **Step 1: Add focused Rust consumer tests**
 
 Use an `apphost.rs` document containing `create_builder(None)?`, `builder.add_redis("cache")?`, and `builder.add_step("publish")?`.
 
@@ -130,7 +169,7 @@ assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/appho
 
 For gutter decorations, provide a running `cache` resource and assert the decoration range starts on the Rust `add_redis` line.
 
-- [ ] **Step 2: Run focused consumer tests**
+- [x] **Step 2: Run focused consumer tests**
 
 Run:
 
@@ -142,7 +181,7 @@ yarn run unit-test --grep "AspireCodeLensProvider|AspireGutterDecorationProvider
 
 Expected: all focused consumer tests pass through the parser added in Task 1.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add extension/src/test/aspireCodeLensProvider.test.ts extension/src/test/aspireGutterDecorationProvider.test.ts extension/src/test/appHostFilePresenceWatcher.test.ts
@@ -157,7 +196,7 @@ git commit -m "Test Rust AppHost editor features"
 - Modify: `src/Aspire.Hosting.CodeGeneration.Rust/RustLanguageSupport.cs`
 - Modify: `tests/Aspire.Hosting.CodeGeneration.Rust.Tests/RustLanguageSupportTests.cs`
 
-- [ ] **Step 1: Update tests for the canonical source and Cargo separator**
+- [x] **Step 1: Update tests for the canonical source and Cargo separator**
 
 Change the scaffold file assertion to exactly:
 
@@ -171,7 +210,7 @@ Assert.Collection(
 
 Add assertions that `apphost.rs` contains `#[path = ".aspire/modules/mod.rs"]`, `create_builder(None)?`, and `app.run(None)?`; `Cargo.toml` contains a `[[bin]]` named `apphost` with `path = "apphost.rs"`; and `runtimeSpec.Execute.Args` equals `['run', '--']`.
 
-- [ ] **Step 2: Run the Rust language-support tests and verify they fail**
+- [x] **Step 2: Run the Rust language-support tests and verify they fail**
 
 Run:
 
@@ -181,7 +220,7 @@ dotnet test --project tests/Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Host
 
 Expected: scaffold shape and runtime argument assertions fail.
 
-- [ ] **Step 3: Move executable scaffold code to `apphost.rs`**
+- [x] **Step 3: Move executable scaffold code to `apphost.rs`**
 
 Write the generated source directly to `files[AppHostFileName]`, change the module path to `.aspire/modules/mod.rs`, remove `src/main.rs`, and add this Cargo binary declaration:
 
@@ -201,13 +240,13 @@ Execute = new CommandSpec
 }
 ```
 
-- [ ] **Step 4: Run Rust language-support tests**
+- [x] **Step 4: Run Rust language-support tests**
 
 Run the same filtered `dotnet test` command from Step 2.
 
 Expected: all `RustLanguageSupportTests` pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Aspire.Hosting.CodeGeneration.Rust/RustLanguageSupport.cs tests/Aspire.Hosting.CodeGeneration.Rust.Tests/RustLanguageSupportTests.cs
@@ -226,7 +265,7 @@ git commit -m "Align Rust AppHost scaffold and runtime"
 - Modify: `extension/src/test/appHostTargetVersion.test.ts`
 - Modify: `extension/src/test/aspireDebugSession.test.ts`
 
-- [ ] **Step 1: Add failing Rust classification tests**
+- [x] **Step 1: Add failing Rust classification tests**
 
 Assert Rust candidates summarize to `rust`, C#/Rust and TypeScript/Rust summarize to `polyglot`, `.rs` paths classify as `rust`, a directory containing `apphost.rs` classifies as `rust`, and classification is case-insensitive.
 
@@ -241,7 +280,7 @@ Create `apphost.rs` beside this config and assert the target version is `13.6.0`
 
 Extend debug telemetry tests so direct-file and directory Rust launches report `apphost_language: 'rust'`.
 
-- [ ] **Step 2: Run classification tests and verify they fail**
+- [x] **Step 2: Run classification tests and verify they fail**
 
 Run:
 
@@ -253,7 +292,7 @@ yarn run unit-test --grep "appHostLanguage|appHostTargetVersion|Rust.*telemetry"
 
 Expected: Rust values are currently `unknown` and direct Rust target version is missing.
 
-- [ ] **Step 3: Implement Rust classification**
+- [x] **Step 3: Implement Rust classification**
 
 Introduce one shared exported type:
 
@@ -266,7 +305,7 @@ Add `rust` to `languageFamily`, track `sawRust` in summaries, classify `.rs` pat
 
 Add `.rs` to `isPolyglotAppHostFile` so direct guest AppHosts use adjacent `aspire.config.json`.
 
-- [ ] **Step 4: Run focused tests and lint**
+- [x] **Step 4: Run focused tests and lint**
 
 Run:
 
@@ -279,7 +318,7 @@ yarn run lint
 
 Expected: focused tests pass and ESLint reports no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add extension/src/utils/appHostLanguage.ts extension/src/utils/appHostTargetVersion.ts extension/src/debugger/AspireDebugSession.ts extension/src/test/appHostLanguage.test.ts extension/src/test/appHostTargetVersion.test.ts extension/src/test/aspireDebugSession.test.ts
@@ -293,7 +332,7 @@ git commit -m "Classify Rust AppHosts in telemetry"
 **Files:**
 - Modify only if verification exposes a defect in the touched scope.
 
-- [ ] **Step 1: Run the full extension test pipeline**
+- [x] **Step 1: Run the full extension test pipeline**
 
 ```bash
 cd extension
@@ -302,7 +341,7 @@ yarn run test
 
 Expected: extension compile, lint, and unit tests pass.
 
-- [ ] **Step 2: Run Rust code-generation and hosting tests**
+- [x] **Step 2: Run Rust code-generation and hosting tests**
 
 ```bash
 dotnet test --project tests/Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.Rust.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
@@ -311,7 +350,7 @@ dotnet test --project tests/Aspire.Hosting.Rust.Tests/Aspire.Hosting.Rust.Tests.
 
 Expected: both projects pass.
 
-- [ ] **Step 3: Build the extension and local CLI together**
+- [x] **Step 3: Build the extension and local CLI together**
 
 ```bash
 cd extension
@@ -320,7 +359,7 @@ cd extension
 
 Expected: the Aspire CLI and extension build successfully.
 
-- [ ] **Step 4: Verify the final diff**
+- [x] **Step 4: Verify the final diff**
 
 ```bash
 git diff --check
