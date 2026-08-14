@@ -203,9 +203,9 @@ await cache.withCommand(
         }
 
         const result = await interactionService.promptProgress(
-            "Processing",
             "Please wait while data is being processed...",
             {
+                title: "Processing",
                 primaryButtonText: "Cancel",
                 work: async () => {
                     // Simulate a long-running operation.
