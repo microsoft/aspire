@@ -28,7 +28,7 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
     });
 
     test('returns rust when every candidate is Rust', () => {
-        assert.strictEqual(summarizeAppHostLanguages([c('rust'), c('Rust')]), 'rust');
+        assert.strictEqual(summarizeAppHostLanguages([c('rust'), c('Rust'), c('rust/cargo')]), 'rust');
     });
 
     test('returns polyglot for a mix of csharp and typescript', () => {

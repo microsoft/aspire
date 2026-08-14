@@ -38,7 +38,7 @@ function languageFamily(raw: string | null | undefined): AppHostLanguage | 'othe
     if (value === 'typescript' || value.startsWith('typescript/') || value === 'javascript' || value.startsWith('javascript/')) {
         return 'typescript';
     }
-    if (value === 'rust') {
+    if (value === 'rust' || value.startsWith('rust/')) {
         return 'rust';
     }
     return 'other';
