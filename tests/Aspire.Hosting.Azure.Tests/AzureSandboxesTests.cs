@@ -251,8 +251,7 @@ public class AzureSandboxesTests
         var sandboxContainer = new AzureSandboxContainerResource(
             "listener-sandbox-container",
             listener.Resource,
-            sandboxGroup.Resource,
-            autoSuspend: false);
+            sandboxGroup.Resource);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
@@ -902,7 +901,8 @@ public class AzureSandboxesTests
                 IsExternal: true,
                 IsHttp: true,
                 Protocol: "Http",
-                Anonymous: false)
+                Anonymous: false,
+                AuthorizedConnectorGateways: [])
         };
         var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(endpoints);
         var previousState = new DeploymentStateSection(
