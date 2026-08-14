@@ -1247,8 +1247,10 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Contains("protocol could not be determined", resolutionException.Message);
     }
 
-    [Fact]
-    public async Task WithOtlpDevTunnel_FailsWhenDashboardTerminatesWhileWaiting()
+    [Theory]
+    [InlineData("Terminated")]
+    [InlineData(nameof(KnownResourceStates.Exited))]
+    public async Task WithOtlpDevTunnel_FailsWhenDashboardTerminatesWhileWaiting(string dashboardState)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
@@ -1289,7 +1291,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         await notificationService.PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
         {
-            State = KnownResourceStates.Exited
+            State = dashboardState
         });
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
