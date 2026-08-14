@@ -253,6 +253,14 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
   - paths:
+      - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
+    targets: [test:Aspire.Cli.Tests]
+    reason: >-
+      Cli.Tests/Templating/TemplatePackageLockTests.ProjectTemplateFrontendPackageLock_UsesPublicNpmRegistry
+      reads this shipped lockfile to guard its registry host. Additive with the src/Aspire.ProjectTemplates/**
+      -> Aspire.Templates.Tests rule below, which does NOT build Aspire.Cli.Tests, so a lockfile-only edit here
+      would otherwise skip the guard.
+  - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
       - flake.lock
