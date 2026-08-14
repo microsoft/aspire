@@ -920,7 +920,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
     }
 
-    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean, token: vscode.CancellationToken): Promise<void> {
+    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<void> {
         if (this._disposed) {
             throw new vscode.CancellationError();
         }

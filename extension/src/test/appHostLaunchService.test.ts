@@ -134,6 +134,17 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'user-selection');
     });
 
+    test('lifecycle-owned launch omits isolation arguments when unspecified', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        await service.launchFromLifecycleOwner(appHostPath, 'run', true, undefined, new vscode.CancellationTokenSource().token);
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'explicit-launch-configuration');
+        assert.strictEqual(config.args, undefined);
+    });
+
     test('lifecycle-owned launch forwards explicit isolation false', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);

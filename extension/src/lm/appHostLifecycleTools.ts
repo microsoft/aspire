@@ -143,7 +143,7 @@ export interface AppHostLifecycleLaunchService {
     getRunningAppHosts(token: vscode.CancellationToken): Promise<readonly AppHostLifecycleRunningAppHost[]>;
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean, token: vscode.CancellationToken): Promise<void>;
+    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<void>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
     stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }
@@ -319,6 +319,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         }
 
         const isolated = resolveIsolated(input.isolated, preflight.target.absolutePath);
+        const isolatedOption = input.isolated ?? (isolated ? true : undefined);
 
         try {
             // Probe for a process this extension does not own *before* taking the
@@ -400,7 +401,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         current.absolutePath,
                         'run',
                         requestedMode === 'run',
-                        isolated,
+                        isolatedOption,
                         lockToken);
                 }
                 catch (error) {
