@@ -617,6 +617,44 @@ suite('AspireDebugSession tests', () => {
         }
     });
 
+    test('Rust direct-file telemetry reports the AppHost language', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.rs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+            await waitFor(() => spawnStub.calledOnce);
+            const event = fake.events.find(candidate => candidate.name === 'aspire/vscode/debug/apphost/start');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'rust');
+        }
+        finally {
+            restoreReporter();
+        }
+    });
+
     test('emits AppHost start telemetry before target version resolution completes', async () => {
         const tempDir = makeTempDir();
         const appHostPath = join(tempDir, 'apphost.cs');
@@ -3514,6 +3552,57 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         }
         finally {
             resolveLanguage?.('typescript');
+            restoreReporter();
+        }
+    });
+
+    test('Rust directory telemetry reports the AppHost language', async () => {
+        const appHostDirectory = makeTempDir();
+        writeFileSync(join(appHostDirectory, 'apphost.rs'), 'fn main() {}');
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostDirectory,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: [],
+                totalChildSessions: 0,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            await waitFor(() => spawnStub.calledOnce);
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            aspireDebugSession.dispose();
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'aspire/vscode/debug/apphost/end'));
+
+            const event = fake.events.find(candidate => candidate.name === 'aspire/vscode/debug/apphost/end');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'rust');
+        }
+        finally {
             restoreReporter();
         }
     });

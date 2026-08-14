@@ -23,7 +23,7 @@ import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import { sendTelemetryEvent } from "../utils/telemetry";
-import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } from "../utils/appHostLanguage";
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
@@ -169,8 +169,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _appHostStartTimeMs: number | undefined = undefined;
   // Tracks the AppHost-language classification of the launched program so it can
   // be repeated on the matching end event without re-deriving from `configuration`.
-  private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
-  private _appHostLanguageAtLaunchPromise: Promise<'csharp' | 'typescript' | 'unknown'> | undefined = undefined;
+  private _appHostLanguageAtLaunch: AppHostLanguage = 'unknown';
+  private _appHostLanguageAtLaunchPromise: Promise<AppHostLanguage> | undefined = undefined;
   // Resolving telemetry metadata can require project/config reads, so the launch
   // path starts the work in the background and reuses the same result for start/end telemetry.
   private _appHostTargetVersionAtLaunch = 'unknown';
@@ -932,7 +932,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
+  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<AppHostLanguage> {
     try {
       const telemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
       this._appHostLanguageAtLaunch = telemetryTargetLanguage !== 'unknown'
