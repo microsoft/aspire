@@ -5,12 +5,12 @@ import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProces
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
 import { getComparisonKey, isAppHostPathUnderFolder, isSameAppHostPath } from '../utils/paths/comparison';
-import { FileSystemEntryDescriptorIndex } from '../utils/paths/fileSystemIdentity';
+import { FileSystemEntryDescriptor, FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
 import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';

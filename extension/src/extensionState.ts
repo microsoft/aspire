@@ -7,7 +7,6 @@ import { isSamePath } from './utils/paths/comparison';
 import { stripResourceSuffix } from './utils/urlSchemes';
 
 export { isSamePath };
-export { stripResourceSuffix };
 
 export function createStateSnapshot(
   dataRepository: AppHostDataRepository,

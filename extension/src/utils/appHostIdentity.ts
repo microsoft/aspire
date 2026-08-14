@@ -1,9 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { isSameFileSystemEntry } from './appHostDiscovery';
+import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
 import { isAppHostSourceFile } from './paths/comparison';
-
-export { isAppHostSourceFile };
 
 /** Whether two paths name the same AppHost. */
 export type AppHostIdentityRelation = 'same' | 'different' | 'ambiguous';

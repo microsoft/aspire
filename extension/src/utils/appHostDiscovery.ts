@@ -18,7 +18,7 @@ import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
 
 export { isSamePath };
 export { isSameFileSystemEntry };
-export { getFileSystemEntryDescriptor, isSameFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
+export { getFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
 export type { FileSystemEntryDescriptor } from './paths/fileSystemIdentity';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
