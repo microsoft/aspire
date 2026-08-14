@@ -6,7 +6,7 @@ import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity } from '../utils/appHostIdentity';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
 import { getAspireDebugConfigurationExternalLaunchReservation, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation } from './AspireDebugConfigurationProviderInternal';
 
@@ -116,6 +116,9 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
         else {
             delete configRecord[appHostLaunchReservationIdConfigKey];
+        }
+        if (!launchedByExtension) {
+            delete configRecord[appHostCliPathConfigKey];
         }
         delete aspireConfig.skipCliAvailabilityCheck;
         delete configRecord.launchedByExtension;

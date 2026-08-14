@@ -11,7 +11,8 @@ import * as cliModule from '../utils/process/cliProcess';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { AspireResourceExtendedDebugConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
@@ -156,6 +157,19 @@ suite('AspireDebugSession tests', () => {
         finally {
             spawnStub.restore();
         }
+    });
+
+    test('spawns the CLI path pinned by the launch service', async () => {
+        const cliProcess = createFakeCliProcess(4322);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        const getAspireCliExecutablePath = sinon.stub().rejects(new Error('CLI path should already be pinned.'));
+        const aspireDebugSession = createSessionForSpawn(getAspireCliExecutablePath);
+        aspireDebugSession.configuration[appHostCliPathConfigKey] = '/selected/aspire';
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.strictEqual(spawnStub.firstCall.args[1], '/selected/aspire');
+        assert.strictEqual(getAspireCliExecutablePath.called, false);
     });
 
     test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
@@ -3308,6 +3322,73 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         });
         assert.deepStrictEqual(appHostArgs, ['--example-argument']);
         assert.strictEqual(debuggerExtension.resourceType, 'rust');
+    });
+
+    test('an AppHost restart preserves the CLI path negotiated with its arguments', async () => {
+        let restartHandler: ((debugSessionId: string) => boolean) | undefined;
+        let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+                args: ['--isolated'],
+                [appHostCliPathConfigKey]: '/selected/aspire',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: {
+                runId: 'apphost-run',
+            },
+        };
+        const appHostResourceSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession as unknown as vscode.DebugSession,
+            stopSession: sinon.stub().resolves(),
+        };
+        sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            runId: 'apphost-run',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'AppHost',
+            request: 'launch',
+        });
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            terminateSessionCallback = callback;
+            return { dispose: sinon.stub() };
+        });
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, onRestart) => {
+            restartHandler = onRestart;
+        });
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(appHostResourceSession);
+        sinon.stub(aspireDebugSession, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/AppHost.csproj', ['run'], [], true, { forceBuild: false });
+        assert.strictEqual(restartHandler?.(aspireDebugSession.debugSessionId), true);
+        await terminateSessionCallback?.(appHostDebugSession as unknown as vscode.DebugSession);
+
+        const restartedConfig = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+        assert.strictEqual(restartedConfig[appHostCliPathConfigKey], '/selected/aspire');
+        assert.deepStrictEqual(restartedConfig.args, ['--isolated']);
+        assert.strictEqual(isAspireDebugConfigurationExtensionOwned(restartedConfig), true);
     });
 
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {

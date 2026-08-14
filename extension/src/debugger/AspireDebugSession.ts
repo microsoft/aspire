@@ -28,7 +28,8 @@ import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } f
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
-import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { appHostCliPathConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { markAspireDebugConfigurationAsExtensionOwned } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
@@ -1023,7 +1024,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       return partial;
     };
 
-    const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+    const pinnedCliPath = this.configuration[appHostCliPathConfigKey];
+    const cliPath = typeof pinnedCliPath === 'string'
+      ? pinnedCliPath
+      : await this._terminalProvider.getAspireCliExecutablePath();
     if (this.isShuttingDown) {
       // CLI resolution can outlive shutdown. Spawning now would create a detached `aspire run`
       // after every teardown owner has already started or completed its cleanup.
@@ -1270,6 +1274,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             }
 
             extensionLogOutputChannel.info('AppHost restart requested, restarting Aspire debug session');
+            // The descriptor factory strips the per-activation ownership marker before the
+            // adapter starts. Re-mark this trusted in-memory configuration so the resolver
+            // preserves the CLI path that was negotiated together with its launch arguments.
+            markAspireDebugConfigurationAsExtensionOwned(config);
             await vscode.debug.startDebugging(undefined, config);
           }
           else {

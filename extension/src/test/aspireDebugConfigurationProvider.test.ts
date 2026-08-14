@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
-import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import * as cliPathModule from '../utils/cliPath';
@@ -290,6 +290,40 @@ suite('AspireDebugConfigurationProvider', () => {
 
         assert.strictEqual(config?.[appHostLaunchReservationIdConfigKey], undefined);
         assert.deepStrictEqual(launchReservation.reserved, []);
+    });
+
+    test('does not trust a launch.json pinned CLI path', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            [appHostCliPathConfigKey]: '/forged/aspire',
+        });
+
+        assert.strictEqual(config?.[appHostCliPathConfigKey], undefined);
+    });
+
+    test('preserves the launch service pinned CLI path', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const input = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            [appHostCliPathConfigKey]: '/selected/aspire',
+        };
+        markAspireDebugConfigurationAsExtensionOwned(input);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, input);
+
+        assert.strictEqual(config?.[appHostCliPathConfigKey], '/selected/aspire');
     });
 
     test('reuses one reservation across repeated resolver passes for an external launch', async () => {

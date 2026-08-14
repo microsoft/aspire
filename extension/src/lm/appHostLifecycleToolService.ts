@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 import { appHostLifecycleUnresolvedPath } from '../loc/strings';
 import { canonicalizeAppHostPath } from '../utils/appHostIdentity';
-import { resolveIsolated } from '../utils/gitWorktree';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isCommandCancellation } from '../utils/telemetry';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
@@ -136,21 +135,22 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         return resolution.resolved ? resolution.target.displayPath : appHostLifecycleUnresolvedPath;
     }
 
-    /**
-     * Effective isolation for the confirmation prompt. Uses the same inference `start`
-     * uses so the user approves the isolation that will actually be applied.
-     */
-    async describeEffectiveIsolated(input: AppHostStartToolInput | undefined, token: vscode.CancellationToken): Promise<boolean> {
-        if (typeof input?.isolated === 'boolean') {
-            return input.isolated;
-        }
-
+    async describeStartTarget(input: AppHostStartToolInput | undefined, token: vscode.CancellationToken): Promise<{ displayPath: string; isolated: boolean }> {
         if (!vscode.workspace.isTrusted) {
-            return false;
+            return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
         }
 
         const resolution = await this.resolveTarget(input?.appHostPath, token);
-        return resolution.resolved ? resolveIsolated(undefined, resolution.target.absolutePath) : false;
+        if (!resolution.resolved) {
+            return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
+        }
+
+        const requestedIsolation = typeof input?.isolated === 'boolean' ? input.isolated : undefined;
+        const isolation = await this._dependencies.launchService.resolveLaunchIsolation(
+            resolution.target.absolutePath,
+            requestedIsolation,
+            token);
+        return { displayPath: resolution.target.displayPath, isolated: isolation.effective };
     }
 
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
@@ -164,13 +164,16 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         const requestedMode = input.mode;
         const preflight = await this.preflight(aspireAppHostStartToolName, input?.appHostPath, token, requestedMode);
         if (preflight.rejected) {
-            return { ...preflight.result, isolated: resolveIsolated(input.isolated, undefined) };
+            return preflight.result;
         }
 
-        const isolated = resolveIsolated(input.isolated, preflight.target.absolutePath);
-        const isolatedOption = input.isolated ?? (isolated ? true : undefined);
+        let isolation = { effective: false, option: undefined as boolean | undefined };
 
         try {
+            isolation = await this._dependencies.launchService.resolveLaunchIsolation(
+                preflight.target.absolutePath,
+                input.isolated,
+                token);
             // Probe for a process this extension does not own *before* taking the
             // lifecycle lock, and return early when the answer is "yes".
             //
@@ -187,7 +190,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 // Launching again would start a second AppHost against the same project.
                 // Report it instead so the agent can decide, and never adopt or kill a
                 // process this extension does not own.
-                return createResult(aspireAppHostStartToolName, 'alreadyRunning', preflight.target.relativePath, 'external', requestedMode, undefined, undefined, isolated);
+                return createResult(aspireAppHostStartToolName, 'alreadyRunning', preflight.target.relativePath, 'external', requestedMode, undefined, undefined, isolation.effective);
             }
 
             return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.absolutePath, token, async lockToken => {
@@ -200,6 +203,14 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 }
 
                 const current = recheck.target;
+                let currentIsolation: { effective: boolean; option: boolean | undefined } | undefined;
+                const getCurrentIsolation = async () => {
+                    currentIsolation ??= await this._dependencies.launchService.resolveLaunchIsolation(
+                        current.absolutePath,
+                        input.isolated,
+                        lockToken);
+                    return currentIsolation;
+                };
                 const owned = this.findEditorSessions(current.absolutePath);
                 // A session that finished startup is checked before the launching flag on
                 // purpose. That flag is only cleared once `aspire ps` reconciliation observes
@@ -214,11 +225,11 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         requestedMode,
                         getSessionMode(runningSession),
                         undefined,
-                        isolated);
+                        (await getCurrentIsolation()).effective);
                 }
 
                 if (this._dependencies.launchService.isLaunching(current.absolutePath) || owned.sessions.length > 0) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
+                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, (await getCurrentIsolation()).effective);
                 }
 
                 if (owned.ambiguous) {
@@ -226,13 +237,13 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                     // for example a sibling project file and a `Program.cs` in a directory
                     // holding several projects. Launching would risk a second process for
                     // an AppHost that is already running, so refuse instead of guessing.
-                    return createResult(aspireAppHostStartToolName, 'ambiguousSession', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
+                    return createResult(aspireAppHostStartToolName, 'ambiguousSession', current.relativePath, 'editor', requestedMode, undefined, undefined, (await getCurrentIsolation()).effective);
                 }
 
                 // Authoritative ownership check immediately before launching. This is the
                 // one that matters: everything before it could be stale by now.
                 if (await this.isRunningOutsideEditor(current.absolutePath, lockToken)) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyRunning', current.relativePath, 'external', requestedMode, undefined, undefined, isolated);
+                    return createResult(aspireAppHostStartToolName, 'alreadyRunning', current.relativePath, 'external', requestedMode, undefined, undefined, (await getCurrentIsolation()).effective);
                 }
 
                 // Claim the launching slot in one synchronous step. The lifecycle lock only
@@ -240,32 +251,38 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 // `startDebugging` without it, so this claim - not the checks above - is
                 // what makes "no second AppHost" hold against a concurrent editor launch.
                 if (!this._dependencies.launchService.tryReserveLaunch(current.absolutePath)) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
+                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, (await getCurrentIsolation()).effective);
                 }
 
                 try {
                     // `noDebug` is the only lever the tool exposes; the Aspire command is pinned
                     // to `run` so an agent can never reach deploy/publish/do through this surface.
-                    await this._dependencies.launchService.launchFromLifecycleOwner(
+                    const launchedIsolation = await this._dependencies.launchService.launchFromLifecycleOwner(
                         current.absolutePath,
                         'run',
                         requestedMode === 'run',
-                        isolatedOption,
+                        input.isolated,
                         lockToken);
+                    return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, launchedIsolation.effective);
                 }
                 catch (error) {
                     // The launch path clears its own reservation once it owns it, but a
                     // failure before that point (a disposed service, for example) would
                     // otherwise leave this AppHost reported as launching forever.
                     this._dependencies.launchService.clearLaunching(current.absolutePath);
-                    return this.createErrorResult(aspireAppHostStartToolName, error, current.relativePath, 'editor', requestedMode, undefined, isolated);
+                    return this.createErrorResult(
+                        aspireAppHostStartToolName,
+                        error,
+                        current.relativePath,
+                        'editor',
+                        requestedMode,
+                        undefined,
+                        currentIsolation?.effective ?? isolation.effective);
                 }
-
-                return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, isolated);
             });
         }
         catch (error) {
-            return this.createErrorResult(aspireAppHostStartToolName, error, preflight.target.relativePath, 'editor', requestedMode, undefined, isolated);
+            return this.createErrorResult(aspireAppHostStartToolName, error, preflight.target.relativePath, 'editor', requestedMode, undefined, isolation.effective);
         }
     }
 

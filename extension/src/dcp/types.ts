@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
-import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -230,6 +230,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     step?: string;
     skipCliAvailabilityCheck?: boolean;
     env?: { [key: string]: string };
+    [appHostCliPathConfigKey]?: string;
     [appHostLaunchTokenConfigKey]?: number;
     [appHostRestartSourceSessionIdConfigKey]?: string;
     [appHostSelectionOriginConfigKey]?: AppHostSelectionOrigin;

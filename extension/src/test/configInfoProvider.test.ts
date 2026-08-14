@@ -287,6 +287,29 @@ suite('configInfoProvider tests', () => {
         assert.strictEqual(spawnStub.callCount, 2);
     });
 
+    test('force refresh cancels and terminates its capability probe', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const provider = new ConfigInfoProvider(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        const probe = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+            forceRefresh: true,
+            cancellationToken: cancellation.token,
+        });
+        cancellation.cancel();
+
+        assert.strictEqual(await probe, null);
+        sinon.assert.calledOnceWithExactly(terminateStub, childProcess, 'cancelled aspire config info command');
+    });
+
     test('caller timeout does not cancel a newer shared probe after delayed path resolution', async () => {
         const clock = sinon.useFakeTimers();
         let resolveCliPath: ((cliPath: string) => void) | undefined;

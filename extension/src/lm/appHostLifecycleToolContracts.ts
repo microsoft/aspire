@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { type AppHostIdentityRelation } from '../utils/appHostIdentity';
-import { type AppHostStopResult } from '../services/AppHostLaunchService';
+import { type AppHostLaunchIsolation, type AppHostStopResult } from '../services/AppHostLaunchService';
 
 /**
  * Names of the contributed language model tools. These must match the `name`
@@ -98,7 +98,8 @@ export interface AppHostLifecycleLaunchService {
     getRunningAppHosts(token: vscode.CancellationToken): Promise<readonly AppHostLifecycleRunningAppHost[]>;
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<void>;
+    resolveLaunchIsolation(appHostPath: string, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
+    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
     stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }

@@ -31,14 +31,14 @@ export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<A
     // confirmation shows the exact target `invoke` will act on. It performs discovery but
     // no lifecycle work, which is what the API requires of a preparation step.
     async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<AppHostStartToolInput>, token: vscode.CancellationToken): Promise<vscode.PreparedToolInvocation> {
-        const displayPath = escapeMarkdown(await this._service.describeTarget(options.input?.appHostPath, token));
+        const description = await this._service.describeStartTarget(options.input, token);
+        const displayPath = escapeMarkdown(description.displayPath);
         const displayMode = describeRequestedMode(options.input?.mode);
-        const isolated = await this._service.describeEffectiveIsolated(options.input, token);
         return {
             invocationMessage: appHostLifecycleStartInvocationMessage(displayPath),
             confirmationMessages: {
                 title: appHostLifecycleStartConfirmationTitle,
-                message: isolated
+                message: description.isolated
                     ? appHostLifecycleStartConfirmationMessageIsolated(displayPath, displayMode)
                     : appHostLifecycleStartConfirmationMessage(displayPath, displayMode),
             },

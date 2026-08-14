@@ -57,7 +57,7 @@ function makeAppHost(overrides: Partial<AppHostDisplayInfo> = {}): AppHostDispla
 }
 
 function makeLaunchService(): AppHostLaunchService {
-    return new AppHostLaunchService();
+    return new AppHostLaunchService({ hasCapability: async () => true });
 }
 
 function makeTerminalProvider(): AspireTerminalProvider {

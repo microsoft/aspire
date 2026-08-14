@@ -5,12 +5,13 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { appHostLifecycleBusy } from '../loc/strings';
-import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchSession } from '../services/AppHostLaunchService';
+import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchCapabilityProvider, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
+import { isolatedLaunchCapability } from '../types/configInfo';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
@@ -65,8 +66,25 @@ function createAppHostDirectory(...entries: readonly string[]): string {
     return directory;
 }
 
+class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
+    readonly calls: Array<{
+        capability: string;
+        options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken } | undefined;
+    }> = [];
+    supportsIsolatedLaunch = true;
+
+    async hasCapability(
+        capability: string,
+        options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken },
+    ): Promise<boolean> {
+        this.calls.push({ capability, options });
+        return capability === isolatedLaunchCapability && this.supportsIsolatedLaunch;
+    }
+}
+
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
+    let capabilityProvider: FakeCapabilityProvider;
     let startDebuggingStub: sinon.SinonStub;
     let stopDebuggingStub: sinon.SinonStub;
     let resolveCliPathStub: sinon.SinonStub;
@@ -84,7 +102,8 @@ suite('AppHostLaunchService', () => {
             onDidTerminateDebugSessionCallback = callback;
             return new vscode.Disposable(() => { });
         });
-        service = new AppHostLaunchService();
+        capabilityProvider = new FakeCapabilityProvider();
+        service = new AppHostLaunchService(capabilityProvider);
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
         stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
@@ -165,6 +184,46 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('lifecycle-owned launch omits isolation arguments for an older CLI', async () => {
+        capabilityProvider.supportsIsolatedLaunch = false;
+        const appHostPath = '/repo/AppHost.csproj';
+        const cancellation = new vscode.CancellationTokenSource();
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        const isolation = await service.launchFromLifecycleOwner(appHostPath, 'run', true, true, cancellation.token);
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.args, undefined);
+        assert.strictEqual(config[appHostCliPathConfigKey], 'aspire');
+        assert.deepStrictEqual(isolation, { effective: false, option: undefined });
+        assert.deepStrictEqual(capabilityProvider.calls, [{
+            capability: isolatedLaunchCapability,
+            options: {
+                suppressErrors: true,
+                forceRefresh: true,
+                cliPath: 'aspire',
+                cancellationToken: cancellation.token,
+            },
+        }]);
+    });
+
+    test('lifecycle-owned launch omits explicit isolation false for an older CLI', async () => {
+        capabilityProvider.supportsIsolatedLaunch = false;
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        const isolation = await service.launchFromLifecycleOwner(
+            appHostPath,
+            'run',
+            true,
+            false,
+            new vscode.CancellationTokenSource().token);
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.args, undefined);
+        assert.deepStrictEqual(isolation, { effective: false, option: undefined });
     });
 
     test('launch omits inferred isolation for a primary checkout AppHost path', async () => {

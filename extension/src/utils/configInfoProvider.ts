@@ -46,6 +46,7 @@ interface ConfigInfoOptions {
     suppressErrors?: boolean;
     forceRefresh?: boolean;
     cliPath?: string;
+    cancellationToken?: vscode.CancellationToken;
 }
 
 /**
@@ -77,12 +78,18 @@ export class ConfigInfoProvider {
      *   CLI path so the executable is queried again.
      * @param options.cliPath The already-resolved CLI executable path. Supplying this guarantees the
      *   probe describes the same executable the caller is about to invoke.
+     * @param options.cancellationToken Cancels an invocation-specific probe and terminates its CLI
+     *   process. Shared cached probes should not pass a caller token.
      */
     async getConfigInfo(options?: ConfigInfoOptions): Promise<ConfigInfo | null> {
         const suppressErrors = options?.suppressErrors ?? false;
+        if (options?.cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
         const startTime = Date.now();
         const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors);
-        if (!cliPath) {
+        if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
 
@@ -109,7 +116,7 @@ export class ConfigInfoProvider {
             }
         }
 
-        const probe = this._fetchConfigInfo(cliPath, suppressErrors, remainingTimeoutMs);
+        const probe = this._fetchConfigInfo(cliPath, suppressErrors, remainingTimeoutMs, options?.cancellationToken);
         this._inFlightByCliPath.set(cliPath, probe);
         try {
             const result = await probe;
@@ -192,11 +199,17 @@ export class ConfigInfoProvider {
         });
     }
 
-    private _fetchConfigInfo(cliPath: string, suppressErrors: boolean, timeoutMs: number): Promise<ConfigInfo | null> {
+    private _fetchConfigInfo(
+        cliPath: string,
+        suppressErrors: boolean,
+        timeoutMs: number,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<ConfigInfo | null> {
         return new Promise<ConfigInfo | null>((resolve) => {
             let childProcess: ChildProcessWithoutNullStreams | undefined;
             let settled = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
+            let cancellation: vscode.Disposable | undefined;
             const settle = (result: ConfigInfo | null) => {
                 if (settled) {
                     return;
@@ -206,6 +219,7 @@ export class ConfigInfoProvider {
                 if (timeout) {
                     clearTimeout(timeout);
                 }
+                cancellation?.dispose();
                 resolve(result);
             };
             const reportError = (error: unknown) => {
@@ -216,6 +230,10 @@ export class ConfigInfoProvider {
                 this._reportError(error, suppressErrors);
                 settle(null);
             };
+            if (cancellationToken?.isCancellationRequested) {
+                settle(null);
+                return;
+            }
 
             // The timeout passed here is the remainder of the same 30-second budget that covered
             // executable-path lookup, so a wedged startup probe cannot block callers indefinitely.
@@ -227,6 +245,12 @@ export class ConfigInfoProvider {
                     terminateCliProcess(childProcess, 'timed-out aspire config info command');
                 }
             }, timeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => {
+                settle(null);
+                if (childProcess) {
+                    terminateCliProcess(childProcess, 'cancelled aspire config info command');
+                }
+            });
 
             const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {

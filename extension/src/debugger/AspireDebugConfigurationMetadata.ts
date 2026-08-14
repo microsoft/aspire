@@ -1,4 +1,5 @@
 export const appHostTelemetryTargetPathConfigKey = '__aspireAppHostTelemetryTargetPath';
+export const appHostCliPathConfigKey = '__aspireAppHostCliPath';
 export const appHostLaunchReservationIdConfigKey = '__aspireAppHostLaunchReservationId';
 export const appHostLaunchTokenConfigKey = '__aspireAppHostLaunchToken';
 export const appHostRestartSourceSessionIdConfigKey = '__aspireAppHostRestartSourceSessionId';
