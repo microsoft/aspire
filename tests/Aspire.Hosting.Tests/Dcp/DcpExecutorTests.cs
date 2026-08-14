@@ -8189,7 +8189,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var failure = Assert.Single(failedResources);
         Assert.Same(resource, failure.Resource);
         Assert.NotNull(failure.ErrorMessage);
-        Assert.Contains("Launch configuration failed.", failure.ErrorMessage);
+        Assert.Contains("Failed to apply launch configuration", failure.ErrorMessage);
         Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
 
         var logLines = new List<LogLine>();

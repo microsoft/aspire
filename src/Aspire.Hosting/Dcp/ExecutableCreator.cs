@@ -279,9 +279,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // configuration performs the tool invocation. With no resolved prefix to replace it, Process
                 // execution would run a bare tool command such as `dotnet <app-args>`.
                 var failureMessage =
-                    $"Failed to apply launch configuration for resource '{er.ModelResource.Name}': {ex.Message} " +
+                    $"Failed to apply launch configuration for resource '{er.ModelResource.Name}'. " +
                     "Process fallback is unavailable because the active launch configuration owns the resource's launch tool arguments, " +
                     "but those arguments resolved empty and the project process scaffold was suppressed.";
+                // DcpExecutor expects IObjectCreator<Executable, EmptyCreationContext>.CreateObjectAsync to log
+                // failure details before throwing FailedToApplyEnvironmentException, so record the diagnostic here.
                 resourceLogger.LogError(ex, "{Message}", failureMessage);
                 throw new FailedToApplyEnvironmentException(failureMessage, ex);
             }
