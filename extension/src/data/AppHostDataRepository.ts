@@ -4,104 +4,19 @@ import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry } from '../utils/appHostDiscovery';
-import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
 import { getComparisonKey, isProjectFileToSourceFileMatch } from '../utils/paths/comparison';
 import { FileSystemEntryDescriptorIndex } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
+import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
+import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, LimitedOutputBuffer, normalizeResourceCommandStatusLine, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
 
+export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
-
-export interface ResourceUrlJson {
-    name: string | null;
-    displayName: string | null;
-    url: string;
-    isInternal: boolean;
-}
-
-export interface ResourceCommandJson {
-    displayName?: string | null;
-    description: string | null;
-    visibility?: string | null;
-    state?: string | null;
-    sortOrder?: number | null;
-    argumentInputs?: ResourceCommandArgumentInputJson[] | null;
-}
-
-// Resource command argument input types. Values match the strings emitted by the CLI
-// JSON contract (ResourceCommandArgumentJson.InputType in
-// src/Shared/Model/Serialization/ResourceJson.cs).
-export const ResourceCommandInputType = {
-    Text: 'Text',
-    SecretText: 'SecretText',
-    Choice: 'Choice',
-    Boolean: 'Boolean',
-    Number: 'Number',
-} as const;
-
-export type ResourceCommandInputType = typeof ResourceCommandInputType[keyof typeof ResourceCommandInputType];
-
-export interface ResourceCommandArgumentDynamicLoadingJson {
-    alwaysLoadOnStart?: boolean;
-    dependsOnInputs?: string[] | null;
-}
-
-// Mirrors the CLI JSON contract in src/Shared/Model/Serialization/ResourceJson.cs
-// (`ResourceCommandArgumentJson`), populated by Aspire.Cli's ResourceSnapshotMapper.
-export interface ResourceCommandArgumentInputJson {
-    name: string;
-    label: string | null;
-    description: string | null;
-    enableDescriptionMarkdown?: boolean;
-    inputType: ResourceCommandInputType;
-    required?: boolean;
-    placeholder: string | null;
-    value: string | null;
-    options: Record<string, string | null> | null;
-    allowCustomChoice?: boolean;
-    disabled?: boolean;
-    maxLength: number | null;
-    dynamicLoading?: ResourceCommandArgumentDynamicLoadingJson | null;
-}
-
-export interface ResourceHealthReportJson {
-    status: string | null;
-    description: string | null;
-    exceptionMessage: string | null;
-}
-
-export interface ResourceJson {
-    name: string;
-    displayName: string | null;
-    resourceType: string;
-    state: string | null;
-    stateStyle: string | null;
-    healthStatus: string | null;
-    healthReports: Record<string, ResourceHealthReportJson> | null;
-    exitCode: number | null;
-    dashboardUrl: string | null;
-    urls: ResourceUrlJson[] | null;
-    commands: Record<string, ResourceCommandJson> | null;
-    properties: Record<string, string | null> | null;
-}
-
-export interface AppHostDisplayInfo {
-    appHostPath: string;
-    appHostPid: number;
-    status?: string;
-    cliPid: number | null;
-    dashboardUrl: string | null;
-    logFilePath?: string | null;
-    resources: ResourceJson[] | null | undefined;
-}
-
-interface DescribeSnapshotJson {
-    resources?: ResourceJson[];
-}
 
 interface WorkspaceFolderAppHostCandidates {
     readonly workspaceFolder: vscode.WorkspaceFolder;
@@ -117,45 +32,6 @@ interface CombinedWorkspaceAppHostCandidates {
     appHostCandidates: AppHostCandidate[];
     selectedAppHostPath: string | null;
 }
-
-export class AspireCliNotInstalledError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'AspireCliNotInstalledError';
-    }
-}
-
-export class AspireCliFailedError extends Error {
-    constructor(
-        public readonly command: string,
-        public readonly exitCode: number | null,
-        public readonly stdout: string,
-        public readonly stderr: string) {
-        super(aspireCliCommandFailed(command, String(exitCode), ''));
-        this.name = 'AspireCliFailedError';
-    }
-}
-
-export class AspireCliParseError extends Error {
-    constructor(
-        public readonly command: string,
-        public readonly output: string,
-        innerError: unknown) {
-        super(aspireCliOutputParseFailed(command, String(innerError)));
-        this.name = 'AspireCliParseError';
-    }
-}
-
-/**
- * Captured output from a hidden `aspire resource ...` execution. `stdout` carries the rendered
- * command value (when the command returns one); `stderr` carries human-readable status/errors.
- */
-export interface ResourceCommandExecutionOutput {
-    stdout: string;
-    stderr: string;
-}
-
-export type ViewMode = 'workspace' | 'global';
 
 interface DescribeStream {
     appHostPath: string;
@@ -195,19 +71,9 @@ interface PostStopRefreshTimer {
  *    mode this backs the full tree; in workspace mode it confirms whether the
  *    workspace AppHost is running and drives which hosts get described.
  */
-const oneShotOutputBufferLimit = 64 * 1024;
-
-interface RunCliCommandOptions {
-    timeoutMs?: number | null;
-    stdoutBufferLimit?: number | null;
-    cancellationToken?: vscode.CancellationToken;
-    env?: { name: string; value: string }[];
-}
-
 export class AppHostDataRepository {
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
-    private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
     private static readonly _streamedCandidateUpdateDebounceMs = 50;
     private static readonly _streamedCandidateUpdateMaxWaitMs = 250;
@@ -229,7 +95,6 @@ export class AppHostDataRepository {
     // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
     // attempt the flag and rely on the locale-independent no-data fallback below.
     private _includeDisabledCommandsSupported = true;
-    private _noLogoSupported = true;
     private readonly _configInfoProvider: ConfigInfoProvider;
 
     // ── Running AppHost state (ps polling) ──
@@ -242,7 +107,6 @@ export class AppHostDataRepository {
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psPollingGeneration = 0;
-    private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
@@ -297,8 +161,10 @@ export class AppHostDataRepository {
 
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
+    private readonly _cliRunner: AppHostCliRunner;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
+        this._cliRunner = new AppHostCliRunner(_terminalProvider);
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
@@ -593,7 +459,7 @@ export class AppHostDataRepository {
     async fetchRunningAppHostsOnce(cancellationToken?: vscode.CancellationToken): Promise<AppHostDisplayInfo[]> {
         const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>(
             'aspire ps',
-            this._withNoLogo(['ps', '--format', 'json']),
+            this._cliRunner._withNoLogo(['ps', '--format', 'json']),
             { cancellationToken });
         return Array.isArray(appHosts) ? appHosts : [appHosts];
     }
@@ -648,7 +514,7 @@ export class AppHostDataRepository {
         }
 
         try {
-            const output = await this._runCliCommand(`aspire resource ${commandName}`, args, {
+            const output = await this._cliRunner._runCliCommand(`aspire resource ${commandName}`, args, {
                 timeoutMs: null,
                 stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
                 cancellationToken,
@@ -679,7 +545,7 @@ export class AppHostDataRepository {
         this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._stopPolling();
         this._stopAllDescribes();
-        this._stopOneShotProcesses();
+        this._cliRunner._stopOneShotProcesses();
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
@@ -1153,7 +1019,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
-            const args = this._withNoLogo(['describe', '--follow', '--format', 'json']);
+            const args = this._cliRunner._withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -1195,7 +1061,7 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    if (code !== 0 && this._disableNoLogoForRetry(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow --apphost ${appHostPath}`)) {
+                    if (code !== 0 && this._cliRunner._disableNoLogoForRetry(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow --apphost ${appHostPath}`)) {
                         this._describeStreams.delete(appHostPath);
                         this._startDescribe(appHostPath, forceIncludeDisabledCommands);
                         return;
@@ -1436,7 +1302,7 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._runCliCommand(command, args, options);
+        const { stdout } = await this._cliRunner._runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);
@@ -1445,135 +1311,9 @@ export class AppHostDataRepository {
         }
     }
 
-    private _withNoLogo(args: string[]): string[] {
-        if (!this._noLogoSupported) {
-            return args;
-        }
-
-        const appHostIndex = args.indexOf('--apphost');
-        const insertIndex = appHostIndex === -1 ? args.length : appHostIndex;
-        return [...args.slice(0, insertIndex), noLogoOption, ...args.slice(insertIndex)];
-    }
-
-    // Returns the args to retry with when the installed CLI does not recognize --nologo, or
-    // undefined when this failure is unrelated to --nologo. Has the intentional side effect of
-    // flipping _noLogoSupported to false the first time the unsupported pattern is observed so
-    // subsequent _withNoLogo calls stop adding the option for the lifetime of the repository.
-    //
-    // Callers that own their own retry args use the returned value directly; long-lived watch
-    // restarters (describe/ps follow) use _disableNoLogoForRetry below and intentionally discard
-    // the returned args because the watch starter rebuilds args via _withNoLogo.
-    private _tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
-        if (!isNoLogoUnsupportedOutput(args, stdout, stderr)) {
-            return undefined;
-        }
-
-        if (this._noLogoSupported) {
-            this._noLogoSupported = false;
-            extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying ${operation} without it.`);
-        }
-
-        return removeRootNoLogoOption(args);
-    }
-
-    // Boolean variant of _tryGetNoLogoRetryArgs for watch restarters that rebuild args via
-    // _withNoLogo when they restart. These call sites only need to know "did we just disable
-    // --nologo support for the rest of this session?" — the recomputed args from
-    // _tryGetNoLogoRetryArgs would be thrown away.
-    private _disableNoLogoForRetry(args: string[], stdout: string, stderr: string, operation: string): boolean {
-        return this._tryGetNoLogoRetryArgs(args, stdout, stderr, operation) !== undefined;
-    }
-
-    private async _runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
-            throw new AspireCliNotInstalledError(String(error));
-        });
-
-        if (options.cancellationToken?.isCancellationRequested) {
-            throw new vscode.CancellationError();
-        }
-
-        return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            let settled = false;
-            let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-            let cliProcess: ChildProcessWithoutNullStreams | undefined;
-            let cancellationRegistration: vscode.Disposable | undefined;
-            const timeoutMs = options.timeoutMs === undefined ? AppHostDataRepository._oneShotCommandTimeoutMs : options.timeoutMs;
-            const stdoutBufferLimit = options.stdoutBufferLimit === undefined ? null : options.stdoutBufferLimit;
-            const stdout = new LimitedOutputBuffer(stdoutBufferLimit);
-            const stderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
-
-            const settle = (callback: () => void) => {
-                if (settled) {
-                    return;
-                }
-
-                settled = true;
-                if (timeoutTimer) {
-                    clearTimeout(timeoutTimer);
-                    timeoutTimer = undefined;
-                }
-                cancellationRegistration?.dispose();
-                cancellationRegistration = undefined;
-                if (cliProcess) {
-                    this._oneShotProcesses.delete(cliProcess);
-                    if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        terminateCliProcess(cliProcess, command);
-                    }
-                }
-                callback();
-            };
-
-            if (timeoutMs !== null) {
-                timeoutTimer = setTimeout(() => {
-                    settle(() => reject(new AspireCliFailedError(command, null, stdout.value, stderr.value || aspireCliCommandTimedOut(timeoutMs))));
-                }, timeoutMs);
-            }
-
-            cancellationRegistration = options.cancellationToken?.onCancellationRequested(() => {
-                settle(() => reject(new vscode.CancellationError()));
-            });
-
-            cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
-                createProcessGroup: true,
-                noExtensionVariables: true,
-                env: options.env,
-                stdoutCallback: (data) => { stdout.append(data); },
-                stderrCallback: (data) => { stderr.append(data); },
-                exitCallback: (code) => {
-                    if (code !== 0) {
-                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout.value, stderr.value, command);
-                        if (retryArgs) {
-                            settle(() => {
-                                this._runCliCommand(command, retryArgs, options).then(resolve, reject);
-                            });
-                            return;
-                        }
-
-                        settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
-                        return;
-                    }
-
-                    settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
-                },
-                errorCallback: (error) => {
-                    settle(() => reject(new AspireCliNotInstalledError(error.message)));
-                },
-            });
-            this._oneShotProcesses.add(cliProcess);
-        });
-    }
-
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._cliRunner._withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
         return snapshot.resources ?? [];
-    }
-
-    private _stopOneShotProcesses(): void {
-        for (const process of this._oneShotProcesses) {
-            terminateCliProcess(process, 'one-shot aspire command');
-        }
-        this._oneShotProcesses.clear();
     }
 
     private _stopDescribe(appHostPath: string): void {
@@ -1731,7 +1471,7 @@ export class AppHostDataRepository {
             }
         };
 
-        const args = this._withNoLogo(['ps', '--follow', '--format', 'json']);
+        const args = this._cliRunner._withNoLogo(['ps', '--follow', '--format', 'json']);
         const psFollowStdout = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
         const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
@@ -1763,7 +1503,7 @@ export class AppHostDataRepository {
                 }
 
                 if (code !== 0) {
-                    if (this._disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
+                    if (this._cliRunner._disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
                         this._startPsFollow();
                         return;
                     }
@@ -1811,7 +1551,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = true;
         const fetchVersion = ++this._psFetchVersion;
 
-        const args = this._withNoLogo(['ps', '--format', 'json']);
+        const args = this._cliRunner._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
@@ -1842,7 +1582,7 @@ export class AppHostDataRepository {
             && !this._disposed
             && (force || this._dataActive);
         const pollingGeneration = this._psPollingGeneration;
-        const args = this._withNoLogo(['ps', '--format', 'json']);
+        const args = this._cliRunner._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
                 return;
@@ -2129,7 +1869,7 @@ export class AppHostDataRepository {
                 removePsProcess();
                 if (!callbackInvoked) {
                     if ((code ?? 1) !== 0) {
-                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
+                        const retryArgs = this._cliRunner._tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
                         if (retryArgs) {
                             this._runPsCommand(retryArgs, callback, options);
                             return;
@@ -2227,69 +1967,6 @@ function getConfiguredNumber(config: vscode.WorkspaceConfiguration, key: string)
         ?? inspection?.globalValue;
 }
 
-class LimitedOutputBuffer {
-    private readonly _marker: string;
-    private readonly _headLimit: number;
-    private readonly _tailLimit: number;
-    private _head = '';
-    private _tail = '';
-    private _truncated = false;
-
-    constructor(private readonly _limit: number | null) {
-        if (_limit === null) {
-            this._marker = '';
-            this._headLimit = 0;
-            this._tailLimit = 0;
-            return;
-        }
-
-        this._marker = getOutputTruncationMarker(_limit);
-        const available = Math.max(_limit - this._marker.length, 0);
-        this._headLimit = Math.ceil(available / 2);
-        this._tailLimit = available - this._headLimit;
-    }
-
-    append(data: string): void {
-        if (this._limit === null) {
-            this._head += data;
-            return;
-        }
-
-        if (!this._truncated) {
-            const combined = this._head + data;
-            if (combined.length <= this._limit) {
-                this._head = combined;
-                return;
-            }
-
-            this._head = combined.slice(0, this._headLimit);
-            this._tail = takeLast(combined, this._tailLimit);
-            this._truncated = true;
-            return;
-        }
-
-        this._tail = takeLast(this._tail + data, this._tailLimit);
-    }
-
-    get value(): string {
-        if (!this._truncated) {
-            return this._head;
-        }
-
-        return `${this._head}${this._marker}${this._tail}`;
-    }
-}
-
-function getOutputTruncationMarker(limit: number): string {
-    const marker = `\n${aspireCommandOutputTruncated(limit)}\n`;
-
-    return marker.length <= limit ? marker : marker.slice(0, limit);
-}
-
-function takeLast(value: string, count: number): string {
-    return count === 0 ? '' : value.slice(-count);
-}
-
 export function filterResourceCommandStatusOutput(output: string, resourceName: string, commandName: string): string {
     if (!output) {
         return '';
@@ -2360,37 +2037,6 @@ function getKnownResourceCommandStatus(commandName: string): { progressVerb: str
     }
 }
 
-function normalizeResourceCommandStatusLine(line: string): string {
-    return line
-        .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-        .trim()
-        .replace(/^[✅✔✓]\s*/, '');
-}
-
-function parseCliJsonOutput<T>(stdout: string): T {
-    try {
-        return JSON.parse(stdout);
-    } catch (error) {
-        // Some CLI invocations can emit startup diagnostics before the final JSON payload:
-        //   Starting AppHost...
-        //   {"resources":[{"name":"api", ...}]}
-        // Parse the whole output first for the normal deterministic path, then fall back to
-        // the last JSON-looking line so older or chatty CLIs do not poison the snapshot.
-        for (const line of stdout.split(/\r?\n/).reverse()) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                try {
-                    return JSON.parse(trimmed);
-                } catch {
-                    // Keep scanning in case the CLI wrote a JSON-looking diagnostic after the payload.
-                }
-            }
-        }
-
-        throw error;
-    }
-}
-
 function isPathInWorkspace(filePath: string): boolean {
     return vscode.workspace.workspaceFolders?.some(workspaceFolder => {
         const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
@@ -2398,56 +2044,6 @@ function isPathInWorkspace(filePath: string): boolean {
             && !relativePath.startsWith('..')
             && !path.isAbsolute(relativePath);
     }) ?? false;
-}
-
-function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
-    const lines = [...nonJsonLines, ...stderr.split(/\r?\n/)];
-    const output = lines.join('\n');
-    if (!output) {
-        return false;
-    }
-
-    // The surrounding help/error text and placeholder names are localized by System.CommandLine,
-    // but the command name and bracket/angle syntax are stable. Older CLIs that do not support
-    // `describe` either print top-level help such as:
-    //   Uso:
-    //   aspire <comando> [opciones]
-    // or reject stable tokens from the attempted invocation, such as `describe` or `--follow`.
-    const normalizedOutput = output.toLowerCase();
-    return lines.some(isAspireCommandHelpSyntaxLine)
-        || containsQuotedCliToken(output, 'describe')
-        || containsQuotedCliToken(output, '--follow')
-        || containsQuotedCliToken(output, '--format')
-        || containsQuotedCliToken(output, '--apphost')
-        || (normalizedOutput.includes('usage:') && normalizedOutput.includes('commands:'))
-        || normalizedOutput.includes('unknown command')
-        || normalizedOutput.includes('unrecognized command')
-        || normalizedOutput.includes('unrecognized option')
-        || normalizedOutput.includes('is not a recognized command');
-}
-
-function isAspireCommandHelpSyntaxLine(line: string): boolean {
-    return /^aspire(?:\.exe)?\s+(?:<[^>]+>|\[[^\]]+\])(?:\s|$)/i.test(normalizeResourceCommandStatusLine(line));
-}
-
-function containsQuotedCliToken(output: string, token: string): boolean {
-    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`[\\'"\`\\u2018\\u2019\\u201C\\u201D]${escapedToken}[\\'"\`\\u2018\\u2019\\u201C\\u201D]`).test(output);
-}
-
-function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
-    // This is only consulted after a describe attempt produced no resource data, so any
-    // non-JSON/stderr output here is diagnostic text rather than successful output. When the
-    // CLI accepts `--include-disabled-commands` it streams JSON resources and never echoes the
-    // flag name back, so the literal flag token only appears when the CLI is reporting that it
-    // does not recognize the option, e.g.:
-    //   English:  Unrecognized command or argument '--include-disabled-commands'.
-    //   Spanish:  No se encuentra el recurso '--include-disabled-commands'.
-    // The flag token itself is never localized, so detecting on its presence keeps this fallback
-    // locale-independent — matching on translated phrases like "unrecognized option" would miss
-    // non-English CLI output (e.g. via ASPIRE_LOCALE_OVERRIDE or the system locale).
-    const output = [...nonJsonLines, stderr].join('\n');
-    return output.includes('--include-disabled-commands');
 }
 
 export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
