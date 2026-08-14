@@ -27,7 +27,7 @@ namespace Aspire.Shared.TerminalHost;
 internal sealed class TerminalHostMetadata
 {
     /// <summary>The metadata schema version understood by this build.</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>
     /// Bumped when fields are added or semantics change so older readers can refuse
@@ -36,7 +36,7 @@ internal sealed class TerminalHostMetadata
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
-    /// <summary>The replica id (see <see cref="TerminalHostPaths.ComputeReplicaId(string, string, int)"/>).</summary>
+    /// <summary>The replica id (see <see cref="TerminalHostPaths.CreateReplicaId"/>).</summary>
     [JsonPropertyName("replicaId")]
     public required string ReplicaId { get; init; }
 
@@ -54,17 +54,39 @@ internal sealed class TerminalHostMetadata
 
     /// <summary>
     /// Process id of the AppHost process. Readers pair it with
-    /// <see cref="AppHostProcessStartTimeUnixMilliseconds"/> before deciding ownership.
+    /// <see cref="AppHostProcessIdentity"/> before deciding ownership.
     /// </summary>
     [JsonPropertyName("appHostPid")]
     public required int AppHostPid { get; init; }
 
     /// <summary>
-    /// Stable start time of the AppHost process, paired with <see cref="AppHostPid"/>
-    /// so a recycled PID cannot be mistaken for the original owner.
+    /// Opaque same-boot identity of the AppHost process, paired with <see cref="AppHostPid"/>
+    /// so a recycled PID cannot be mistaken for the original owner. Schema-v1 sidecars omit it.
+    /// </summary>
+    [JsonPropertyName("appHostProcessIdentity")]
+    public long? AppHostProcessIdentity { get; init; }
+
+    /// <summary>
+    /// Process identity name used by schema-v2 sidecars from earlier preview builds.
+    /// Retained only so their orphaned files remain reclaimable.
     /// </summary>
     [JsonPropertyName("appHostProcessStartTimeUnixMilliseconds")]
-    public required long AppHostProcessStartTimeUnixMilliseconds { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? SchemaV2AppHostProcessIdentity { get; init; }
+
+    /// <summary>
+    /// Machine or PID-namespace scope in which <see cref="AppHostPid"/> is meaningful.
+    /// Schema-v1 sidecars omit it.
+    /// </summary>
+    [JsonPropertyName("appHostProcessScopeId")]
+    public string? AppHostProcessScopeId { get; init; }
+
+    /// <summary>
+    /// Linux kernel boot identifier for the owning AppHost. This disambiguates otherwise identical
+    /// boot-relative process identities after a reboot. Other platforms omit it.
+    /// </summary>
+    [JsonPropertyName("appHostBootId")]
+    public string? AppHostBootId { get; init; }
 
     /// <summary>UTC timestamp when the sidecar was written.</summary>
     [JsonPropertyName("createdAtUtc")]

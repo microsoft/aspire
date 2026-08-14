@@ -2,20 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Aspire.Hosting;
+using Aspire.Shared;
 
 namespace Aspire.TerminalHost;
 
 /// <summary>
 /// Runs a terminal host with process-level graceful shutdown handling.
 /// </summary>
-internal static class TerminalHostProcessRunner
+public static class TerminalHostProcessRunner
 {
     /// <summary>
-    /// Runs a terminal host until it exits or the process receives SIGINT or SIGTERM.
+    /// Runs a terminal host until it exits, cancellation is requested, or the process receives
+    /// SIGINT or SIGTERM.
     /// </summary>
-    public static async Task<int> RunAsync(string[] args)
+    public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
     {
-        using var cts = new CancellationTokenSource();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var parentWatchdog = ParentProcessWatchdog.Start(
+            cts,
+            KnownConfigNames.TerminalHostParentProcessId,
+            KnownConfigNames.TerminalHostParentProcessStartedStable,
+            legacyStartVariable: null);
 
         void RequestCancellation()
         {
@@ -43,8 +51,10 @@ internal static class TerminalHostProcessRunner
 
         try
         {
-            // PosixSignalRegistration also maps Windows console control events. Sharing this
-            // runner keeps the standalone executable and bundled aspire-managed path aligned.
+            // PosixSignalRegistration also maps Windows console control events. Win32
+            // TerminateProcess is not interceptable, so forced DCP termination on Windows can
+            // bypass this cleanup; AppHost exact-path cleanup and the next startup sweep are the
+            // backstops for that platform.
             if (!OperatingSystem.IsBrowser()
                 && !OperatingSystem.IsIOS()
                 && !OperatingSystem.IsTvOS()
@@ -83,6 +93,11 @@ internal static class TerminalHostProcessRunner
             if (cancelKeyPressHandler is not null)
             {
                 Console.CancelKeyPress -= cancelKeyPressHandler;
+            }
+
+            if (parentWatchdog is not null)
+            {
+                await parentWatchdog.DisposeAsync().ConfigureAwait(false);
             }
         }
     }

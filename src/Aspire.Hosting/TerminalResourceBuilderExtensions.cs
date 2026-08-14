@@ -1,14 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Lifecycle;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -94,6 +95,7 @@ public static class TerminalResourceBuilderExtensions
 
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
+        appBuilder.Services.TryAddSingleton<TerminalHostOrphanCleanupService>();
 
         // Subscribe directly on the IDistributedApplicationEventing rather than registering an
         // IDistributedApplicationEventingSubscriber: subscriptions registered during the builder
@@ -143,6 +145,12 @@ public static class TerminalResourceBuilderExtensions
             return;
         }
 
+        var executionContext = @event.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        if (!executionContext.IsRunMode)
+        {
+            return;
+        }
+
         // ReplicaAnnotation may have been added before OR after WithTerminal — that's
         // exactly why this code runs at BeforeStartEvent time. The model is locked down
         // by now, so LastOrDefault() reflects the final WithReplicas(N) call.
@@ -153,16 +161,14 @@ public static class TerminalResourceBuilderExtensions
         }
 
         // All per-replica terminal-host files live flat under ~/.aspire/trmnl/, with
-        // a per-replica id derived from (normalized AppHost path, parent resource name,
-        // replica index). This:
+        // a random per-run replica id. This:
         //  - matches the repo's convention for per-user runtime state (cf. ~/.aspire/cli/bch,
         //    ~/.aspire/dev-certs, ~/.aspire/deployments)
         //  - avoids dropping UDS sockets in the global /tmp on Linux where different distros
         //    treat /tmp permissions differently
         //  - keeps absolute paths short enough to fit sun_path (104 bytes on macOS)
-        //  - is stable across AppHost restarts so external tools can enumerate by listing
-        //    {trmnlDir}/{id}.metadata.json. The listener side MUST pre-delete stale .sock
-        //    files at the same path before binding.
+        //  - lets external tools enumerate by listing {trmnlDir}/{id}.metadata.json
+        //  - prevents an old child or AppHost cleanup from touching a replacement run's sockets.
         var configuration = @event.Services.GetRequiredService<IConfiguration>();
         var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
         if (string.IsNullOrEmpty(appHostPath))
@@ -171,8 +177,12 @@ public static class TerminalResourceBuilderExtensions
                 "Cannot materialize terminal hosts: AppHost:FilePath / AppHost:Path is not set in configuration.");
         }
 
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        var trmnlDirectory = configuration[TerminalHostPaths.DirectoryOverrideConfigName];
+        if (string.IsNullOrEmpty(trmnlDirectory))
+        {
+            var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        }
 
         // 0700 on Unix so other local users cannot enumerate which terminals exist on
         // this machine. On Windows the user-profile ACLs (per-user by default) make this
@@ -198,30 +208,23 @@ public static class TerminalResourceBuilderExtensions
         var replicaIds = new string[replicaCount];
         var metadataLogger = @event.Services.GetService<ILoggerFactory>()?.CreateLogger("Aspire.Hosting.WithTerminal");
         var appHostPid = Environment.ProcessId;
-        var appHostProcessStartTimeUnixMilliseconds = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds();
+        var appHostProcessIdentity = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds();
+        var appHostProcessScopeId = TerminalHostOrphanCleanupService.GetCurrentProcessScopeId();
+        var appHostBootId = TerminalHostOrphanCleanupService.GetCurrentBootId();
         var createdAtUtc = DateTime.UtcNow;
-
-        // Before writing this run's sidecars, reclaim terminal-host files left behind by any
-        // AppHost that exited ungracefully (SIGKILL / crash) and so never ran its cleanup. A
-        // graceful `aspire stop` is already handled by the terminal host's own SIGTERM teardown
-        // plus the ApplicationStopped backstop below, but an ungraceful exit strands
-        // {id}.dcp.sock / {id}.host.sock (and the sidecar) forever. ~/.aspire/trmnl/ is shared by
-        // every AppHost on the machine, so we only delete files whose owning AppHost PID is
-        // provably gone — keyed off the sidecar's AppHost PID and stable process start time.
-        // See https://github.com/microsoft/aspire/issues/19302.
-        await SweepOrphanedTerminalFilesAsync(
-            trmnlDirectory,
-            metadataLogger,
-            cancellationToken).ConfigureAwait(false);
 
         for (var i = 0; i < replicaCount; i++)
         {
-            var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, parent.Name, i);
-            var layout = CreateTerminalHostLayout(homeDirectory, replicaId, i);
+            var replicaId = TerminalHostPaths.CreateReplicaId();
+            var layout = CreateTerminalHostLayout(trmnlDirectory, replicaId, i);
             var terminalHostName = $"{parent.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
             var terminalHost = new TerminalHostResource(terminalHostName, parent, layout);
 
-            ConfigureTerminalHostAnnotations(terminalHost, options);
+            ConfigureTerminalHostAnnotations(
+                terminalHost,
+                options,
+                appHostPid,
+                appHostProcessIdentity);
 
             // Wire OTLP env vars onto each terminal host so it can ship logs/traces/metrics to
             // the dashboard. Without this, terminal host failures (DCP never dials, control
@@ -261,7 +264,6 @@ public static class TerminalResourceBuilderExtensions
             // control socket. The host process never reads its own sidecar; the AppHost is
             // the sole writer.
             await WriteMetadataSidecarAsync(
-                trmnlDirectory,
                 layout.MetadataPath,
                 new TerminalHostMetadata
                 {
@@ -270,7 +272,9 @@ public static class TerminalResourceBuilderExtensions
                     ReplicaIndex = i,
                     AppHostPath = appHostPath,
                     AppHostPid = appHostPid,
-                    AppHostProcessStartTimeUnixMilliseconds = appHostProcessStartTimeUnixMilliseconds,
+                    AppHostProcessIdentity = appHostProcessIdentity,
+                    AppHostProcessScopeId = appHostProcessScopeId,
+                    AppHostBootId = appHostBootId,
                     CreatedAtUtc = createdAtUtc,
                     Columns = options.Columns,
                     Rows = options.Rows,
@@ -295,11 +299,10 @@ public static class TerminalResourceBuilderExtensions
         //      their sockets.
         //
         // Why ApplicationStopped (not ApplicationStopping): deleting after the children have fully
-        // exited avoids racing a child that is still mid-drain and could re-bind its UDS.
+        // exited avoids racing a child that is still mid-drain.
         //
-        // Why we delete exact per-replica paths instead of `rm -r trmnlDirectory`: the directory
-        // is shared across every AppHost on the machine. We only own the four known files for OUR
-        // replica ids; the persistent lock file remains so its inode is stable across processes.
+        // The directory is shared across every AppHost on the machine, so delete only exact paths
+        // identified by this run's random replica ids.
         var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
         var loggerFactory = @event.Services.GetService<ILoggerFactory>();
         if (lifetime is not null)
@@ -311,15 +314,17 @@ public static class TerminalResourceBuilderExtensions
             {
                 foreach (var replicaId in capturedReplicaIds)
                 {
-                    DeleteOwnedReplicaFiles(
+                    TerminalHostOrphanCleanupService.DeleteReplicaFiles(
                         capturedTrmnlDir,
                         replicaId,
-                        appHostPid,
-                        appHostProcessStartTimeUnixMilliseconds,
                         cleanupLogger);
                 }
             });
         }
+
+        // Machine-wide cleanup is best-effort and must not extend startup latency. The singleton
+        // service starts only once even when multiple resources call WithTerminal().
+        @event.Services.GetRequiredService<TerminalHostOrphanCleanupService>().Start(trmnlDirectory);
 
         // The target waits until each host has started so its viewer-facing UDS listener
         // is bound before any consumer (Dashboard or CLI) tries to connect. A follow-up
@@ -337,7 +342,6 @@ public static class TerminalResourceBuilderExtensions
     }
 
     private static async Task WriteMetadataSidecarAsync(
-        string trmnlDirectory,
         string metadataPath,
         TerminalHostMetadata metadata,
         ILogger? logger,
@@ -345,11 +349,6 @@ public static class TerminalResourceBuilderExtensions
     {
         try
         {
-            using var replicaLock = await AcquireReplicaLockAsync(
-                trmnlDirectory,
-                metadata.ReplicaId,
-                cancellationToken).ConfigureAwait(false);
-
             // Indented for human inspection: the file is small (<1 KiB) and is expected to
             // be `cat`-ed by users debugging terminal-host issues. Performance is irrelevant.
             var json = JsonSerializer.Serialize(metadata, s_metadataSerializerOptions);
@@ -387,10 +386,8 @@ public static class TerminalResourceBuilderExtensions
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Once the ownership lock is acquired, sidecar writes are best-effort: a missing
-            // sidecar only degrades external discovery. Lock timeouts are intentionally not
-            // caught here because starting without synchronization could collide with another
-            // AppHost using the same deterministic replica paths.
+            // Per-run paths cannot collide with another AppHost. A missing sidecar only degrades
+            // external discovery and crash recovery for this terminal.
             logger?.LogDebug(ex, "Failed to write terminal host metadata sidecar '{Path}'.", metadataPath);
         }
     }
@@ -400,274 +397,11 @@ public static class TerminalResourceBuilderExtensions
         WriteIndented = true,
     };
 
-    private static readonly TimeSpan s_replicaLockRetryDelay = TimeSpan.FromMilliseconds(10);
-    private static readonly TimeSpan s_replicaLockTimeout = TimeSpan.FromSeconds(5);
-
-    private static async Task<FileStream> AcquireReplicaLockAsync(
-        string trmnlDirectory,
-        string replicaId,
-        CancellationToken cancellationToken)
-    {
-        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
-        var stopwatch = Stopwatch.StartNew();
-
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                return OpenReplicaLock(trmnlDirectory, replicaId);
-            }
-            catch (IOException ex)
-            {
-                // Another AppHost is updating or sweeping this replica. Wait until its
-                // read/write/delete transaction completes before replacing the sidecar.
-                if (stopwatch.Elapsed >= s_replicaLockTimeout)
-                {
-                    throw new TimeoutException(
-                        $"Timed out after {s_replicaLockTimeout.TotalSeconds:N0} seconds acquiring terminal host replica lock '{lockPath}'.",
-                        ex);
-                }
-            }
-
-            await Task.Delay(s_replicaLockRetryDelay, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private static FileStream? TryAcquireReplicaLock(string trmnlDirectory, string replicaId)
-    {
-        try
-        {
-            return OpenReplicaLock(trmnlDirectory, replicaId);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A writer or another sweeper owns this replica. Skipping is safe because a
-            // later AppHost startup will reconsider the sidecar.
-            return null;
-        }
-    }
-
-    private static FileStream OpenReplicaLock(string trmnlDirectory, string replicaId)
-    {
-        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
-
-        // Keep the lock file persistent. Deleting a locked file on Unix would let another
-        // process create a new inode at the same path and acquire a second, independent lock.
-        return new FileStream(
-            lockPath,
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 1);
-    }
-
-    private static void DeleteReplicaFiles(string trmnlDirectory, string replicaId, ILogger? logger)
-    {
-        var paths = new[]
-        {
-            Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock"),
-            Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ConsumerSockPurpose}.sock"),
-            Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ControlSockPurpose}.sock"),
-            Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}"),
-        };
-
-        foreach (var path in paths)
-        {
-            try
-            {
-                File.Delete(path);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                logger?.LogDebug(ex, "Failed to delete terminal host file '{Path}'.", path);
-            }
-        }
-    }
-
-    private static void DeleteOwnedReplicaFiles(
-        string trmnlDirectory,
-        string replicaId,
+    private static void ConfigureTerminalHostAnnotations(
+        TerminalHostResource host,
+        TerminalOptions options,
         int appHostPid,
-        long appHostProcessStartTimeUnixMilliseconds,
-        ILogger? logger)
-    {
-        using var replicaLock = TryAcquireReplicaLock(trmnlDirectory, replicaId);
-        if (replicaLock is null)
-        {
-            return;
-        }
-
-        var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
-        if (!File.Exists(metadataPath))
-        {
-            // Without a sidecar, the stopping process cannot prove that files at this
-            // stable replica id were not already replaced by a newer AppHost.
-            return;
-        }
-
-        TerminalHostMetadata? metadata;
-        try
-        {
-            metadata = JsonSerializer.Deserialize<TerminalHostMetadata>(File.ReadAllText(metadataPath));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            logger?.LogDebug(ex, "Skipping cleanup of unreadable terminal host sidecar '{Path}'.", metadataPath);
-            return;
-        }
-
-        if (metadata is null
-            || metadata.SchemaVersion != TerminalHostMetadata.CurrentSchemaVersion
-            || !string.Equals(metadata.ReplicaId, replicaId, StringComparison.Ordinal)
-            || metadata.AppHostPid != appHostPid
-            || metadata.AppHostProcessStartTimeUnixMilliseconds != appHostProcessStartTimeUnixMilliseconds)
-        {
-            // A newer AppHost may have replaced this stable replica id while the old
-            // process was stopping. Never let the old cleanup delete the new owner's files.
-            return;
-        }
-
-        DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
-    }
-
-    private static async Task SweepOrphanedTerminalFilesAsync(
-        string trmnlDirectory,
-        ILogger? logger,
-        CancellationToken cancellationToken)
-    {
-        // Machine-wide GC of terminal-host files whose owning AppHost is gone. Safe to run on
-        // every AppHost start: the PID guards below make it idempotent and prevent it from ever
-        // touching a live AppHost's files (including sibling terminal resources of THIS run, which
-        // share our own process id).
-        try
-        {
-            if (!Directory.Exists(trmnlDirectory))
-            {
-                return;
-            }
-
-            // Snapshot the listing up front (GetFiles, not the lazy EnumerateFiles) because the
-            // loop deletes files from this same directory as it goes; iterating a live enumeration
-            // while mutating it is undefined on some platforms.
-            foreach (var candidatePath in Directory.GetFiles(trmnlDirectory))
-            {
-                // Derive the replica id from the filename rather than trusting JSON content.
-                // The strict base64url shape also prevents sidecar data from becoming a file
-                // search pattern or escaping the four known per-replica paths.
-                if (!TerminalHostPaths.TryGetReplicaIdFromMetadataPath(candidatePath, out var replicaId))
-                {
-                    continue;
-                }
-
-                using var replicaLock = TryAcquireReplicaLock(trmnlDirectory, replicaId);
-                if (replicaLock is null)
-                {
-                    continue;
-                }
-
-                TerminalHostMetadata? metadata;
-                try
-                {
-                    // Sidecars are tiny (<1 KiB) UTF-8 JSON written by WriteMetadataSidecarAsync.
-                    // ReadAllText strips a BOM if a sidecar was ever hand-edited with one.
-                    var json = await File.ReadAllTextAsync(candidatePath, cancellationToken).ConfigureAwait(false);
-                    metadata = JsonSerializer.Deserialize<TerminalHostMetadata>(json);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-                {
-                    // A half-written sidecar (owner killed mid-write) or one from a newer/unknown
-                    // schema. Skip rather than delete: without a trustworthy PID we can't prove the
-                    // owner is dead, and a live AppHost may be writing this very file right now.
-                    logger?.LogDebug(ex, "Skipping unreadable terminal host sidecar '{Path}' during startup sweep.", candidatePath);
-                    continue;
-                }
-
-                if (metadata is null)
-                {
-                    continue;
-                }
-
-                if (metadata.SchemaVersion != TerminalHostMetadata.CurrentSchemaVersion
-                    || !string.Equals(metadata.ReplicaId, replicaId, StringComparison.Ordinal)
-                    || metadata.AppHostPid <= 0
-                    || metadata.AppHostProcessStartTimeUnixMilliseconds <= 0)
-                {
-                    // Unknown schemas and filename/content mismatches are not trustworthy
-                    // enough to authorize deletion.
-                    continue;
-                }
-
-                // A still-running AppHost owns this terminal, so leave it alone. Pairing the PID
-                // with its stable start time distinguishes the original owner from a recycled PID.
-                if (IsProcessAlive(
-                    metadata.AppHostPid,
-                    metadata.AppHostProcessStartTimeUnixMilliseconds))
-                {
-                    continue;
-                }
-
-                logger?.LogDebug(
-                    "Reclaiming orphaned terminal host files for replica '{ReplicaId}' (owner PID {AppHostPid} is no longer running).",
-                    replicaId,
-                    metadata.AppHostPid);
-                DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: a failed sweep only means orphans linger a little longer; it must never
-            // block AppHost startup.
-            logger?.LogDebug(ex, "Failed to sweep orphaned terminal host files in '{Directory}'.", trmnlDirectory);
-        }
-    }
-
-    private static bool IsProcessAlive(int pid, long expectedStartTimeUnixMilliseconds)
-    {
-        // A non-positive PID is never a real, addressable OS process — treat as dead so a
-        // zero-initialized or corrupt sidecar becomes reclaimable.
-        if (pid <= 0)
-        {
-            return false;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            if (process.HasExited)
-            {
-                return false;
-            }
-
-            var actualStartTimeUnixMilliseconds = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(pid);
-            if (actualStartTimeUnixMilliseconds is null)
-            {
-                // The process may have raced to exit or be inaccessible. Bias to alive so
-                // uncertainty never authorizes deletion of a potentially live terminal.
-                return true;
-            }
-
-            return ProcessStartTimeHelper.AreCloseMilliseconds(
-                expectedStartTimeUnixMilliseconds,
-                actualStartTimeUnixMilliseconds.Value);
-        }
-        catch (ArgumentException)
-        {
-            // GetProcessById throws ArgumentException when no running process has this id — i.e.
-            // the owning AppHost has exited and been reaped. This is the common orphan case.
-            return false;
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // Couldn't positively determine liveness (the process raced to exit between lookup and
-            // query, or its handle couldn't be opened). Bias to "alive" so we never delete files
-            // that might still belong to a running AppHost; a missed sweep is reclaimed next start.
-            return true;
-        }
-    }
-
-    private static void ConfigureTerminalHostAnnotations(TerminalHostResource host, TerminalOptions options)
+        long appHostProcessIdentity)
     {
         // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
         // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
@@ -687,6 +421,14 @@ public static class TerminalResourceBuilderExtensions
         }));
 
         host.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+
+        host.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessId] =
+                appHostPid.ToString(CultureInfo.InvariantCulture);
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessStartedStable] =
+                appHostProcessIdentity.ToString(CultureInfo.InvariantCulture);
+        }));
 
         host.Annotations.Add(new CommandLineArgsCallbackAnnotation(context =>
         {
@@ -713,19 +455,19 @@ public static class TerminalResourceBuilderExtensions
 
     /// <summary>
     /// Builds the per-replica UDS triple + metadata path for a single terminal host. All
-    /// four files live flat under <c>~/.aspire/trmnl/</c> and share the same
-    /// <paramref name="replicaId"/> filename prefix so cleanup is a directory glob.
+    /// four files live flat under the configured terminal artifact directory and share the same
+    /// <paramref name="replicaId"/> filename prefix.
     /// </summary>
-    private static TerminalHostLayout CreateTerminalHostLayout(string homeDirectory, string replicaId, int replicaIndex)
+    private static TerminalHostLayout CreateTerminalHostLayout(string trmnlDirectory, string replicaId, int replicaIndex)
     {
-        ArgumentException.ThrowIfNullOrEmpty(homeDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
         ArgumentException.ThrowIfNullOrEmpty(replicaId);
         ArgumentOutOfRangeException.ThrowIfNegative(replicaIndex);
 
-        var producerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose);
-        var consumerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose);
-        var controlPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ControlSockPurpose);
-        var metadataPath = TerminalHostPaths.GetMetadataPath(homeDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose);
+        var consumerPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose);
+        var controlPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ControlSockPurpose);
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
 
         return new TerminalHostLayout(replicaId, replicaIndex, producerPath, consumerPath, controlPath, metadataPath);
     }

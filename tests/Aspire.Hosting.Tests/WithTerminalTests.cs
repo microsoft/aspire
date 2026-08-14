@@ -5,15 +5,17 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-public class WithTerminalTests
+public class WithTerminalTests : IAsyncLifetime
 {
+    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-terminal-tests-").FullName;
+
     [Fact]
     public void TerminalImplementationTypesAreInternal()
     {
@@ -34,7 +36,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalAddsTerminalAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -64,7 +66,7 @@ public class WithTerminalTests
         // every per-replica TerminalHostResource (and onto the DCP TerminalSpec) is
         // covered by TerminalHostHasCommandLineArgsForLayoutPaths and the spec mapping
         // tests in TerminalHostEventingSubscriberTests.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal(options =>
@@ -87,7 +89,7 @@ public class WithTerminalTests
         // Aspire.TerminalHost rejects a PTY width below 1, so an invalid Columns value must
         // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
         // failure that can block the parent resource.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         var ex = Assert.Throws<ArgumentOutOfRangeException>(
@@ -103,7 +105,7 @@ public class WithTerminalTests
         // Aspire.TerminalHost rejects a PTY height below 1, so an invalid Rows value must
         // fail at the WithTerminal() call site rather than as a hidden terminal-host startup
         // failure that can block the parent resource.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         var ex = Assert.Throws<ArgumentOutOfRangeException>(
@@ -129,7 +131,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalCreatesPerReplicaHiddenTerminalHostResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -148,7 +150,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalLinksAnnotationToHostResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -163,7 +165,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalAddsWaitAnnotationForEachTerminalHost()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -180,7 +182,7 @@ public class WithTerminalTests
     [Fact]
     public void WithTerminalCanBeChained()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         var result = resource.WithTerminal();
@@ -191,7 +193,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalWorksOnContainerResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var container = builder.AddContainer("mycontainer", "myimage");
 
         container.WithTerminal();
@@ -209,7 +211,7 @@ public class WithTerminalTests
     [Fact]
     public async Task TerminalHostResourcesAreExcludedFromManifest()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -231,7 +233,7 @@ public class WithTerminalTests
     [Fact]
     public async Task TerminalHostsAreHiddenByDefault()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2));
         resource.WithTerminal();
@@ -249,7 +251,7 @@ public class WithTerminalTests
     [Fact]
     public async Task ShowTerminalHostOptionMakesTerminalHostsVisible()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2));
         resource.WithTerminal(options => options.ShowTerminalHost = true);
@@ -280,7 +282,7 @@ public class WithTerminalTests
         // Now: MaterializeTerminalHostsAsync writes a metadata sidecar at BeforeStartEvent
         // time, and the ApplicationStopped callback deletes the four known files for each
         // replica owned by this run.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
         resource.WithTerminal();
 
@@ -343,7 +345,7 @@ public class WithTerminalTests
         // The sidecar lets external tools (CLI `aspire terminal ps`, dashboard) discover
         // live terminals by listing ~/.aspire/trmnl/*.metadata.json. The on-disk schema
         // must match TerminalHostMetadata exactly — older readers refuse unknown schemas.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithTerminal(options =>
             {
@@ -372,13 +374,20 @@ public class WithTerminalTests
             Assert.Equal(Environment.ProcessId, root.GetProperty("appHostPid").GetInt32());
             Assert.Equal(
                 ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds(),
-                root.GetProperty("appHostProcessStartTimeUnixMilliseconds").GetInt64());
+                root.GetProperty("appHostProcessIdentity").GetInt64());
+            Assert.Equal(
+                TerminalHostOrphanCleanupService.GetCurrentProcessScopeId(),
+                root.GetProperty("appHostProcessScopeId").GetString());
+            Assert.Equal(
+                TerminalHostOrphanCleanupService.GetCurrentBootId(),
+                root.GetProperty("appHostBootId").GetString());
             Assert.Equal(137, root.GetProperty("columns").GetInt32());
             Assert.Equal(41, root.GetProperty("rows").GetInt32());
             Assert.Equal(host.Layout.ControlUdsPath, root.GetProperty("controlSocketPath").GetString());
             Assert.Equal(host.Layout.ConsumerUdsPath, root.GetProperty("consumerSocketPath").GetString());
             Assert.False(string.IsNullOrEmpty(root.GetProperty("appHostPath").GetString()));
             Assert.NotEqual(default, root.GetProperty("createdAtUtc").GetDateTime());
+            Assert.Equal(_terminalDirectory, Path.GetDirectoryName(host.Layout.MetadataPath));
 
             if (!OperatingSystem.IsWindows())
             {
@@ -399,21 +408,18 @@ public class WithTerminalTests
     {
         // Regression for https://github.com/microsoft/aspire/issues/19302 (startup-GC half): an
         // AppHost that exits ungracefully (SIGKILL / crash) can strand {id}.dcp.sock /
-        // {id}.host.sock and its metadata sidecar in the shared ~/.aspire/trmnl/ forever. On the
-        // next AppHost start, MaterializeTerminalHostsAsync sweeps sidecars whose owning PID is no
-        // longer alive.
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        // {id}.host.sock and its metadata sidecar in the terminal artifact directory forever. On the
+        // next AppHost start, the background collector sweeps sidecars whose owning PID is no
+        // longer alive without delaying BeforeStartEvent.
+        var trmnlDirectory = GetTerminalDirectory();
         Directory.CreateDirectory(trmnlDirectory);
 
-        // Unique, test-owned replica id so we only ever assert on files WE created and never
-        // collide with a real terminal on the developer's machine.
+        // Unique, test-owned replica id within this test's isolated terminal directory.
         var orphanId = CreateTestReplicaId("orphan");
         var orphanMetadataPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.MetadataSuffix}");
         var orphanProducerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
         var orphanConsumerPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ConsumerSockPurpose}.sock");
         var orphanControlPath = Path.Combine(trmnlDirectory, $"{orphanId}.{TerminalHostPaths.ControlSockPurpose}.sock");
-        var orphanLockPath = GetReplicaLockPath(trmnlDirectory, orphanId);
 
         // int.MaxValue is not a live process on any supported platform (it exceeds Linux pid_max
         // and is an invalid — odd — Windows PID), so the sweep's liveness check classifies the
@@ -423,13 +429,13 @@ public class WithTerminalTests
             fileReplicaId: orphanId,
             metadataReplicaId: orphanId,
             appHostPid: int.MaxValue,
-            appHostProcessStartTimeUnixMilliseconds: 1,
+            appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(orphanProducerPath, string.Empty);
         File.WriteAllText(orphanConsumerPath, string.Empty);
         File.WriteAllText(orphanControlPath, string.Empty);
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
         resource.WithTerminal();
 
@@ -438,6 +444,7 @@ public class WithTerminalTests
         {
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+            await WaitForSweepAsync(app);
 
             Assert.False(File.Exists(orphanMetadataPath), "Dead-owner sidecar should be swept on startup.");
             Assert.False(File.Exists(orphanProducerPath), "Dead-owner producer socket should be swept on startup.");
@@ -446,9 +453,7 @@ public class WithTerminalTests
         }
         finally
         {
-            // Belt and braces: remove the orphan placeholders (in case the sweep regressed) and
-            // this run's own materialized terminal-host files so we don't pollute the shared dir.
-            DeleteIfExists(orphanMetadataPath, orphanProducerPath, orphanConsumerPath, orphanControlPath, orphanLockPath);
+            DeleteIfExists(orphanMetadataPath, orphanProducerPath, orphanConsumerPath, orphanControlPath);
             CleanUpTerminalHostFiles(resource);
             await app.DisposeAsync();
         }
@@ -461,14 +466,12 @@ public class WithTerminalTests
         // a second AppHost start would rip the sockets out from under a running terminal. A child
         // process exercises the Process.GetProcessById liveness branch rather than the special case
         // that preserves sidecars owned by this test process.
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        var trmnlDirectory = GetTerminalDirectory();
         Directory.CreateDirectory(trmnlDirectory);
 
         var liveId = CreateTestReplicaId("live");
         var liveMetadataPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.MetadataSuffix}");
         var liveProducerPath = Path.Combine(trmnlDirectory, $"{liveId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
-        var liveLockPath = GetReplicaLockPath(trmnlDirectory, liveId);
 
         using var liveProcess = TestProcesses.StartLongRunning();
         var liveProcessStartTimeUnixMilliseconds =
@@ -479,11 +482,11 @@ public class WithTerminalTests
             fileReplicaId: liveId,
             metadataReplicaId: liveId,
             appHostPid: liveProcess.Id,
-            appHostProcessStartTimeUnixMilliseconds: liveProcessStartTimeUnixMilliseconds.Value,
+            appHostProcessIdentity: liveProcessStartTimeUnixMilliseconds.Value,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(liveProducerPath, string.Empty);
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
         resource.WithTerminal();
 
@@ -492,13 +495,14 @@ public class WithTerminalTests
         {
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+            await WaitForSweepAsync(app);
 
             Assert.True(File.Exists(liveMetadataPath), "Live-owner sidecar must be preserved by the sweep.");
             Assert.True(File.Exists(liveProducerPath), "Live-owner socket must be preserved by the sweep.");
         }
         finally
         {
-            DeleteIfExists(liveMetadataPath, liveProducerPath, liveLockPath);
+            DeleteIfExists(liveMetadataPath, liveProducerPath);
             CleanUpTerminalHostFiles(resource);
 
             if (!liveProcess.HasExited)
@@ -518,8 +522,7 @@ public class WithTerminalTests
         var replicaId = CreateTestReplicaId("reused-pid");
         var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
         var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
-        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
-        var staleStartTimeUnixMilliseconds =
+        var staleProcessIdentity =
             ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds() - (long)TimeSpan.FromMinutes(1).TotalMilliseconds;
 
         WriteSidecar(
@@ -527,7 +530,7 @@ public class WithTerminalTests
             replicaId,
             replicaId,
             appHostPid: Environment.ProcessId,
-            appHostProcessStartTimeUnixMilliseconds: staleStartTimeUnixMilliseconds,
+            appHostProcessIdentity: staleProcessIdentity,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(producerPath, string.Empty);
 
@@ -540,7 +543,7 @@ public class WithTerminalTests
         }
         finally
         {
-            DeleteIfExists(metadataPath, producerPath, lockPath);
+            DeleteIfExists(metadataPath, producerPath);
         }
     }
 
@@ -552,14 +555,13 @@ public class WithTerminalTests
         var metadataPath = Path.Combine(trmnlDirectory, $"{fileReplicaId}.{TerminalHostPaths.MetadataSuffix}");
         var maliciousPrefix = "terminal-sweep-" + Guid.NewGuid().ToString("N");
         var sentinelPath = Path.Combine(trmnlDirectory, maliciousPrefix + "-sentinel.tmp");
-        var lockPath = GetReplicaLockPath(trmnlDirectory, fileReplicaId);
 
         WriteSidecar(
             metadataPath,
             fileReplicaId,
             metadataReplicaId: maliciousPrefix + "*",
             appHostPid: int.MaxValue,
-            appHostProcessStartTimeUnixMilliseconds: 1,
+            appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(sentinelPath, string.Empty);
 
@@ -572,7 +574,7 @@ public class WithTerminalTests
         }
         finally
         {
-            DeleteIfExists(metadataPath, sentinelPath, lockPath);
+            DeleteIfExists(metadataPath, sentinelPath);
         }
     }
 
@@ -591,7 +593,7 @@ public class WithTerminalTests
             invalidReplicaId,
             invalidReplicaId,
             appHostPid: int.MaxValue,
-            appHostProcessStartTimeUnixMilliseconds: 1,
+            appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
         File.WriteAllText(producerPath, string.Empty);
 
@@ -615,14 +617,13 @@ public class WithTerminalTests
         var replicaId = CreateTestReplicaId("schema");
         var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
         var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
-        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
 
         WriteSidecar(
             metadataPath,
             replicaId,
             replicaId,
             appHostPid: int.MaxValue,
-            appHostProcessStartTimeUnixMilliseconds: 1,
+            appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion + 1);
         File.WriteAllText(producerPath, string.Empty);
 
@@ -635,87 +636,228 @@ public class WithTerminalTests
         }
         finally
         {
-            DeleteIfExists(metadataPath, producerPath, lockPath);
+            DeleteIfExists(metadataPath, producerPath);
         }
     }
 
     [Fact]
-    public async Task WithTerminalSweepSkipsReplicaLockedByAnotherWriter()
+    public async Task WithTerminalSweepReclaimsSchemaV1SidecarUsingPidOnly()
     {
         var trmnlDirectory = GetTerminalDirectory();
-        var replicaId = CreateTestReplicaId("locked");
-        var metadataPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.MetadataSuffix}");
-        var producerPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.ProducerSockPurpose}.sock");
-        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
+        var replicaId = CreateTestReplicaId("schema-v1");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
 
         WriteSidecar(
             metadataPath,
             replicaId,
             replicaId,
             appHostPid: int.MaxValue,
-            appHostProcessStartTimeUnixMilliseconds: 1,
-            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+            appHostProcessIdentity: null,
+            schemaVersion: 1);
         File.WriteAllText(producerPath, string.Empty);
 
-        try
-        {
-            using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            {
-                await RunStartupSweepAsync();
-            }
+        await RunStartupSweepAsync();
 
+        Assert.False(File.Exists(metadataPath));
+        Assert.False(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsSchemaV2Sidecar()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("schema-v2");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessIdentity: 1,
+            schemaVersion: 2);
+        File.WriteAllText(producerPath, string.Empty);
+
+        await RunStartupSweepAsync();
+
+        Assert.False(File.Exists(metadataPath));
+        Assert.False(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepPreservesSidecarFromAnotherProcessScope()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("other-scope");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessIdentity: 1,
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion,
+            appHostProcessScopeId: "different-process-scope");
+        File.WriteAllText(producerPath, string.Empty);
+
+        await RunStartupSweepAsync();
+
+        Assert.True(File.Exists(metadataPath));
+        Assert.True(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsSidecarFromPreviousBoot()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Linux uses boot-relative process identities.");
+
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("previous-boot");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+        var currentBootId = TerminalHostOrphanCleanupService.GetCurrentBootId();
+        Assert.NotNull(currentBootId);
+
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: Environment.ProcessId,
+            appHostProcessIdentity: ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds(),
+            schemaVersion: TerminalHostMetadata.CurrentSchemaVersion,
+            appHostBootId: currentBootId + "-previous");
+        File.WriteAllText(producerPath, string.Empty);
+
+        await RunStartupSweepAsync();
+
+        Assert.False(File.Exists(metadataPath));
+        Assert.False(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepRemovesUnusedLegacyLock()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("legacy-lock");
+        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
+        File.WriteAllText(lockPath, string.Empty);
+
+        await RunStartupSweepAsync();
+
+        Assert.False(File.Exists(lockPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepPreservesLegacyReplicaWhileLockIsOwned()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("active-legacy-lock");
+        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+        WriteSidecar(
+            metadataPath,
+            replicaId,
+            replicaId,
+            appHostPid: int.MaxValue,
+            appHostProcessIdentity: 1,
+            schemaVersion: 2);
+        File.WriteAllText(producerPath, string.Empty);
+
+        using (new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            await RunStartupSweepAsync();
+            Assert.True(File.Exists(lockPath));
             Assert.True(File.Exists(metadataPath));
             Assert.True(File.Exists(producerPath));
         }
+
+        await RunStartupSweepAsync();
+        Assert.False(File.Exists(lockPath));
+        Assert.False(File.Exists(metadataPath));
+        Assert.False(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public void DeleteReplicaFilesKeepsMetadataUntilEverySocketIsRemoved()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("delete-order");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+        File.WriteAllText(metadataPath, "{}");
+        Directory.CreateDirectory(producerPath);
+
+        try
+        {
+            Assert.False(TerminalHostOrphanCleanupService.DeleteReplicaFiles(trmnlDirectory, replicaId, logger: null));
+            Assert.True(File.Exists(metadataPath));
+        }
         finally
         {
-            DeleteIfExists(metadataPath, producerPath, lockPath);
+            Directory.Delete(producerPath);
+            File.Delete(metadataPath);
         }
     }
 
     [Fact]
-    public async Task WithTerminalFailsClearlyWhenReplicaLockCannotBeAcquired()
+    public async Task WithTerminalStartsOneBackgroundSweepPerAppHost()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceName = "lock-timeout-" + Guid.NewGuid().ToString("N");
-        var resource = builder.AddExecutable(resourceName, "myapp", ".");
-        resource.WithTerminal();
+        using var builder = CreateBuilder();
+        builder.AddExecutable("first", "myapp", ".").WithTerminal();
+        builder.AddExecutable("second", "myapp", ".").WithTerminal();
 
-        var app = builder.Build();
-        var configuration = app.Services.GetRequiredService<IConfiguration>();
-        var appHostPath = configuration["AppHost:FilePath"]
-            ?? configuration["AppHost:Path"]
-            ?? throw new InvalidOperationException("The test AppHost path is not configured.");
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
 
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
-        Directory.CreateDirectory(trmnlDirectory);
-        var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, resourceName, replicaIndex: 0);
-        var lockPath = GetReplicaLockPath(trmnlDirectory, replicaId);
-
-        try
-        {
-            using (new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
-            {
-                var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-                var exception = await Assert.ThrowsAsync<TimeoutException>(
-                    () => builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model)));
-
-                Assert.Equal(
-                    $"Timed out after 5 seconds acquiring terminal host replica lock '{lockPath}'.",
-                    exception.Message);
-            }
-        }
-        finally
-        {
-            DeleteIfExists(lockPath);
-            await app.DisposeAsync();
-        }
+        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
+        Assert.Equal(1, cleanupService.StartCount);
+        await cleanupService.Completion.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
-    private static async Task RunStartupSweepAsync()
+    [Fact]
+    public async Task WithTerminalDoesNotMaterializeRuntimeArtifactsInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder(DistributedApplicationOperation.Publish);
+        var publishDirectory = Path.Combine(_terminalDirectory, "publish");
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = publishDirectory;
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        Assert.False(Directory.Exists(publishDirectory));
+        Assert.Empty(model.Resources.OfType<TerminalHostResource>());
+        Assert.False(resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().IsInitialized);
+    }
+
+    private async Task RunStartupSweepAsync()
+    {
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("sweep-" + Guid.NewGuid().ToString("N"), "myapp", ".");
         resource.WithTerminal();
 
@@ -724,6 +866,7 @@ public class WithTerminalTests
         {
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+            await WaitForSweepAsync(app);
         }
         finally
         {
@@ -737,8 +880,10 @@ public class WithTerminalTests
         string fileReplicaId,
         string metadataReplicaId,
         int appHostPid,
-        long appHostProcessStartTimeUnixMilliseconds,
-        int schemaVersion)
+        long? appHostProcessIdentity,
+        int schemaVersion,
+        string? appHostProcessScopeId = null,
+        string? appHostBootId = null)
     {
         // The socket-path fields are required by the schema but never read by the sweep,
         // so simple placeholders are sufficient for these metadata validation tests.
@@ -750,7 +895,16 @@ public class WithTerminalTests
             ReplicaIndex = 0,
             AppHostPath = "/does/not/matter",
             AppHostPid = appHostPid,
-            AppHostProcessStartTimeUnixMilliseconds = appHostProcessStartTimeUnixMilliseconds,
+            AppHostProcessIdentity = schemaVersion == TerminalHostMetadata.CurrentSchemaVersion
+                ? appHostProcessIdentity
+                : null,
+            SchemaV2AppHostProcessIdentity = schemaVersion == 2 ? appHostProcessIdentity : null,
+            AppHostProcessScopeId = schemaVersion == TerminalHostMetadata.CurrentSchemaVersion
+                ? appHostProcessScopeId ?? TerminalHostOrphanCleanupService.GetCurrentProcessScopeId()
+                : null,
+            AppHostBootId = schemaVersion == TerminalHostMetadata.CurrentSchemaVersion
+                ? appHostBootId ?? TerminalHostOrphanCleanupService.GetCurrentBootId()
+                : null,
             CreatedAtUtc = DateTime.UtcNow,
             Columns = 80,
             Rows = 24,
@@ -761,22 +915,14 @@ public class WithTerminalTests
         File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata));
     }
 
-    private static string CreateTestReplicaId(string resourceName)
-        => TerminalHostPaths.ComputeReplicaId(
-            Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")),
-            resourceName,
-            replicaIndex: 0);
+    private static string CreateTestReplicaId(string _)
+        => TerminalHostPaths.CreateReplicaId();
 
-    private static string GetTerminalDirectory()
+    private string GetTerminalDirectory()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
-        Directory.CreateDirectory(trmnlDirectory);
-        return trmnlDirectory;
+        Directory.CreateDirectory(_terminalDirectory);
+        return _terminalDirectory;
     }
-
-    private static string GetReplicaLockPath(string trmnlDirectory, string replicaId)
-        => Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
 
     private static void CleanUpTerminalHostFiles(IResourceBuilder<ExecutableResource> resource)
     {
@@ -792,18 +938,7 @@ public class WithTerminalTests
                 host.Layout.MetadataPath,
                 host.Layout.ProducerUdsPath,
                 host.Layout.ConsumerUdsPath,
-                host.Layout.ControlUdsPath,
-                GetReplicaLockPath(Path.GetDirectoryName(host.Layout.MetadataPath)!, host.Layout.ReplicaId));
-        }
-    }
-
-    private static void CleanUpTerminalHostLocks(DistributedApplicationModel model)
-    {
-        foreach (var host in model.Resources.OfType<TerminalHostResource>())
-        {
-            DeleteIfExists(GetReplicaLockPath(
-                Path.GetDirectoryName(host.Layout.MetadataPath)!,
-                host.Layout.ReplicaId));
+                host.Layout.ControlUdsPath);
         }
     }
 
@@ -832,7 +967,7 @@ public class WithTerminalTests
     [Fact]
     public void WithTerminalThrowsWhenCalledTwiceOnSameResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -843,7 +978,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalDefaultsToOneTerminalHost()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -861,7 +996,7 @@ public class WithTerminalTests
     [Fact]
     public async Task WithTerminalAfterWithReplicasCreatesOneTerminalHostPerReplica()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(3));
 
@@ -875,9 +1010,8 @@ public class WithTerminalTests
         for (var i = 0; i < 3; i++)
         {
             Assert.Equal(i, hosts[i].ParentReplicaIndex);
-            // The parent replica index is folded into the per-replica id, so the four
-            // files for replica i share a distinct `{id}.` prefix and never collide with
-            // replica j's files in the shared ~/.aspire/trmnl/ directory.
+            // Each parent replica receives its own random id, so its four files share a
+            // distinct `{id}.` prefix and never collide with a sibling.
             Assert.NotEmpty(hosts[i].Layout.ReplicaId);
             Assert.StartsWith(hosts[i].Layout.ReplicaId + ".", Path.GetFileName(hosts[i].Layout.ProducerUdsPath));
             Assert.StartsWith(hosts[i].Layout.ReplicaId + ".", Path.GetFileName(hosts[i].Layout.ConsumerUdsPath));
@@ -892,7 +1026,7 @@ public class WithTerminalTests
         // the parent's ReplicaAnnotation eagerly, so calling WithReplicas(N) AFTER
         // WithTerminal() resulted in only one terminal host being created. With deferred
         // host materialization in BeforeStartEvent, the order is now irrelevant.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -913,7 +1047,7 @@ public class WithTerminalTests
     [Fact]
     public async Task TerminalHostLayoutPathsAreUnderTheSameTrmnlDirectoryWithDistinctReplicaIds()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2));
 
@@ -922,8 +1056,7 @@ public class WithTerminalTests
         await PublishBeforeStartAsync(builder);
 
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
-        var expectedDirectory = Aspire.Shared.TerminalHost.TerminalHostPaths.GetTrmnlDirectory(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        var expectedDirectory = _terminalDirectory;
 
         var seenReplicaIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var host in hosts)
@@ -945,9 +1078,49 @@ public class WithTerminalTests
     }
 
     [Fact]
+    public async Task TerminalHostLayoutUsesANewReplicaIdForEachAppHostRun()
+    {
+        using var firstBuilder = CreateBuilder();
+        var firstResource = firstBuilder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await PublishBeforeStartAsync(firstBuilder);
+        var firstId = Assert.Single(
+            firstResource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts).Layout.ReplicaId;
+
+        using var secondBuilder = CreateBuilder();
+        var secondResource = secondBuilder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await PublishBeforeStartAsync(secondBuilder);
+        var secondId = Assert.Single(
+            secondResource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts).Layout.ReplicaId;
+
+        Assert.NotEqual(firstId, secondId);
+    }
+
+    [Fact]
+    public async Task TerminalHostWatchesTheOwningAppHostProcess()
+    {
+        using var builder = CreateBuilder();
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await PublishBeforeStartAsync(builder);
+        var host = Assert.Single(
+            resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var environment = await host.GetEnvironmentVariableValuesAsync();
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal(
+            Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            environment.Single(pair => pair.Key == KnownConfigNames.TerminalHostParentProcessId).Value);
+        Assert.Equal(
+            ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds()
+                .ToString(System.Globalization.CultureInfo.InvariantCulture),
+            environment.Single(pair => pair.Key == KnownConfigNames.TerminalHostParentProcessStartedStable).Value);
+    }
+
+    [Fact]
     public async Task TerminalHostHasCommandLineArgsForLayoutPaths()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2));
 
@@ -992,7 +1165,7 @@ public class WithTerminalTests
         // The host process binary path is filled in by TerminalHostEventingSubscriber
         // from DcpOptions during BeforeStartEvent. The test environment doesn't ship a
         // real terminalhost binary, so the placeholder remains after the event fires.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
@@ -1022,14 +1195,7 @@ public class WithTerminalTests
         // because the test harness doesn't go through DistributedApplication.RunApplicationAsync.
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        try
-        {
-            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
-        }
-        finally
-        {
-            CleanUpTerminalHostLocks(model);
-        }
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
     }
 
     /// <summary>
@@ -1051,26 +1217,45 @@ public class WithTerminalTests
     {
         await using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        try
-        {
-            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
-            return model;
-        }
-        finally
-        {
-            CleanUpTerminalHostLocks(model);
-        }
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        return model;
     }
 
     [Fact]
     public void WithTerminalForcesProcessExecution()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = CreateBuilder(DistributedApplicationOperation.Run);
         var resource = builder.AddProject<TestProject>("myproj", options => { options.ExcludeLaunchProfile = true; });
 
         resource.WithTerminal();
 
         Assert.True(resource.Resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>());
+    }
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync()
+    {
+        if (Directory.Exists(_terminalDirectory))
+        {
+            Directory.Delete(_terminalDirectory, recursive: true);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    private IDistributedApplicationTestingBuilder CreateBuilder(
+        DistributedApplicationOperation operation = DistributedApplicationOperation.Run)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(operation);
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = _terminalDirectory;
+        return builder;
+    }
+
+    private static async Task WaitForSweepAsync(DistributedApplication app)
+    {
+        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
+        await cleanupService.Completion.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     private sealed class TestProject : IProjectMetadata
