@@ -112,6 +112,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             configuration.EnvironmentVariables,
             resolvedLaunchToolArgumentCount,
             hasPreparedProjectArguments,
+            resourceLogger,
             cancellationToken).ConfigureAwait(false);
         ApplyResolvedProjectArguments(er, exe, resolvedLaunchToolArgumentCount);
 
