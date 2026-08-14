@@ -109,4 +109,27 @@ public class AuxiliaryBackchannelMonitorTests
             tempRoot.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_SubmoduleInsideLinkedWorktree_UsesEnclosingWorktree()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-linked-submodule-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+            var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
+            var submoduleRoot = Directory.CreateDirectory(Path.Combine(worktreeRoot, "extern", "dep")).FullName;
+            TestGitWorktree.WriteGitDirFile(submoduleRoot, Path.Combine(adminDirectory, "modules", "dep"));
+            var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
+
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, worktreeRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, primaryRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
 }

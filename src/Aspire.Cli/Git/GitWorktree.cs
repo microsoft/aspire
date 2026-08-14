@@ -97,8 +97,8 @@ internal static class GitWorktree
     /// </remarks>
     public static bool IsSameWorktreeScope(string appHostPath, string workingDirectory)
     {
-        var workingLinkedRoot = TryGetLinkedWorktreeRoot(workingDirectory);
-        var appHostLinkedRoot = TryGetLinkedWorktreeRoot(appHostPath);
+        var workingLinkedRoot = TryGetScopeWorktreeRoot(workingDirectory);
+        var appHostLinkedRoot = TryGetScopeWorktreeRoot(appHostPath);
 
         if (workingLinkedRoot is not null)
         {
@@ -106,6 +106,54 @@ internal static class GitWorktree
         }
 
         return appHostLinkedRoot is null;
+    }
+
+    private static string? TryGetScopeWorktreeRoot(string startPath)
+    {
+        string current;
+        try
+        {
+            current = GetWalkStartDirectory(startPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < MaxAncestorWalks; i++)
+        {
+            var gitPath = Path.Combine(current, GitDirectoryName);
+            if (Directory.Exists(gitPath))
+            {
+                return null;
+            }
+
+            if (File.Exists(gitPath))
+            {
+                if (IsLinkedWorktreeGitFile(gitPath))
+                {
+                    return CanonicalizePath(current);
+                }
+
+                // A submodule inside a linked worktree has metadata under:
+                //   <common>/worktrees/<id>/modules/<submodule>
+                // It remains a separate checkout for isolation, but stop/resource scoping
+                // must use the enclosing linked worktree rather than the primary checkout.
+                return TryReadGitDirTarget(gitPath, out var gitDirectory)
+                    ? TryGetEnclosingLinkedWorktreeRoot(gitDirectory)
+                    : null;
+            }
+
+            var parent = Directory.GetParent(current);
+            if (parent is null || string.Equals(parent.FullName, current, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            current = parent.FullName;
+        }
+
+        return null;
     }
 
     private static string GetWalkStartDirectory(string startPath)
@@ -130,11 +178,7 @@ internal static class GitWorktree
 
         var canonicalAdminDirectory = CanonicalizePath(adminDirectory);
         var adminParent = Directory.GetParent(Path.TrimEndingDirectorySeparator(canonicalAdminDirectory));
-        var worktreesComparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        if (adminParent is null ||
-            !adminParent.Name.Equals(WorktreesSegment, worktreesComparison))
+        if (!IsWorktreesDirectory(adminParent))
         {
             return false;
         }
@@ -150,6 +194,36 @@ internal static class GitWorktree
         }
 
         return PathsEqual(checkoutGitFile, gitFilePath);
+    }
+
+    private static string? TryGetEnclosingLinkedWorktreeRoot(string gitDirectory)
+    {
+        var current = new DirectoryInfo(CanonicalizePath(gitDirectory));
+        for (var i = 0; i < MaxAncestorWalks && current.Parent is not null; i++)
+        {
+            if (IsWorktreesDirectory(current.Parent) &&
+                TryReadPath(
+                    Path.Combine(current.FullName, GitDirFileName),
+                    current.FullName,
+                    out var checkoutGitFile) &&
+                File.Exists(checkoutGitFile) &&
+                IsLinkedWorktreeGitFile(checkoutGitFile))
+            {
+                return Path.GetDirectoryName(CanonicalizePath(checkoutGitFile));
+            }
+
+            current = current.Parent;
+        }
+
+        return null;
+    }
+
+    private static bool IsWorktreesDirectory(DirectoryInfo? directory)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return directory?.Name.Equals(WorktreesSegment, comparison) is true;
     }
 
     private static bool TryReadGitDirTarget(string gitFilePath, out string gitDirectory)

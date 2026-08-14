@@ -380,6 +380,23 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsSameWorktreeScope_SubmoduleInsideLinkedWorktree_UsesEnclosingWorktree()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var primaryRoot = workspace.WorkspaceRoot.FullName;
+        Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+        var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
+        var submoduleRoot = Directory.CreateDirectory(Path.Combine(worktreeRoot, "extern", "dep")).FullName;
+        TestGitWorktree.WriteGitDirFile(submoduleRoot, Path.Combine(adminDirectory, "modules", "dep"));
+        var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
+
+        Assert.Null(GitWorktree.TryGetLinkedWorktreeRoot(submoduleAppHost));
+        Assert.True(GitWorktree.IsSameWorktreeScope(submoduleAppHost, worktreeRoot));
+        Assert.False(GitWorktree.IsSameWorktreeScope(submoduleAppHost, primaryRoot));
+    }
+
+    [Fact]
     public void IsSameWorktreeScope_Submodule_RemainsInScopeOfPrimary()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
