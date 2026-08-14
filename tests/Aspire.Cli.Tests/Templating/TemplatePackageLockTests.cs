@@ -69,8 +69,9 @@ public class TemplatePackageLockTests
     public void StarterAppHostPackageLock_UsesPublicNpmRegistry(string templateName)
     {
         // Guards the top-level (AppHost) lockfile in addition to the frontend one covered above.
-        // PR #18858 fixed the frontend lockfiles but left these on the internal dnceng feed,
-        // which regressed `aspire agent init` for customers. See https://github.com/microsoft/aspire/issues/19370.
+        // A shipped lockfile pins the `resolved` registry for every dependency npm restores in a
+        // generated starter, so these must resolve from the public npm registry — otherwise restore
+        // fails for customers who cannot reach a private feed. See https://github.com/microsoft/aspire/issues/19370.
         var filePath = Path.Combine(
             GetRepoRoot(),
             "src",
