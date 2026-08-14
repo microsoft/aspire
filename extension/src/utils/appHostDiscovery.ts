@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
@@ -14,6 +13,13 @@ import { sendTelemetryEvent } from './telemetry';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 import { ConfigInfoProvider } from './configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
+import { isSamePath } from './paths/comparison';
+import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
+
+export { isSamePath };
+export { isSameFileSystemEntry };
+export { getFileSystemEntryDescriptor, isSameFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
+export type { FileSystemEntryDescriptor } from './paths/fileSystemIdentity';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -1202,76 +1208,4 @@ function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: st
         && !relativePath.startsWith('..')
         && !path.isAbsolute(relativePath)
         && !relativePath.split(path.sep).some(segment => segment.toLowerCase() === 'bin' || segment.toLowerCase() === 'obj');
-}
-
-type FileSystemEntryIdentity = Pick<fs.BigIntStats, 'dev' | 'ino'>;
-type FileSystemEntryIdentityProvider = (filePath: string) => FileSystemEntryIdentity | undefined;
-
-export interface FileSystemEntryDescriptor {
-    resolvedPath: string;
-    identity: FileSystemEntryIdentity | undefined;
-}
-
-export function getFileSystemEntryDescriptor(
-    filePath: string,
-    getIdentity: FileSystemEntryIdentityProvider = tryGetFileSystemEntryIdentity): FileSystemEntryDescriptor {
-    const resolvedPath = path.resolve(filePath);
-    return {
-        resolvedPath,
-        identity: getIdentity(resolvedPath),
-    };
-}
-
-export function isSameFileSystemEntryDescriptor(
-    left: FileSystemEntryDescriptor,
-    right: FileSystemEntryDescriptor): boolean {
-    if (left.resolvedPath === right.resolvedPath) {
-        return true;
-    }
-
-    if (hasStableFileSystemEntryIdentity(left.identity) && hasStableFileSystemEntryIdentity(right.identity)) {
-        return left.identity.dev === right.identity.dev && left.identity.ino === right.identity.ino;
-    }
-
-    return isSamePath(left.resolvedPath, right.resolvedPath);
-}
-
-export function isSameFileSystemEntry(
-    left: string,
-    right: string,
-    getIdentity: FileSystemEntryIdentityProvider = tryGetFileSystemEntryIdentity): boolean {
-    const resolvedLeft = path.resolve(left);
-    const resolvedRight = path.resolve(right);
-    if (resolvedLeft === resolvedRight) {
-        return true;
-    }
-
-    return isSameFileSystemEntryDescriptor(
-        { resolvedPath: resolvedLeft, identity: getIdentity(resolvedLeft) },
-        { resolvedPath: resolvedRight, identity: getIdentity(resolvedRight) });
-}
-
-function hasStableFileSystemEntryIdentity(
-    identity: FileSystemEntryIdentity | undefined): identity is FileSystemEntryIdentity {
-    return identity !== undefined && identity.ino !== 0n;
-}
-
-function tryGetFileSystemEntryIdentity(filePath: string): FileSystemEntryIdentity | undefined {
-    try {
-        return fs.statSync(filePath, { bigint: true });
-    }
-    catch {
-        return undefined;
-    }
-}
-
-export function isSamePath(left: string, right: string): boolean {
-    const comparison = process.platform === 'win32'
-        ? 'case-insensitive'
-        : 'case-sensitive';
-    const resolvedLeft = path.resolve(left);
-    const resolvedRight = path.resolve(right);
-    return comparison === 'case-insensitive'
-        ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
-        : resolvedLeft === resolvedRight;
 }

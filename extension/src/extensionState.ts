@@ -1,10 +1,11 @@
-import * as path from 'path';
-
 import { AspireExtensionContext } from './AspireExtensionContext';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
 import type { AspireAppHostState, AspireExtensionStateSnapshot, AspireResourceCommandState, AspireResourceState, AspireResourceUrlState } from './types/extensionApi';
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
+import { isSamePath } from './utils/paths/comparison';
+
+export { isSamePath };
 
 export function createStateSnapshot(
   dataRepository: AppHostDataRepository,
@@ -120,12 +121,4 @@ export function sanitizeDashboardUrl(url: string | null | undefined): string | u
   catch {
     return undefined;
   }
-}
-
-export function isSamePath(left: string, right: string): boolean {
-  const normalizedLeft = path.resolve(left);
-  const normalizedRight = path.resolve(right);
-  return process.platform === 'win32'
-    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
-    : normalizedLeft === normalizedRight;
 }

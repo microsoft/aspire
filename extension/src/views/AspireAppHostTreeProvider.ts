@@ -59,6 +59,7 @@ import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsL
 import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
+import { getComparisonKey, isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -85,10 +86,6 @@ function getLinkableResourceUrls(resource: ResourceJson) {
 
 function isSamePath(left: string, right: string): boolean {
     return isSameFileSystemEntry(left, right);
-}
-
-function getComparisonKey(value: string): string {
-    return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
 function hasNoResources(resources: readonly ResourceJson[] | null | undefined): boolean {
@@ -1759,15 +1756,6 @@ function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
     return isSamePath(path.dirname(normalizedLeft), path.dirname(normalizedRight)) &&
         ((isProjectFile(normalizedLeft) && isAppHostSourceFile(normalizedRight)) ||
             (isAppHostSourceFile(normalizedLeft) && isProjectFile(normalizedRight)));
-}
-
-function isProjectFile(value: string): boolean {
-    return path.extname(value).toLowerCase() === '.csproj';
-}
-
-function isAppHostSourceFile(value: string): boolean {
-    const fileName = path.basename(value).toLowerCase();
-    return fileName === 'apphost.cs' || fileName === 'program.cs';
 }
 
 function resourceMatchesName(resource: ResourceJson, resourceName: string, includeDisplayName: boolean): boolean {

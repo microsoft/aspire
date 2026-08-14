@@ -5,11 +5,16 @@ import { spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli'
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry, isSameFileSystemEntryDescriptor } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, FileSystemEntryDescriptor, formatAppHostLanguage, getFileSystemEntryDescriptor, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate, isSameFileSystemEntry } from '../utils/appHostDiscovery';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
+import { getComparisonKey, isProjectFileToSourceFileMatch } from '../utils/paths/comparison';
+import { FileSystemEntryDescriptorIndex } from '../utils/paths/fileSystemIdentity';
+import { shortenPath, shortenPaths } from '../utils/paths/shortening';
+
+export { shortenPath, shortenPaths };
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -2155,10 +2160,6 @@ export class AppHostDataRepository {
 
 }
 
-export function shortenPath(filePath: string): string {
-    return shortenPaths([filePath])[0] ?? filePath;
-}
-
 function formatWorkspaceFolderDiscoveryError(error: WorkspaceFolderDiscoveryError): string {
     return `${error.workspaceFolder.uri.fsPath}: ${String(error.error)}`;
 }
@@ -2217,182 +2218,6 @@ function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly W
         appHostCandidates: combinedAppHostCandidates,
         selectedAppHostPath: selectedAppHostPath ?? null,
     };
-}
-
-class FileSystemEntryDescriptorIndex {
-    private readonly _descriptors: FileSystemEntryDescriptor[] = [];
-    private readonly _exactPathBuckets = new Map<string, number[]>();
-    private readonly _identityBuckets = new Map<string, number[]>();
-    private readonly _fallbackPathBuckets = new Map<string, number[]>();
-    private readonly _unstableFallbackPathBuckets = new Map<string, number[]>();
-
-    find(descriptor: FileSystemEntryDescriptor): number | undefined {
-        const identityKey = getStableIdentityKey(descriptor);
-        const candidateBuckets = [
-            this._exactPathBuckets.get(descriptor.resolvedPath),
-            identityKey === undefined ? undefined : this._identityBuckets.get(identityKey),
-            identityKey === undefined
-                ? this._fallbackPathBuckets.get(getFallbackPathKey(descriptor))
-                : this._unstableFallbackPathBuckets.get(getFallbackPathKey(descriptor)),
-        ];
-        const checkedIndexes = new Set<number>();
-
-        for (const bucket of candidateBuckets) {
-            for (const index of bucket ?? []) {
-                if (!checkedIndexes.has(index)
-                    && isSameFileSystemEntryDescriptor(this._descriptors[index], descriptor)) {
-                    return index;
-                }
-
-                checkedIndexes.add(index);
-            }
-        }
-
-        return undefined;
-    }
-
-    add(descriptor: FileSystemEntryDescriptor): void {
-        const index = this._descriptors.length;
-        this._descriptors.push(descriptor);
-        this.addToBuckets(index, descriptor);
-    }
-
-    replace(index: number, descriptor: FileSystemEntryDescriptor): void {
-        this._descriptors[index] = descriptor;
-        this.addToBuckets(index, descriptor);
-    }
-
-    private addToBuckets(index: number, descriptor: FileSystemEntryDescriptor): void {
-        addToBucket(this._exactPathBuckets, descriptor.resolvedPath, index);
-
-        const fallbackPathKey = getFallbackPathKey(descriptor);
-        addToBucket(this._fallbackPathBuckets, fallbackPathKey, index);
-
-        const identityKey = getStableIdentityKey(descriptor);
-        if (identityKey === undefined) {
-            addToBucket(this._unstableFallbackPathBuckets, fallbackPathKey, index);
-        } else {
-            addToBucket(this._identityBuckets, identityKey, index);
-        }
-    }
-}
-
-function getStableIdentityKey(descriptor: FileSystemEntryDescriptor): string | undefined {
-    const identity = descriptor.identity;
-    return identity !== undefined && identity.ino !== 0n
-        ? `${identity.dev}:${identity.ino}`
-        : undefined;
-}
-
-function getFallbackPathKey(descriptor: FileSystemEntryDescriptor): string {
-    return process.platform === 'win32'
-        ? descriptor.resolvedPath.toLowerCase()
-        : descriptor.resolvedPath;
-}
-
-function addToBucket(buckets: Map<string, number[]>, key: string, index: number): void {
-    const bucket = buckets.get(key);
-    if (!bucket) {
-        buckets.set(key, [index]);
-    } else if (bucket[bucket.length - 1] !== index) {
-        bucket.push(index);
-    }
-}
-
-const projectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
-
-export function shortenPaths(filePaths: readonly string[]): string[] {
-    const states: ShortenedPathState[] = [];
-    const stateByPath = new Map<string, ShortenedPathState>();
-
-    for (const filePath of filePaths) {
-        const pathKey = filePath;
-        let state = stateByPath.get(pathKey);
-        if (!state) {
-            state = createShortenedPathState(filePath);
-            stateByPath.set(pathKey, state);
-            states.push(state);
-        }
-    }
-
-    while (true) {
-        const duplicateLabels = new Set<string>();
-        const seenLabels = new Set<string>();
-
-        for (const state of states) {
-            const labelKey = state.label;
-            if (seenLabels.has(labelKey)) {
-                duplicateLabels.add(labelKey);
-            } else {
-                seenLabels.add(labelKey);
-            }
-        }
-
-        if (duplicateLabels.size === 0) {
-            break;
-        }
-
-        for (const state of states) {
-            if (duplicateLabels.has(state.label)) {
-                expandShortenedPathState(state);
-            }
-        }
-    }
-
-    return filePaths.map(filePath => stateByPath.get(filePath)?.label ?? filePath);
-}
-
-interface ShortenedPathState {
-    originalPath: string;
-    segments: string[];
-    depth: number;
-    label: string;
-}
-
-function createShortenedPathState(filePath: string): ShortenedPathState {
-    const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '');
-    const segments = normalized.split('/');
-    const fileName = segments[segments.length - 1] || filePath;
-    const extension = path.extname(fileName).toLowerCase();
-    const isProjectFile = projectFileExtensions.has(extension);
-    const depth = !isProjectFile && segments.length >= 2 ? 2 : 1;
-
-    return {
-        originalPath: filePath,
-        segments,
-        depth,
-        label: depth >= 2 ? joinPathSegments(segments.slice(-depth)) : fileName,
-    };
-}
-
-function expandShortenedPathState(state: ShortenedPathState): void {
-    state.depth++;
-
-    if (state.depth >= state.segments.length) {
-        state.label = state.originalPath;
-        return;
-    }
-
-    const firstCandidateIndex = state.segments.length - state.depth;
-    const firstCandidateSegment = state.segments[firstCandidateIndex];
-    if (firstCandidateSegment.length === 0 || isWindowsDriveSegment(firstCandidateSegment)) {
-        state.label = state.originalPath;
-        return;
-    }
-
-    state.label = joinPathSegments(state.segments.slice(firstCandidateIndex));
-}
-
-function joinPathSegments(segments: readonly string[]): string {
-    return segments.join('/');
-}
-
-function isWindowsDriveSegment(segment: string): boolean {
-    return /^[a-zA-Z]:$/.test(segment);
-}
-
-function getComparisonKey(value: string): string {
-    return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
 function getConfiguredNumber(config: vscode.WorkspaceConfiguration, key: string): number | undefined {
@@ -2658,19 +2483,6 @@ export function isAppHostPathUnderFolder(appHostPath: string | undefined, folder
 
     const folderPrefix = normalizedFolderPath.endsWith(path.sep) ? normalizedFolderPath : `${normalizedFolderPath}${path.sep}`;
     return normalizedAppHostPath.startsWith(folderPrefix);
-}
-
-function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
-    return (isProjectFile(left) && isAppHostSourceFile(right)) || (isAppHostSourceFile(left) && isProjectFile(right));
-}
-
-function isProjectFile(value: string): boolean {
-    return path.extname(value).toLowerCase() === '.csproj';
-}
-
-function isAppHostSourceFile(value: string): boolean {
-    const fileName = path.basename(value).toLowerCase();
-    return fileName === 'apphost.cs' || fileName === 'program.cs';
 }
 
 function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {
