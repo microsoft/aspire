@@ -109,6 +109,64 @@ public class RustDockerfileShellTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(markerPath));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TheAppAccountIsOnlyCreatedWhenTheRuntimeImageDoesNotAlreadyDefineIt(bool groupExists, bool userExists)
+    {
+        SkipWithoutPosixShell();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var stubDirectory = workspace.CreateDirectory("stubs").FullName;
+        var invocationLog = Path.Combine(workspace.WorkspaceRoot.FullName, "invocations");
+
+        // A custom runtime image may already define the `app` group and user. Both toolsets fail when asked
+        // to create an account that exists, so stub each tool with the exit code that image would produce.
+        WriteStub(stubDirectory, "id", invocationLog, exitCode: userExists ? 0 : 1);
+        WriteStub(stubDirectory, "addgroup", invocationLog, exitCode: groupExists ? 1 : 0);
+        WriteStub(stubDirectory, "groupadd", invocationLog, exitCode: groupExists ? 1 : 0);
+        WriteStub(stubDirectory, "adduser", invocationLog, exitCode: 0);
+        WriteStub(stubDirectory, "useradd", invocationLog, exitCode: 0);
+
+        var result = await RunShellAsync(RustDockerfileGenerator.CreateAppUserCommand, stubDirectory);
+
+        string[] expectedInvocations = (groupExists, userExists) switch
+        {
+            (false, false) => ["id -u app", "addgroup -S app", "adduser -S -G app app"],
+            // busybox `addgroup` and shadow-utils `groupadd` both refuse an existing group, so the user is
+            // added to the group the image already ships.
+            (true, false) => ["id -u app", "addgroup -S app", "groupadd --system app", "adduser -S -G app app"],
+            _ => ["id -u app"]
+        };
+
+        Assert.Equal(string.Empty, result.StandardError);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(expectedInvocations, ReadInvocations(invocationLog));
+    }
+
+    [Fact]
+    public async Task AppAccountCreationStillFailsWhenTheRuntimeImageCannotCreateTheUser()
+    {
+        SkipWithoutPosixShell();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var stubDirectory = workspace.CreateDirectory("stubs").FullName;
+        var invocationLog = Path.Combine(workspace.WorkspaceRoot.FullName, "invocations");
+
+        WriteStub(stubDirectory, "id", invocationLog, exitCode: 1);
+        WriteStub(stubDirectory, "addgroup", invocationLog, exitCode: 0);
+        WriteStub(stubDirectory, "groupadd", invocationLog, exitCode: 0);
+        WriteStub(stubDirectory, "adduser", invocationLog, exitCode: 1, standardError: "adduser: /etc/passwd is read-only");
+        WriteStub(stubDirectory, "useradd", invocationLog, exitCode: 1, standardError: "useradd: /etc/passwd is read-only");
+
+        var result = await RunShellAsync(RustDockerfileGenerator.CreateAppUserCommand, stubDirectory);
+
+        // Tolerating a pre-existing account must not tolerate a genuine failure to create one.
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal(
+            "adduser: /etc/passwd is read-only\nuseradd: /etc/passwd is read-only\n",
+            result.StandardError);
+    }
+
     private static void SkipWithoutPosixShell()
     {
         if (OperatingSystem.IsWindows())
@@ -117,7 +175,30 @@ public class RustDockerfileShellTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static async Task<(int ExitCode, string StandardOutput, string StandardError)> RunShellAsync(string command)
+    // The stub records its own invocation so a test can assert which account tools ran, then exits with the
+    // code the simulated runtime image would produce.
+    private static void WriteStub(string directory, string name, string invocationLog, int exitCode, string? standardError = null)    {
+        var stubPath = Path.Combine(directory, name);
+        var standardErrorLine = standardError is null ? "" : $"echo {ShellQuote(standardError)} >&2\n";
+
+        File.WriteAllText(
+            stubPath,
+            $"#!/bin/sh\necho {ShellQuote(name)}\" $*\" >> {ShellQuote(invocationLog)}\n{standardErrorLine}exit {exitCode}\n");
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(stubPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static string[] ReadInvocations(string invocationLog)
+        => File.Exists(invocationLog)
+            ? File.ReadAllLines(invocationLog)
+            : [];
+
+    private static async Task<(int ExitCode, string StandardOutput, string StandardError)> RunShellAsync(
+        string command,
+        string? path = null)
     {
         var startInfo = new ProcessStartInfo("/bin/sh")
         {
@@ -127,6 +208,13 @@ public class RustDockerfileShellTests(ITestOutputHelper outputHelper)
         };
         startInfo.ArgumentList.Add("-c");
         startInfo.ArgumentList.Add(command);
+
+        if (path is not null)
+        {
+            // Replacing PATH entirely keeps the account commands resolving to the stubs rather than to
+            // whatever the host happens to provide.
+            startInfo.Environment["PATH"] = path;
+        }
 
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start /bin/sh.");
         var standardOutput = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);

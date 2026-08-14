@@ -1,7 +1,7 @@
 ﻿FROM docker.io/library/rust:1.97-alpine3.24 AS build
 WORKDIR /app
 COPY . .
-RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,id=aspire-rust-b66e5db297c6c0ec,target=/build/target,sharing=locked \
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,id=aspire-rust-{cacheId},target=/build/target,sharing=locked \
     rustup target add aarch64-unknown-linux-musl && \
     for candidate in /build/target/release/my-service /build/target/*/release/my-service; do if [ -f "$candidate" ]; then rm -f "$candidate"; fi; done && \
     cargo build --target aarch64-unknown-linux-musl --release --target-dir /build/target && \
@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,id=as
     cp "$bin" /build/bin/my-service
 
 FROM docker.io/library/alpine:3.24
-RUN (addgroup -S app || groupadd --system app) && (adduser -S -G app app || useradd --system --gid app --no-create-home app)
+RUN if ! id -u app > /dev/null 2>&1; then (addgroup -S app || groupadd --system app || true) && (adduser -S -G app app || useradd --system --gid app --no-create-home app); fi
 WORKDIR /app
 COPY --from=build /build/bin/my-service /app/my-service
 USER app

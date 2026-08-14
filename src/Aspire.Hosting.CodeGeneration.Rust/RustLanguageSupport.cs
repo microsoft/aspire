@@ -17,6 +17,9 @@ internal sealed class RustLanguageSupport : ILanguageSupport
     private const string LanguageId = "rust";
     private const string AppHostFileName = "apphost.rs";
 
+    // Must stay in sync with the [[bin]] target the scaffolded Cargo.toml below declares.
+    private const string AppHostBinaryName = "apphost";
+
     /// <summary>
     /// The code generation target language. This maps to the ICodeGenerator.Language property.
     /// </summary>
@@ -140,7 +143,14 @@ internal sealed class RustLanguageSupport : ILanguageSupport
             Execute = new CommandSpec
             {
                 Command = "cargo",
-                Args = ["run", "--"]
+                // The binary is named explicitly because the scaffolded manifest declares `[[bin]] apphost`
+                // and a package is free to gain more. A bare `cargo run` is ambiguous the moment a second
+                // [[bin]] target exists and fails with "could not determine which binary to run", which would
+                // stop the app host from starting at all. Naming it here rather than adding `default-run` to
+                // the manifest also fixes app hosts that were scaffolded before this change, since the
+                // command comes from the CLI while the manifest is already on disk.
+                // See https://doc.rust-lang.org/cargo/commands/cargo-run.html
+                Args = ["run", "--bin", AppHostBinaryName, "--"]
             }
         };
     }

@@ -170,6 +170,47 @@ public class CargoMetadataTests
         Assert.Equal("failed to fetch ***", diagnostic);
     }
 
+    [Theory]
+    [InlineData("DATABASE_URL")]
+    [InlineData("REDIS_URL")]
+    [InlineData("url")]
+    [InlineData("SERVICE_URI")]
+    public void CargoFailureDiagnosticRedactsInheritedUrlEnvironmentValues(string variableName)
+    {
+        // An ambient DATABASE_URL routinely carries a password even when the URL itself has no user info, so
+        // the name alone makes it sensitive. This matches the extension-side policy in
+        // extension/src/debugger/languages/rust.ts.
+        var inheritedEnvironment = new Dictionary<string, string?>
+        {
+            [variableName] = "postgres://app@db.example.com/orders?sslmode=require"
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            "build script printed postgres://app@db.example.com/orders?sslmode=require",
+            new Dictionary<string, string>(),
+            inheritedEnvironment);
+
+        Assert.Equal("build script printed ***", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticRetainsInheritedValuesWhoseNamesMerelyEndInUrlLetters()
+    {
+        // `CURL_CA_BUNDLE` ends in the letters of a URL without naming one. Redacting it would delete a
+        // useful path from the diagnostic for no benefit.
+        var inheritedEnvironment = new Dictionary<string, string?>
+        {
+            ["CURL_CA_BUNDLE"] = "/etc/ssl/certs/ca-bundle.crt"
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            "failed to verify /etc/ssl/certs/ca-bundle.crt",
+            new Dictionary<string, string>(),
+            inheritedEnvironment);
+
+        Assert.Equal("failed to verify /etc/ssl/certs/ca-bundle.crt", diagnostic);
+    }
+
     [Fact]
     public void CargoFailureDiagnosticOmitsOutputWhenSensitiveValueIsTooShortToRedactSafely()
     {

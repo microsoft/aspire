@@ -291,6 +291,61 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         Assert.Same(pipelineSteps, Assert.Single(container.Annotations.OfType<PipelineStepAnnotation>()));
     }
 
+    [Fact]
+    public async Task PublishMakesTheRustImageBuildDependOnEachContainerFilesSource()
+    {
+        // The generated Dockerfile copies out of each container files source, so those sources have to be
+        // built first; otherwise the COPY --from reads an image that does not exist yet.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.Services.AddSingleton<ICargoMetadataReader>(new FakeCargoMetadataReader(CargoMetadataFactory.SinglePackage("my-service")));
+
+        var frontend = builder.AddResource(new RustFilesContainer("frontend"))
+            .WithImage("frontend-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+        var assets = builder.AddResource(new RustFilesContainer("assets"))
+            .WithImage("assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/public" });
+        var rust = builder.AddRustApp("api", sourceDir.FullName);
+        rust.PublishWithContainerFiles(frontend, "/app/static");
+        rust.PublishWithContainerFiles(assets, "/app/public");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var rustBuildStep = CreateBuildComputeStep("build-api", rust.Resource);
+        var frontendBuildStep = CreateBuildComputeStep("build-frontend", frontend.Resource);
+        var assetsBuildStep = CreateBuildComputeStep("build-assets", assets.Resource);
+
+        // Run every configuration callback the pipeline would, from the model rather than from the Rust
+        // resource: PublishAsDockerFile removes that resource, so this also proves the annotation is still
+        // reachable through the container substituted in its place.
+        foreach (var annotation in model.Resources.SelectMany(resource => resource.Annotations.OfType<PipelineConfigurationAnnotation>()))
+        {
+            await annotation.Callback(new PipelineConfigurationContext
+            {
+                Services = app.Services,
+                Model = model,
+                Steps = [rustBuildStep, frontendBuildStep, assetsBuildStep]
+            });
+        }
+
+        Assert.Equal(["build-frontend", "build-assets"], rustBuildStep.DependsOnSteps);
+        Assert.Equal([], frontendBuildStep.DependsOnSteps);
+        Assert.Equal([], assetsBuildStep.DependsOnSteps);
+    }
+
+    private static PipelineStep CreateBuildComputeStep(string name, IResource resource)
+        => new()
+        {
+            Name = name,
+            Action = static _ => Task.CompletedTask,
+            Tags = [WellKnownPipelineTags.BuildCompute],
+            Resource = resource
+        };
+
     #pragma warning restore ASPIREPIPELINES003
 
     [Fact]
@@ -832,12 +887,47 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishProducesTheSameDockerfileForEquivalentCratesInDifferentDirectories()
+    public async Task PublishScopesTheTargetCacheToTheCrateDirectory()
     {
+        // A BuildKit cache mount id is global to the daemon. Unrelated app hosts commonly both build an `api`
+        // resource from `Cargo.toml`, and sharing one Cargo target directory while both source trees appear at
+        // /app lets cargo accept the other tree's local-library artifacts as fresh on fingerprint and mtime.
         var first = await PublishDockerfileAsync();
         var second = await PublishDockerfileAsync();
 
-        Assert.Equal(first, second);
+        var firstCacheId = ReadTargetCacheId(first);
+        var secondCacheId = ReadTargetCacheId(second);
+
+        Assert.NotEqual(firstCacheId, secondCacheId);
+
+        // The cache identity is the only thing that may differ between checkouts of an equivalent crate.
+        Assert.Equal(
+            first.Replace(firstCacheId, "aspire-rust-scope", StringComparison.Ordinal),
+            second.Replace(secondCacheId, "aspire-rust-scope", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PublishReusesTheTargetCacheForTheSameCrateDirectory()
+    {
+        // Scoping the cache must not defeat it: republishing the same crate has to keep hitting the cargo
+        // target directory it filled last time.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var firstOutputDir = workspace.CreateDirectory("output-first");
+        var secondOutputDir = workspace.CreateDirectory("output-second");
+
+        foreach (var outputDir in new[] { firstOutputDir, secondOutputDir })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+            builder.Services.AddSingleton<ICargoMetadataReader>(new FakeCargoMetadataReader(CargoMetadataFactory.SinglePackage("my-service")));
+            builder.AddRustApp("api", sourceDir.FullName);
+            builder.Build().Run();
+        }
+
+        var first = await File.ReadAllTextAsync(Path.Combine(firstOutputDir.FullName, "api.Dockerfile"), TestContext.Current.CancellationToken);
+        var second = await File.ReadAllTextAsync(Path.Combine(secondOutputDir.FullName, "api.Dockerfile"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(ReadTargetCacheId(first), ReadTargetCacheId(second));
     }
 
     [Fact]
@@ -854,14 +944,8 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
 
         var first = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"), TestContext.Current.CancellationToken);
         var second = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "worker.Dockerfile"), TestContext.Current.CancellationToken);
-        const string cacheMountPattern = @"--mount=type=cache,id=(aspire-rust-[0-9a-f]{16}),target=/build/target,sharing=locked";
 
-        var firstMatch = Regex.Match(first, cacheMountPattern);
-        var secondMatch = Regex.Match(second, cacheMountPattern);
-
-        Assert.True(firstMatch.Success);
-        Assert.True(secondMatch.Success);
-        Assert.NotEqual(firstMatch.Groups[1].Value, secondMatch.Groups[1].Value);
+        Assert.NotEqual(ReadTargetCacheId(first), ReadTargetCacheId(second));
     }
 
     [Fact]
@@ -953,6 +1037,66 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishBoundsTheLockFileSearchToAnAppDirectoryWithATrailingSeparator(bool lockFileInsideAppDirectory)
+    {
+        // Path.GetFullPath keeps a trailing separator while Path.GetDirectoryName drops it, so an app
+        // directory spelled "../rust-api/" compared unequal to the directory the manifest resolved to and the
+        // search climbed into the repository above it. Only the app directory is copied into the image, so a
+        // Cargo.lock found above it would make --locked fail the container build.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "Cargo.lock"), "version = 4\n");
+
+        if (lockFileInsideAppDirectory)
+        {
+            File.WriteAllText(Path.Combine(sourceDir.FullName, "Cargo.lock"), "version = 4\n");
+        }
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.Services.AddSingleton<ICargoMetadataReader>(new FakeCargoMetadataReader(CargoMetadataFactory.SinglePackage("my-service")));
+        builder.AddRustApp("api", sourceDir.FullName + Path.DirectorySeparatorChar)
+            .WithCargoManifestPath("Cargo.toml");
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"), TestContext.Current.CancellationToken);
+        var expectedCargoCommand = lockFileInsideAppDirectory
+            ? "cargo build --manifest-path Cargo.toml --locked --release --target-dir /build/target"
+            : "cargo build --manifest-path Cargo.toml --release --target-dir /build/target";
+
+        Assert.Equal(expectedCargoCommand, ReadCargoBuildCommand(content));
+    }
+
+    // Reads the id from the generated target cache mount, which is emitted as:
+    //   RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,id=aspire-rust-0123456789abcdef,target=/build/target,sharing=locked \
+    private static string ReadTargetCacheId(string dockerfile)
+    {
+        var match = Regex.Match(
+            dockerfile,
+            @"--mount=type=cache,id=(aspire-rust-[0-9a-f]{16}),target=/build/target,sharing=locked");
+
+        Assert.True(match.Success, "The generated Dockerfile does not contain a scoped target cache mount.");
+
+        return match.Groups[1].Value;
+    }
+
+    // Reads the cargo invocation out of the generated RUN, whose lines are joined by " && \" continuations:
+    //     for candidate in ...; done && \
+    //     cargo build --release --target-dir /build/target && \
+    //     count=0 && \
+    private static string ReadCargoBuildCommand(string dockerfile)
+    {
+        var line = Assert.Single(
+            dockerfile.Split('\n'),
+            static l => l.TrimStart().StartsWith("cargo build", StringComparison.Ordinal));
+
+        return line.Trim().TrimEnd('\\').TrimEnd().TrimEnd('&').TrimEnd();
+    }
+
     private async Task<string> PublishDockerfileAsync(
         Action<string>? configureSource = null,
         string? metadata = null,
@@ -991,4 +1135,8 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
             Assert.Skip($"Symbolic links are unavailable in this test environment: {ex.Message}");
         }
     }
+
+    // Minimal container resource that can act as a container files source, so PublishWithContainerFiles can be
+    // exercised without depending on a real container integration.
+    private sealed class RustFilesContainer(string name) : ContainerResource(name), IResourceWithContainerFiles;
 }

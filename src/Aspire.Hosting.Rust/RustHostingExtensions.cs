@@ -4,12 +4,14 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Rust;
 using Microsoft.Extensions.DependencyInjection;
@@ -126,6 +128,22 @@ public static class RustHostingExtensions
             }, ownedByLaunchConfigurationType: "rust")
             .WithVSCodeDebugging()
             .PublishAsDockerFile();
+
+        // The generated image copies files out of each container files source, so those sources have to be
+        // built first. PublishAsDockerFile removes the Rust resource from the model, but the container it
+        // substitutes shares this annotation collection, so the callback still runs; the step lookup matches
+        // on resource name and therefore finds the substituted container's build steps.
+        resourceBuilder.WithPipelineConfiguration(context =>
+        {
+            if (resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
+            {
+                var buildSteps = context.GetSteps(resource, WellKnownPipelineTags.BuildCompute);
+                foreach (var containerFile in containerFilesAnnotations)
+                {
+                    buildSteps.DependsOn(context.GetSteps(containerFile.Source, WellKnownPipelineTags.BuildCompute));
+                }
+            }
+        });
 
         if (builder.ExecutionContext.IsPublishMode)
         {
@@ -570,7 +588,11 @@ public static class RustHostingExtensions
     // See https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
     private static bool HasLockFile(string workingDirectory, string? manifestPath)
     {
-        workingDirectory = Path.GetFullPath(workingDirectory);
+        // Trailing separators are load bearing here. Path.GetFullPath("../rust-api/") keeps the separator
+        // while Path.GetDirectoryName returns the same directory without one, so comparing the two spellings
+        // for equality never matches and the walk would climb past the app directory and find an unrelated
+        // repository lock file that is not in the Docker build context.
+        workingDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(workingDirectory));
 
         // A relative manifest path is resolved the same way cargo resolves it: against the directory the
         // process is launched in.
@@ -578,22 +600,37 @@ public static class RustHostingExtensions
             ? Path.GetDirectoryName(Path.GetFullPath(path, workingDirectory))
             : workingDirectory;
 
-        while (directory is not null)
+        // A manifest outside the app directory starts the walk outside it, so containment is checked before
+        // each probe rather than only after one, which also stops the walk at the app directory itself.
+        // Path.GetDirectoryName only keeps a trailing separator for a filesystem root, which IsAtOrBelow
+        // handles, so no further trimming is needed inside the loop.
+        while (directory is { } candidate && IsAtOrBelow(candidate, workingDirectory))
         {
-            if (File.Exists(Path.Combine(directory, "Cargo.lock")))
+            if (File.Exists(Path.Combine(candidate, "Cargo.lock")))
             {
                 return true;
             }
 
-            if (string.Equals(directory, workingDirectory, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            directory = Path.GetDirectoryName(directory);
+            directory = Path.GetDirectoryName(candidate);
         }
 
         return false;
+    }
+
+    private static bool IsAtOrBelow(string candidate, string directory)
+    {
+        if (string.Equals(candidate, directory, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // A filesystem root already ends in a separator, so appending another would build a prefix that no
+        // path starts with.
+        var prefix = Path.EndsInDirectorySeparator(directory)
+            ? directory
+            : directory + Path.DirectorySeparatorChar;
+
+        return candidate.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

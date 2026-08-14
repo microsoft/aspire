@@ -202,8 +202,15 @@ internal sealed partial class CargoMetadataReader : ICargoMetadataReader
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.UserInfo);
     }
 
+    // A URL or URI variable is treated as sensitive by name rather than only when it carries user info:
+    // `DATABASE_URL` and `REDIS_URL` routinely hold a password, and an inherited one would otherwise be
+    // echoed verbatim by a cargo wrapper into an exception message and any log that records it. This
+    // mirrors the extension-side policy in extension/src/debugger/languages/rust.ts
+    // (`isSensitiveArgumentName`), which matches `(?:^|[._-])(?:url|uri)(?:$|[._-])`. URL and URI are
+    // deliberately absent from the trailing no-delimiter alternation below, because names such as `CURL`
+    // end in those letters without naming a URL.
     [GeneratedRegex(
-        @"(?:^|[._-])(?:PGPASSWORD|MYSQL_PWD|tokens?|passwords?|passwd|secrets?|credentials?|api[_-]?keys?|access[_-]?keys?|private[_-]?keys?|client[_-]?secrets?|connection[_-]?strings?)(?:$|[._-])|(?:TOKENS?|PASSWORDS?|PASSWD|SECRETS?|CREDENTIALS?|APIKEYS?|ACCESSKEYS?|PRIVATEKEYS?|CLIENTSECRETS?|CONNECTIONSTRINGS?)$",
+        @"(?:^|[._-])(?:PGPASSWORD|MYSQL_PWD|tokens?|passwords?|passwd|secrets?|credentials?|api[_-]?keys?|access[_-]?keys?|private[_-]?keys?|client[_-]?secrets?|connection[_-]?strings?|urls?|uris?)(?:$|[._-])|(?:TOKENS?|PASSWORDS?|PASSWD|SECRETS?|CREDENTIALS?|APIKEYS?|ACCESSKEYS?|PRIVATEKEYS?|CLIENTSECRETS?|CONNECTIONSTRINGS?)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SensitiveEnvironmentVariableNamePattern();
 

@@ -85,6 +85,60 @@ public class RustLanguageSupportTests(ITestOutputHelper outputHelper)
         Assert.Equal(["apphost.rs"], runtimeSpec.DetectionPatterns);
         Assert.Equal("rust", runtimeSpec.ExtensionLaunchCapability);
         Assert.Equal("cargo", runtimeSpec.Execute.Command);
-        Assert.Equal(["run", "--"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "--bin", "apphost", "--"], runtimeSpec.Execute.Args);
+    }
+
+    [Fact]
+    public void GetRuntimeSpec_NamesTheScaffoldedBinarySoASecondBinTargetStaysUnambiguous()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "RustApp"
+        });
+
+        // Once the package declares a second [[bin]], a bare `cargo run` fails with "could not determine
+        // which binary to run" and the app host never starts, so the launch command has to name the binary
+        // the scaffolded manifest declares.
+        var multiBinaryManifest = files["Cargo.toml"] + """
+
+
+            [[bin]]
+            name = "migrate"
+            path = "migrate.rs"
+            """;
+        var runtimeSpec = _languageSupport.GetRuntimeSpec();
+
+        Assert.Equal(["apphost", "migrate"], ReadBinTargetNames(multiBinaryManifest));
+        Assert.Equal(["run", "--bin", "apphost", "--"], runtimeSpec.Execute.Args);
+    }
+
+    // Bin targets are declared in Cargo.toml as:
+    //   [[bin]]
+    //   name = "apphost"
+    //   path = "apphost.rs"
+    // Only the scaffolded shape is handled: a table header on its own line followed by unquoted keys.
+    private static string[] ReadBinTargetNames(string manifest)
+    {
+        const string namePrefix = "name = \"";
+        var names = new List<string>();
+        var inBinTable = false;
+
+        foreach (var line in manifest.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith('['))
+            {
+                inBinTable = trimmed == "[[bin]]";
+            }
+            else if (inBinTable && trimmed.StartsWith(namePrefix, StringComparison.Ordinal))
+            {
+                names.Add(trimmed[namePrefix.Length..].TrimEnd('"'));
+            }
+        }
+
+        return [.. names];
     }
 }

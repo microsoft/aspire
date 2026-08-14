@@ -76,7 +76,7 @@ internal static partial class RustDockerfileGenerator
 
         ValidateDockerfileValue(options.ManifestPath, "cargo manifest path", resource.Name);
         var containerManifestPath = ValidateManifestPath(options.ManifestPath, workingDirectory, resource.Name);
-        var targetCacheId = BuildTargetCacheId(resource.Name, containerManifestPath);
+        var targetCacheId = BuildTargetCacheId(resource.Name, containerManifestPath, workingDirectory);
 
         var metadata = await context.Services.GetRequiredService<ICargoMetadataReader>()
             // Empty environment: the resource's environment applies to the process the container runs, not to
@@ -154,12 +154,7 @@ internal static partial class RustDockerfileGenerator
 
         var runtimeStage = context.Builder.From(runtimeImage);
 
-        // BusyBox and shadow-utils disagree on both command names and flags and the image may ship either, so
-        // try one and fall back to the other. Ids are left to the tool to allocate because none is free on
-        // every image: alpine already uses gid 999 for `ping`, and a taken id fails rather than falling through.
-        runtimeStage.Run(
-            "(addgroup -S app || groupadd --system app) && " +
-            "(adduser -S -G app app || useradd --system --gid app --no-create-home app)");
+        runtimeStage.Run(CreateAppUserCommand);
 
         runtimeStage
             .WorkDir("/app")
@@ -381,17 +376,36 @@ internal static partial class RustDockerfileGenerator
         }
     }
 
-    private static string BuildTargetCacheId(string resourceName, string? containerManifestPath)
+    private static string BuildTargetCacheId(string resourceName, string? containerManifestPath, string workingDirectory)
     {
-        // The generated Dockerfile must be identical when the same app model is evaluated on another
-        // machine, so only app-model and build-context-relative inputs participate in the cache identity.
-        var identity = $"{resourceName}\0{containerManifestPath ?? "Cargo.toml"}";
+        // A BuildKit cache mount id is global to the daemon, so the identity has to separate this crate from
+        // every other one built on the machine. The resource name and manifest path alone do not: unrelated
+        // app hosts routinely both contain an `api` resource built from `Cargo.toml`, and sharing one target
+        // directory between two source trees that both appear at /app lets cargo accept the other tree's
+        // local-library and workspace artifacts as fresh on fingerprint and mtime. Including the crate's
+        // canonical location means the generated Dockerfile differs between checkouts, which is the accepted
+        // cost of not letting one application's build consume another's artifacts.
+        var identity = $"{PathNormalizer.ResolveSymlinks(workingDirectory)}\0{resourceName}\0{containerManifestPath ?? "Cargo.toml"}";
         var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(identity));
 
         // Lowercase hexadecimal contains none of the comma, whitespace, or quote delimiters used by
         // Dockerfile mount options, so the stable resource-scoped id can be emitted without escaping.
         return $"aspire-rust-{hash:x16}";
     }
+
+    // A custom runtime image may already ship an `app` account. Creating it again fails on both toolsets, and
+    // an unconditional `&&` chain would then fail the build over an account that is already exactly what the
+    // image needs, so the account is only created when `id` reports it missing. When it does have to be
+    // created, BusyBox and shadow-utils disagree on both command names and flags and the image may ship
+    // either, so each step tries one and falls back to the other. `|| true` on the group covers an image that
+    // predefines the group but not the user. Ids are left to the tool to allocate because none is free on
+    // every image: alpine already uses gid 999 for `ping`, and a taken id fails rather than falling through.
+    // An image with no `id` at all reports 127, which is non-zero, so creation is still attempted.
+    internal const string CreateAppUserCommand =
+        "if ! id -u app > /dev/null 2>&1; then " +
+        "(addgroup -S app || groupadd --system app || true) && " +
+        "(adduser -S -G app app || useradd --system --gid app --no-create-home app); " +
+        "fi";
 
     internal static string BuildArtifactCommand(
         RustCargoTarget target,
