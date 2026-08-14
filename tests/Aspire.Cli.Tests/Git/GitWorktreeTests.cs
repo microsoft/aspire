@@ -113,6 +113,26 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryGetLinkedWorktreeRoot_CaseVariantCheckoutPath_ReturnsFilesystemCanonicalCasing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            worktreeRoot,
+            Path.Combine(fixtureRoot, "primary", ".git"));
+        var caseVariantRoot = Path.Combine(fixtureRoot, "WORKTREE");
+        if (!Directory.Exists(caseVariantRoot))
+        {
+            Assert.Skip("The test requires a case-insensitive filesystem.");
+        }
+
+        var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(caseVariantRoot);
+
+        Assert.Equal(PathNormalizer.ResolveSymlinks(worktreeRoot), linkedRoot);
+    }
+
+    [Fact]
     public void TryGetLinkedWorktreeRoot_AdminAliasWithRelativeBackPointer_ReturnsCanonicalWorktreeRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

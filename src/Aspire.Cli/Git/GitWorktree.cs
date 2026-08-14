@@ -70,7 +70,7 @@ internal static class GitWorktree
             if (File.Exists(gitPath))
             {
                 return IsLinkedWorktreeGitFile(gitPath)
-                    ? PathNormalizer.ResolveSymlinks(current)
+                    ? CanonicalizePath(current)
                     : null;
             }
 
