@@ -246,7 +246,7 @@ internal sealed class TerminalHostOrphanCleanupService(
                 }
                 else
                 {
-                    logger.LogDebug(
+                    logger.LogWarning(
                         "Skipping terminal metadata '{Path}' with unsupported schema version {SchemaVersion}.",
                         candidatePath,
                         metadata.SchemaVersion);
