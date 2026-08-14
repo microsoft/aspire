@@ -198,11 +198,11 @@
   <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
     <value>Embedded Aspire skills metadata must specify a release asset name.</value>
   </data>
-  <data name="AspireSkillsInstaller_MissingMetadataSha256" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify the release asset SHA-256 hash.</value>
+  <data name="AspireSkillsInstaller_MissingMetadataSha512" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</value>
   </data>
   <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
-    <value>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</value>
+    <value>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>

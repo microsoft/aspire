@@ -1,7 +1,19 @@
-import { BottomBarPanel, By, EditorView, InputBox, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { error as webDriverError } from 'selenium-webdriver';
 
 const escapeKey = '\uE00C';
 const aspireAppHostsSectionTitle = 'AppHosts';
+const blockingWebDriverLifecycleErrorNames = new Set([
+    'InvalidSessionIdError',
+    'NoSuchSessionError',
+    'NoSuchWindowError',
+    'SessionNotCreatedError',
+]);
+const blockingWebDriverLifecycleMessageFragments = [
+    'session deleted because of page crash',
+    'disconnected: not connected to devtools',
+    'chrome not reachable',
+];
 
 export async function openAspireView(): Promise<TreeSection> {
     let lastSectionTitles: string[] = [];
@@ -17,14 +29,16 @@ export async function openAspireView(): Promise<TreeSection> {
                     const aspireSection = sections.find((_, index) => lastSectionTitles[index] === aspireAppHostsSectionTitle);
                     return aspireSection ?? false;
                 }
-                catch {
+                catch (error) {
+                    throwIfWebDriverSessionFailure(error);
                     return false;
                 }
             }, 10000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section.`);
 
             return section;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             await delay(250);
         }
     }
@@ -36,7 +50,8 @@ export async function openAspireView(): Promise<TreeSection> {
             const aspireSection = sections.find((_, index) => lastSectionTitles[index] === aspireAppHostsSectionTitle);
             return aspireSection ?? false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, 30000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section. Visible sections: ${lastSectionTitles.join(', ') || '<none>'}.`);
@@ -50,7 +65,8 @@ export async function waitForTreeItem(section: TreeSection, label: string, timeo
                 return item;
             }
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
         }
 
         try {
@@ -59,7 +75,8 @@ export async function waitForTreeItem(section: TreeSection, label: string, timeo
             const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
             return currentSection ? await currentSection.findItem(label, 4) ?? false : false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
@@ -70,7 +87,8 @@ export async function waitForChildTreeItem(parent: TreeItem, label: string, time
         try {
             return await parent.findChildItem(label) ?? false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, `Timed out waiting for child tree item '${label}' on '${await parent.getLabel()}'.`);
@@ -98,7 +116,8 @@ export async function waitForTreeItemDescription(section: TreeSection, label: st
                 lastDescription = await item.getDescription();
                 return lastDescription === expectedDescription ? item : false;
             }
-            catch {
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
                 return false;
             }
         }, timeoutMs, `Timed out waiting for tree item '${label}' description '${expectedDescription}'.`);
@@ -117,7 +136,8 @@ export async function selectContextMenuItem(item: TreeItem, label: string): Prom
         try {
             await menu.close();
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
         }
     }
 }
@@ -161,7 +181,8 @@ export async function cancelActiveInput(): Promise<void> {
         try {
             return await InputBox.create();
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, 30000, 'Timed out waiting for active input to appear.');
@@ -178,7 +199,8 @@ export async function answerActiveInput(value: string, expectedPlaceholder: stri
             lastPrompt = `${title ?? '<no title>'} / ${placeholder}`;
             return placeholder === expectedPlaceholder ? candidate : false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, `Timed out waiting for input placeholder '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
@@ -191,7 +213,8 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
         try {
             return await InputBox.create();
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
@@ -208,7 +231,8 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
 
             return false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, `Timed out waiting for quick pick '${label}'. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
@@ -220,7 +244,8 @@ export async function getActiveQuickPickLabels(timeoutMs = 30000): Promise<strin
         try {
             return await InputBox.create();
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
@@ -231,7 +256,8 @@ export async function getActiveQuickPickLabels(timeoutMs = 30000): Promise<strin
             const labels = await Promise.all(picks.map(pick => pick.getLabel()));
             return labels.length > 0 ? labels : false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, 'Timed out waiting for active quick pick labels.');
@@ -239,20 +265,68 @@ export async function getActiveQuickPickLabels(timeoutMs = 30000): Promise<strin
 
 export async function waitForNotificationMessage(expectedText: string, timeoutMs = 30000): Promise<Notification> {
     return await VSBrowser.instance.driver.wait(async () => {
-        const notifications = await new Workbench().getNotifications();
-        for (const notification of notifications) {
-            const message = await notification.getMessage();
-            if (message.includes(expectedText)) {
-                return notification;
+        try {
+            const notifications = await new Workbench().getNotifications();
+            for (const notification of notifications) {
+                const message = await notification.getMessage();
+                if (message.includes(expectedText)) {
+                    return notification;
+                }
             }
-        }
 
-        return false;
+            return false;
+        }
+        catch (error) {
+            // VS Code can replace notification elements while Selenium reads them, so let the
+            // next WebDriver poll reacquire the current notification list.
+            if (error instanceof webDriverError.StaleElementReferenceError) {
+                return false;
+            }
+
+            throw error;
+        }
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
+}
+
+export interface AcceptedModalDialog {
+    message: string;
+    details: string;
+}
+
+export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<AcceptedModalDialog> {
+    let lastError: unknown;
+    const accepted = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const dialog = new ModalDialog();
+            const message = await dialog.getMessage();
+            if (!message) {
+                return false;
+            }
+
+            const details = await dialog.getDetails().catch(() => '');
+            if (screenshotName) {
+                await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
+            }
+
+            await dialog.pushButton(buttonTitle);
+            return { message, details };
+        }
+        catch (error) {
+            lastError = error;
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
+
+    return accepted as AcceptedModalDialog;
 }
 
 export async function getNotificationCount(): Promise<number> {
     return (await new Workbench().getNotifications()).length;
+}
+
+export async function getNotificationMessages(): Promise<string[]> {
+    const notifications = await new Workbench().getNotifications();
+    return await Promise.all(notifications.map(notification => notification.getMessage()));
 }
 
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {
@@ -272,7 +346,8 @@ export async function waitForTerminalChannel(expectedText: string, timeoutMs = 3
             const channel = await getCurrentTerminalChannel();
             return channel.includes(expectedText) ? channel : false;
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
             return false;
         }
     }, timeoutMs, `Timed out waiting for terminal channel containing '${expectedText}'.`);
@@ -304,6 +379,116 @@ export async function waitForWorkbenchText(expectedText: string, timeoutMs = 300
     }
     catch (error) {
         throw withWaitDiagnostics(error, [`Last workbench/webview text (${lastText.length} chars):\n${truncateDiagnosticText(lastText)}`]);
+    }
+}
+
+export async function waitForAnyWorkbenchText(expectedTexts: readonly string[], timeoutMs = 30000): Promise<string> {
+    let lastText = '';
+    const expectedTextDescription = expectedTexts.map(text => `'${text}'`).join(' or ');
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            lastText = await getWorkbenchAndWebviewText();
+            return expectedTexts.some(text => lastText.includes(text)) ? lastText : false;
+        }, timeoutMs, `Timed out waiting for workbench text containing ${expectedTextDescription}.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last workbench/webview text (${lastText.length} chars):\n${truncateDiagnosticText(lastText)}`]);
+    }
+}
+
+const appHostsSectionTransitionStateKey = '__aspireAppHostsSectionTransition';
+
+export async function startAppHostsSectionTextTransition(expectedTexts: readonly string[], expectedPattern: RegExp, timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        return await VSBrowser.instance.driver.executeScript<boolean>(`
+            const [stateKey, sectionTitle, expectedTexts, patternSource, patternFlags] = arguments;
+            const titles = Array.from(document.querySelectorAll('.part.sidebar .pane > .pane-header > .title'));
+            const title = titles.find(candidate => candidate.textContent?.trim() === sectionTitle);
+            const pane = title?.closest('.pane');
+            if (!pane || pane.getClientRects().length === 0) {
+                return false;
+            }
+
+            const expectedPattern = new RegExp(patternSource, patternFlags);
+            const matchesExpectedText = element => {
+                expectedPattern.lastIndex = 0;
+                return element.getClientRects().length > 0
+                    && expectedTexts.every(text => element.innerText.includes(text))
+                    && expectedPattern.test(element.innerText);
+            };
+            const trackedRow = Array.from(pane.querySelectorAll('.monaco-list-row')).find(matchesExpectedText);
+            if (!trackedRow) {
+                return false;
+            }
+
+            window[stateKey]?.observer?.disconnect();
+            const state = { lastNonMatchingAt: 0, trackedRow };
+            state.observer = new MutationObserver(records => {
+                const sawNonMatchingText = records.some(record =>
+                    Array.from(record.removedNodes).some(node => node === trackedRow || node.contains?.(trackedRow)))
+                    || !trackedRow.isConnected
+                    || !matchesExpectedText(trackedRow);
+                if (sawNonMatchingText) {
+                    state.lastNonMatchingAt = Date.now();
+                }
+            });
+            state.observer.observe(pane, { childList: true, subtree: true, characterData: true });
+            window[stateKey] = state;
+            return true;
+        `, appHostsSectionTransitionStateKey, aspireAppHostsSectionTitle, expectedTexts, expectedPattern.source, expectedPattern.flags);
+    }, timeoutMs, `Timed out starting '${aspireAppHostsSectionTitle}' section text transition tracking.`);
+}
+
+export async function cancelAppHostsSectionTextTransition(): Promise<void> {
+    await VSBrowser.instance.driver.executeScript(`
+        window[arguments[0]]?.observer?.disconnect();
+        delete window[arguments[0]];
+    `, appHostsSectionTransitionStateKey).catch(() => undefined);
+}
+
+export async function waitForAppHostsSectionTextAfterTransition(expectedTexts: readonly string[], expectedPattern: RegExp, notBeforeTimestamp: number, timeoutMs = 30000): Promise<string> {
+    let lastText = '';
+    const expectedDescription = [...expectedTexts.map(text => `'${text}'`), expectedPattern.toString()].join(' and ');
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            const result = await VSBrowser.instance.driver.executeScript<{ matched: boolean; text: string }>(`
+                const [stateKey, sectionTitle, expectedTexts, patternSource, patternFlags, notBeforeTimestamp] = arguments;
+                return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+                    const state = window[stateKey];
+                    const titles = Array.from(document.querySelectorAll('.part.sidebar .pane > .pane-header > .title'));
+                    const title = titles.find(candidate => candidate.textContent?.trim() === sectionTitle);
+                    const pane = title?.closest('.pane');
+                    const text = pane && pane.getClientRects().length > 0 ? pane.innerText : '';
+                    const expectedPattern = new RegExp(patternSource, patternFlags);
+                    const matchesExpectedText = row => {
+                        expectedPattern.lastIndex = 0;
+                        return row.getClientRects().length > 0
+                            && expectedTexts.every(expectedText => row.innerText.includes(expectedText))
+                            && expectedPattern.test(row.innerText);
+                    };
+                    const matchingRow = pane
+                        ? Array.from(pane.querySelectorAll('.monaco-list-row')).find(matchesExpectedText)
+                        : undefined;
+                    const matched = Boolean(state?.lastNonMatchingAt >= notBeforeTimestamp && matchingRow);
+                    if (matched) {
+                        state.observer.disconnect();
+                        delete window[stateKey];
+                    }
+                    resolve({ matched, text });
+                })));
+            `, appHostsSectionTransitionStateKey, aspireAppHostsSectionTitle, expectedTexts, expectedPattern.source, expectedPattern.flags, notBeforeTimestamp);
+            lastText = result.text;
+            return result.matched ? lastText : false;
+        }, timeoutMs, `Timed out waiting for '${aspireAppHostsSectionTitle}' section text to transition back to ${expectedDescription}.`);
+    }
+    catch (error) {
+        await VSBrowser.instance.driver.executeScript(`
+            window[arguments[0]]?.observer?.disconnect();
+            delete window[arguments[0]];
+        `, appHostsSectionTransitionStateKey).catch(() => undefined);
+        throw withWaitDiagnostics(error, [`Last '${aspireAppHostsSectionTitle}' section text (${lastText.length} chars):\n${truncateDiagnosticText(lastText)}`]);
     }
 }
 
@@ -354,14 +539,16 @@ async function getWorkbenchAndWebviewText(): Promise<string> {
         const webviewText = await (await webview.findWebElement(By.css('body'))).getText();
         return `${outerText}\n${webviewText}`;
     }
-    catch {
+    catch (error) {
+        throwIfWebDriverSessionFailure(error);
         return outerText;
     }
     finally {
         try {
             await webview.switchBack();
         }
-        catch {
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
         }
     }
 }
@@ -370,11 +557,34 @@ function withWaitDiagnostics(error: unknown, diagnostics: string[]): Error {
     const originalMessage = error instanceof Error ? error.message : String(error);
     const enrichedError = new Error(`${originalMessage}\n\n${diagnostics.join('\n')}`);
 
-    if (error instanceof Error && error.stack) {
-        enrichedError.stack = `${enrichedError.message}\nCaused by: ${error.stack}`;
+    if (error instanceof Error) {
+        enrichedError.name = error.name;
+        if (error.stack) {
+            enrichedError.stack = `${enrichedError.message}\nCaused by: ${error.stack}`;
+        }
     }
 
     return enrichedError;
+}
+
+function throwIfWebDriverSessionFailure(error: unknown): void {
+    if (!(error instanceof Error)) {
+        return;
+    }
+
+    if (blockingWebDriverLifecycleErrorNames.has(error.name)) {
+        throw error;
+    }
+
+    // Selenium uses WebDriverError for both transient failures and browser lifecycle failures:
+    //   unknown error: session deleted because of page crash
+    //   unknown error: disconnected: not connected to DevTools
+    //   unknown error: chrome not reachable
+    const message = error.message.toLowerCase();
+    if (error.name === 'WebDriverError' &&
+        blockingWebDriverLifecycleMessageFragments.some(fragment => message.includes(fragment))) {
+        throw error;
+    }
 }
 
 function formatDiagnosticList(values: string[]): string {

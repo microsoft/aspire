@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import * as ts from 'typescript';
 
 function readSourcePattern(source: string, name: string): RegExp {
     const declaration = new RegExp(`const ${name} = /(.+)/;`).exec(source);
@@ -19,7 +20,170 @@ function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
+function getDirectCallExpression(statement: ts.Statement, name: string): ts.CallExpression | undefined {
+    if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+        return undefined;
+    }
+
+    return ts.isIdentifier(statement.expression.expression) && statement.expression.expression.text === name
+        ? statement.expression
+        : undefined;
+}
+
+function getLiteralText(expression: ts.Expression | undefined): string | undefined {
+    return expression !== undefined && ts.isStringLiteralLike(expression)
+        ? expression.text
+        : undefined;
+}
+
+function getSuiteStatements(sourceFile: ts.SourceFile): readonly ts.Statement[] {
+    for (const statement of sourceFile.statements) {
+        const suiteCall = getDirectCallExpression(statement, 'suite');
+        if (suiteCall === undefined) {
+            continue;
+        }
+
+        const callback = suiteCall.arguments[1];
+        if (callback !== undefined && (ts.isFunctionExpression(callback) || ts.isArrowFunction(callback)) && ts.isBlock(callback.body)) {
+            return callback.body.statements;
+        }
+    }
+
+    return [];
+}
+
+function compareVersionStrings(left: string, right: string): number {
+    const leftParts = left.split('.').map(Number);
+    const rightParts = right.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(leftParts.length, rightParts.length); i++) {
+        const difference = (leftParts[i] ?? 0) - (rightParts[i] ?? 0);
+        if (difference !== 0) {
+            return difference;
+        }
+    }
+
+    return 0;
+}
+
+function runE2eRunnerAsPlatform(extensionRoot: string, platform: 'darwin' | 'linux' | 'win32', environment: NodeJS.ProcessEnv) {
+    const runnerPath = path.join(extensionRoot, 'scripts', 'run-e2e.js');
+    const bootstrap = `Object.defineProperty(process, 'platform', { value: ${JSON.stringify(platform)} }); require(${JSON.stringify(runnerPath)});`;
+    return spawnSync(process.execPath, ['-e', bootstrap], {
+        encoding: 'utf8',
+        timeout: 120000,
+        env: environment,
+    });
+}
+
+function getTestBlock(source: string, testName: string): string {
+    const sourceFile = ts.createSourceFile('e2e.test.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const suiteStatements = getSuiteStatements(sourceFile);
+
+    // Walk the parsed suite body instead of scanning raw text so comments, nested template
+    // literals, and regular expressions like `/\)/` cannot masquerade as structure.
+    for (const statement of suiteStatements) {
+        const testCall = getDirectCallExpression(statement, 'test');
+        if (testCall !== undefined && getLiteralText(testCall.arguments[0]) === testName) {
+            return source.slice(statement.getStart(sourceFile), statement.getEnd());
+        }
+    }
+
+    assert.fail(`Expected to find test '${testName}'.`);
+}
+
 suite('E2E launch profile', () => {
+    test('finds test blocks when the test name uses double quotes', () => {
+        const source = [
+            "suite('Aspire debug dashboard E2E', function () {",
+            '  test("keeps long-running CLI run status out of notifications", async () => {',
+            '    await waitForAnyWorkbenchText(cliRunStatusTexts, 120000);',
+            '    const notificationMessages = await getNotificationMessages();',
+            '  });',
+            "  test('another test', async () => {",
+            "    throw new Error('should not be included');",
+            '  });',
+            '});',
+        ].join('\n');
+
+        const block = getTestBlock(source, 'keeps long-running CLI run status out of notifications');
+
+        assert.ok(block.includes('waitForAnyWorkbenchText(cliRunStatusTexts, 120000);'));
+        assert.ok(block.includes('const notificationMessages = await getNotificationMessages();'));
+        assert.ok(!block.includes("test('another test'"));
+    });
+
+    test('finds test blocks when whitespace changes around the test declaration', () => {
+        const source = [
+            "suite('Aspire debug dashboard E2E', function () {",
+            "\ttest ( 'keeps long-running CLI run status out of notifications' , async () => {",
+            '        const observedStatuses = cliRunStatusTexts.map(status => `(${status})`);',
+            "        assert.ok(observedStatuses.some(status => status.includes('Building AppHost...')));",
+            '    });',
+            "\ttest('another test', async () => {",
+            '        assert.fail("should not be included");',
+            '    });',
+            '});',
+        ].join('\n');
+
+        const block = getTestBlock(source, 'keeps long-running CLI run status out of notifications');
+
+        assert.ok(block.includes('const observedStatuses = cliRunStatusTexts.map(status => `(${status})`);'));
+        assert.ok(block.includes("assert.ok(observedStatuses.some(status => status.includes('Building AppHost...')));"));
+        assert.ok(!block.includes("assert.fail(\"should not be included\");"));
+    });
+
+    test('finds test blocks when the body contains a regex literal with a closing parenthesis', () => {
+        const source = [
+            "suite('Aspire debug dashboard E2E', function () {",
+            "  test('keeps long-running CLI run status out of notifications', async () => {",
+            "    assert.ok(/\\)/.test(')'));",
+            '    const notificationMessages = await getNotificationMessages();',
+            '  });',
+            '});',
+        ].join('\n');
+
+        const block = getTestBlock(source, 'keeps long-running CLI run status out of notifications');
+
+        assert.ok(block.includes("assert.ok(/\\)/.test(')'));"));
+        assert.ok(block.includes('const notificationMessages = await getNotificationMessages();'));
+    });
+
+    test('finds test blocks when the body contains nested template literals with closing parentheses', () => {
+        const source = [
+            "suite('Aspire debug dashboard E2E', function () {",
+            "  test('keeps long-running CLI run status out of notifications', async () => {",
+            "    const shape = `outer ${`inner )`}`;",
+            "    assert.ok(shape.includes('inner )'));",
+            '  });',
+            '});',
+        ].join('\n');
+
+        const block = getTestBlock(source, 'keeps long-running CLI run status out of notifications');
+
+        assert.ok(block.includes("const shape = `outer ${`inner )`}`;"));
+        assert.ok(block.includes("assert.ok(shape.includes('inner )'));"));
+    });
+
+    test('ignores block-commented target declarations', () => {
+        const source = [
+            "suite('Aspire debug dashboard E2E', function () {",
+            '  /*',
+            "  test('keeps long-running CLI run status out of notifications', async () => {",
+            "    throw new Error('comment only');",
+            '  });',
+            '  */',
+            "  test('another test', async () => {",
+            '    assert.ok(true);',
+            '  });',
+            '});',
+        ].join('\n');
+
+        assert.throws(
+            () => getTestBlock(source, 'keeps long-running CLI run status out of notifications'),
+            /Expected to find test 'keeps long-running CLI run status out of notifications'\./);
+    });
+
     test('creates nothing in the per-run root that a later module-scope throw could strand', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -70,6 +234,56 @@ suite('E2E launch profile', () => {
         }
         finally {
             fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('rejects VS Code overrides whose macOS executable the pinned ExTester cannot launch', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+        fs.mkdirSync(testArtifactsRoot, { recursive: true });
+        const tempRoot = fs.mkdtempSync(path.join(testArtifactsRoot, 'aev-version-guard-'));
+        try {
+            const result = runE2eRunnerAsPlatform(extensionRoot, 'darwin', {
+                ...process.env,
+                ASPIRE_EXTENSION_E2E_CLI_PATH: path.join(tempRoot, 'missing-aspire'),
+                ASPIRE_EXTENSION_E2E_SPEC: 'out/test/e2eLaunchProfile.test.js',
+                ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
+                ASPIRE_EXTENSION_E2E_VSCODE_VERSION: '1.131.0',
+            });
+
+            assert.notStrictEqual(result.status, 0);
+            assert.match(result.stderr, /VS Code 1\.131\.0.*ExTester 8\.23\.0 on macOS.*Contents\/MacOS\/Electron/);
+            assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
+        }
+        finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('allows VS Code 1.131 overrides where ExTester uses the current executable path', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+        fs.mkdirSync(testArtifactsRoot, { recursive: true });
+
+        for (const platform of ['linux', 'win32'] as const) {
+            const tempRoot = fs.mkdtempSync(path.join(testArtifactsRoot, `aev-version-${platform}-`));
+            try {
+                const missingCliPath = path.join(tempRoot, 'missing-aspire');
+                const result = runE2eRunnerAsPlatform(extensionRoot, platform, {
+                    ...process.env,
+                    ASPIRE_EXTENSION_E2E_CLI_PATH: missingCliPath,
+                    ASPIRE_EXTENSION_E2E_SPEC: 'out/test/e2eLaunchProfile.test.js',
+                    ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
+                    ASPIRE_EXTENSION_E2E_VSCODE_VERSION: '1.131.0',
+                });
+
+                assert.notStrictEqual(result.status, 0);
+                assert.ok(result.stderr.includes(`ASPIRE_EXTENSION_E2E_CLI_PATH points to a missing file: ${missingCliPath}`), result.stderr);
+                assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
+            }
+            finally {
+                fs.rmSync(tempRoot, { recursive: true, force: true });
+            }
         }
     });
 
@@ -126,16 +340,28 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
+        assert.ok(runner.includes("const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');"));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS'));
         assert.ok(runner.includes('await runWithProcessTreeTimeout(process.execPath'));
         assert.ok(runner.includes('getRunTestsTimeoutMs()'));
         assert.ok(runner.includes('2400000'));
-        assert.ok(runner.includes('did not exit after process-tree termination'));
-        assert.ok(runner.includes('child.unref()'));
         assert.ok(runner.includes("spawnSync('taskkill'"));
-        assert.ok(runner.includes("terminateProcessTree(child.pid, 'SIGTERM')"));
-        assert.ok(runner.includes("terminateProcessTree(child.pid, 'SIGKILL')"));
         assert.ok(runner.includes('process.kill(-pid, signal)'));
+    });
+
+    test('wires the ExTester process lifecycle into the extracted runner', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const invocationStart = runner.indexOf('await runWithProcessTreeTimeout(process.execPath');
+        const invocationEnd = runner.indexOf('\n      });', invocationStart);
+        const runnerOptions = runner.slice(invocationStart, invocationEnd);
+
+        assert.ok(invocationStart >= 0);
+        assert.ok(invocationEnd > invocationStart);
+        assert.ok(runnerOptions.includes('quoteShellArgument: quoteWindowsShellArgument,'));
+        assert.ok(runnerOptions.includes("stdio: 'inherit',"));
+        assert.ok(runnerOptions.includes("detached: process.platform !== 'win32',"));
+        assert.ok(runnerOptions.includes('terminateProcessTree,'));
     });
 
     test('bounds retryable runner setup steps so setup failures still collect diagnostics', () => {
@@ -194,6 +420,37 @@ suite('E2E launch profile', () => {
         assert.ok(!workflow.includes('registry=https://'));
     });
 
+    test('defaults to the newest VS Code with the legacy macOS executable path while the internal feed lacks newer ExTester', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const installedPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'package.json'), 'utf8'));
+        const extester = require(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'extester.js')) as {
+            loadCodeVersion(version: string): string;
+        };
+        const previousCodeVersion = process.env.CODE_VERSION;
+        const defaultVsCodeVersion = '1.130.0';
+        const macOsLegacyExecutableRemovalVersion = '1.131.0';
+        const extesterMacOsExecutableFallbackVersion = '8.24.0';
+
+        assert.ok(runner.includes(`process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '${defaultVsCodeVersion}'`));
+        assert.strictEqual(installedPackageJson.version, '8.23.0');
+        assert.ok(compareVersionStrings(defaultVsCodeVersion, macOsLegacyExecutableRemovalVersion) < 0);
+        assert.ok(compareVersionStrings(installedPackageJson.version, extesterMacOsExecutableFallbackVersion) < 0);
+
+        try {
+            delete process.env.CODE_VERSION;
+            assert.strictEqual(extester.loadCodeVersion(defaultVsCodeVersion), defaultVsCodeVersion);
+        }
+        finally {
+            if (previousCodeVersion === undefined) {
+                delete process.env.CODE_VERSION;
+            }
+            else {
+                process.env.CODE_VERSION = previousCodeVersion;
+            }
+        }
+    });
+
     test('preflights locked ExTester dependency graph before starting the E2E matrix', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -219,6 +476,9 @@ suite('E2E launch profile', () => {
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
         const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
+        const runStepIndex = workflow.indexOf('- name: Run extension E2E tests');
+        const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
+        const runStep = workflow.slice(runStepIndex, uploadStepIndex);
 
         assert.ok(workflow.includes('shardName: azure-functions'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
@@ -233,6 +493,22 @@ suite('E2E launch profile', () => {
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
+        assert.strictEqual(runStep.includes('continue-on-error:'), false);
+    });
+
+    test('wires structured E2E harness failures into advisory handling', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+
+        assert.ok(runner.includes("const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');"));
+        assert.ok(runner.includes("const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';"));
+        assert.ok(runner.includes('let cleanupFailed = false;'));
+        assert.ok(runner.includes('cleanupFailed = true;'));
+        assert.ok(runner.includes('shouldAllowAdvisoryTestFailure(testFailure, readMochaResults(), cleanupFailed)'));
+        assert.ok(runner.includes('completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.'));
+        assert.strictEqual(runner.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE'), false);
+        assert.strictEqual(runner.includes('completedTests'), false);
     });
 
     test('keeps Linux E2E recordings for successful runs by default', () => {
@@ -335,6 +611,19 @@ suite('E2E launch profile', () => {
         assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
         assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
+    });
+
+    test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const progressNotifierTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'progressNotifier.test.ts'), 'utf8');
+        const statusSurfaceTest = getTestBlock(progressNotifierTests, 'CLI status is reported as dismissible window progress rather than a notification');
+
+        assert.ok(statusSurfaceTest.includes('vscode.ProgressLocation.Window'));
+        assert.ok(statusSurfaceTest.includes('vscode.ProgressLocation.Notification'));
+        assert.ok(
+            !debugDashboard.includes("test('keeps long-running CLI run status out of notifications'"),
+            'Workbench-wide text includes persistent Debug Console output, so it cannot prove status-bar progress is active.');
     });
 
     test('uses known AppHost PID when E2E teardown CLI status probes time out', () => {
@@ -496,12 +785,75 @@ suite('E2E launch profile', () => {
         assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
-    test('patches ExTester launch arguments without replacement-token expansion', () => {
+    test('waits for durable AppHost discovery gates before asserting running state', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(fixtures.includes('writeGatedStreamingDiscoveryCliWrapper'));
+        assert.ok(fixtures.includes('function waitForReleaseFile'));
+        assert.ok(fixtures.includes('waitForPsSnapshotRequest: () => waitForPath(psSnapshotRequestFilePath, 30_000)'));
+        assert.ok(fixtures.includes('waitForLsCandidateRequest: () => waitForPath(lsCandidateRequestFilePath, 30_000)'));
+        assert.ok(fixtures.includes('psSnapshotAppHostPid'));
+        assert.ok(fixtures.includes("args.includes('--follow')"));
+        assert.ok(fixtures.includes('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_147_483_647);'));
+        assert.ok(fixtures.includes('fs.writeSync(process.stdout.fd, JSON.stringify(payload)'));
+        assert.ok(appHostTree.includes('writeGatedStreamingDiscoveryCliWrapper'));
+        assert.ok(appHostTree.includes('discoveryGate.releasePsSnapshot();'));
+        assert.ok(appHostTree.includes('discoveryGate.releaseLsCandidate();'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForWorkspaceRediscoveryLoading'));
+        assert.ok(vscodeHelpers.includes('export async function startAppHostsSectionTextTransition'));
+        assert.ok(vscodeHelpers.includes('export async function waitForAppHostsSectionTextAfterTransition'));
+        assert.ok(vscodeHelpers.includes('export async function cancelAppHostsSectionTextTransition'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const runningAppHost = findRunningAppHost(running.state);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;'));
+        assert.ok(runningBeforeDiscoveryTest.includes('writeGatedStreamingDiscoveryCliWrapper(runningAppHost.appHostPath, authoritativeSnapshotAppHostPid)'));
+        assert.ok(runningBeforeDiscoveryTest.includes('await startAppHostsSectionTextTransition([appHostLabel], /\\(\\d+ resources\\)/);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const snapshotReleasedAt = Date.now();'));
+        assert.ok(runningBeforeDiscoveryTest.includes('await waitForAppHostsSectionTextAfterTransition([appHostLabel], /\\(\\d+ resources\\)/, snapshotReleasedAt);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('file.state.isRepositoryLoading === false'));
+        assert.ok(runningBeforeDiscoveryTest.includes('findRunningAppHost(file.state)?.appHostPid === authoritativeSnapshotAppHostPid'));
+
+        const cleanupIndex = runningBeforeDiscoveryTest.indexOf('finally {');
+        assert.ok(cleanupIndex >= 0, 'Expected the E2E to keep cleanup releases in a finally block.');
+        const testBeforeCleanup = runningBeforeDiscoveryTest.slice(0, cleanupIndex);
+        const cleanup = runningBeforeDiscoveryTest.slice(cleanupIndex);
+        const startTransitionIndex = testBeforeCleanup.indexOf('await startAppHostsSectionTextTransition([appHostLabel], /\\(\\d+ resources\\)/);');
+        const refreshIndex = testBeforeCleanup.indexOf("await executeE2eControlCommand({ name: 'refreshAppHosts' }");
+        const waitForPsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForPsSnapshotRequest();');
+        const waitForLsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForLsCandidateRequest();');
+        const snapshotReleasedAtIndex = testBeforeCleanup.indexOf('const snapshotReleasedAt = Date.now();');
+        const releasePsIndex = testBeforeCleanup.indexOf('discoveryGate.releasePsSnapshot();');
+        const runningStateIndex = testBeforeCleanup.indexOf('const runningBeforeDiscovery = await waitForExtensionState');
+        const runningTreeTextIndex = testBeforeCleanup.indexOf('await waitForAppHostsSectionTextAfterTransition([appHostLabel], /\\(\\d+ resources\\)/, snapshotReleasedAt);');
+        const releaseLsIndex = testBeforeCleanup.indexOf('discoveryGate.releaseLsCandidate();');
+
+        assert.ok(startTransitionIndex >= 0, 'The E2E must track the currently rendered running row before refresh.');
+        assert.ok(refreshIndex > startTransitionIndex, 'The AppHosts pane transition must be tracked before refresh starts.');
+        assert.ok(waitForPsRequestIndex >= 0, 'The E2E must wait until the running AppHost snapshot reaches its gate.');
+        assert.ok(waitForLsRequestIndex > waitForPsRequestIndex, 'The E2E must wait until workspace discovery reaches its gate.');
+        assert.ok(snapshotReleasedAtIndex > waitForLsRequestIndex, 'The fresh running AppHost snapshot release time must be captured only after both refresh paths are gated.');
+        assert.ok(releasePsIndex > snapshotReleasedAtIndex, 'The fresh running AppHost snapshot must be released after its transition threshold is captured.');
+        assert.ok(runningStateIndex > releasePsIndex, 'The running AppHost must be asserted after the fresh snapshot is released.');
+        assert.ok(runningTreeTextIndex > runningStateIndex, 'The fresh running AppHost snapshot must be visibly rendered before discovery is released.');
+        assert.ok(releaseLsIndex > runningTreeTextIndex, 'The slow workspace candidate must remain gated until the running AppHost is rendered.');
+        assert.ok(cleanup.includes('await runE2eTeardown(['), 'Every cleanup must run even when another cleanup fails.');
+        assert.ok(cleanup.includes('() => cancelAppHostsSectionTextTransition()'), 'The transition tracker must be disposed even when the E2E fails before observing the rendered row.');
+    });
+
+    test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const browser = fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'browser.js'), 'utf8');
+        const argsDeclaration = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/.exec(browser);
+        const cleanArgsDeclaration = "const args = ['--no-sandbox', '--disable-dev-shm-usage', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];";
 
-        assert.ok(runner.includes('ExTester 8.23.0 does not expose a supported way to open VS Code with a workspace'));
-        assert.ok(runner.includes('Patching ExTester VS Code launch arguments by exact 8.23.0 argument match.'));
+        assert.ok(argsDeclaration);
+        assert.ok(runner.includes(cleanArgsDeclaration));
+        assert.ok(runner.includes('ExTester does not expose a supported way to open VS Code with a workspace'));
+        assert.ok(runner.includes('Patching ExTester VS Code launch arguments by exact argument match.'));
         assert.ok(runner.includes('source.replace(target, () => replacement)'));
         assert.ok(runner.includes('source.replace(argsDeclarationPattern, () => replacement)'));
     });
@@ -756,10 +1108,18 @@ suite('E2E launch profile', () => {
         // reusing the wrong install offline.
         assert.ok(runner.includes('CODE_VERSION: vscodeVersion,'));
         assert.ok(runner.includes('const vscodeVersion = resolveCachedVsCodeVersion('));
+        assert.match(runner, /vscodeVersion,\r?\n\s+extesterVersion,/);
 
         // ExTester's codeStream falls back to CODE_TYPE when --type is absent, and an Insiders
         // build unpacks into directory names this cache does not discover.
         assert.ok(runner.includes("CODE_TYPE: 'stable',"));
+    });
+
+    test('pins unit-test VS Code download to avoid moving latest resolution', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const unitTestConfig = fs.readFileSync(path.join(extensionRoot, '.vscode-test.mjs'), 'utf8');
+
+        assert.ok(unitTestConfig.includes("version: '1.131.0'"));
     });
 
     test('cleans only ExTester download archives between setup retries', () => {
@@ -788,6 +1148,7 @@ suite('E2E launch profile', () => {
         assert.ok(resolverStart >= 0);
         assert.ok(resolverBody.includes("normalizedVersion === 'min' || normalizedVersion === 'max'"));
         assert.ok(resolverBody.includes('/^\\d+\\.\\d+(\\.\\d+)?$/.test(normalizedVersion)'));
+        assert.ok(resolverBody.includes("a concrete version such as '1.130.0'"));
         assert.ok(resolverBody.includes('throw new Error('));
     });
 

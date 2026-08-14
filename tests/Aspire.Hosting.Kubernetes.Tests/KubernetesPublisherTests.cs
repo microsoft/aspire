@@ -697,6 +697,22 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task KubernetesTreatsZeroPublicPortAsUnspecified()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("database", "image")
+            .WithEndpoint(name: "tcp", port: 0, targetPort: 1433);
+
+        var app = builder.Build();
+        app.Run();
+
+        var servicePath = Path.Combine(workspace.Path, "templates/database/service.yaml");
+        await Verify(File.ReadAllText(servicePath), "yaml");
+    }
+
+    [Fact]
     public async Task KubernetesEndpointReferenceUsesServicePortNotTargetPort()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/18321

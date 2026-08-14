@@ -20,6 +20,15 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class PsCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(AppHostDisplayStatus.Running, "[green]running[/]")]
+    [InlineData(AppHostDisplayStatus.Stopped, "[red]stopped[/]")]
+    [InlineData("unknown[status]", "unknown[[status]]")]
+    public void GetStatusMarkup_ReturnsExpectedMarkup(string status, string expectedMarkup)
+    {
+        Assert.Equal(expectedMarkup, PsCommand.GetStatusMarkup(status));
+    }
+
     [Fact]
     public async Task PsCommand_Help_Works()
     {

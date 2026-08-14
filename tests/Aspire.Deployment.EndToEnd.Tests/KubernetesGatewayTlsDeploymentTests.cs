@@ -114,7 +114,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
 
             // Create resource group
             output.WriteLine("Step 3: Creating resource group...");
-            await auto.TypeAsync($"az group create --name {resourceGroupName} --location centralus --output table");
+            await auto.TypeAsync($"az group create --name {resourceGroupName} --location westus3 --output table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
@@ -136,9 +136,9 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
                 $"az aks create " +
                 $"--resource-group {resourceGroupName} " +
                 $"--name {clusterName} " +
-                $"--location centralus " +
+                $"--location westus3 " +
                 $"--node-count 1 " +
-                $"--node-vm-size Standard_D2s_v5 " +
+                $"--node-vm-size Standard_D2as_v5 " +
                 $"--network-plugin azure " +
                 $"--generate-ssh-keys " +
                 $"--attach-acr {acrName} " +

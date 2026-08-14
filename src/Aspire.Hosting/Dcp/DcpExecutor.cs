@@ -178,7 +178,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     containers = _containerCreator.PrepareObjects().ToArray();
                     _containerCreator.PrepareContainerExecutables();
-                    executables = (await _executableCreator.PrepareObjectsAsync(ct).ConfigureAwait(false)).ToArray();
+                    executables = _executableCreator.PrepareObjects(ct).ToArray();
 
                     prepareResourcesActivity.SetDcpPreparedResourceCounts(containers.Length, executables.Length);
                 }
@@ -662,7 +662,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             foreach (var endpoint in sp.Endpoints)
             {
                 endpoint.SetResolvedIsProxied(GetEffectiveIsProxied(sp.ModelResource, endpoint, _options.Value.RandomizePorts));
-                ValidateEndpointBeforeDynamicPublicPortAllocation(sp.ModelResource, endpoint);
+                DcpModelUtilities.ValidateEndpointPorts(sp.ModelResource, endpoint);
 
                 if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
@@ -772,6 +772,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     /// Use this when deciding whether DCP should bind a service to a known public port. Proxied endpoints
     /// with randomized ports deliberately do not report a fixed port so DCP can allocate the public port
     /// instead of reserving the configured value.
+    /// Port 0 requests dynamic allocation and therefore does not count as a fixed public port.
     /// Container endpoint definitions keep the public host port separate from the target container port, so
     /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
     /// port value for the process and the public endpoint, so the effective public port can come from either
@@ -779,7 +780,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
     /// </remarks>
     private static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
     {
-        var effectivePublicPort = resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port;
+        var effectivePublicPort = EndpointAnnotation.NormalizePort(resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port);
 
         // When port randomization is enabled, proxied endpoints intentionally ignore the defined public
         // port so DCP can allocate one dynamically instead.
@@ -867,14 +868,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         // Schema suggested by https://github.com/microsoft/aspire/issues/13597:
         // Resources:<resource-name>:<endpoint-name>:port
         return $"Resources:{resource.Name}:{endpoint.Name}:port";
-    }
-
-    private static void ValidateEndpointBeforeDynamicPublicPortAllocation(IResource resource, EndpointAnnotation endpoint)
-    {
-        if (resource.IsContainer() && endpoint.TargetPort is null)
-        {
-            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{resource.Name}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
-        }
     }
 
     internal static void SetInitialResourceState(IResource resource, IAnnotationHolder annotationHolder)
@@ -1348,6 +1341,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argsCallbacks))
         {
             foreach (var callback in argsCallbacks)
+            {
+                ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
+            }
+        }
+
+        if (resource.TryGetAnnotationsOfType<LaunchToolArgsCallbackAnnotation>(out var launchToolArgsCallbacks))
+        {
+            foreach (var callback in launchToolArgsCallbacks)
             {
                 ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
             }

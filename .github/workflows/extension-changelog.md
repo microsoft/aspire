@@ -5,10 +5,12 @@ description: |
   applies the `vscode-extension-release` label. This agentic workflow detects
   that placeholder, generates polished, user-facing release notes from the
   extension commit range recorded in the placeholder marker, and replaces the
-  placeholder on the PR branch via a safe output. The generated notes match the
-  tone and structure of recent `extension/CHANGELOG.md` entries — this workflow
-  does not invent a new format, and it never invents changes that aren't backed
-  by commits in the range.
+  placeholder on the PR branch via a safe output. The generated notes keep a
+  distinct finalized marker in the release entry so the merge gate can detect
+  stale main-branch extension changes before merge. The generated notes match
+  the tone and structure of recent `extension/CHANGELOG.md` entries — this
+  workflow does not invent a new format, and it never invents changes that
+  aren't backed by commits in the range.
 
 max-daily-ai-credits: -1
 
@@ -136,6 +138,84 @@ tools:
       owner: "microsoft"
       repositories: ["aspire"]
 
+pre-agent-steps:
+  - name: Preload authoritative marker range for local changelog enumeration
+    run: |
+      set -euo pipefail
+
+      CHANGELOG=extension/CHANGELOG.md
+      if [ ! -f "${CHANGELOG}" ]; then
+        echo "No ${CHANGELOG} file in this checkout; skipping authoritative range preload."
+        exit 0
+      fi
+
+      mapfile -t MARKERS < <(grep '<!-- aspire-ext-changelog from=' "${CHANGELOG}" || true)
+      if [ "${#MARKERS[@]}" -eq 0 ]; then
+        echo "No pending aspire-ext-changelog marker present; skipping authoritative range preload."
+        exit 0
+      fi
+
+      if [ "${#MARKERS[@]}" -ne 1 ]; then
+        echo "::error::Expected exactly one pending aspire-ext-changelog marker, found ${#MARKERS[@]}."
+        exit 1
+      fi
+
+      MARKER_LINE="${MARKERS[0]}"
+      # Bash parses literal '<' tokens in an inline [[ ... =~ ... ]] regex as syntax, so keep
+      # the HTML comment marker pattern in a variable before matching it.
+      MARKER_REGEX='^<!-- aspire-ext-changelog from=([0-9a-f]{40}) to=([0-9a-f]{40}) base=[^>]* -->$'
+      if [[ ! "${MARKER_LINE}" =~ ${MARKER_REGEX} ]]; then
+        echo "::error::Could not parse authoritative marker: ${MARKER_LINE}"
+        exit 1
+      fi
+
+      FROM_SHA="${BASH_REMATCH[1]}"
+      TO_SHA="${BASH_REMATCH[2]}"
+      CURRENT_BRANCH="$(git branch --show-current)"
+      if [ -z "${CURRENT_BRANCH}" ]; then
+        echo "::error::Could not determine the checked-out PR branch for authoritative range preload."
+        exit 1
+      fi
+
+      range_is_available() {
+        git cat-file -e "${FROM_SHA}^{commit}" 2>/dev/null \
+          && git cat-file -e "${TO_SHA}^{commit}" 2>/dev/null \
+          && git merge-base --is-ancestor "${FROM_SHA}" "${TO_SHA}" 2>/dev/null \
+          && git log --format='%H%x09%s' --no-merges "${FROM_SHA}..${TO_SHA}" -- extension/ >/dev/null 2>&1
+      }
+
+      if range_is_available; then
+        echo "Authoritative marker range ${FROM_SHA}..${TO_SHA} is already locally enumerable."
+        exit 0
+      fi
+
+      DEEPEN_BY=128
+      ATTEMPT=0
+      while [ "$(git rev-parse --is-shallow-repository)" = "true" ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        if [ "${ATTEMPT}" -le 6 ]; then
+          echo "Deepening ${CURRENT_BRANCH} by ${DEEPEN_BY} commits to preload ${FROM_SHA}..${TO_SHA}."
+          git fetch --no-tags --deepen="${DEEPEN_BY}" origin "${CURRENT_BRANCH}"
+          DEEPEN_BY=$((DEEPEN_BY * 2))
+        else
+          echo "Unshallowing ${CURRENT_BRANCH} to preload ${FROM_SHA}..${TO_SHA}."
+          git fetch --no-tags --unshallow origin "${CURRENT_BRANCH}"
+        fi
+
+        if range_is_available; then
+          echo "Preloaded authoritative marker range ${FROM_SHA}..${TO_SHA} for local changelog enumeration."
+          exit 0
+        fi
+      done
+
+      if range_is_available; then
+        echo "Preloaded authoritative marker range ${FROM_SHA}..${TO_SHA} for local changelog enumeration."
+        exit 0
+      fi
+
+      echo "::error::Failed to preload authoritative marker range ${FROM_SHA}..${TO_SHA} for local changelog enumeration."
+      exit 1
+
 timeout-minutes: 20
 ---
 
@@ -189,14 +269,16 @@ _Release notes are being generated automatically and will replace this placehold
 ```
 
 The authoritative sentinel is the HTML marker comment that starts with
-`<!-- aspire-ext-changelog`. Apply these rules:
+`<!-- aspire-ext-changelog from=`. Apply these rules:
 
-- If the file contains **no** `aspire-ext-changelog` marker, a human or an
-  earlier run already replaced the placeholder. Write a diagnostic to the run
-  summary and **exit successfully without emitting any safe output**. (This can
-  happen if the label is re-applied after the placeholder was already replaced —
-  handle it cheaply and stop before doing any other work.)
-- If the file contains **more than one** `aspire-ext-changelog` marker,
+- If the file contains **no** pending `aspire-ext-changelog` marker, a human or
+  an earlier run already replaced the placeholder. A finalized release entry may
+  still contain `<!-- aspire-ext-changelog-finalized ... -->`, and that is
+  expected. Write a diagnostic to the run summary and **exit successfully
+  without emitting any safe output**. (This can happen if the label is
+  re-applied after the placeholder was already replaced — handle it cheaply and
+  stop before doing any other work.)
+- If the file contains **more than one** pending `aspire-ext-changelog` marker,
   something is wrong (a malformed or tampered changelog). **Fail the workflow**
   with a clear diagnostic; do not guess which one to replace.
 - If there is **exactly one** marker, continue.
@@ -228,18 +310,31 @@ your replacement keeps the same heading.
 
 ## Step 4: Gather the extension change set
 
-Use the compare API to get the commits between the validated SHAs:
+The PR body, description, and deterministic fallback notes are presentation-only
+and MUST NOT be used to discover the change set. The validated marker range is
+the only authoritative source.
 
-```
-GET /repos/microsoft/aspire/compare/<from>...<to>
-```
+A deterministic pre-agent step already preloaded the authoritative marker range
+and history into this checkout. Do not perform any network fetch in the agent
+step. If the local range is missing or cannot be enumerated, treat that as a
+workflow error and fail with a diagnostic instead of trying to repair it here.
 
-You only care about changes under the `extension/` directory. For each commit
-that touches `extension/` and corresponds to a merged pull request, capture: PR
-number, title, labels, author. Use the `pull_requests` and `search` toolsets to
-enrich when helpful (for example `is:pr is:merged repo:microsoft/aspire` queries
-to confirm PR titles and labels). You may also read the changed file list /
-diff under `extension/` to understand what actually changed.
+Use local git as the authoritative source for the exact candidate set:
+
+1. Run `git log --format='%H%x09%s' --no-merges <from>..<to> -- extension/`
+   locally and treat the full output of that command as the exact candidate set.
+2. Count the candidates produced by that command and keep that count in mind
+   while you work.
+3. Consider and classify **every** candidate from that full local set before you
+   write notes. You may group related user-facing commits into one final note
+   and exclude internal-only commits, but you MUST NOT stop after a fixed number
+   of commits and MUST NOT use only the newest page, partial list, PR body, or
+   API response as a substitute for the full local range.
+
+After you have the exact local candidate set, you may use the compare API, the
+changed file list / diff, and the `pull_requests` / `search` toolsets only to
+enrich or verify commits that are already in that local set (for example to
+capture PR number, title, labels, or author).
 
 Exclude anything that is not user-facing. A change is user-facing only when
 someone using the VS Code extension can observe it in commands, settings,
@@ -282,18 +377,23 @@ extension, not the internal implementation.
 Edit `extension/CHANGELOG.md` in the workspace so that:
 
 - The `## v<version>` heading is preserved.
+- Immediately under that heading, emit the finalized metadata marker:
+
+  `<!-- aspire-ext-changelog-finalized from=<FROM_SHA> to=<TO_SHA> base=<BASE_VERSION> -->`
+
 - The entire placeholder body — **including the `<!-- aspire-ext-changelog ... -->`
   marker comment and the italic "_Release notes are being generated…_" line** —
-  is removed and replaced with your generated notes. The marker MUST NOT survive
-  in the final file; if it did, a later run (e.g. from the label being
-  re-applied) would have no reliable way to tell the work was already done.
+  is removed and replaced with the finalized marker and your generated notes.
+  The pending `aspire-ext-changelog` marker MUST NOT survive in the final file;
+  if it did, a later run (e.g. from the label being re-applied) would have no
+  reliable way to tell the work was already done.
 - The final Markdown contains no multiple consecutive blank lines (`\n\n\n`),
   which would fail the repository's Markdownlint `MD012/no-multiple-blanks`
   required check.
 - All other existing entries below are left untouched.
 
 If, after excluding noise in Step 4, there are **no** user-facing changes,
-replace the placeholder body with a single line such as
+keep the finalized marker and replace the placeholder body with a single line such as
 `- No user-facing changes in this release.` under the version heading (match how
 prior maintenance-only entries are phrased if any exist).
 
@@ -304,11 +404,12 @@ editing `extension/CHANGELOG.md`, emit a single push request as your final
 output so gh-aw commits the change to the triggering PR's head branch with a
 clear commit message (for example
 `Generate extension changelog for v<version>`). Do not include any other file in
-the change. Then write a short success line to the run summary:
+the change. Then write a short success line to the run summary. The summary must be auditable: report the exact candidate count from Step 4, how many candidates were included in the final notes and how many were excluded, and ensure the included/excluded totals (or equivalent auditable classification totals) account for every candidate from the local git range:
 
 > Replaced the placeholder `extension/CHANGELOG.md` entry for **v`<version>`**
 > on PR #`${{ github.event.pull_request.number }}`. Range: `<from>`..`<to>`.
-> Entries: `<count>`.
+> Candidates: `<candidate-count>`; included: `<included-count>`; excluded:
+> `<excluded-count>`.
 
 ## Step 8: Failure handling
 
@@ -318,7 +419,8 @@ Two distinct outcomes — handle them differently:
 
 - The PR head branch does not start with `extension-release/`, or the PR base
   branch is not `main` (Step 1).
-- `extension/CHANGELOG.md` no longer contains the marker (Step 2) — already done.
+- `extension/CHANGELOG.md` no longer contains the pending marker (Step 2) —
+  already done.
 
 For these, write a clear diagnostic to the run summary and exit 0 **without
 emitting a `push-to-pull-request-branch` safe output**. The safe-output job is a
@@ -329,7 +431,9 @@ no-op when no request is emitted.
 - More than one marker present (Step 2).
 - Malformed `from`/`to` SHAs, or SHAs that don't resolve in `microsoft/aspire`
   (Step 3).
-- The compare API or required searches fail outright so you cannot produce notes.
+- The local git range still cannot be enumerated after the pre-agent history
+  preload, or required enrichment searches fail outright so you cannot produce
+  notes.
 
 For these, exit non-zero so the run shows a red X, and write the failing API,
 the marker contents, and the error to the run summary so a maintainer can

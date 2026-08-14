@@ -139,6 +139,43 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitDirectoryAndOnlyUnbuildableAppHosts_ReturnsProjectResolutionError()
+    {
+        // Connection commands (stop, logs, describe, ps) decide between "the AppHost is not running" and
+        // "we could not resolve a project" purely from the exit code. A resolution failure that is not
+        // classified as one produces success-shaped output for a command that resolved nothing.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable)
+        };
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            interactionService,
+            projectLocator,
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+
+        var result = await resolver.ResolveConnectionAsync(
+            new FileInfo(appHostDirectory.FullName),
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProjectResolutionError);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+        Assert.Equal(InteractionServiceStrings.UnbuildableAppHostsDetected, result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task ResolveConnectionAsync_WithExplicitDirectoryAndNoAppHosts_ReturnsDirectorySpecificError()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

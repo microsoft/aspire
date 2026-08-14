@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -75,7 +79,7 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
         // override file (and chart values.yaml placeholder) include the entry.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Pipeline:ClearCache=true prevents loading of leaked deployment state from
-        // ~/.aspire/deployments/<sha>/<env>.json (which would otherwise auto-resolve
+        // <ASPIRE_HOME>/deployments/<sha>/<env>.json (which would otherwise auto-resolve
         // parameters from prior test runs and bypass the MissingParameterValueException path).
         var builder = TestDistributedApplicationBuilder.Create(
             "AppHost:Operation=publish",
@@ -287,6 +291,173 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("Exact", content);
+    }
+
+    [Fact]
+    public async Task AddIngress_NoPathsWithTls_DoesNotRegisterTlsBootstrapStep()
+    {
+        // An ingress with no paths and no default backend is skipped during materialization, so
+        // collecting its TLS secret would bootstrap a self-signed cert for an Ingress that is
+        // never created, leaving an orphaned secret in the cluster.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "empty");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var steps = await PipelineStepTestHelpers.CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Empty(PipelineStepTestHelpers.GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddIngress_NoPaths_WarnsThatIngressAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Ingress (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Ingress 'empty' has no path rules or default backend configured. The Ingress and its TLS certificate will not be created.",
+            warning.Message);
+    }
+
+    [Fact]
+    public async Task AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap()
+    {
+        // An Ingress can be configured with paths (so it passes the publish-time materialization
+        // check) and still be dropped from the chart when none of its backends resolve to a
+        // deployment target. Bootstrapping its certificate anyway would leave an orphaned secret in
+        // the cluster, so eligibility is re-checked at deploy time.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var otherEnvironment = builder.AddKubernetesEnvironment("other");
+
+        // Assigning the container to a different environment keeps it out of "env"'s deployment
+        // targets, so the Ingress backend cannot be resolved.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(otherEnvironment);
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "public");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The secret is still collected, because step factories run before publish populates the
+        // generated objects and therefore cannot know the Ingress will be dropped.
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+
+        // The deploy-time re-check is what prevents the orphaned secret.
+        Assert.False(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task AddIngress_ResolvableBackendWithTls_EligibleForTlsBootstrap()
+    {
+        // Positive control for AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap:
+        // an Ingress that does render must remain eligible, so the deploy-time re-check cannot
+        // silently suppress every certificate.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task CollectTlsSecrets_BeforePublish_DoesNotDependOnGeneratedIngress()
+    {
+        // Guards the trap that makes this area easy to "fix" incorrectly. In production the pipeline
+        // builds every step before running any of them, so CollectTlsSecrets always executes while
+        // GeneratedIngress is still null. Moving the materialization check into collection would
+        // therefore disable TLS bootstrap for *every* Ingress, yet the other tests here would not
+        // notice, because they inspect collection after app.Run() has already populated it.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Null(ingress.Resource.GeneratedIngress);
+        var collectedBeforePublish = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        Assert.Same(ingress.Resource, Assert.Single(collectedBeforePublish).Owner);
+
+        // The Ingress does render, so the deploy-time re-check still lets the bootstrap through.
+        app.Run();
+        Assert.NotNull(ingress.Resource.GeneratedIngress);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(ingress.Resource));
     }
 
     [Fact]

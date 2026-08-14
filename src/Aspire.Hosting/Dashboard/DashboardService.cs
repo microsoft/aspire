@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IFileUploadStore fileUploadStore)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IInteractionFileUploadStore fileUploadStore)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -504,6 +504,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         var cancellationToken = context.CancellationToken;
         long totalBytesWritten = 0;
         string? fileId = null;
+        int? interactionId = null;
         FileStream? fileStream = null;
 
         try
@@ -519,9 +520,25 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                     {
                         throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include a file name."));
                     }
+                    if (chunk.InteractionId <= 0)
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include an interaction ID."));
+                    }
+                    if (string.IsNullOrEmpty(chunk.InputName))
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include an input name."));
+                    }
 
                     string path;
-                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName);
+                    interactionId = chunk.InteractionId;
+                    try
+                    {
+                        (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName, interactionId.Value, chunk.InputName);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+                    }
                     fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
                 }
 
@@ -541,6 +558,15 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             {
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "Upload stream is empty."));
             }
+
+            // Close and flush the file before marking the upload complete. If disposal fails,
+            // the catch path removes the entry so a partial upload is never retained.
+            await fileStream.DisposeAsync().ConfigureAwait(false);
+            fileStream = null;
+
+            fileUploadStore.CompleteUpload(interactionId!.Value, fileId!);
+
+            return new UploadFileResponse { FileId = fileId };
         }
         catch
         {
@@ -548,25 +574,22 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             // before attempting deletion — on Windows, open handles prevent file deletion.
             if (fileStream is not null)
             {
-                await fileStream.DisposeAsync().ConfigureAwait(false);
-                fileStream = null;
+                try
+                {
+                    await fileStream.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to close incomplete uploaded file {FileId}.", fileId);
+                }
             }
 
-            if (fileId is not null)
+            if (fileId is not null && interactionId is not null)
             {
-                fileUploadStore.RemoveEntry(fileId);
+                fileUploadStore.RemoveEntry(interactionId.Value, fileId);
             }
 
             throw;
         }
-        finally
-        {
-            if (fileStream is not null)
-            {
-                await fileStream.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-
-        return new UploadFileResponse { FileId = fileId };
     }
 }

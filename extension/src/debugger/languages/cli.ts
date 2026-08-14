@@ -109,78 +109,118 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     return child;
 }
 
-export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean }): void {
-    const processGroupPid = process.platform !== 'win32' && managedPosixProcessGroups.has(childProcess)
-        ? childProcess.pid
-        : undefined;
-    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
-    let forceSignalSent = false;
-    const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
-    const forceTermination = (): boolean => {
-        if (forceSignalSent) {
-            return true;
-        }
-
-        try {
-            forceSignalSent = terminateCliProcessTree(childProcess, true);
-            if (!forceSignalSent) {
-                extensionLogOutputChannel.warn(`Failed to forcefully terminate ${description}.`);
+export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): Promise<void> {
+    return new Promise(resolve => {
+        const isWindows = process.platform === 'win32';
+        const processGroupPid = !isWindows && managedPosixProcessGroups.has(childProcess)
+            ? childProcess.pid
+            : undefined;
+        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+        let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
+        let forceSignalSent = false;
+        let settled = false;
+        const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
+        const forceTermination = (): boolean => {
+            if (forceSignalSent) {
+                return true;
             }
-        } catch (error) {
-            extensionLogOutputChannel.error(`Failed to forcefully terminate ${description}: ${String(error)}`);
-        }
 
-        return forceSignalSent;
-    };
-    const stopTracking = () => {
-        exited = true;
-        childProcess.off('close', onExit);
-        childProcess.off('exit', onExit);
-        if (forceKillTimer) {
-            clearTimeout(forceKillTimer);
-            forceKillTimer = undefined;
-        }
-    };
-    const onExit = () => {
-        stopTracking();
-        if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
-            // Once the leader exits, force any remaining descendants immediately. Delaying another
-            // negative-PID signal would allow the operating system to recycle the process-group ID.
-            forceTermination();
-        }
-        managedPosixProcessGroups.delete(childProcess);
-    };
+            try {
+                forceSignalSent = terminateCliProcessTree(childProcess, true);
+                if (!forceSignalSent) {
+                    extensionLogOutputChannel.warn(`Failed to forcefully terminate ${description}.`);
+                }
+            } catch (error) {
+                extensionLogOutputChannel.error(`Failed to forcefully terminate ${description}: ${String(error)}`);
+            }
 
-    if (!exited) {
-        childProcess.once('close', onExit);
-        childProcess.once('exit', onExit);
-    } else {
-        if (processGroupPid !== undefined) {
-            if (hasLiveProcessGroup()) {
+            return forceSignalSent;
+        };
+        const stopTracking = () => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            exited = true;
+            childProcess.off('close', onExit);
+            childProcess.off('exit', onExit);
+            if (forceKillTimer) {
+                clearTimeout(forceKillTimer);
+                forceKillTimer = undefined;
+            }
+            if (confirmationTimer) {
+                clearTimeout(confirmationTimer);
+                confirmationTimer = undefined;
+            }
+            resolve();
+        };
+        const onExit = () => {
+            if (settled) {
+                return;
+            }
+
+            if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
+                // Once the leader exits, force any remaining descendants immediately. Delaying another
+                // negative-PID signal would allow the operating system to recycle the process-group ID.
                 forceTermination();
             }
             managedPosixProcessGroups.delete(childProcess);
-        }
-        return;
-    }
+            stopTracking();
+        };
 
-    try {
-        if (!childProcess.killed) {
-            const signalSent = terminateCliProcessTree(childProcess, false);
-            if (!signalSent) {
-                extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
-                onExit();
+        if (!exited) {
+            childProcess.once('close', onExit);
+            childProcess.once('exit', onExit);
+        } else {
+            if (processGroupPid !== undefined) {
+                if (hasLiveProcessGroup()) {
+                    forceTermination();
+                }
+                managedPosixProcessGroups.delete(childProcess);
+            }
+            stopTracking();
+            return;
+        }
+
+        if (options?.force) {
+            if (!forceTermination()) {
+                stopTracking();
+                return;
+            }
+
+            confirmationTimer = setTimeout(() => {
+                confirmationTimer = undefined;
+                if (!options.suppressTimeoutWarning) {
+                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                }
+                managedPosixProcessGroups.delete(childProcess);
+                stopTracking();
+            }, processShutdownGracePeriodMs);
+            confirmationTimer.unref();
+            return;
+        }
+
+        try {
+            if (!childProcess.killed) {
+                const signalSent = terminateCliProcessTree(childProcess, false);
+                if (!signalSent) {
+                    extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
+                    if (childProcess.pid === undefined) {
+                        stopTracking();
+                        return;
+                    }
+                }
+            }
+        } catch (error) {
+            extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
+            if (childProcess.pid === undefined) {
+                stopTracking();
                 return;
             }
         }
-    } catch (error) {
-        extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
-        onExit();
-        return;
-    }
 
-    if (!exited) {
         forceKillTimer = setTimeout(() => {
             forceKillTimer = undefined;
             if (exited) {
@@ -198,10 +238,21 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
 
             if (!forceTermination()) {
                 stopTracking();
+                return;
             }
+
+            confirmationTimer = setTimeout(() => {
+                confirmationTimer = undefined;
+                if (!options?.suppressTimeoutWarning) {
+                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                }
+                managedPosixProcessGroups.delete(childProcess);
+                stopTracking();
+            }, processShutdownGracePeriodMs);
+            confirmationTimer.unref();
         }, processShutdownGracePeriodMs);
         forceKillTimer.unref();
-    }
+    });
 }
 
 function terminateCliProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {

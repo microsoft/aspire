@@ -178,6 +178,41 @@ public class EFCoreOperationExecutorTests
         Assert.Equal("dotnet-ef command was canceled.", result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task GatherToolArgumentsAsync_ReplaysLaunchAndOrdinaryCallbacksForSequentialCommands()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var tool = builder.AddDotnetTool("ef-tool", "dotnet-ef")
+            .WithArgs("persistent");
+        using var app = builder.Build();
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+
+        var firstCommand = new CommandLineArgsCallbackAnnotation(args => args.Add("first"));
+        tool.Resource.Annotations.Add(firstCommand);
+
+        var firstArguments = await EFResourceBuilderExtensions.GatherToolArgumentsAsync(
+            tool.Resource,
+            executionContext,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        tool.Resource.Annotations.Remove(firstCommand);
+        tool.Resource.Annotations.Add(new CommandLineArgsCallbackAnnotation(args => args.Add("second")));
+
+        var secondArguments = await EFResourceBuilderExtensions.GatherToolArgumentsAsync(
+            tool.Resource,
+            executionContext,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new[] { "tool", "exec", "dotnet-ef", "--yes", "--", "persistent", "first" },
+            firstArguments.Cast<string>());
+        Assert.Equal(
+            new[] { "tool", "exec", "dotnet-ef", "--yes", "--", "persistent", "second" },
+            secondArguments.Cast<string>());
+    }
+
     private static DotnetToolResource CreateToolResource(Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand)
     {
         var toolResource = new DotnetToolResource("ef-tool", "dotnet-ef");

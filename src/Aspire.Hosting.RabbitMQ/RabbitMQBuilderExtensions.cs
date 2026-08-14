@@ -135,7 +135,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="DistributedApplicationException">Thrown when the current container image and tag do not match the defaults for <see cref="RabbitMQServerResource"/>.</exception>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -211,8 +211,18 @@ public static class RabbitMQBuilderExtensions
 
     /// <inheritdoc cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})" />
     /// <param name="builder">The resource builder.</param>
-    /// <param name="port">The host port used to access the management UI when running locally.</param>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+    /// <param name="port">The host port that can be used to access the management UI page when running locally.</param>
+    /// <remarks>
+    /// <example>
+    /// Use <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource}, int?)"/> to specify a port to access the RabbitMQ management UI page.
+    /// <code>
+    /// var rabbitmq = builder.AddRabbitMQ("rabbitmq")
+    ///                       .WithDataVolume()
+    ///                       .WithManagementPlugin(port: 15672);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);

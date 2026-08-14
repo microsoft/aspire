@@ -103,8 +103,11 @@ suite('Aspire command palette E2E', function () {
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, beforeRefresh);
 
         const stateFile = await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
-            'secondary AppHost candidate',
+            file => file.state.isWorkspaceAppHostDiscoveryComplete
+                && !file.state.isRepositoryLoading
+                && file.state.workspaceAppHostCandidatePaths.length >= 2
+                && file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
+            'completed discovery with multiple AppHost candidates',
             180000);
 
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 2);

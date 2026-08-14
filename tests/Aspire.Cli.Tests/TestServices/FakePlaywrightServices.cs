@@ -186,16 +186,16 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 .Select(entry => new SkillBundleFile
                 {
                     RelativePath = entry.Key.RelativePath,
-                    Sha256 = ComputeSha256(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
+                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
                 })
                 .ToArray()
         };
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 }
 

@@ -274,6 +274,33 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         await AssertPrefetchingAsync(provider, templateCommand, templateCommand.Name, expectedTemplatePrefetch: true, expectedCliPrefetch: true);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NewSourceOverrideSkipsTemplatePackageMetadataPrefetching(bool useTemplateSubcommand)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var newCommand = provider.GetRequiredService<NewCommand>();
+        BaseCommand command = useTemplateSubcommand
+            ? Assert.IsType<TemplateCommand>(newCommand.Subcommands.First())
+            : newCommand;
+        var commandLine = useTemplateSubcommand
+            ? $"new {command.Name} --source source-feed"
+            : "new --source source-feed";
+        var parseResult = newCommand.Parse(commandLine);
+
+        await AssertPrefetchingAsync(
+            provider,
+            command,
+            commandLine,
+            expectedTemplatePrefetch: false,
+            expectedCliPrefetch: true,
+            parseResult: parseResult);
+    }
+
     [Fact]
     public async Task DetachedRunStartsNoPackageMetadataPrefetching()
     {
@@ -452,7 +479,8 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         string commandLine,
         bool expectedTemplatePrefetch,
         bool expectedCliPrefetch,
-        bool updateNotificationsEnabled = true)
+        bool updateNotificationsEnabled = true,
+        ParseResult? parseResult = null)
     {
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, updateNotificationsEnabled);
@@ -481,7 +509,7 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
         var prefetcher = CreatePrefetcher(executionContext, features, packagingService, updateNotifier);
 
         await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
-        command.SelectForExecution(command.Parse(commandLine));
+        command.SelectForExecution(parseResult ?? command.Parse(commandLine));
         await prefetcher.ExecuteTask!.DefaultTimeout();
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
 
