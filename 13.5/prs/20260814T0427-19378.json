@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backport of #19351: honors --source during template discovery in restricted network environments",
+  "mergedAt": "2026-08-14T04:27:06Z",
+  "number": 19378,
+  "runDate": "2026-08-14T06:29:14Z",
+  "status": "included",
+  "title": "[release/13.5] Honor --source during template discovery"
+}

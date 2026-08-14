@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed `aspire new --source` ignoring the explicit source during template discovery and installation, which could cause NuGet.org traffic in restricted enterprise environments where it is blocked.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-08-14T04:27:06Z",
+  "lastMergedAt": "2026-08-14T04:27:06Z",
+  "name": "Honor --source during template discovery",
+  "owner": "adamint",
+  "prs": [
+    19378
+  ]
+}
