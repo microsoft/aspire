@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import {
     appHostLifecycleStartConfirmationMessage,
+    appHostLifecycleStartConfirmationMessageIsolated,
     appHostLifecycleStartConfirmationTitle,
     appHostLifecycleStartInvocationMessage,
     appHostLifecycleStopConfirmationMessage,
@@ -13,6 +14,7 @@ import {
 } from '../loc/strings';
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { canonicalizeAppHostPath, type AppHostIdentityRelation } from '../utils/appHostIdentity';
+import { resolveIsolated } from '../utils/gitWorktree';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isCommandCancellation } from '../utils/telemetry';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
@@ -91,6 +93,8 @@ export type AppHostLifecycleOutcome =
 export interface AppHostStartToolInput {
     appHostPath: string;
     mode: AppHostLifecycleMode;
+    /** When omitted, linked git worktrees start isolated. Explicit true/false overrides that. */
+    isolated?: boolean;
 }
 
 export interface AppHostStopToolInput {
@@ -111,6 +115,8 @@ export interface AppHostLifecycleToolResult {
     appHostPath: string;
     requestedMode?: AppHostLifecycleMode;
     effectiveMode?: AppHostLifecycleMode;
+    /** Present on start results. The effective isolation after inference and overrides. */
+    isolated?: boolean;
     controller: AppHostLifecycleController;
     /**
      * The selectors the tool accepts, returned only when the requested one did not
@@ -137,7 +143,7 @@ export interface AppHostLifecycleLaunchService {
     getRunningAppHosts(token: vscode.CancellationToken): Promise<readonly AppHostLifecycleRunningAppHost[]>;
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, token: vscode.CancellationToken): Promise<void>;
+    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean, token: vscode.CancellationToken): Promise<void>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
     stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }
@@ -281,16 +287,38 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         return resolution.resolved ? resolution.target.displayPath : appHostLifecycleUnresolvedPath;
     }
 
+    /**
+     * Effective isolation for the confirmation prompt. Uses the same inference `start`
+     * uses so the user approves the isolation that will actually be applied.
+     */
+    async describeEffectiveIsolated(input: AppHostStartToolInput | undefined, token: vscode.CancellationToken): Promise<boolean> {
+        if (typeof input?.isolated === 'boolean') {
+            return input.isolated;
+        }
+
+        if (!vscode.workspace.isTrusted) {
+            return false;
+        }
+
+        const resolution = await this.resolveTarget(input?.appHostPath, token);
+        return resolution.resolved ? resolveIsolated(undefined, resolution.target.absolutePath) : false;
+    }
+
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
         if (!isValidStartInput(input)) {
-            return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined);
+            const isolated = typeof (input as { isolated?: unknown } | undefined)?.isolated === 'boolean'
+                ? (input as { isolated: boolean }).isolated
+                : false;
+            return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined, undefined, isolated);
         }
 
         const requestedMode = input.mode;
         const preflight = await this.preflight(aspireAppHostStartToolName, input?.appHostPath, token, requestedMode);
         if (preflight.rejected) {
-            return preflight.result;
+            return { ...preflight.result, isolated: resolveIsolated(input.isolated, undefined) };
         }
+
+        const isolated = resolveIsolated(input.isolated, preflight.target.absolutePath);
 
         try {
             // Probe for a process this extension does not own *before* taking the
@@ -309,7 +337,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 // Launching again would start a second AppHost against the same project.
                 // Report it instead so the agent can decide, and never adopt or kill a
                 // process this extension does not own.
-                return createResult(aspireAppHostStartToolName, 'alreadyRunning', preflight.target.relativePath, 'external', requestedMode, undefined);
+                return createResult(aspireAppHostStartToolName, 'alreadyRunning', preflight.target.relativePath, 'external', requestedMode, undefined, undefined, isolated);
             }
 
             return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.absolutePath, token, async lockToken => {
@@ -334,11 +362,13 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         current.relativePath,
                         'editor',
                         requestedMode,
-                        getSessionMode(runningSession));
+                        getSessionMode(runningSession),
+                        undefined,
+                        isolated);
                 }
 
                 if (this._dependencies.launchService.isLaunching(current.absolutePath) || owned.sessions.length > 0) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined);
+                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
                 }
 
                 if (owned.ambiguous) {
@@ -346,13 +376,13 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                     // for example a sibling project file and a `Program.cs` in a directory
                     // holding several projects. Launching would risk a second process for
                     // an AppHost that is already running, so refuse instead of guessing.
-                    return createResult(aspireAppHostStartToolName, 'ambiguousSession', current.relativePath, 'editor', requestedMode, undefined);
+                    return createResult(aspireAppHostStartToolName, 'ambiguousSession', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
                 }
 
                 // Authoritative ownership check immediately before launching. This is the
                 // one that matters: everything before it could be stale by now.
                 if (await this.isRunningOutsideEditor(current.absolutePath, lockToken)) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyRunning', current.relativePath, 'external', requestedMode, undefined);
+                    return createResult(aspireAppHostStartToolName, 'alreadyRunning', current.relativePath, 'external', requestedMode, undefined, undefined, isolated);
                 }
 
                 // Claim the launching slot in one synchronous step. The lifecycle lock only
@@ -360,7 +390,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 // `startDebugging` without it, so this claim - not the checks above - is
                 // what makes "no second AppHost" hold against a concurrent editor launch.
                 if (!this._dependencies.launchService.tryReserveLaunch(current.absolutePath)) {
-                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined);
+                    return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined, undefined, isolated);
                 }
 
                 try {
@@ -370,6 +400,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         current.absolutePath,
                         'run',
                         requestedMode === 'run',
+                        isolated,
                         lockToken);
                 }
                 catch (error) {
@@ -377,14 +408,14 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                     // failure before that point (a disposed service, for example) would
                     // otherwise leave this AppHost reported as launching forever.
                     this._dependencies.launchService.clearLaunching(current.absolutePath);
-                    return this.createErrorResult(aspireAppHostStartToolName, error, current.relativePath, 'editor', requestedMode, undefined);
+                    return this.createErrorResult(aspireAppHostStartToolName, error, current.relativePath, 'editor', requestedMode, undefined, isolated);
                 }
 
-                return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode);
+                return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, isolated);
             });
         }
         catch (error) {
-            return this.createErrorResult(aspireAppHostStartToolName, error, preflight.target.relativePath, 'editor', requestedMode, undefined);
+            return this.createErrorResult(aspireAppHostStartToolName, error, preflight.target.relativePath, 'editor', requestedMode, undefined, isolated);
         }
     }
 
@@ -640,20 +671,21 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         controller: AppHostLifecycleController,
         requestedMode: AppHostLifecycleMode | undefined,
         effectiveMode: AppHostLifecycleMode | undefined,
+        isolated?: boolean,
     ): AppHostLifecycleToolResult {
         if (isCommandCancellation(error)) {
-            return createResult(tool, 'cancelled', relativePath, controller, requestedMode, effectiveMode);
+            return createResult(tool, 'cancelled', relativePath, controller, requestedMode, effectiveMode, undefined, isolated);
         }
 
         if (error instanceof AppHostLifecycleLockTimeoutError) {
-            return createResult(tool, 'busy', relativePath, controller, requestedMode, effectiveMode);
+            return createResult(tool, 'busy', relativePath, controller, requestedMode, effectiveMode, undefined, isolated);
         }
 
         // Failure details stay in the extension log. They routinely contain absolute
         // paths, CLI stderr, and DCP/RPC connection details, none of which may cross
         // back into the model transcript.
         extensionLogOutputChannel.error(`Aspire language model tool ${tool} failed: ${String(error)}`);
-        return createResult(tool, 'failed', relativePath, controller, requestedMode, effectiveMode);
+        return createResult(tool, 'failed', relativePath, controller, requestedMode, effectiveMode, undefined, isolated);
     }
 
 }
@@ -668,11 +700,14 @@ export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<A
     async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<AppHostStartToolInput>, token: vscode.CancellationToken): Promise<vscode.PreparedToolInvocation> {
         const displayPath = escapeMarkdown(await this._service.describeTarget(options.input?.appHostPath, token));
         const displayMode = describeRequestedMode(options.input?.mode);
+        const isolated = await this._service.describeEffectiveIsolated(options.input, token);
         return {
             invocationMessage: appHostLifecycleStartInvocationMessage(displayPath),
             confirmationMessages: {
                 title: appHostLifecycleStartConfirmationTitle,
-                message: appHostLifecycleStartConfirmationMessage(displayPath, displayMode),
+                message: isolated
+                    ? appHostLifecycleStartConfirmationMessageIsolated(displayPath, displayMode)
+                    : appHostLifecycleStartConfirmationMessage(displayPath, displayMode),
             },
         };
     }
@@ -765,6 +800,7 @@ function createResult(
     requestedMode: AppHostLifecycleMode | undefined,
     effectiveMode: AppHostLifecycleMode | undefined,
     knownAppHosts?: readonly string[],
+    isolated?: boolean,
 ): AppHostLifecycleToolResult {
     const result: AppHostLifecycleToolResult = { tool, outcome, appHostPath, controller };
     if (requestedMode) {
@@ -779,6 +815,10 @@ function createResult(
         result.knownAppHosts = knownAppHosts;
     }
 
+    if (tool === aspireAppHostStartToolName) {
+        result.isolated = isolated ?? false;
+    }
+
     return result;
 }
 
@@ -787,9 +827,13 @@ function parseMode(value: unknown): AppHostLifecycleMode | undefined {
 }
 
 function isValidStartInput(value: unknown): value is AppHostStartToolInput {
-    return hasOnlyProperties(value, ['appHostPath', 'mode']) &&
-        typeof value.appHostPath === 'string' &&
-        parseMode(value.mode) !== undefined;
+    if (!hasOnlyProperties(value, ['appHostPath', 'mode'], ['isolated']) ||
+        typeof value.appHostPath !== 'string' ||
+        parseMode(value.mode) === undefined) {
+        return false;
+    }
+
+    return !('isolated' in value) || typeof value.isolated === 'boolean';
 }
 
 function isValidStopInput(value: unknown): value is AppHostStopToolInput {
@@ -797,14 +841,15 @@ function isValidStopInput(value: unknown): value is AppHostStopToolInput {
         typeof value.appHostPath === 'string';
 }
 
-function hasOnlyProperties<T extends string>(value: unknown, properties: readonly T[]): value is Record<T, unknown> {
+function hasOnlyProperties<T extends string>(value: unknown, properties: readonly T[], optional: readonly string[] = []): value is Record<T, unknown> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return false;
     }
 
+    const allowed = new Set([...properties, ...optional]);
     const actualProperties = Object.keys(value);
-    return actualProperties.length === properties.length &&
-        properties.every(property => Object.prototype.hasOwnProperty.call(value, property));
+    return properties.every(property => Object.prototype.hasOwnProperty.call(value, property)) &&
+        actualProperties.every(property => allowed.has(property));
 }
 
 function describeRequestedMode(value: unknown): string {

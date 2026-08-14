@@ -54,6 +54,9 @@ function createAppHostDirectory(...entries: readonly string[]): string {
     const fixtureRoot = path.resolve(__dirname, '..', '..', '.test-workspace', 'launch-service');
     const directory = path.join(fixtureRoot, `apphost-${crypto.randomBytes(6).toString('hex')}`);
     fs.mkdirSync(directory, { recursive: true });
+    // Stop the ancestor walk so a checkout that is itself a linked worktree
+    // does not make every launch() infer --isolated.
+    fs.mkdirSync(path.join(directory, '.git'));
     for (const entry of entries) {
         fs.writeFileSync(path.join(directory, entry), '');
     }
@@ -135,10 +138,34 @@ suite('AppHostLaunchService', () => {
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
 
-        await service.launchFromLifecycleOwner(appHostPath, 'run', true, new vscode.CancellationTokenSource().token);
+        await service.launchFromLifecycleOwner(appHostPath, 'run', true, false, new vscode.CancellationTokenSource().token);
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'explicit-launch-configuration');
+        assert.strictEqual(config.args, undefined);
+    });
+
+    test('lifecycle-owned launch forwards --isolated', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        await service.launchFromLifecycleOwner(appHostPath, 'run', true, true, new vscode.CancellationTokenSource().token);
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('launch infers --isolated from a linked worktree AppHost path', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        fs.writeFileSync(
+            path.join(directory, '.git'),
+            `gitdir: ${path.join(directory, '.git', 'worktrees', 'feature')}\n`);
+
+        await service.launch(path.join(directory, 'AppHost.csproj'), 'run', true);
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.deepStrictEqual(config.args, ['--isolated']);
     });
 
     test('launch includes step when doStep is provided', async () => {

@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Git;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
@@ -80,6 +81,21 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
+    /// Resolves whether the AppHost should run isolated. An explicit <c>--isolated</c>
+    /// wins; otherwise a linked git worktree infers isolated mode so it does not collide
+    /// with the primary checkout on ports or user secrets.
+    /// </summary>
+    internal static bool ResolveIsolated(ParseResult parseResult, string? startPath)
+    {
+        if (parseResult.GetResult(s_isolatedOption) is { Implicit: false })
+        {
+            return parseResult.GetValue(s_isolatedOption);
+        }
+
+        return GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null;
+    }
+
+    /// <summary>
     /// Launches an AppHost in detached mode, waits for the backchannel, and displays the result.
     /// </summary>
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
@@ -133,6 +149,13 @@ internal sealed class AppHostLauncher(
         }
 
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
+
+        // Re-evaluate against the resolved AppHost so `--apphost` in a linked worktree
+        // isolates even when the CLI was invoked from the primary checkout.
+        if (!isolated)
+        {
+            isolated = GitWorktree.TryGetLinkedWorktreeRoot(effectiveAppHostFile.FullName) is not null;
+        }
 
         // Check for running instance and stop it if found (same behavior as regular run)
         await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);

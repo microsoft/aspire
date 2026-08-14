@@ -61,4 +61,53 @@ public class AuxiliaryBackchannelMonitorTests
         Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(null, Path.GetTempPath()));
         Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(string.Empty, Path.GetTempPath()));
     }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_NestedLinkedWorktree_IsNotInScopeOfPrimary()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-worktree-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+            File.WriteAllText(
+                Path.Combine(worktreeRoot, ".git"),
+                $"gitdir: {Path.Combine(primaryRoot, ".git", "worktrees", "feature")}\n");
+
+            var primaryAppHost = Path.Combine(primaryRoot, "AppHost.csproj");
+            var nestedAppHost = Path.Combine(worktreeRoot, "AppHost.csproj");
+
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, primaryRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, primaryRoot));
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, worktreeRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, worktreeRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_Submodule_IsInScopeOfPrimary()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-submodule-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var submoduleRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, "extern", "dep")).FullName;
+            File.WriteAllText(
+                Path.Combine(submoduleRoot, ".git"),
+                $"gitdir: {Path.Combine(primaryRoot, ".git", "modules", "dep")}\n");
+
+            var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, primaryRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
 }

@@ -442,6 +442,88 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.True(detachedLauncherCalled);
     }
 
+    [Fact]
+    public void ResolveIsolated_LinkedWorktree_InfersIsolated()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".git"),
+            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
+    }
+
+    [Fact]
+    public void ResolveIsolated_PrimaryCheckout_DoesNotInferIsolated()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
+    }
+
+    [Fact]
+    public async Task StartCommand_WhenRunningInExtensionFromLinkedWorktree_StartsIsolatedSession()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".git"),
+            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+        var appHostFile = CreateAppHostFile(workspace);
+
+        DebugSessionOptions? options = null;
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ProjectLocatorFactory = _ => projectLocator;
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: false);
+            };
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) =>
+                {
+                    options = debugSessionOptions;
+                };
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"start --apphost {appHostFile.FullName}");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.NotNull(options.Args);
+        Assert.Contains("--isolated", options.Args);
+    }
+
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)
     {
         var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");

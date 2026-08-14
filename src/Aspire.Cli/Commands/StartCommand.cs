@@ -45,7 +45,9 @@ internal sealed class StartCommand : BaseCommand
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var isolated = AppHostLauncher.ResolveIsolated(
+            parseResult,
+            passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the

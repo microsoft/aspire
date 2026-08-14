@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration, AspireOperationKind, type AspireResourceDebugSession } from '../dcp/types';
 import { appHostLifecycleBusy, startDebuggingDeclined } from '../loc/strings';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
+import { ensureIsolatedCliArg, resolveIsolated } from '../utils/gitWorktree';
 import { compareAppHostIdentity, getAppHostIdentityKeyInfo, getAppHostPathComparisonKey, isAppHostPathWithinDirectory, type AppHostIdentityKeyInfo, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { bucketAspireCommand } from '../utils/telemetryBuckets';
@@ -909,7 +910,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                     throw new vscode.CancellationError();
                 }
 
-                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken);
+                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, resolveIsolated(undefined, appHostPath));
             });
         }
         catch (error) {
@@ -918,7 +919,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
     }
 
-    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, token: vscode.CancellationToken): Promise<void> {
+    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean, token: vscode.CancellationToken): Promise<void> {
         if (this._disposed) {
             throw new vscode.CancellationError();
         }
@@ -927,7 +928,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // establish a missing default, but must not replace an existing workspace choice.
         const launchToken = this.trackPendingRun(appHostPath, command);
         try {
-            await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token);
+            await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token, isolated);
         }
         catch (error) {
             this._pendingRunPathByToken.delete(launchToken);
@@ -943,6 +944,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         selectionOrigin: AppHostSelectionOrigin,
         launchToken: number,
         token: vscode.CancellationToken,
+        isolated: boolean,
     ): Promise<void> {
         // Reserve before the first await. The awaits below (telemetry, the CLI gate) run
         // before `startDebugging`, so reserving later would leave a window in which a
@@ -999,6 +1001,10 @@ export class AppHostLaunchService implements vscode.Disposable {
             [appHostSelectionOriginConfigKey]: selectionOrigin,
             [appHostLaunchTokenConfigKey]: launchToken,
         };
+        const isolatedArgs = ensureIsolatedCliArg(config.args, isolated);
+        if (isolatedArgs) {
+            config.args = isolatedArgs;
+        }
         config[appHostLaunchReservationIdConfigKey] = reservationId;
         markAspireDebugConfigurationAsExtensionOwned(config);
 

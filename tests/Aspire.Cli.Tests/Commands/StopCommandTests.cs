@@ -219,6 +219,58 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_WithoutAppHost_DoesNotStopNestedLinkedWorktreeInstance()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".git"));
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".worktrees", "feature")).FullName;
+        File.WriteAllText(
+            Path.Combine(worktreeRoot, ".git"),
+            $"gitdir: {Path.Combine(workspace.WorkspaceRoot.FullName, ".git", "worktrees", "feature")}\n");
+
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var primaryAppHost = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
+        var nestedAppHost = Path.Combine(worktreeRoot, "AppHost.csproj");
+        Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, workspace.WorkspaceRoot.FullName));
+        Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, workspace.WorkspaceRoot.FullName));
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var primaryConnection = CreateConnection(
+            primaryAppHost,
+            int.MaxValue - 7,
+            isInScope: AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, workspace.WorkspaceRoot.FullName));
+        primaryConnection.SocketPath = CreateMatchingSocketFile(primaryAppHost, workspace, 7);
+        var nestedConnection = CreateConnection(
+            nestedAppHost,
+            int.MaxValue - 8,
+            isInScope: AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, workspace.WorkspaceRoot.FullName));
+        nestedConnection.SocketPath = CreateMatchingSocketFile(nestedAppHost, workspace, 8);
+        monitor.AddConnection("hash1", primaryConnection.SocketPath, primaryConnection);
+        monitor.AddConnection("hash2", nestedConnection.SocketPath, nestedConnection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var expectedPath = Path.Combine("AppHost", "AppHost.csproj");
+        Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
+        Assert.DoesNotContain(GetDisplayedText(interactionService, statusMessages), message => message.Contains(".worktrees", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task StopCommand_WithExplicitAppHostFileDoesNotUseProjectLocatorBeforeSocketLookup()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
