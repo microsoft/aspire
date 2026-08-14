@@ -7,7 +7,7 @@ import {
     resourceCommandDynamicInputsFailed,
     resourceCommandLoadingDynamicInputs,
 } from '../loc/strings';
-import { ResourceCommandArgumentInputJson } from './AppHostDataRepository';
+import { ResourceCommandArgumentInputJson } from '../data/AppHostDataRepository';
 import {
     buildResourceCommandCliArgs,
     ResourceCommandArgumentLoader,

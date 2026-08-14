@@ -2,7 +2,7 @@ import { AspireExtensionContext } from './AspireExtensionContext';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
 import type { AspireAppHostState, AspireExtensionStateSnapshot, AspireResourceCommandState, AspireResourceState, AspireResourceUrlState } from './types/extensionApi';
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
+import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './data/AppHostDataRepository';
 import { isSamePath } from './utils/paths/comparison';
 import { stripResourceSuffix } from './utils/urlSchemes';
 

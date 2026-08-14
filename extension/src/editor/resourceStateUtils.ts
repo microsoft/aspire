@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import * as path from 'path';
-import { ResourceJson, AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { ResourceJson, AppHostDisplayInfo } from '../data/AppHostDataRepository';
 import { getComparisonKey } from '../utils/paths/comparison';
 
 export interface ResourceMatch {

@@ -8,7 +8,7 @@ import waitForExpect from 'wait-for-expect';
 import { AspireGutterDecorationProvider, classifyState } from '../editor/AspireGutterDecorationProvider';
 import { ResourceState } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
+import { AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 
 function p(...segments: string[]): string {
     return path.join(path.sep, ...segments);

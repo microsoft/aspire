@@ -30,7 +30,7 @@ import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvide
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { installCliCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository, isMatchingAppHostPath } from './views/AppHostDataRepository';
+import { AppHostDataRepository, isMatchingAppHostPath } from './data/AppHostDataRepository';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
@@ -40,7 +40,7 @@ import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
 import { executeResourceCommand } from './views/resourceCommandExecution';
-import { ResourceCommandJson } from './views/AppHostDataRepository';
+import { ResourceCommandJson } from './data/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { ConfigInfoProvider } from './utils/configInfoProvider';
 import { AppHostLaunchService } from './services/AppHostLaunchService';

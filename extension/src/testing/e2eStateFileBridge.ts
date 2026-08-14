@@ -18,7 +18,7 @@ import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotifi
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
 

@@ -8,7 +8,7 @@ import { ConfigInfoProvider, getConfigInfo, parseConfigInfoOutput } from '../uti
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 
 suite('configInfoProvider tests', () => {

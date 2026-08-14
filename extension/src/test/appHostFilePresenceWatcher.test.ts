@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AppHostFilePresenceWatcher } from '../editor/AppHostFilePresenceWatcher';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../debugger/languages/cli';
 // Import parsers so they self-register before the watcher consults them.

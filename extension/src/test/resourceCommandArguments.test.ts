@@ -13,7 +13,7 @@ import {
     ResourceCommandArgumentValue,
 } from '../views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from '../views/ResourceCommandArgumentsLoader';
-import { ResourceCommandArgumentInputJson } from '../views/AppHostDataRepository';
+import { ResourceCommandArgumentInputJson } from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): ResourceCommandArgumentInputJson {

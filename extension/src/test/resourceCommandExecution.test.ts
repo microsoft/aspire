@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { executeResourceCommand, ResourceCommandRunner } from '../views/resourceCommandExecution';
-import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../views/AppHostDataRepository';
+import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('executeResourceCommand', () => {

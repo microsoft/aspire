@@ -5,7 +5,7 @@ import {
     AspireCliFailedError,
     AspireCliNotInstalledError,
     filterResourceCommandStatusOutput,
-} from './AppHostDataRepository';
+} from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 import {
     resourceCommandCliNotInstalled,

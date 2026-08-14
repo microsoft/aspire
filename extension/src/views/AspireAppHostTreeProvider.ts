@@ -53,7 +53,7 @@ import {
     isMatchingAppHostPath,
     shortenPaths,
     ResourceCommandJson,
-} from './AppHostDataRepository';
+} from '../data/AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { executeResourceCommand as executeResourceCommandWithUi, getErrorMessage, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';

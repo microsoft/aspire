@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
-import type { ViewMode } from '../views/AppHostDataRepository';
+import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
 import type { AppHostLaunchRequestedEvent } from '../services/AppHostLaunchService';
