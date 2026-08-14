@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dark-mode primary action buttons previously used a lighter lavender fill than dashboard hyperlinks. Buttons and hyperlinks now share the same accent color in dark mode, keeping primary actions visually consistent with the established accent styling.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-08-13T23:05:50Z",
+  "lastMergedAt": "2026-08-13T23:05:50Z",
+  "name": "Matched dark-mode accent buttons to hyperlinks",
+  "owner": "JamesNK",
+  "prs": [
+    19332
+  ]
+}

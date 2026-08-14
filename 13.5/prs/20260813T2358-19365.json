@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backport of #15634: TypeScript AppHost now trusts the Aspire dev certificate for TLS connections.",
+  "mergedAt": "2026-08-13T23:58:42Z",
+  "number": 19365,
+  "runDate": "2026-08-14T00:17:28Z",
+  "status": "included",
+  "title": "[release/13.5] Ensure the typescript app host trusts the dev cert"
+}

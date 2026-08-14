@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Backport of #17811: internal signing infrastructure change for template JS files, no user-facing impact.",
+  "mergedAt": "2026-08-13T21:26:25Z",
+  "number": 19360,
+  "runDate": "2026-08-14T00:17:28Z",
+  "status": "excluded",
+  "title": "[release/13.5] Use catalog signing for template JS files instead of Authenticode"
+}

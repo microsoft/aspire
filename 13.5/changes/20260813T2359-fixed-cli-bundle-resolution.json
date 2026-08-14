@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fresh Aspire CLI installations with `AspireUseCliBundle=true` could fail to build or launch because the embedded CLI bundle hadn't been extracted yet, leaving the AppHost without DCP or dashboard metadata. AppHost builds and installers now ensure the bundle is resolved before launch, and setup failures now produce actionable diagnostics instead of a metadata-free AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-08-13T23:59:34Z",
+  "lastMergedAt": "2026-08-13T23:59:34Z",
+  "name": "Fixed Aspire CLI bundle resolution on fresh installs",
+  "owner": "karolz-ms",
+  "prs": [
+    19364
+  ]
+}

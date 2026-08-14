@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "TypeScript AppHosts could not validate Aspire-managed development certificates when opening TLS connections to resources in run mode. The trusted development certificate is now exported into a content-addressed PEM cache and wired into the TypeScript runtime's certificate bundle, preserving any existing `NODE_EXTRA_CA_CERTS` value.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-08-13T23:58:42Z",
+  "lastMergedAt": "2026-08-13T23:58:42Z",
+  "name": "TypeScript AppHost trusts the dev certificate",
+  "owner": "danegsta",
+  "prs": [
+    19365
+  ]
+}

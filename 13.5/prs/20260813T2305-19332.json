@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19268: dashboard dark-mode accent color fix for primary buttons.",
+  "mergedAt": "2026-08-13T23:05:50Z",
+  "number": 19332,
+  "runDate": "2026-08-14T00:17:28Z",
+  "status": "included",
+  "title": "[release/13.5] Match dark accent buttons to hyperlinks"
+}

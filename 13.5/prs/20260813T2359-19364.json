@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #19251: fixes Aspire CLI bundle resolution on fresh installations.",
+  "mergedAt": "2026-08-13T23:59:34Z",
+  "number": 19364,
+  "runDate": "2026-08-14T00:17:28Z",
+  "status": "included",
+  "title": "[release/13.5] Ensure Aspire CLI bundle resolution"
+}
