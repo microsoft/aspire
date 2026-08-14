@@ -604,6 +604,9 @@
     <trans-unit id="command.restore">
       <source xml:lang="en">Restore packages</source>
     </trans-unit>
+    <trans-unit id="command.codeLensRevealAppHost">
+      <source xml:lang="en">Reveal AppHost in Aspire panel</source>
+    </trans-unit>
     <trans-unit id="command.codeLensRevealResource">
       <source xml:lang="en">Reveal resource in Aspire panel</source>
     </trans-unit>
@@ -636,6 +639,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustLabel">
       <source xml:lang="en">Rust</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDebuggerExtensionNotInstalled">
+      <source xml:lang="en">Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustDisplayName">
       <source xml:lang="en">Rust: {0}</source>

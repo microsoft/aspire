@@ -530,6 +530,11 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.codeLensRevealAppHost",
+        "title": "%command.codeLensRevealAppHost%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.codeLensOpenDashboard",
         "title": "%command.codeLensOpenDashboard%",
         "category": "Aspire"
@@ -676,6 +681,10 @@
         },
         {
           "command": "aspire-vscode.codeLensRevealResource",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.codeLensRevealAppHost",
           "when": "false"
         },
         {

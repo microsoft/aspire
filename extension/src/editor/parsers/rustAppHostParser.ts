@@ -166,8 +166,17 @@ function isCreateBuilderCall(call: TreeSitterNode): boolean {
 }
 
 function getCallMemberAccess(call: TreeSitterNode): TreeSitterNode | undefined {
+    // A turbofish such as `builder.add_project::<Frontend>("web")` parses as
+    //   call_expression -> function: generic_function -> function: field_expression + type_arguments
+    // so the member access has to be unwrapped from the generic_function before the `add_*` field
+    // name can be read. Plain `builder.add_redis("cache")` calls have the field_expression directly.
+    // See the `generic_function` rule in https://github.com/tree-sitter/tree-sitter-rust/blob/master/grammar.js.
     const functionNode = call.childForFieldName('function');
-    return functionNode?.type === 'field_expression' ? functionNode : undefined;
+    const memberAccess = functionNode?.type === 'generic_function'
+        ? functionNode.childForFieldName('function')
+        : functionNode;
+
+    return memberAccess?.type === 'field_expression' ? memberAccess : undefined;
 }
 
 function getFirstArgument(call: TreeSitterNode): TreeSitterNode | undefined {

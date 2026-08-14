@@ -2117,6 +2117,51 @@ suite('RustAppHostParser', () => {
 
         assert.deepStrictEqual(await parser.parseResources(doc), []);
     });
+
+    test('parses turbofished add_* calls', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                'fn main() {',
+                '    let builder = create_builder(None)?;',
+                '    let web = builder.add_project::<Frontend>("web")?;',
+                '    let api = builder.add_container::<Api, ApiOptions>("api")?',
+                '        .with_data_volume(None)?;',
+                '    builder.add_step::<Publish>("publish")?;',
+                '}',
+            ].join('\n'),
+            '/test/apphost.rs'
+        );
+
+        const resources = await parser.parseResources(doc);
+
+        assert.deepStrictEqual(
+            resources.map(({ name, methodName, kind, statementStartLine }) => ({ name, methodName, kind, statementStartLine })),
+            [
+                { name: 'web', methodName: 'add_project', kind: 'resource', statementStartLine: 2 },
+                { name: 'api', methodName: 'add_container', kind: 'resource', statementStartLine: 3 },
+                { name: 'publish', methodName: 'add_step', kind: 'pipelineStep', statementStartLine: 5 },
+            ]
+        );
+        assert.strictEqual(resources[0].range.start.line, 2);
+        assert.strictEqual(resources[0].range.end.line, 2);
+        assert.strictEqual(resources[0].range.start.character, '    let web = builder'.length);
+    });
+
+    test('ignores turbofished add_* calls without a receiver', async () => {
+        const parser = getRustParser();
+        const doc = createMockDocument(
+            [
+                'fn main() {',
+                '    let web = add_project::<Frontend>("web")?;',
+                '    let api = aspire::add_container::<Api>("api")?;',
+                '}',
+            ].join('\n'),
+            '/test/apphost.rs'
+        );
+
+        assert.deepStrictEqual(await parser.parseResources(doc), []);
+    });
 });
 
 // ============================================================
