@@ -134,7 +134,7 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'user-selection');
     });
 
-    test('lifecycle-owned launch does not replace an existing workspace default', async () => {
+    test('lifecycle-owned launch forwards explicit isolation false', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
 
@@ -142,7 +142,7 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'explicit-launch-configuration');
-        assert.strictEqual(config.args, undefined);
+        assert.deepStrictEqual(config.args, ['--isolated', 'false']);
     });
 
     test('lifecycle-owned launch forwards --isolated', async () => {
@@ -166,6 +166,27 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('launch does not infer --isolated for non-run commands in a linked worktree', async () => {
+        const directory = createAppHostDirectory('Deploy.csproj', 'Publish.csproj', 'Do.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        fs.writeFileSync(
+            path.join(directory, '.git'),
+            `gitdir: ${path.join(directory, '.git', 'worktrees', 'feature')}\n`);
+
+        await service.launch(path.join(directory, 'Deploy.csproj'), 'deploy', true);
+        await service.launch(path.join(directory, 'Publish.csproj'), 'publish', true);
+        await service.launch(path.join(directory, 'Do.csproj'), 'do', true, 'deploy');
+
+        const configs = startDebuggingStub.getCalls()
+            .map(call => call.args[1] as AspireExtendedDebugConfiguration)
+            .map(config => ({ command: config.command, args: config.args, step: config.step }));
+        assert.deepStrictEqual(configs, [
+            { command: 'deploy', args: undefined, step: undefined },
+            { command: 'publish', args: undefined, step: undefined },
+            { command: 'do', args: undefined, step: 'deploy' },
+        ]);
     });
 
     test('launch includes step when doStep is provided', async () => {

@@ -910,7 +910,8 @@ export class AppHostLaunchService implements vscode.Disposable {
                     throw new vscode.CancellationError();
                 }
 
-                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, resolveIsolated(undefined, appHostPath));
+                const isolated = command === 'run' ? resolveIsolated(undefined, appHostPath) : undefined;
+                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, isolated);
             });
         }
         catch (error) {
@@ -944,7 +945,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         selectionOrigin: AppHostSelectionOrigin,
         launchToken: number,
         token: vscode.CancellationToken,
-        isolated: boolean,
+        isolated: boolean | undefined,
     ): Promise<void> {
         // Reserve before the first await. The awaits below (telemetry, the CLI gate) run
         // before `startDebugging`, so reserving later would leave a window in which a

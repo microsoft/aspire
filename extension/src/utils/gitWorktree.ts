@@ -50,23 +50,24 @@ export function resolveIsolated(explicit: boolean | undefined, startPath: string
     return explicit ?? isLinkedGitWorktree(startPath);
 }
 
-export function ensureIsolatedCliArg(args: string[] | undefined, isolated: boolean): string[] | undefined {
-    if (!isolated) {
+export function ensureIsolatedCliArg(args: string[] | undefined, isolated: boolean | undefined): string[] | undefined {
+    if (isolated === undefined) {
         return args;
     }
 
     const existing = args ?? [];
     const separatorIndex = existing.indexOf('--');
     const beforeSeparator = separatorIndex === -1 ? existing : existing.slice(0, separatorIndex);
-    if (beforeSeparator.includes('--isolated')) {
+    if (beforeSeparator.some(arg => arg === '--isolated' || arg.startsWith('--isolated='))) {
         return args;
     }
 
+    const isolationArgs = isolated ? ['--isolated'] : ['--isolated', 'false'];
     if (separatorIndex === -1) {
-        return [...existing, '--isolated'];
+        return [...existing, ...isolationArgs];
     }
 
-    return [...beforeSeparator, '--isolated', ...existing.slice(separatorIndex)];
+    return [...beforeSeparator, ...isolationArgs, ...existing.slice(separatorIndex)];
 }
 
 function getWalkStartDirectory(startPath: string): string {
