@@ -5,6 +5,10 @@ namespace Aspire.Hosting.Azure.Sandboxes.Provisioning;
 
 internal static class SandboxesResourceVersions
 {
+    // Connector Namespace is the product name, while the preview ARM contract retains
+    // the Microsoft.Web/connectorGateways resource type.
+    // https://learn.microsoft.com/azure/connector-namespace/connector-namespace-overview
+    public const string ConnectorGateway = "2026-05-01-preview";
 
     public const string SandboxGroup = "2026-02-01-preview";
 }
