@@ -70,6 +70,14 @@ internal sealed class RustLanguageSupport : ILanguageSupport
             serde = { version = "1.0", features = ["derive"] }
             serde_json = "1.0"
             lazy_static = "1.4"
+
+            # The generated SDK under .aspire/modules is large, and incremental compilation splits it into
+            # thousands of codegen units. On macOS debug info stays in those object files, because
+            # split-debuginfo defaults to "unpacked", so LLDB has to stitch a debug map across all of them
+            # and fails to resolve any type whose definition landed in a different unit. Compiling the
+            # AppHost in one pass keeps the debugger working and is not measurably slower.
+            [profile.dev]
+            incremental = false
             """;
 
         // Create apphost.run.json with random ports
