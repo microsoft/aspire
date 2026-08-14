@@ -96,14 +96,31 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
             TimeSpan.FromMinutes(2));
 
         await auto.RunCommandAsync("test -f SourceOverrideServiceDefaults/SourceOverrideServiceDefaults.csproj", counter);
+
+        // A local `--source` directory is enumerated directly rather than queried through a feed, so
+        // the observable evidence is the install itself: it runs from a source-scoped temporary
+        // NuGet.config directory and points `dotnet new install` at the .nupkg copied into
+        // source-feed. Logged lines look like:
+        //   Running dotnet in /tmp/aspire-nuget-configABC123 with args: new install /workspace/.../source-feed/Aspire.ProjectTemplates.13.0.0-preview.1.nupkg
+        // Match the argument list instead of the randomly-suffixed temp directory.
+        //
+        // The negative guard has to name the search path this CLI would actually take. Shipped (and
+        // CI-installed) CLIs are bundles, so a feed-backed template lookup goes through
+        // BundleNuGetPackageCache -> `aspire-managed nuget search`, which logs:
+        //   Running NuGet search via aspire-managed: Aspire.ProjectTemplates
+        //   NuGet search args: nuget search --query Aspire.ProjectTemplates --take 1000 --format json ...
+        // Those two Debug lines are the only trace of it, because the helper process itself is spawned
+        // with SuppressLogging (as is the SDK-backed `dotnet package search` fallback), so asserting on
+        // a logged `package search` command line can never fail and would not catch a regression.
+        // Because the positive assertion above matches a Debug line from the same log, an empty or
+        // level-filtered log cannot make these negative assertions pass vacuously.
         await auto.RunCommandAsync(
             "test ! -e /tmp/unexpected-nuget-source-contacted && " +
             "find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
             "grep -R -F \"Resolved 'staging' channel\" \"$HOME/.aspire/logs\" && " +
-            "grep -R -F -- '--nuget-config /tmp/aspire-nuget-config' \"$HOME/.aspire/logs\" && " +
-            "grep -R -F 'Searching 1 source(s)' \"$HOME/.aspire/logs\" && " +
-            "grep -R -F 'Running dotnet in /tmp/aspire-nuget-config' \"$HOME/.aspire/logs\" && " +
-            "grep -R -F 'source-feed' \"$HOME/.aspire/logs\" && " +
+            "grep -R -E 'Running dotnet in .*aspire-nuget-config.* with args: new install [^ ]*/source-feed/Aspire\\.ProjectTemplates\\.[^ ]*\\.nupkg' \"$HOME/.aspire/logs\" && " +
+            "! grep -R -E -- 'Running NuGet search via aspire-managed: Aspire\\.ProjectTemplates|NuGet search args: nuget search --query Aspire\\.ProjectTemplates' \"$HOME/.aspire/logs\" && " +
+            "! grep -R -F -- '--nuget-source' \"$HOME/.aspire/logs\" && " +
             "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
             counter);
     }
