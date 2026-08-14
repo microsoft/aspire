@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils;
+
 namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
@@ -53,5 +55,45 @@ internal static class PackageSourceOverrideMappings
             (!string.IsNullOrEmpty(uri.UserInfo) ||
                 !string.IsNullOrEmpty(uri.Query) ||
                 !string.IsNullOrEmpty(uri.Fragment));
+    }
+
+    public static string? GetNormalizedLocalDirectory(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return null;
+        }
+
+        var trimmedSource = source.Trim();
+        if (UrlHelper.IsHttpUrl(trimmedSource))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri))
+            {
+                return uri.IsFile ? Path.GetFullPath(uri.LocalPath) : null;
+            }
+
+            return Path.GetFullPath(trimmedSource);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (PathTooLongException)
+        {
+            return null;
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
     }
 }
