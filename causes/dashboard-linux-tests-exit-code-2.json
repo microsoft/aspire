@@ -1,0 +1,16 @@
+{
+  "id": "dashboard-linux-tests-exit-code-2",
+  "type": "flaky-test",
+  "title": "Dashboard (ubuntu-latest) test run fails with exit code 2, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 2. (Run tests (Linux/macOS) step failed; detailed job logs unavailable)",
+  "occurrences": [
+    {
+      "run_id": 31762325235,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/31762325235",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "pr_number": 19371,
+      "observed_at": "2026-08-14T03:43:25Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19379"
+}

@@ -1,0 +1,38 @@
+{
+  "run_id": 31762325235,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/31762325235",
+  "analyzed_at": "2026-08-14T03:43:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19371,
+    "title": "Fix template catalog member paths",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-investigate-template-regression",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19371"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 94655671326,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31762325235/job/94655671326",
+      "classification": "flaky-test",
+      "reason": "Failed at 'Run tests (Linux/macOS)' step with exit code 2. Detailed job logs were unavailable for this analysis, but the PR only modifies eng/generate-catalog.ps1 (a template catalog generation script), which has no relation to the Dashboard test suite. The failure is therefore unrelated to this PR's changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "id": 94657019965,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/31762325235/job/94657019965",
+      "classification": "flaky-test",
+      "reason": "Failed at 'Run extension E2E tests' step with exit code 1. Detailed job logs were unavailable for this analysis, but the PR only modifies eng/generate-catalog.ps1, unrelated to the VS Code extension or its E2E test infrastructure. Prior causes show this apphost-lifecycle-tools/Windows E2E shard and related VS Code extension E2E shards have a known history of flakiness.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["dashboard-linux-tests-exit-code-2", "vscode-e2e-apphost-lifecycle-tools-windows-flaky"]
+}
