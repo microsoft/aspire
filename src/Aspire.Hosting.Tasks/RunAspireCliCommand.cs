@@ -57,6 +57,8 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     [Output]
     public string? FailureMessage { get; set; }
 
+    internal Func<Process, int, bool> WaitForExit { get; set; } = static (process, milliseconds) => process.WaitForExit(milliseconds);
+
     public override bool Execute()
     {
         if (string.IsNullOrWhiteSpace(FileName))
@@ -95,7 +97,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
 
-        if (!process.WaitForExit(TimeoutMilliseconds))
+        if (!WaitForExit(process, TimeoutMilliseconds))
         {
             TimedOut = true;
             if (!TerminateProcess(process))
@@ -105,7 +107,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
 
             // Process termination is asynchronous. Bound the follow-up wait so an unresponsive
             // process cannot turn the command timeout into an indefinitely hung MSBuild invocation.
-            if (!process.WaitForExit(ProcessTerminationTimeoutMilliseconds))
+            if (!WaitForExit(process, ProcessTerminationTimeoutMilliseconds))
             {
                 FailureMessage ??= $"The timed-out command '{FileName}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
                 return true;

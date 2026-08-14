@@ -4,9 +4,11 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Security;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Aspire.Hosting.Tasks;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -847,6 +849,46 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void RunAspireCliCommandReportsWhenProcessDoesNotExitAfterTermination()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var commandPath = Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "hang.cmd" : "hang");
+        File.WriteAllText(
+            commandPath,
+            OperatingSystem.IsWindows()
+                ? "@echo off\r\n:loop\r\ngoto loop\r\n"
+                : "#!/bin/sh\nwhile :; do :; done\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        static Assembly? ResolveMicrosoftBuildFramework(AssemblyLoadContext _, AssemblyName assemblyName)
+        {
+            return assemblyName.Name == "Microsoft.Build.Framework"
+                ? Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Microsoft.Build.Framework.dll"))
+                : null;
+        }
+
+        AssemblyLoadContext.Default.Resolving += ResolveMicrosoftBuildFramework;
+        try
+        {
+            var (result, elapsed, waitTimeouts, failureMessage) = ExecuteRunAspireCliCommand(commandPath);
+
+            Assert.True(result);
+            Assert.True(elapsed < TimeSpan.FromSeconds(5), $"Execute took {elapsed}.");
+            Assert.Equal([1, 5_000], waitTimeouts);
+            Assert.Equal(
+                $"The timed-out command '{commandPath}' did not exit within 5000 milliseconds after termination was requested.",
+                failureMessage);
+        }
+        finally
+        {
+            AssemblyLoadContext.Default.Resolving -= ResolveMicrosoftBuildFramework;
+        }
+    }
+
+    [Fact]
     public async Task BuildUsesEnvironmentAspireHomeWhenMsBuildPropertyDiffers()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1544,6 +1586,28 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrEmpty(toolPath), "AspireRuntimeIdentifierToolPath assembly metadata is not set.");
         Assert.True(File.Exists(toolPath), $"Aspire.RuntimeIdentifier.Tool was not built at '{toolPath}'. Build the test project to produce it.");
         return toolPath!;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static (bool Result, TimeSpan Elapsed, List<int> WaitTimeouts, string? FailureMessage) ExecuteRunAspireCliCommand(string commandPath)
+    {
+        var waitTimeouts = new List<int>();
+        var task = new RunAspireCliCommand
+        {
+            FileName = commandPath,
+            TimeoutMilliseconds = 1,
+            WaitForExit = (_, timeout) =>
+            {
+                waitTimeouts.Add(timeout);
+                return false;
+            }
+        };
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = task.Execute();
+        stopwatch.Stop();
+
+        return (result, stopwatch.Elapsed, waitTimeouts, task.FailureMessage);
     }
 
     private static string GetAspireHostingTasksAssemblyPath()
