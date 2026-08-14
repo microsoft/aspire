@@ -805,6 +805,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <Error Condition="'$(CommandTimedOut)' != 'true'" Text="The command did not report a timeout." />
                 <Error Condition="'$(CommandFailureMessage)' == ''" Text="The command did not report a timeout failure." />
                 <Message Text="CommandTimedOut=$(CommandTimedOut)" Importance="High" />
+                <Message Text="CommandFailureMessage=$(CommandFailureMessage)" Importance="High" />
               </Target>
             </Project>
             """);
@@ -824,6 +825,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
             Assert.True(result.ExitCode == 0, result.Output);
             Assert.Contains("CommandTimedOut=true", result.Output, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("CommandFailureMessage=The command timed out after 5000 milliseconds.", result.Output, StringComparison.Ordinal);
             Assert.True(File.Exists(childPidPath), $"The child process did not record its PID. MSBuild output:{Environment.NewLine}{result.Output}");
 
             childProcessId = int.Parse(await File.ReadAllTextAsync(childPidPath), CultureInfo.InvariantCulture);

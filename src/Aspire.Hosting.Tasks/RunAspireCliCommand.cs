@@ -17,9 +17,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     private const string ArgumentValueMetadataName = "Value";
     private const string CommandShimPathEnvironmentVariable = "__ASPIRE_MSBUILD_COMMAND_PATH";
     private const string CommandShimArgumentEnvironmentVariablePrefix = "__ASPIRE_MSBUILD_COMMAND_ARGUMENT_";
-#if NETFRAMEWORK
-    private const int ProcessTreeTerminationTimeoutMilliseconds = 5_000;
-#endif
+    private const int ProcessTerminationTimeoutMilliseconds = 5_000;
 
     /// <summary>
     /// Gets or sets the executable or command shim to run.
@@ -104,9 +102,15 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             {
                 return true;
             }
-        }
 
-        process.WaitForExit();
+            // Process termination is asynchronous. Bound the follow-up wait so an unresponsive
+            // process cannot turn the command timeout into an indefinitely hung MSBuild invocation.
+            if (!process.WaitForExit(ProcessTerminationTimeoutMilliseconds))
+            {
+                FailureMessage ??= $"The timed-out command '{FileName}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
+                return true;
+            }
+        }
 
         var standardOutput = standardOutputTask.GetAwaiter().GetResult();
         var standardError = standardErrorTask.GetAwaiter().GetResult();
@@ -222,7 +226,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             var standardOutputTask = taskKill.StandardOutput.ReadToEndAsync();
             var standardErrorTask = taskKill.StandardError.ReadToEndAsync();
 
-            if (!taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+            if (!taskKill.WaitForExit(ProcessTerminationTimeoutMilliseconds))
             {
                 try
                 {
@@ -233,13 +237,13 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
                     // The helper exited between the timeout and termination attempt.
                 }
 
-                if (taskKill.HasExited || taskKill.WaitForExit(ProcessTreeTerminationTimeoutMilliseconds))
+                if (taskKill.HasExited || taskKill.WaitForExit(ProcessTerminationTimeoutMilliseconds))
                 {
                     _ = standardOutputTask.GetAwaiter().GetResult();
                     _ = standardErrorTask.GetAwaiter().GetResult();
                 }
 
-                FailureMessage = $"The process-tree terminator '{taskKillPath}' did not exit within {ProcessTreeTerminationTimeoutMilliseconds} milliseconds.";
+                FailureMessage = $"The process-tree terminator '{taskKillPath}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds.";
                 return false;
             }
 
