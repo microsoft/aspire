@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 import { RpcClient } from './server/rpcClient';
-import { InteractionService } from './server/interactionService';
 import { extensionLogOutputChannel } from './utils/logging';
 import { initializeTelemetry, sendTelemetryEvent } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
