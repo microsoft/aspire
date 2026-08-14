@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
+import { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
 /**
  * Coarse AppHost language classification used for telemetry. We deliberately
@@ -20,6 +20,22 @@ import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
  */
 export type AppHostLanguage = 'csharp' | 'typescript' | 'rust' | 'unknown';
 export type AppHostLanguageSummary = Exclude<AppHostLanguage, 'unknown'> | 'polyglot' | 'unknown' | 'none';
+
+export function formatAppHostLanguage(language: string): string | undefined {
+    if (!language) {
+        return undefined;
+    }
+
+    switch (language.toLowerCase()) {
+        case 'csharp':
+            return 'C#';
+        case 'typescript':
+        case 'typescript/nodejs':
+            return 'TypeScript';
+        default:
+            return language.charAt(0).toUpperCase() + language.slice(1);
+    }
+}
 
 /**
  * Normalizes a language string from `aspire ls --format json` to a coarse
