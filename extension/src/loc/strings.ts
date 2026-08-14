@@ -124,6 +124,9 @@ export const resourceCommandSucceeded = (command: string, resource: string) => v
 export const resourceCommandFailed = (command: string, resource: string, error: string) => vscode.l10n.t("Command '{0}' on '{1}' failed: {2}", command, resource, error);
 export const resourceCommandFailedNoDetail = (command: string, resource: string) => vscode.l10n.t("Command '{0}' on '{1}' failed.", command, resource);
 export const resourceCommandCliNotInstalled = (error: string) => vscode.l10n.t('The Aspire CLI could not be started: {0}', error);
+export const resourceCommandOpenCliLog = vscode.l10n.t('Open CLI Log');
+export const resourceCommandOpenAppHostLog = vscode.l10n.t('Open AppHost Log');
+export const resourceCommandLogOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open resource command log file {0}: {1}', path, error);
 export const resourceCommandOutputOpenFailed = (error: string) => vscode.l10n.t('The command completed, but its output could not be opened: {0}', error);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
