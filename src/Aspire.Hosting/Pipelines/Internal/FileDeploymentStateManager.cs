@@ -23,6 +23,10 @@ internal sealed partial class FileDeploymentStateManager(
     IHostEnvironment hostEnvironment,
     IOptions<PipelineOptions> pipelineOptions) : DeploymentStateManagerBase<FileDeploymentStateManager>(logger)
 {
+    private readonly JsonObject _migratedState = [];
+    private readonly HashSet<string> _migratedSectionNames = new(StringComparer.Ordinal);
+    private bool _isMigratingLegacyState;
+
     // Regex pattern matching only alphanumeric characters, underscores, and hyphens
     [GeneratedRegex(@"^[a-zA-Z0-9_-]+$")]
     private static partial Regex ValidEnvironmentNameRegex();
@@ -63,9 +67,13 @@ internal sealed partial class FileDeploymentStateManager(
         }
 
         var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
-        return legacyStatePath is not null && File.Exists(legacyStatePath)
-            ? legacyStatePath
-            : currentStatePath;
+        if (legacyStatePath is not null && File.Exists(legacyStatePath))
+        {
+            _isMigratingLegacyState = true;
+            return legacyStatePath;
+        }
+
+        return currentStatePath;
     }
 
     private string? GetCanonicalStatePath() => GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
@@ -104,7 +112,20 @@ internal sealed partial class FileDeploymentStateManager(
     }
 
     /// <inheritdoc/>
-    protected override async Task SaveStateToStorageAsync(JsonObject state, CancellationToken cancellationToken)
+    protected override JsonNode? GetSectionState(JsonObject? state, string sectionName)
+    {
+        if (_isMigratingLegacyState &&
+            (_migratedSectionNames.Contains(sectionName) ||
+             _migratedSectionNames.Any(name => name.StartsWith($"{sectionName}:", StringComparison.Ordinal))))
+        {
+            return TryGetNestedPropertyValue(_migratedState, sectionName);
+        }
+
+        return base.GetSectionState(state, sectionName);
+    }
+
+    /// <inheritdoc/>
+    protected override async Task SaveStateToStorageAsync(JsonObject state, string? sectionName, CancellationToken cancellationToken)
     {
         try
         {
@@ -121,7 +142,19 @@ internal sealed partial class FileDeploymentStateManager(
                 return;
             }
 
-            var flattenedSecrets = JsonFlattener.FlattenJsonObject(state);
+            var stateToSave = state;
+            if (_isMigratingLegacyState && sectionName is not null)
+            {
+                // Source/polyglot AppHosts historically shared one directory-scoped state file.
+                // Persist only sections this AppHost has actually updated so sibling AppHosts
+                // remain available in the legacy file and cannot be mistaken for stale resources.
+                var sectionData = TryGetNestedPropertyValue(state, sectionName) as JsonObject;
+                SetNestedPropertyValue(_migratedState, sectionName, sectionData?.DeepClone().AsObject());
+                _migratedSectionNames.Add(sectionName);
+                stateToSave = _migratedState;
+            }
+
+            var flattenedSecrets = JsonFlattener.FlattenJsonObject(stateToSave);
             var deploymentStateDirectory = Path.GetDirectoryName(deploymentStatePath)!;
             if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
             {
@@ -156,14 +189,6 @@ internal sealed partial class FileDeploymentStateManager(
                 deploymentStatePath,
                 flattenedSecrets.ToJsonString(UserSecretsJsonOptions.s_instance),
                 cancellationToken).ConfigureAwait(false);
-
-            var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
-            if (legacyStatePath is not null &&
-                !string.Equals(legacyStatePath, deploymentStatePath, StringComparison.Ordinal) &&
-                File.Exists(legacyStatePath))
-            {
-                File.Delete(legacyStatePath);
-            }
 
             logger.LogDebug("Deployment state saved to {Path}", deploymentStatePath);
         }

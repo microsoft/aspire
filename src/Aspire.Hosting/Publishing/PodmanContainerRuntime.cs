@@ -342,7 +342,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             imageName,
             cancellationToken).ConfigureAwait(false);
         var imageMetadata = await ExecuteContainerCommandForOutputAsync(
-            ["image", "inspect", "--format", "{{json .}}", localImageName],
+            ["image", "inspect", "--format", """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""", localImageName],
             "inspect image metadata",
             imageName,
             cancellationToken).ConfigureAwait(false);

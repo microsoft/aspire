@@ -12,6 +12,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Hashing;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -308,7 +309,7 @@ internal static class AzureSandboxContainerDeployment
                 }
             }
 
-            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(endpoints, diskImageReference);
+            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(endpoints);
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint);
@@ -1477,16 +1478,14 @@ internal static class AzureSandboxContainerDeployment
             : throw new InvalidOperationException("AppHost:PathSha256 is required to isolate Azure sandbox ownership between AppHosts.");
     }
 
-    internal static string CreateDeploymentSecurityFingerprint(
-        IReadOnlyList<SandboxEndpoint> endpoints,
-        string imageReference)
+    internal static string CreateDeploymentSecurityFingerprint(IReadOnlyList<SandboxEndpoint> endpoints)
     {
-        return $"{imageReference}|{string.Join(
+        return string.Join(
             "|",
             endpoints
                 .OrderBy(static endpoint => endpoint.Name, StringComparer.Ordinal)
                 .Select(static endpoint =>
-                    $"{endpoint.Name}:{endpoint.TargetPort}:{endpoint.Protocol}:{endpoint.IsExternal}:{endpoint.Anonymous}"))}";
+                    $"{endpoint.Name}:{endpoint.TargetPort}:{endpoint.Protocol}:{endpoint.IsExternal}:{endpoint.Anonymous}"));
     }
 
     internal static bool HasSecurityRelevantEndpointChange(
@@ -1504,7 +1503,16 @@ internal static class AzureSandboxContainerDeployment
         }
 
         var previousFingerprint = previousStateSection.Data["EndpointSecurityFingerprint"]?.GetValue<string>();
-        return !string.Equals(previousFingerprint, currentFingerprint, StringComparison.Ordinal);
+        if (string.Equals(previousFingerprint, currentFingerprint, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Older preview state included the image reference before the endpoint-only
+        // fingerprint. Ignore that prefix so an image rollout does not become an
+        // immediate security cleanup during migration to the corrected format.
+        return previousFingerprint is null ||
+            !previousFingerprint.EndsWith($"|{currentFingerprint}", StringComparison.Ordinal);
     }
 
     private static void SetRecoveryStateIfMissing(
@@ -1643,7 +1651,7 @@ internal static class AzureSandboxContainerDeployment
 
     private static async Task WaitForPublicHttpAsync(string publicUrl, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var httpClient = new HttpClient(CreatePublicEndpointHttpHandler()) { Timeout = TimeSpan.FromSeconds(10) };
         var deadline = DateTimeOffset.UtcNow.Add(timeout);
         Exception? lastException = null;
         HttpStatusCode? lastStatusCode = null;
@@ -1674,7 +1682,10 @@ internal static class AzureSandboxContainerDeployment
         throw new TimeoutException($"Sandbox public URL '{publicUrl}' was not ready after {timeout.TotalSeconds} seconds (last HTTP status: '{lastStatusCode}').", lastException);
     }
 
-    private static async Task DeleteSandboxAsync(
+    internal static HttpClientHandler CreatePublicEndpointHttpHandler() =>
+        new() { AllowAutoRedirect = false };
+
+    internal static async Task DeleteSandboxAsync(
         PipelineStepContext context,
         IAzureDevComputeClient client,
         AzureDevComputeResourceScope scope,
@@ -1684,30 +1695,54 @@ internal static class AzureSandboxContainerDeployment
         CancellationToken? cancellationToken = null)
     {
         var effectiveCancellationToken = cancellationToken ?? context.CancellationToken;
+        Exception? portRemovalException = null;
 
-        try
+        foreach (var port in ports.Distinct())
         {
-            foreach (var port in ports.Distinct())
+            try
             {
-                try
+                await client.RemovePortAsync(
+                    scope,
+                    sandboxId,
+                    new AzureDevComputeRemovePortRequest { Port = port },
+                    effectiveCancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (throwOnError)
                 {
-                    await client.RemovePortAsync(
-                        scope,
-                        sandboxId,
-                        new AzureDevComputeRemovePortRequest { Port = port },
-                        effectiveCancellationToken).ConfigureAwait(false);
+                    portRemovalException ??= ex;
                 }
-                catch (Exception ex) when (!throwOnError && ex is not OperationCanceledException)
+                else
                 {
                     context.Logger.LogWarning(ex, "Failed to remove sandbox port {Port} from sandbox '{SandboxId}'.", port, sandboxId);
                 }
             }
+        }
 
+        try
+        {
             await client.DeleteSandboxAsync(scope, sandboxId, effectiveCancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (!throwOnError && ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            context.Logger.LogWarning(ex, "Failed to delete sandbox '{SandboxId}'.", sandboxId);
+            if (!throwOnError)
+            {
+                context.Logger.LogWarning(ex, "Failed to delete sandbox '{SandboxId}'.", sandboxId);
+            }
+            else if (portRemovalException is null)
+            {
+                throw;
+            }
+            else
+            {
+                context.Logger.LogWarning(ex, "Failed to delete sandbox '{SandboxId}' after a port removal failure.", sandboxId);
+            }
+        }
+
+        if (portRemovalException is not null)
+        {
+            ExceptionDispatchInfo.Capture(portRemovalException).Throw();
         }
     }
 

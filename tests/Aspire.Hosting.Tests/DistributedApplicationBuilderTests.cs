@@ -390,6 +390,47 @@ public class DistributedApplicationBuilderTests
         Assert.Equal(
             builder1.Configuration["AppHost:ProjectNameSha256"],
             builder2.Configuration["AppHost:ProjectNameSha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:LegacyPathSha256"],
+            builder1.Configuration["AppHost:Sha256"]);
+        Assert.NotEqual(
+            builder1.Configuration["AppHost:PathSha256"],
+            builder1.Configuration["AppHost:Sha256"]);
+    }
+
+    [Fact]
+    public void PolyglotAppHostPathIdentityPreservesFilesystemCaseSemantics()
+    {
+        var lowerCaseOptions = new DistributedApplicationOptions
+        {
+            ProjectDirectory = "/home/user/project",
+            ProjectName = "Aspire.Hosting.RemoteHost",
+            AppHostFilePath = "/home/user/project/apphost.ts",
+            Args = []
+        };
+        var upperCaseOptions = new DistributedApplicationOptions
+        {
+            ProjectDirectory = "/home/user/project",
+            ProjectName = "Aspire.Hosting.RemoteHost",
+            AppHostFilePath = "/home/user/project/AppHost.ts",
+            Args = []
+        };
+
+        var lowerCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(lowerCaseOptions);
+        var upperCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(upperCaseOptions);
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                lowerCaseBuilder.Configuration["AppHost:PathSha256"],
+                upperCaseBuilder.Configuration["AppHost:PathSha256"]);
+        }
+        else
+        {
+            Assert.NotEqual(
+                lowerCaseBuilder.Configuration["AppHost:PathSha256"],
+                upperCaseBuilder.Configuration["AppHost:PathSha256"]);
+        }
     }
 
     [Fact]

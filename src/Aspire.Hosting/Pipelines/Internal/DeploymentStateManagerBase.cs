@@ -51,8 +51,15 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// Saves the state to the appropriate storage location.
     /// </summary>
     /// <param name="state">The state to save.</param>
+    /// <param name="sectionName">The section being saved, or <see langword="null"/> when saving the complete state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    protected abstract Task SaveStateToStorageAsync(JsonObject state, CancellationToken cancellationToken);
+    protected abstract Task SaveStateToStorageAsync(JsonObject state, string? sectionName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the stored value for a deployment state section.
+    /// </summary>
+    protected virtual JsonNode? GetSectionState(JsonObject? state, string sectionName) =>
+        TryGetNestedPropertyValue(state, sectionName);
 
     /// <summary>
     /// Loads the deployment state from storage, using caching to avoid repeated loads.
@@ -103,7 +110,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await SaveStateToStorageAsync(state, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(state, sectionName: null, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -138,7 +145,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
             JsonObject? data = null;
             string? value = null;
 
-            var sectionData = TryGetNestedPropertyValue(_state, sectionName);
+            var sectionData = GetSectionState(_state, sectionName);
             if (sectionData is JsonObject o)
             {
                 data = o.DeepClone().AsObject();
@@ -169,7 +176,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// <param name="node">The starting JSON object.</param>
     /// <param name="path">The colon-separated path to navigate.</param>
     /// <returns>The JSON node at the specified path, or null if not found.</returns>
-    private static JsonNode? TryGetNestedPropertyValue(JsonObject? node, string path)
+    protected static JsonNode? TryGetNestedPropertyValue(JsonObject? node, string path)
     {
         if (node is null)
         {
@@ -203,7 +210,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         {
             // Store a deep clone to ensure immutability
             SetNestedPropertyValue(_state, section.SectionName, section.Data.DeepClone().AsObject());
-            await SaveStateToStorageAsync(_state, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(_state, section.SectionName, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -223,7 +230,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         {
             // Remove the section from the state by passing null
             SetNestedPropertyValue(_state, section.SectionName, null);
-            await SaveStateToStorageAsync(_state, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(_state, section.SectionName, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -269,7 +276,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// <param name="root">The root JSON object.</param>
     /// <param name="path">The colon-separated path to set.</param>
     /// <param name="value">The value to set at the specified path, or null to remove the property.</param>
-    private static void SetNestedPropertyValue(JsonObject root, string path, JsonObject? value)
+    protected static void SetNestedPropertyValue(JsonObject root, string path, JsonObject? value)
     {
         var segments = path.Split(':');
 

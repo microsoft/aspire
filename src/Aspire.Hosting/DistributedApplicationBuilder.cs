@@ -317,11 +317,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Source-file and polyglot AppHosts can share a host process and project directory,
             // so use the actual source file to keep their deployment state isolated.
-            var appHostIdentityPath = !string.IsNullOrEmpty(appHostFilePath) &&
-                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase)
-                    ? Path.GetFullPath(appHostFilePath)
-                    : AppHostPath;
-            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostIdentityPath.ToLowerInvariant()));
+            var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
+                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
+            var appHostIdentityPath = isSourceFileAppHost
+                ? Path.GetFullPath(appHostFilePath!)
+                : AppHostPath;
+            var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
+                ? appHostIdentityPath
+                : appHostIdentityPath.ToLowerInvariant();
+            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
             appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
             if (string.Equals(appHostPathSha, legacyAppHostPathSha, StringComparison.Ordinal))
             {
@@ -341,7 +345,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             }
             else
             {
-                appHostSha = appHostPathSha;
+                // AppHost:Sha256 is consumed by persistent run-mode resources such as volumes,
+                // browser profiles, dev tunnels, and Compose projects. Keep its historical
+                // directory-based identity stable while AppHost:PathSha256 provides the
+                // source-file-specific deployment identity.
+                appHostSha = legacyAppHostPathSha ?? appHostPathSha;
             }
         }
 

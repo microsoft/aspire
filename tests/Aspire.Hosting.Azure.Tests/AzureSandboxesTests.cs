@@ -581,9 +581,7 @@ public class AzureSandboxesTests
                 Protocol: "Http",
                 Anonymous: false)
         };
-        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
-            endpoints,
-            "example/image@sha256:first");
+        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(endpoints);
         var previousState = new DeploymentStateSection(
             "Azure:Sandboxes:frontend-sandbox-container",
             new JsonObject
@@ -597,6 +595,9 @@ public class AzureSandboxesTests
 
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = $"example/image@sha256:first|{fingerprint}";
+        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         previousState.Data["PendingSecurityCleanup"] = true;
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["PendingSecurityCleanup"] = false;
@@ -604,14 +605,48 @@ public class AzureSandboxesTests
         var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
         [
             endpoints[0] with { Anonymous = true }
-        ],
-        "example/image@sha256:first");
+        ]);
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint));
+    }
 
-        var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
-            endpoints,
-            "example/image@sha256:second");
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+    [Fact]
+    public void SandboxReadinessProbeDoesNotFollowRedirects()
+    {
+        using var handler = AzureSandboxContainerDeployment.CreatePublicEndpointHttpHandler();
+
+        Assert.False(handler.AllowAutoRedirect);
+    }
+
+    [Fact]
+    public async Task SandboxDeletionRunsAfterPortRemovalFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new FailingPortRemovalClient();
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            AzureSandboxContainerDeployment.DeleteSandboxAsync(
+                stepContext,
+                client,
+                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+                "sandbox-1",
+                [8080],
+                throwOnError: true));
+
+        Assert.Equal("port removal failed", exception.Message);
+        Assert.True(client.DeleteSandboxCalled);
     }
 
     [Fact]
@@ -1998,6 +2033,38 @@ public class AzureSandboxesTests
         public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class FailingPortRemovalClient : IAzureDevComputeClient
+    {
+        public bool DeleteSandboxCalled { get; private set; }
+
+        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(
+            AzureDevComputeResourceScope scope,
+            string sandboxId,
+            AzureDevComputeRemovePortRequest request,
+            CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("port removal failed");
+        }
+
+        public Task DeleteSandboxAsync(
+            AzureDevComputeResourceScope scope,
+            string sandboxId,
+            CancellationToken cancellationToken)
+        {
+            DeleteSandboxCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler

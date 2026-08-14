@@ -110,7 +110,15 @@ public class ContainerRuntimeBaseTests
             processRunner.ArgumentLists,
             arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
             arguments => Assert.Equal(["pull", $"docker://{maliciousImageName}"], arguments),
-            arguments => Assert.Equal(["image", "inspect", "--format", "{{json .}}", maliciousImageName], arguments));
+            arguments => Assert.Equal(
+                [
+                    "image",
+                    "inspect",
+                    "--format",
+                    """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""",
+                    maliciousImageName
+                ],
+                arguments));
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
