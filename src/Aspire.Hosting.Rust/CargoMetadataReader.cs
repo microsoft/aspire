@@ -29,6 +29,9 @@ internal interface ICargoMetadataReader
 /// </remarks>
 internal sealed class CargoMetadataReader : ICargoMetadataReader
 {
+    internal const int MaximumStandardErrorLength = 4096;
+    private const string TruncatedDiagnosticSuffix = "... (truncated)";
+
     // A cold `cargo metadata --format-version 1 --no-deps` has been measured at close to 15 seconds on a
     // machine whose cargo caches are empty, so a short timeout would fail valid apps rather than protect
     // them. This is only a backstop against a cargo process that never exits; ordinary shutdown flows
@@ -118,8 +121,10 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
 
         if (process.ExitCode != 0)
         {
+            var diagnostic = FormatStandardError(stderr, environment);
+            var diagnosticSuffix = diagnostic.Length > 0 ? $" {diagnostic}" : string.Empty;
             throw new DistributedApplicationException(
-                $"'cargo metadata' failed for the Rust app '{resourceName}' with exit code {process.ExitCode}. {stderr.Trim()}");
+                $"'cargo metadata' failed for the Rust app '{resourceName}' with exit code {process.ExitCode}.{diagnosticSuffix}");
         }
 
         try
@@ -131,6 +136,30 @@ internal sealed class CargoMetadataReader : ICargoMetadataReader
             throw new DistributedApplicationException(
                 $"Unable to read the output of 'cargo metadata' for the Rust app '{resourceName}'. {ex.Message}", ex);
         }
+    }
+
+    internal static string FormatStandardError(string standardError, IReadOnlyDictionary<string, string> environment)
+    {
+        // Cargo wrappers and configuration errors can echo values from the resolved resource environment.
+        // Redact before truncating so a value that crosses the retained-output boundary cannot leak partially.
+        var redacted = standardError;
+        foreach (var value in environment.Values
+            .Where(static value => !string.IsNullOrEmpty(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(static value => value.Length))
+        {
+            redacted = redacted.Replace(value, "***", StringComparison.Ordinal);
+        }
+
+        redacted = redacted.Trim();
+        if (redacted.Length <= MaximumStandardErrorLength)
+        {
+            return redacted;
+        }
+
+        return string.Concat(
+            redacted.AsSpan(0, MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length),
+            TruncatedDiagnosticSuffix);
     }
 
     private static void TryKillProcess(Process process)

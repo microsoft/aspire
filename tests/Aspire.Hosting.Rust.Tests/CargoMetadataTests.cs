@@ -94,20 +94,52 @@ public class CargoMetadataTests
             CargoMetadataReader.BuildArguments("/app/Cargo.toml"));
     }
 
-        [Fact]
-        public void MetadataReaderAsyncStateMachineDoesNotReferenceDcpProcessTypes()
+    [Fact]
+    public void CargoFailureDiagnosticRedactsEnvironmentValuesLongestFirst()
+    {
+        var environment = new Dictionary<string, string>
         {
-          // Guest AppHosts discover integration types under restricted reflection. A generated state-machine
-          // field that closes over an internal Aspire.Hosting type makes the entire integration assembly fail
-          // type discovery before the Rust launch configuration can be produced.
-          var readMethod = typeof(CargoMetadataReader).GetMethod(nameof(CargoMetadataReader.ReadAsync));
-          var stateMachineType = Assert.IsType<AsyncStateMachineAttribute>(
+            ["REGISTRY_TOKEN"] = "token-value",
+            ["TOKEN_PREFIX"] = "token",
+            ["EMPTY"] = string.Empty
+        };
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(
+            "registry rejected token-value; wrapper repeated token",
+            environment);
+
+        Assert.Equal("registry rejected ***; wrapper repeated ***", diagnostic);
+    }
+
+    [Fact]
+    public void CargoFailureDiagnosticRedactsBeforeBoundingOutput()
+    {
+        const string Secret = "secret-value";
+        const string TruncatedDiagnosticSuffix = "... (truncated)";
+        var environment = new Dictionary<string, string> { ["REGISTRY_TOKEN"] = Secret };
+        var standardError = $"{new string('x', CargoMetadataReader.MaximumStandardErrorLength - 6)}{Secret}tail";
+
+        var diagnostic = CargoMetadataReader.FormatStandardError(standardError, environment);
+
+        Assert.Equal(
+            $"{new string('x', CargoMetadataReader.MaximumStandardErrorLength - TruncatedDiagnosticSuffix.Length)}{TruncatedDiagnosticSuffix}",
+            diagnostic);
+    }
+
+    [Fact]
+    public void MetadataReaderAsyncStateMachineDoesNotReferenceDcpProcessTypes()
+    {
+        // Guest AppHosts discover integration types under restricted reflection. A generated state-machine
+        // field that closes over an internal Aspire.Hosting type makes the entire integration assembly fail
+        // type discovery before the Rust launch configuration can be produced.
+        var readMethod = typeof(CargoMetadataReader).GetMethod(nameof(CargoMetadataReader.ReadAsync));
+        var stateMachineType = Assert.IsType<AsyncStateMachineAttribute>(
             Assert.Single(readMethod!.GetCustomAttributes(typeof(AsyncStateMachineAttribute), inherit: false))).StateMachineType;
 
-          Assert.DoesNotContain(
+        Assert.DoesNotContain(
             stateMachineType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public),
             field => field.FieldType.ToString().Contains("Aspire.Hosting.Dcp.Process", StringComparison.Ordinal));
-        }
+    }
 
     [Fact]
     [RequiresTools(["cargo"])]
