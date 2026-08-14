@@ -106,14 +106,14 @@ internal static class InteractionExports
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
+        string? title,
         string message,
-        string? title = null,
         InteractionProgressOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(interactionService);
 
-        var result = await interactionService.PromptProgressAsync(message, title, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptProgressAsync(title, message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return BoolInteractionResult.From(result);
     }
 

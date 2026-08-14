@@ -174,7 +174,7 @@ public class InteractionServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptMessageBoxAsync("Are you sure?", "Confirmation")).DefaultTimeout();
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => interactionService.PromptProgressAsync("Please wait", "Working...")).DefaultTimeout();
+            () => interactionService.PromptProgressAsync("Working...", "Please wait")).DefaultTimeout();
     }
 
     [Fact]
@@ -1132,7 +1132,7 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var workExecuted = false;
-        var result = await interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var result = await interactionService.PromptProgressAsync("Working...", "Please wait", new ProgressInteractionOptions
         {
             Work = async ctx =>
             {
@@ -1153,7 +1153,7 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var tcs = new TaskCompletionSource();
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Working...", "Please wait", new ProgressInteractionOptions
         {
             PrimaryButtonText = "Cancel",
             Work = async ctx =>
@@ -1185,7 +1185,7 @@ public class InteractionServiceTests
         // thread. Inlining would run the cancellation below before the callback returns, so the prompt task could
         // never complete and the test would deadlock until the timeout.
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Working...", "Please wait", new ProgressInteractionOptions
         {
             PrimaryButtonText = "Cancel",
             Work = async ctx =>
@@ -1218,7 +1218,7 @@ public class InteractionServiceTests
 
         using var cts = new CancellationTokenSource();
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Working...", "Please wait", new ProgressInteractionOptions
         {
             Work = async ctx =>
             {
@@ -1250,7 +1250,7 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var cts = new CancellationTokenSource();
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", cancellationToken: cts.Token);
+        var resultTask = interactionService.PromptProgressAsync("Working...", "Please wait", cancellationToken: cts.Token);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
         Assert.Equal(Interaction.InteractionState.InProgress, interaction.State);
@@ -1267,7 +1267,7 @@ public class InteractionServiceTests
     {
         var interactionService = CreateInteractionService();
 
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Working...", "Please wait", new ProgressInteractionOptions
         {
             PrimaryButtonText = "Cancel"
         });
@@ -1288,7 +1288,7 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var cts = new CancellationTokenSource();
-        var resultTask = interactionService.PromptProgressAsync("Please wait...", cancellationToken: cts.Token);
+        var resultTask = interactionService.PromptProgressAsync(null, "Please wait...", cancellationToken: cts.Token);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
         Assert.Equal(string.Empty, interaction.Title);
