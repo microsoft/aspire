@@ -417,12 +417,14 @@ internal sealed class NewCommand : BaseCommand
                 }
 
                 // Apply the source override after selection so it cannot change implicit/explicit channel selection.
-                // Keep the original channel authoritative for persistence because mappings make the adjusted copy explicit.
-                var templateDiscoveryChannel = selectedChannel.WithFallbackSourceOverride(source);
+                // Pass the adjusted mappings directly so the original channel remains authoritative for persistence.
+                var templateDiscoveryMappings = string.IsNullOrWhiteSpace(source)
+                    ? selectedChannel.Mappings
+                    : PackageSourceOverrideMappings.CreateForTemplateOperations(source);
 
                 try
                 {
-                    var packages = (await templateDiscoveryChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, templateDiscoveryMappings, cancellationToken))
                         .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
@@ -466,6 +468,14 @@ internal sealed class NewCommand : BaseCommand
         if (!string.IsNullOrWhiteSpace(source))
         {
             source = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, ExecutionContext.WorkingDirectory);
+            if (PackageSourceOverrideMappings.GetMissingLocalDirectory(source) is { } missingDirectory)
+            {
+                InteractionService.DisplayError(string.Format(
+                    CultureInfo.CurrentCulture,
+                    NewCommandStrings.SourceDirectoryNotFound,
+                    missingDirectory));
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
         }
 
         // Resolve which templates are actually available at runtime (performs

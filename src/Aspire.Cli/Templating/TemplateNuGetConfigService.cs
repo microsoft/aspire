@@ -263,6 +263,13 @@ internal sealed class TemplateNuGetConfigService(
                     $"{string.Join(", ", allChannels.Select(c => c.Name))}");
             channels = [matchingChannel];
         }
+        else if (!string.IsNullOrWhiteSpace(query.SourceOverride))
+        {
+            // Every channel would query the same explicit source, so querying PR/local channels as
+            // well would attach identical results to whichever channel finishes first. Keep the
+            // implicit channel as the deterministic owner unless the user requested a channel.
+            channels = allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+        }
         else
         {
             // If there are hives (PR build directories), include all channels.
@@ -279,8 +286,10 @@ internal sealed class TemplateNuGetConfigService(
 
             await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
             {
-                var templateSearchChannel = channel.WithFallbackSourceOverride(query.SourceOverride);
-                var templatePackages = await templateSearchChannel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, ct);
+                var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
+                    ? channel.Mappings
+                    : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
+                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, templateSearchMappings, ct);
                 lock (resultsLock)
                 {
                     results.AddRange(templatePackages.Select(p => (p, channel)));
@@ -348,10 +357,10 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
-    /// Installs the resolved Aspire project templates package, generating a temporary NuGet.config from the source-adjusted channel mappings when the channel is explicit.
+    /// Installs the resolved Aspire project templates package, generating a temporary NuGet.config from source-adjusted mappings when needed.
     /// </summary>
     /// <param name="selection">The template package + channel returned by <see cref="ResolveTemplatePackageAsync"/>.</param>
-    /// <param name="sourceOverride">Optional package source override applied to the selected channel's fallback source for installation.</param>
+    /// <param name="sourceOverride">Optional package source override applied to Aspire packages for installation.</param>
     /// <param name="runner">The .NET CLI runner used to invoke <c>dotnet new install</c>. Passed in (rather than injected) because the runner has a transient DI lifetime.</param>
     /// <param name="statusMessage">Status text shown while the install runs.</param>
     /// <param name="statusEmoji">Optional emoji prefix shown next to the status message.</param>
@@ -365,19 +374,21 @@ internal sealed class TemplateNuGetConfigService(
         KnownEmoji? statusEmoji,
         CancellationToken cancellationToken)
     {
-        var templateInstallChannel = selection.Channel.WithFallbackSourceOverride(sourceOverride);
+        var templateInstallMappings = string.IsNullOrWhiteSpace(sourceOverride)
+            ? selection.Channel.Mappings
+            : PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride);
 
-        // Whilst we install the templates - if the source-adjusted channel is explicit we need
+        // Whilst we install the templates - if source mappings are available we need
         // to generate a temporary NuGet.config file to make sure we install the right package
-        // from the right feed. If it remains implicit then we just use the ambient configuration
+        // from the right feed. Without mappings we just use the ambient configuration
         // (although we should still specify the source) because the user would have selected it.
         //
         // The temporary config is disposed when this method returns. That is intentional —
         // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
         // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
         // template hive and uses the ambient NuGet configuration.
-        using var temporaryConfig = templateInstallChannel.Type == PackageChannelType.Explicit
-            ? await TemporaryNuGetConfig.CreateAsync(templateInstallChannel.Mappings!)
+        using var temporaryConfig = templateInstallMappings is not null
+            ? await TemporaryNuGetConfig.CreateAsync(templateInstallMappings)
             : null;
 
         var collector = new OutputCollector();
@@ -396,7 +407,7 @@ internal sealed class TemplateNuGetConfigService(
                     packageName: TemplatesPackageName,
                     version: selection.Package.Version,
                     nugetConfigFile: temporaryConfig?.ConfigFile,
-                    nugetSource: selection.Package.Source,
+                    nugetSource: string.IsNullOrWhiteSpace(sourceOverride) ? selection.Package.Source : sourceOverride,
                     force: true,
                     options: options,
                     cancellationToken: cancellationToken);
@@ -417,7 +428,11 @@ internal sealed class TemplateNuGetConfigService(
 /// back to PR-hive discovery or implicit-only depending on <paramref name="IncludePrHives"/>.
 /// </param>
 /// <param name="VersionOverride">Optional explicit template version (e.g. from <c>--version</c>).</param>
-/// <param name="SourceOverride">Optional package source override consulted during package search, after channel selection, to replace the selected channel's fallback source.</param>
+/// <param name="SourceOverride">
+/// Optional package source override used exclusively for template discovery and installation. Without
+/// <paramref name="RequestedChannel"/>, the implicit channel owns the result so installed hives cannot
+/// assign an unrelated channel identity to a package discovered from this source.
+/// </param>
 /// <param name="IncludePrHives">When true (e.g. for <c>aspire new</c>), local PR hive directories under <c>~/.aspire/hives</c> participate in channel discovery; when false (e.g. for <c>aspire init</c>), they are ignored.</param>
 internal sealed record TemplatePackageQuery(
     string? RequestedChannel,

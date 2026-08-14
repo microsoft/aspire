@@ -15,18 +15,30 @@ internal static class PackageSourceOverrideMappings
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentNullException.ThrowIfNull(workingDirectory);
 
+        var sourceKind = ClassifySource(source, out _);
+
         // On Unix, Uri treats DOS-shaped paths such as C:/feed as absolute file URIs.
         // Preserve a file URI only when the source explicitly includes the file: scheme.
         if (Path.IsPathFullyQualified(source) ||
-            UrlHelper.IsHttpUrl(source) ||
-            (source.StartsWith("file:", StringComparison.OrdinalIgnoreCase) &&
-                Uri.TryCreate(source, UriKind.Absolute, out var uri) &&
-                uri.IsFile))
+            sourceKind is PackageSourceKind.Http or PackageSourceKind.FileUri)
         {
             return source;
         }
 
         return Path.GetFullPath(source, workingDirectory.FullName);
+    }
+
+    public static string? GetMissingLocalDirectory(string source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
+        var sourceKind = ClassifySource(source, out var localDirectory);
+        if (sourceKind is PackageSourceKind.Http)
+        {
+            return null;
+        }
+
+        return Directory.Exists(localDirectory) ? null : localDirectory;
     }
 
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
@@ -69,6 +81,20 @@ internal static class PackageSourceOverrideMappings
         return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];
     }
 
+    public static PackageMapping[] CreateForTemplateOperations(string packageSourceOverride)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+
+        // NuGet package search queries every configured source without applying package source
+        // mapping. Keep the temporary config exclusive to --source so discovery and installation
+        // cannot contact a channel feed or NuGet.org behind the user's approved proxy.
+        return
+        [
+            new("Aspire*", packageSourceOverride),
+            new(PackageMapping.AllPackages, packageSourceOverride)
+        ];
+    }
+
     public static bool HasCredentialMaterial(string source)
     {
         return Uri.TryCreate(source.Trim(), UriKind.Absolute, out var uri) &&
@@ -77,5 +103,32 @@ internal static class PackageSourceOverrideMappings
             (!string.IsNullOrEmpty(uri.UserInfo) ||
                 !string.IsNullOrEmpty(uri.Query) ||
                 !string.IsNullOrEmpty(uri.Fragment));
+    }
+
+    private static PackageSourceKind ClassifySource(string source, out string? localDirectory)
+    {
+        if (UrlHelper.IsHttpUrl(source))
+        {
+            localDirectory = null;
+            return PackageSourceKind.Http;
+        }
+
+        if (source.StartsWith("file:", StringComparison.OrdinalIgnoreCase) &&
+            Uri.TryCreate(source, UriKind.Absolute, out var uri) &&
+            uri.IsFile)
+        {
+            localDirectory = uri.LocalPath;
+            return PackageSourceKind.FileUri;
+        }
+
+        localDirectory = source;
+        return PackageSourceKind.LocalPath;
+    }
+
+    private enum PackageSourceKind
+    {
+        Http,
+        FileUri,
+        LocalPath
     }
 }

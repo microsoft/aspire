@@ -30,4 +30,27 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, source), result);
     }
+
+    [Fact]
+    public void ResolveForWorkingDirectory_FileUri_ReturnsUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "file:///tmp/feed";
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(source, result);
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public void ResolveForWorkingDirectory_WindowsFullyQualifiedPath_ReturnsUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = @"C:\feed";
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(source, result);
+    }
 }

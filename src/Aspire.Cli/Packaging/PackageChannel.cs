@@ -126,18 +126,26 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        return GetTemplatePackagesAsync(workingDirectory, Mappings, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets template packages using the specified mappings without changing this channel's identity.
+    /// </summary>
+    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, PackageMapping[]? mappings, CancellationToken cancellationToken)
     {
         validateTemplatePackageMetadataPrefetching?.Invoke();
 
         if (PinnedVersion is not null)
         {
-            return [new NuGetPackage { Id = "Aspire.ProjectTemplates", Version = PinnedVersion, Source = SourceDetails }];
+            return [new NuGetPackage { Id = "Aspire.ProjectTemplates", Version = PinnedVersion, Source = ComputeSourceDetails(mappings) }];
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
-        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+        using var tempNuGetConfig = mappings is not null ? await TemporaryNuGetConfig.CreateAsync(mappings) : null;
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
@@ -558,27 +566,6 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public PackageChannel CreateScopedChannelForPackage(string packageId)
     {
         return CreateScopedChannelForPackages([packageId]);
-    }
-
-    /// <summary>
-    /// Returns a channel with its fallback package source replaced by the specified override.
-    /// </summary>
-    public PackageChannel WithFallbackSourceOverride(string? sourceOverride)
-    {
-        if (string.IsNullOrWhiteSpace(sourceOverride))
-        {
-            return this;
-        }
-
-        var mappings = (Mappings ?? [])
-            .Where(static mapping => !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal))
-            .Append(new PackageMapping(PackageMapping.AllPackages, sourceOverride))
-            .ToArray();
-
-        // PackageChannel is immutable, so copy the selected channel and replace only its fallback mapping.
-        // Apply this only after channel selection: making an implicit channel explicit earlier changes
-        // channel selection and template-hive behavior.
-        return new PackageChannel(Name, Quality, mappings, nuGetPackageCache, _features, logger, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, _currentCliVersion, validateTemplatePackageMetadataPrefetching);
     }
 
     public PackageChannel CreateScopedChannelForPackages(IEnumerable<string> packageIds)
