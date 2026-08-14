@@ -70,7 +70,7 @@ internal sealed partial class FileDeploymentStateManager(
 
     private string? GetCanonicalStatePath() => GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
 
-    private static string? GetStatePath(string? appHostSha, string environmentName)
+    private string? GetStatePath(string? appHostSha, string environmentName)
     {
         if (string.IsNullOrEmpty(appHostSha))
         {
