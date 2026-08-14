@@ -796,8 +796,8 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
-                    "Please wait while resources are being downloaded...",
                     "Downloading resources",
+                    "Please wait while resources are being downloaded...",
                     new ProgressInteractionOptions
                     {
                         PrimaryButtonText = "Cancel",
@@ -825,8 +825,8 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
+                    null,
                     "Please wait while resources are being downloaded...",
-                    title: null,
                     options: new ProgressInteractionOptions
                     {
                         Work = async ctx =>
@@ -855,8 +855,8 @@ internal static class InteractionCommands
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(commandContext.CancellationToken);
 
                 var progressTask = interactionService.PromptProgressAsync(
-                    "This dialog has no cancel button. It will close automatically.",
                     "Processing",
+                    "This dialog has no cancel button. It will close automatically.",
                     cancellationToken: cts.Token);
 
                 // Simulate background work, then close the dialog.
@@ -877,8 +877,8 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
-                    "Please wait while data is being loaded...",
                     "Loading",
+                    "Please wait while data is being loaded...",
                     new ProgressInteractionOptions
                     {
                         Work = async ctx =>
@@ -900,6 +900,7 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
+                    null,
                     "Please wait...",
                     options: new ProgressInteractionOptions
                     {
@@ -923,8 +924,8 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
-                    "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
                     "Deploying to Azure",
+                    "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
                     new ProgressInteractionOptions
                     {
                         PrimaryButtonText = "Abort deployment",
@@ -948,8 +949,8 @@ internal static class InteractionCommands
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var result = await interactionService.PromptProgressAsync(
-                    "Building and pushing container images to registry. This will take approximately 30 seconds.",
                     "Building container images",
+                    "Building and pushing container images to registry. This will take approximately 30 seconds.",
                     new ProgressInteractionOptions
                     {
                         PrimaryButtonText = "Cancel build"

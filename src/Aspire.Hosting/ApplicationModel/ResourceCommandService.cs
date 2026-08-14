@@ -454,7 +454,7 @@ public class ResourceCommandService
             options.PrimaryButtonText = InteractionStrings.CommandProgressCancelButtonText;
         }
 
-        var progressResult = await interactionService.PromptProgressAsync(progressOptions.Message, title: progressOptions.Title, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var progressResult = await interactionService.PromptProgressAsync(progressOptions.Title, progressOptions.Message, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (progressResult.Canceled)
         {

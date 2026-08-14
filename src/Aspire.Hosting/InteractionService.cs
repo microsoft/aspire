@@ -284,7 +284,7 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string? title, string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
         EnsureServiceAvailable();
 
