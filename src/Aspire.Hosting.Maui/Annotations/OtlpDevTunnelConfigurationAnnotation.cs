@@ -13,6 +13,9 @@ namespace Aspire.Hosting.Maui.Annotations;
 /// </summary>
 internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
 {
+    private readonly object _otlpEndpointLock = new();
+    private int _isOtlpEndpointResolved;
+
     /// <summary>
     /// The OTLP loopback stub resource that acts as the service discovery target.
     /// </summary>
@@ -28,13 +31,46 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
     /// </summary>
     public IResourceBuilder<DevTunnelResource> DevTunnel { get; }
 
+    /// <summary>
+    /// Gets a value indicating whether the dashboard OTLP listener has been resolved.
+    /// </summary>
+    public bool IsOtlpEndpointResolved => Volatile.Read(ref _isOtlpEndpointResolved) != 0;
+
+    /// <summary>
+    /// Gets or sets the maximum time to wait for DCP to publish the dashboard's concrete OTLP listener.
+    /// </summary>
+    internal TimeSpan RuntimeSnapshotResolutionTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
     public OtlpDevTunnelConfigurationAnnotation(
         OtlpLoopbackResource otlpStub,
         IResourceBuilder<OtlpLoopbackResource> otlpStubBuilder,
-        IResourceBuilder<DevTunnelResource> devTunnel)
+        IResourceBuilder<DevTunnelResource> devTunnel,
+        bool isOtlpEndpointResolved)
     {
         OtlpStub = otlpStub;
         OtlpStubBuilder = otlpStubBuilder;
         DevTunnel = devTunnel;
+        _isOtlpEndpointResolved = isOtlpEndpointResolved ? 1 : 0;
+    }
+
+    internal bool UpdateOtlpEndpoint(string scheme, int port, string transport)
+    {
+        lock (_otlpEndpointLock)
+        {
+            if (_isOtlpEndpointResolved != 0)
+            {
+                return false;
+            }
+
+            var endpoint = OtlpStub.OtlpEndpoint;
+            endpoint.UriScheme = scheme;
+            endpoint.Port = port;
+            endpoint.TargetPort = port;
+            endpoint.Transport = transport;
+            endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", port);
+            Volatile.Write(ref _isOtlpEndpointResolved, 1);
+
+            return true;
+        }
     }
 }
