@@ -101,7 +101,12 @@ function isLinkedWorktreeGitFile(gitFilePath: string, worktreeRoot: string): boo
         return false;
     }
 
-    if (path.basename(path.dirname(adminDirectory)).toLowerCase() !== worktreesSegment) {
+    const canonicalAdminDirectory = canonicalizePath(adminDirectory);
+    const adminParentName = path.basename(path.dirname(canonicalAdminDirectory));
+    const isWorktreesParent = process.platform === 'win32'
+        ? adminParentName.toLowerCase() === worktreesSegment
+        : adminParentName === worktreesSegment;
+    if (!isWorktreesParent) {
         return false;
     }
 

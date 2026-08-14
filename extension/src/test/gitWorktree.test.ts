@@ -60,6 +60,17 @@ suite('gitWorktree', () => {
         assert.strictEqual(tryGetLinkedWorktreeRoot(root), root);
     });
 
+    test('uppercase WORKTREES admin directory uses platform casing', () => {
+        const worktreeRoot = path.join(root, 'worktree');
+        const adminDirectory = path.join(root, 'primary', '.git', 'WORKTREES', 'feature');
+        const gitFilePath = writeGitDirFile(worktreeRoot, adminDirectory);
+        fs.writeFileSync(path.join(adminDirectory, 'gitdir'), `${gitFilePath}\n`);
+
+        assert.strictEqual(
+            tryGetLinkedWorktreeRoot(worktreeRoot),
+            process.platform === 'win32' ? worktreeRoot : undefined);
+    });
+
     test('case-variant back-pointer uses filesystem identity', () => {
         const adminDirectory = writeLinkedWorktreeMetadata(root, path.join(root, 'primary', '.git'));
         const gitFilePath = path.join(root, '.git');

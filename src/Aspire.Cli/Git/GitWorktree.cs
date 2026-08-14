@@ -128,9 +128,13 @@ internal static class GitWorktree
             return false;
         }
 
-        var adminParent = Directory.GetParent(Path.TrimEndingDirectorySeparator(adminDirectory));
+        var canonicalAdminDirectory = CanonicalizePath(adminDirectory);
+        var adminParent = Directory.GetParent(Path.TrimEndingDirectorySeparator(canonicalAdminDirectory));
+        var worktreesComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
         if (adminParent is null ||
-            !adminParent.Name.Equals(WorktreesSegment, StringComparison.OrdinalIgnoreCase))
+            !adminParent.Name.Equals(WorktreesSegment, worktreesComparison))
         {
             return false;
         }

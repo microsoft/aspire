@@ -91,6 +91,26 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void TryGetLinkedWorktreeRoot_UppercaseWorktreesAdminDirectory_UsesPlatformCasing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var fixtureRoot = workspace.WorkspaceRoot.FullName;
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(fixtureRoot, "worktree")).FullName;
+        var adminDirectory = Path.Combine(fixtureRoot, "primary", ".git", "WORKTREES", "feature");
+        var gitFilePath = TestGitWorktree.WriteGitDirFile(worktreeRoot, adminDirectory);
+        File.WriteAllText(
+            Path.Combine(adminDirectory, "gitdir"),
+            gitFilePath + Environment.NewLine);
+
+        var linkedRoot = GitWorktree.TryGetLinkedWorktreeRoot(worktreeRoot);
+        var expectedRoot = OperatingSystem.IsWindows()
+            ? PathNormalizer.ResolveSymlinks(worktreeRoot)
+            : null;
+
+        Assert.Equal(expectedRoot, linkedRoot);
+    }
+
+    [Fact]
     public void TryGetLinkedWorktreeRoot_CaseVariantBackPointer_UsesFilesystemIdentity()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
