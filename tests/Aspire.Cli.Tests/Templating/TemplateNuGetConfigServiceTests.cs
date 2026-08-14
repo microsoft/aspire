@@ -320,6 +320,182 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveTemplatePackageAsync_RequestedChannelWithSourceOverride_ReplacesAspireSource()
+    {
+        const string channelName = "staging";
+        const string channelSource = "https://channel.example/v3/index.json";
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+
+        var packageCache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfigFile, _) =>
+            {
+                Assert.NotNull(nugetConfigFile);
+                var doc = XDocument.Load(nugetConfigFile.FullName);
+                var sources = doc.Root!.Element("packageSources")!.Elements("add")
+                    .Select(e => (string)e.Attribute("value")!)
+                    .ToArray();
+                Assert.Equal([sourceOverride], sources);
+                Assert.Equal(["Aspire*", PackageMapping.AllPackages], GetPackagePatternsForSource(doc, sourceOverride));
+
+                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli
+                    {
+                        Id = TemplateNuGetConfigService.TemplatesPackageName,
+                        Version = "13.5.0-preview.1",
+                        Source = sourceOverride
+                    }
+                ]);
+            }
+        };
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var channel = PackageChannel.CreateExplicitChannel(
+                    channelName,
+                    PackageChannelQuality.Prerelease,
+                    [
+                        new PackageMapping("Aspire*", channelSource),
+                        new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+                    ],
+                    packageCache,
+                    features: new TestFeatures(),
+                    NullLogger.Instance);
+                return Task.FromResult<IEnumerable<PackageChannel>>([channel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: channelName,
+            VersionOverride: null,
+            SourceOverride: sourceOverride,
+            IncludePrHives: false);
+
+        await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_SourceOverrideWithoutRequestedChannel_UsesImplicitChannelOnly()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hivesDirectory = workspace.CreateDirectory("hives");
+        hivesDirectory.CreateSubdirectory("pr-12345");
+        var executionContext = CreateExecutionContextWithHives(workspace.WorkspaceRoot, hivesDirectory);
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+
+        var packageCache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfigFile, _) =>
+            {
+                Assert.NotNull(nugetConfigFile);
+                var doc = XDocument.Load(nugetConfigFile.FullName);
+                var sources = doc.Root!.Element("packageSources")!.Elements("add")
+                    .Select(e => (string)e.Attribute("value")!)
+                    .ToArray();
+                Assert.Equal([sourceOverride], sources);
+
+                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli
+                    {
+                        Id = TemplateNuGetConfigService.TemplatesPackageName,
+                        Version = "13.5.0",
+                        Source = sourceOverride
+                    }
+                ]);
+            }
+        };
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitChannel = PackageChannel.CreateImplicitChannel(packageCache, new TestFeatures(), NullLogger.Instance);
+                var hiveChannel = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "pr-source")],
+                    new FakeNuGetPackageCache(),
+                    new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "99.0.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, hiveChannel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: null,
+            VersionOverride: null,
+            SourceOverride: sourceOverride,
+            IncludePrHives: true);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("13.5.0", selection.Package.Version);
+        Assert.Equal(sourceOverride, selection.Package.Source);
+        Assert.Equal(PackageChannelType.Implicit, selection.Channel.Type);
+    }
+
+    [Fact]
+    public async Task InstallTemplatePackageAsync_SourceOverride_UsesExclusiveSource()
+    {
+        const string channelSource = "https://channel.example/v3/index.json";
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        const string packageVersion = "13.5.0-preview.1";
+        var channel = PackageChannel.CreateExplicitChannel(
+            "staging",
+            PackageChannelQuality.Prerelease,
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: packageVersion);
+        var selection = new TemplatePackageSelection(
+            new Aspire.Shared.NuGetPackageCli
+            {
+                Id = TemplateNuGetConfigService.TemplatesPackageName,
+                Version = packageVersion,
+                Source = channelSource
+            },
+            channel);
+        var runner = new TestDotNetCliRunner
+        {
+            InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, _, _, _) =>
+            {
+                Assert.Equal(TemplateNuGetConfigService.TemplatesPackageName, packageName);
+                Assert.Equal(packageVersion, version);
+                Assert.Equal(sourceOverride, nugetSource);
+                Assert.NotNull(nugetConfigFile);
+
+                var doc = XDocument.Load(nugetConfigFile.FullName);
+                var sources = doc.Root!.Element("packageSources")!.Elements("add")
+                    .Select(e => (string)e.Attribute("value")!)
+                    .ToArray();
+                Assert.Equal([sourceOverride], sources);
+                Assert.Equal(["Aspire*", PackageMapping.AllPackages], GetPackagePatternsForSource(doc, sourceOverride));
+
+                return (0, packageVersion);
+            }
+        };
+        var service = CreateService();
+
+        var outcome = await service.InstallTemplatePackageAsync(
+            selection,
+            sourceOverride,
+            runner,
+            "Installing templates",
+            statusEmoji: null,
+            CancellationToken.None);
+
+        Assert.Equal(0, outcome.ExitCode);
+        Assert.Equal(packageVersion, outcome.TemplateVersion);
+    }
+
+    [Fact]
     public async Task ResolveTemplatePackageAsync_NonExistentRequestedChannel_NotLocal_StillThrowsChannelNotFound()
     {
         // Companion to RequestedChannel_NotFound_Throws: any unrecognized name (typo

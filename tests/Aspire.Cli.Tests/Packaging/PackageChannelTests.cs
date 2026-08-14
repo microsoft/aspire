@@ -104,6 +104,35 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetTemplatePackagesAsync_PinnedChannelWithMappingsOverride_UsesOverrideSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string pinnedVersion = "13.5.0-preview.1";
+        const string channelSource = "https://channel.example/v3/index.json";
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        var channel = PackageChannel.CreateExplicitChannel(
+            "staging",
+            PackageChannelQuality.Prerelease,
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: pinnedVersion);
+
+        var package = Assert.Single(await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride),
+            CancellationToken.None));
+
+        Assert.Equal(pinnedVersion, package.Version);
+        Assert.Equal(sourceOverride, package.Source);
+        Assert.Equal(channelSource, channel.SourceDetails);
+    }
+
+    [Fact]
     public async Task GetIntegrationPackagesAsync_WithPinnedLocalSource_ReturnsOnlyPinnedLocalIntegrationPackages()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

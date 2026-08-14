@@ -473,6 +473,7 @@ internal class DotNetTemplateFactory(
 
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
                 selectedTemplateDetails,
+                sourceOverride: inputs.Source,
                 runner,
                 TemplatingStrings.GettingTemplates,
                 statusEmoji: KnownEmojis.Ice,

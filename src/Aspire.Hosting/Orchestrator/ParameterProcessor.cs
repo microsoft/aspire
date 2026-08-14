@@ -6,6 +6,7 @@
 
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,15 @@ public sealed class ParameterProcessor(
     private readonly object _resolutionTaskLock = new();
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task? _parameterResolutionTask;
+
+    /// <summary>
+    /// AppHost-scoped history that records resolved secret parameter values so <c>aspire describe</c>/<c>watch</c>
+    /// can redact them. Assigned by DI after construction (see <c>DistributedApplicationBuilder</c>) rather than
+    /// injected through the public constructor, to keep the public API surface unchanged for backporting. Null when
+    /// the processor is created outside the AppHost container (e.g. in unit tests), in which case recording is a
+    /// no-op.
+    /// </summary>
+    internal SecretRedactionHistory? SecretRedactionHistory { get; set; }
 
     /// <summary>
     /// Initializes parameter resources and handles unresolved parameters if interaction service is available.
@@ -154,6 +164,7 @@ public sealed class ParameterProcessor(
             await UpdateParameterStateAsync(parameterResource, value, KnownResourceStates.Running).ConfigureAwait(false);
 
             parameterResource.WaitForValueTcs?.TrySetResult(value);
+            RecordSecretValueForRedaction(parameterResource, value);
         }
         catch (Exception ex)
         {
@@ -494,6 +505,7 @@ public sealed class ParameterProcessor(
         }
 
         parameterResource.WaitForValueTcs?.TrySetResult(inputValue);
+        RecordSecretValueForRedaction(parameterResource, inputValue);
 
         await UpdateParameterStateAsync(parameterResource, inputValue, KnownResourceStates.Running).ConfigureAwait(false);
 
@@ -515,6 +527,20 @@ public sealed class ParameterProcessor(
             {
                 logger.LogWarning(ex, "Failed to save parameter {ParameterName} to deployment state.", parameterResource.Name);
             }
+        }
+    }
+
+    // Record a resolved secret value into the AppHost-scoped redaction history at the moment it is assigned or
+    // replaced, so `aspire describe`/`watch` redacts it even before any backchannel connection has peeked it. The
+    // describe path only observes a secret once a connection is open; a value assigned (and possibly replaced) before
+    // the first connection would otherwise be absent from the history and leak from a lagging snapshot
+    // (https://github.com/microsoft/aspire/issues/19241). No-op for non-secret parameters, empty values, or when no
+    // history is wired (e.g. unit tests that construct the processor directly).
+    private void RecordSecretValueForRedaction(ParameterResource parameterResource, string? value)
+    {
+        if (parameterResource.Secret && value is { Length: > 0 } && SecretRedactionHistory is { } history)
+        {
+            history.AddValues([value]);
         }
     }
 

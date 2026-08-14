@@ -22,7 +22,8 @@ internal static class TestExecutionContextHelper
         string? logFilePath = null,
         string? identityVersion = null,
         string? identityCommit = null,
-        bool identityOverridden = false)
+        bool identityOverridden = false,
+        DirectoryInfo? aspireHomeDirectory = null)
     {
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
@@ -30,7 +31,8 @@ internal static class TestExecutionContextHelper
             logFilePath: logFilePath,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
-            identityOverridden: identityOverridden);
+            identityOverridden: identityOverridden,
+            aspireHomeDirectory: aspireHomeDirectory);
     }
 
     /// <summary>
@@ -49,7 +51,8 @@ internal static class TestExecutionContextHelper
         string? identityVersion = null,
         string? identityCommit = null,
         bool identityOverridden = false,
-        DirectoryInfo? identityPackagesDirectory = null)
+        DirectoryInfo? identityPackagesDirectory = null,
+        DirectoryInfo? aspireHomeDirectory = null)
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
@@ -74,6 +77,7 @@ internal static class TestExecutionContextHelper
             identityPackagesDirectory: identityPackagesDirectory,
             debugMode: debugMode,
             homeDirectory: homeDirectory,
-            packagesDirectory: packagesDirectory);
+            packagesDirectory: packagesDirectory,
+            aspireHomeDirectory: aspireHomeDirectory);
     }
 }

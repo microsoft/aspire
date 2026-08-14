@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Resources;
@@ -1174,6 +1175,50 @@ public class ParameterProcessorTests
         Assert.Equal("newValue", savedValueNode?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task InitializeParametersAsync_RecordsResolvedSecretValues_ForRedaction()
+    {
+        // Assignment-time recording (https://github.com/microsoft/aspire/issues/19241): the processor records a
+        // secret's resolved value into the AppHost-scoped redaction history the moment it assigns it, so
+        // aspire describe/watch can redact it even before any backchannel connection has observed the value.
+        var redactionHistory = new SecretRedactionHistory();
+        var parameterProcessor = CreateParameterProcessor(secretRedactionHistory: redactionHistory);
+
+        var secretParam = CreateParameterResource("db-password", "s3cr3t-value", secret: true);
+        var nonSecretParam = CreateParameterResource("region", "public-value", secret: false);
+
+        await parameterProcessor.InitializeParametersAsync([secretParam, nonSecretParam], waitForResolution: true).DefaultTimeout();
+
+        // Only the secret value is recorded; the non-secret value must never enter the redaction set (asserting a
+        // single element proves "public-value" was not recorded).
+        var recorded = redactionHistory.AddValuesAndSnapshot([]);
+        Assert.Equal("s3cr3t-value", Assert.Single(recorded));
+    }
+
+    [Fact]
+    public async Task SetParameterCoreAsync_RecordsReplacedSecretValue_ForRedaction()
+    {
+        // The runtime "Set parameter" path replaces a secret's resolved value in place. Both the original and the
+        // replacement value must stay redactable, because a still-current or lagging snapshot can carry the previous
+        // value. Recording at assignment time accumulates both add-only, independent of any backchannel connection.
+        var redactionHistory = new SecretRedactionHistory();
+        var parameterProcessor = CreateParameterProcessor(secretRedactionHistory: redactionHistory);
+
+        var secretParam = CreateParameterResource("db-password", "initial-secret", secret: true);
+
+        await parameterProcessor.InitializeParametersAsync([secretParam], waitForResolution: true).DefaultTimeout();
+
+        // Recreate the completed TCS the way the runtime does before replacing a resolved value.
+        secretParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var result = await parameterProcessor.SetParameterCoreAsync(secretParam, CreateSetParameterArguments("replacement-secret"), CancellationToken.None).DefaultTimeout();
+        Assert.True(result.Success);
+
+        var recorded = redactionHistory.AddValuesAndSnapshot([]);
+        Assert.Contains("initial-secret", recorded);
+        Assert.Contains("replacement-secret", recorded);
+    }
+
     private static InteractionInputCollection CreateSetParameterArguments(string? value, string? saveToUserSecrets = null)
     {
         return new InteractionInputCollection([
@@ -1212,7 +1257,8 @@ public class ParameterProcessorTests
         bool disableDashboard = true,
         DistributedApplicationExecutionContext? executionContext = null,
         IDeploymentStateManager? deploymentStateManager = null,
-        IUserSecretsManager? userSecretsManager = null)
+        IUserSecretsManager? userSecretsManager = null,
+        SecretRedactionHistory? secretRedactionHistory = null)
     {
         return new ParameterProcessor(
             notificationService ?? ResourceNotificationServiceTestHelpers.Create(),
@@ -1221,8 +1267,13 @@ public class ParameterProcessorTests
             logger ?? new NullLogger<ParameterProcessor>(),
             executionContext ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
             deploymentStateManager ?? new MockDeploymentStateManager(),
-            userSecretsManager ?? UserSecrets.NoopUserSecretsManager.Instance
-        );
+            userSecretsManager ?? UserSecrets.NoopUserSecretsManager.Instance)
+        {
+            // Mirror the DI wiring in DistributedApplicationBuilder so tests can observe assignment-time secret
+            // recording. Left null by default (property is a no-op then), matching a processor created outside the
+            // AppHost container.
+            SecretRedactionHistory = secretRedactionHistory
+        };
     }
 
     private static InteractionService CreateInteractionService(bool disableDashboard = false)

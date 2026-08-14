@@ -30,4 +30,13 @@ internal interface ICertificateToolRunner
     /// Removes all HTTPS development certificates.
     /// </summary>
     CertificateCleanResult CleanHttpCertificate();
+
+    /// <summary>
+    /// Exports the highest-versioned trusted ASP.NET Core HTTPS development certificate
+    /// as a content-addressed PEM file in the specified directory.
+    /// </summary>
+    /// <param name="outputDirectory">The directory where the PEM certificate should be cached.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>The output path if a certificate was exported; <see langword="null"/> if no valid certificate was found.</returns>
+    string? ExportDevCertificatePublicPem(string outputDirectory, CancellationToken cancellationToken = default);
 }

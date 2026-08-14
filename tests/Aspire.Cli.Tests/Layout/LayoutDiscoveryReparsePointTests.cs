@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.Acquisition;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -101,6 +102,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         File.WriteAllText(
             Path.Combine(versionedManaged, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(versionedDcp), "stub");
 
         // Create a single bundle/ link pointing at the versioned directory.
         var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
@@ -210,6 +212,34 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DiscoverLayout_RejectsRelativeLayoutWithoutDcpExecutable(bool useBundleDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var componentRoot = useBundleDirectory
+            ? Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)
+            : layoutRoot;
+        var managedDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.ManagedDirectoryName));
+        Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DcpDirectoryName));
+        File.WriteAllText(
+            Path.Combine(managedDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
+        var binaryPath = Path.Combine(layoutRoot, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "stub");
+
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new TestEnvironment())
+        {
+            ProcessPathOverride = binaryPath
+        };
+
+        var layout = discovery.DiscoverLayout();
+
+        Assert.NotEqual(layoutRoot, layout?.LayoutPath);
+    }
+
     private static void CreateValidBundleLayout(string layoutRoot)
     {
         var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
@@ -220,5 +250,6 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         File.WriteAllText(
             Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "stub");
     }
 }

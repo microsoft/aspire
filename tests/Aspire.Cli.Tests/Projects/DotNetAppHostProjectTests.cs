@@ -101,6 +101,50 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task ValidationAndVersionInspectionDoNotAcquireCliBundle()
+    {
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var bundleAcquisitionRequested = false;
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            Layout = layout,
+            EnsureExtractedAndAcquireLayoutAsyncCallback = _ =>
+            {
+                bundleAcquisitionRequested = true;
+                return Task.CompletedTask;
+            }
+        };
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: true,
+                AspireHostingVersion: "13.0.0",
+                IsUsingCliBundle: true,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(
+            new TestDotNetCliRunner(),
+            layout,
+            resolver,
+            options => options.BundleServiceFactory = _ => bundleService);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
+        var version = await project.GetAspireHostingVersionAsync(appHostFile, CancellationToken.None);
+
+        Assert.True(validation.IsValid);
+        Assert.Equal("13.0.0", version);
+        Assert.False(bundleAcquisitionRequested);
+    }
+
+    [Fact]
     public async Task ValidateAppHostAsync_EvaluatesCleanlyButNotAspireHost_RejectsWithoutPossiblyUnbuildable()
     {
         // A project can pass the cheap name heuristic without being an Aspire host: e.g. a
@@ -426,6 +470,328 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostUsingCliBundlePreservesCallerProvidedRuntimePaths()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var customDcpDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "custom-dcp"));
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(customDcpDirectory.FullName), "");
+        var customDashboardPath = Path.Combine(
+            _workspace.WorkspaceRoot.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(customDashboardPath, "");
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                }))
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(customDcpDirectory.FullName, env![BundleDiscovery.DcpPathEnvVar]);
+            Assert.Equal(customDashboardPath, env[BundleDiscovery.DashboardPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [BundleDiscovery.DcpPathEnvVar] = customDcpDirectory.FullName,
+                [BundleDiscovery.DashboardPathEnvVar] = customDashboardPath,
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostUsingCliBundlePreservesInheritedRuntimePaths()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout);
+        var inheritedDcpDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-dcp")).FullName;
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(inheritedDcpDirectory), "");
+        var inheritedDashboardPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "inherited-dashboard");
+        File.WriteAllText(inheritedDashboardPath, "");
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [BundleDiscovery.DcpPathEnvVar] = inheritedDcpDirectory,
+            [BundleDiscovery.DashboardPathEnvVar] = inheritedDashboardPath,
+        });
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                }))
+        };
+        var project = CreateDotNetAppHostProject(runner, layout, environment: environment);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            // Inherited values remain in the process environment. They must not be shadowed
+            // by values in the child-process overlay built from the current CLI layout.
+            Assert.False(env!.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+            Assert.Equal(bundleRoot.FullName, env["AspireCliBundlePath"]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_ProjectAppHostUsingCliBundleReplacesUnusableRuntimePaths(
+        bool useExplicitOverlay,
+        bool useEmptyValues)
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var unusableDcpDirectory = useEmptyValues
+            ? ""
+            : Path.Combine(_workspace.WorkspaceRoot.FullName, "missing-dcp");
+        var unusableDashboardPath = useEmptyValues
+            ? ""
+            : Path.Combine(_workspace.WorkspaceRoot.FullName, "missing-dashboard");
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.DcpPathEnvVar] = unusableDcpDirectory,
+            [BundleDiscovery.DashboardPathEnvVar] = unusableDashboardPath,
+        };
+        var inheritedEnvironment = useExplicitOverlay
+            ? new TestEnvironment()
+            : new TestEnvironment(environmentVariables.ToDictionary(pair => pair.Key, pair => (string?)pair.Value));
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                }))
+        };
+        var project = CreateDotNetAppHostProject(runner, layout, environment: inheritedEnvironment);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(layout.GetDcpPath(), env![BundleDiscovery.DcpPathEnvVar]);
+            Assert.Equal(layout.GetManagedPath(), env[BundleDiscovery.DashboardPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = useExplicitOverlay ? environmentVariables : new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostUsingCliBundleDoesNotInjectInspectionRuntimePaths()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var runnerCalled = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                        DcpDir = "inspection-dcp",
+                        AspireDashboardPath = "inspection-dashboard",
+                    },
+                    Items = new { }
+                })),
+            RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+            {
+                runnerCalled = true;
+                Assert.False(env!.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+                return Task.FromResult(42);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(42, exitCode);
+        Assert.True(runnerCalled);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostUsingCliBundleDoesNotInjectMissingLayoutComponents()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        File.Delete(BundleDiscovery.GetDcpExecutablePath(layout.GetDcpPath()!));
+        File.Delete(layout.GetManagedPath()!);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                })),
+            RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+            {
+                Assert.False(env!.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsync_ProjectAppHostUsingCliBundleDoesNotAcquireOrInjectBundle(bool noBuild)
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var bundleAcquisitionRequested = false;
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            Layout = layout,
+            EnsureExtractedAndAcquireLayoutAsyncCallback = _ =>
+            {
+                bundleAcquisitionRequested = true;
+                return Task.CompletedTask;
+            }
+        };
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = VersionHelper.GetDefaultTemplateVersion(),
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                })),
+            RunAsyncCallback = (_, _, runnerNoBuild, _, _, env, _, options, _) =>
+            {
+                Assert.True(runnerNoBuild);
+                Assert.True(options.NoLaunchProfile);
+                Assert.False(env!.ContainsKey("AspireCliBundlePath"));
+                Assert.False(env.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(
+            runner,
+            layout,
+            configureServices: options => options.BundleServiceFactory = _ => bundleService);
+
+        var exitCode = await project.PublishAsync(new PublishContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = noBuild,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Arguments = ["--operation", "publish"],
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(bundleAcquisitionRequested);
     }
 
     [Fact]
@@ -1530,29 +1896,25 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task PublishAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
+    public async Task PublishAsync_SingleFileAppHostUsingCliBundleDoesNotAcquireOrInjectBundle()
     {
         var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
-        var bundleRoot = CreateCliBundle(out var layout);
-
-        var runner = new TestDotNetCliRunner
+        _ = CreateCliBundle(out var layout);
+        var bundleAcquisitionRequested = false;
+        var bundleService = new TestBundleService(isBundle: true)
         {
-            GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, properties, _, _) =>
+            Layout = layout,
+            EnsureExtractedAndAcquireLayoutAsyncCallback = _ =>
             {
-                Assert.Equal(appHostFile.FullName, projectFile.FullName);
-                Assert.Contains("AspireUseCliBundle", properties);
-                return (0, JsonDocument.Parse("""
-                    {
-                      "Properties": {
-                        "MSBuildVersion": "17.0.0",
-                        "AspireUseCliBundle": "true"
-                      },
-                      "Items": {}
-                    }
-                    """));
+                bundleAcquisitionRequested = true;
+                return Task.CompletedTask;
             }
         };
-        var project = CreateDotNetAppHostProject(runner, layout);
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(
+            runner,
+            layout,
+            configureServices: options => options.BundleServiceFactory = _ => bundleService);
 
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, options, _) =>
         {
@@ -1563,10 +1925,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish"], args);
             Assert.Equal("Production", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
-            Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env[BundleDiscovery.DcpPathEnvVar]);
-            Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
-                env[BundleDiscovery.DashboardPathEnvVar]);
+            Assert.False(env.ContainsKey("AspireCliBundlePath"));
+            Assert.False(env.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
             return Task.FromResult(0);
         };
 
@@ -1579,6 +1941,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
+        Assert.False(bundleAcquisitionRequested);
     }
 
     [Fact]
@@ -3517,8 +3880,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     private DirectoryInfo CreateCliBundle(out LayoutConfiguration layout)
     {
         var bundleRoot = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, Guid.NewGuid().ToString()));
-        Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName));
-        Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName));
+        var dcpDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName));
+        var managedDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName));
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), "");
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "");
 
         layout = new LayoutConfiguration
         {
@@ -3537,7 +3904,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         TestDotNetCliRunner runner,
         LayoutConfiguration? layout = null,
         IAppHostInfoResolver? appHostInfoResolver = null,
-        Action<CliServiceCollectionTestOptions>? configureServices = null)
+        Action<CliServiceCollectionTestOptions>? configureServices = null,
+        IEnvironment? environment = null)
     {
         var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper, options =>
         {
@@ -3552,6 +3920,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
             configureServices?.Invoke(options);
         });
+
+        if (environment is not null)
+        {
+            services.RemoveAll<IEnvironment>();
+            services.AddSingleton(environment);
+        }
 
         if (appHostInfoResolver is not null)
         {
