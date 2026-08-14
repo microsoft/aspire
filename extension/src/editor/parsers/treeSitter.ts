@@ -25,6 +25,6 @@ function getWebTreeSitterWasmPath(): string {
         : resolveBundledWasmAssetPath(require('web-tree-sitter/web-tree-sitter.wasm'));
 }
 
-function resolveBundledWasmAssetPath(assetPath: string): string {
+export function resolveBundledWasmAssetPath(assetPath: string): string {
     return path.isAbsolute(assetPath) ? assetPath : path.join(__dirname, assetPath);
 }

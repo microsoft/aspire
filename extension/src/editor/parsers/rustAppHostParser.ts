@@ -1,8 +1,8 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
-import { initializeTreeSitter } from './treeSitter';
+import { initializeTreeSitter, resolveBundledWasmAssetPath } from './treeSitter';
+import { visit } from './treeSitterHelpers';
 
 /**
  * Rust AppHost resource parser.
@@ -114,10 +114,6 @@ function getRustTreeSitterWasmPath(): string {
         : resolveBundledWasmAssetPath(require('tree-sitter-rust/tree-sitter-rust.wasm'));
 }
 
-function resolveBundledWasmAssetPath(assetPath: string): string {
-    return path.isAbsolute(assetPath) ? assetPath : path.join(__dirname, assetPath);
-}
-
 function findCall(rootNode: TreeSitterNode, predicate: (node: TreeSitterNode) => boolean): TreeSitterNode | undefined {
     let result: TreeSitterNode | undefined;
     visit(rootNode, node => {
@@ -144,20 +140,6 @@ function findMainFunction(rootNode: TreeSitterNode): TreeSitterNode | undefined 
     });
 
     return result;
-}
-
-function visit(node: TreeSitterNode, visitor: (node: TreeSitterNode) => boolean | void): boolean {
-    if (visitor(node) === false) {
-        return false;
-    }
-
-    for (const child of node.namedChildren) {
-        if (!visit(child, visitor)) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 function getCallName(call: TreeSitterNode): string | undefined {
