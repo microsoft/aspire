@@ -32,6 +32,10 @@ import {
     codeLensCommand,
     codeLensOpenDashboard,
     codeLensViewAppHostLogs,
+    codeLensRustAppHostAlreadyRunning,
+    codeLensRustAppHostAlreadyRunningTooltip,
+    codeLensRustAppHostUseAspire,
+    codeLensRustAppHostUseAspireTooltip,
     codeLensResourceValueMissing,
 } from '../loc/strings';
 
@@ -161,11 +165,24 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             return;
         }
 
-        // Only emit the lens when the document maps to a concretely-running AppHost.
-        // This prevents stale lenses on AppHost files whose host is not currently running,
-        // and avoids dispatching commands with a `.cs` source path the CLI cannot resolve.
-        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
-        if (appHostPath === undefined) {
+        const runningAppHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
+
+        if (document.languageId === 'rust') {
+            const entryPointLine = await parser.findAppHostEntryPointLine?.(document) ?? builderLine;
+            const title = runningAppHostPath ? codeLensRustAppHostAlreadyRunning : codeLensRustAppHostUseAspire;
+            const tooltip = runningAppHostPath ? codeLensRustAppHostAlreadyRunningTooltip : codeLensRustAppHostUseAspireTooltip;
+            lenses.push(new vscode.CodeLens(new vscode.Range(entryPointLine, 0, entryPointLine, 0), {
+                title,
+                command: 'aspire-vscode.codeLensRevealAppHost',
+                tooltip,
+                arguments: [runningAppHostPath ?? document.uri.fsPath],
+            }));
+        }
+
+        // Dashboard and log actions require a concretely-running AppHost path. In particular,
+        // C# source documents cannot safely fall back to their sibling source path here because
+        // the CLI expects the project path.
+        if (runningAppHostPath === undefined) {
             return;
         }
 
@@ -175,14 +192,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             title: codeLensOpenDashboard,
             command: 'aspire-vscode.codeLensOpenDashboard',
             tooltip: codeLensOpenDashboard,
-            arguments: [appHostPath],
+            arguments: [runningAppHostPath],
         }));
 
         lenses.push(new vscode.CodeLens(range, {
             title: codeLensViewAppHostLogs,
             command: 'aspire-vscode.codeLensViewAppHostLogs',
             tooltip: codeLensViewAppHostLogs,
-            arguments: [appHostPath],
+            arguments: [runningAppHostPath],
         }));
     }
 

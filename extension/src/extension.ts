@@ -332,6 +332,12 @@ export async function activate(context: vscode.ExtensionContext) {
       appHostTreeView.reveal(element, { select: true, focus: true });
     }
   });
+  const codeLensRevealAppHostRegistration = registerInstrumentedCommand('aspire-vscode.codeLensRevealAppHost', 'codelens', (appHostPath: string) => {
+    const element = appHostTreeProvider.findAppHostElement(appHostPath);
+    if (element) {
+      return appHostTreeView.reveal(element, { select: true, focus: true, expand: true });
+    }
+  });
   const codeLensOpenDashboardRegistration = registerInstrumentedCommand('aspire-vscode.codeLensOpenDashboard', 'codelens', (appHostPath?: string) => {
     const element = appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) : undefined;
     return appHostTreeProvider.openDashboard(element);
@@ -344,7 +350,7 @@ export async function activate(context: vscode.ExtensionContext) {
     additionalArgs.push('--follow');
     terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
   });
-  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
+  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensRevealAppHostRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
 
   // Gutter decorations — colored dots next to resources showing runtime state
   const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);

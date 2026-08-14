@@ -255,6 +255,10 @@ export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
 export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
 export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
 export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');
+export const codeLensRustAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; this AppHost is already running in Aspire');
+export const codeLensRustAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
+export const codeLensRustAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
+export const codeLensRustAppHostUseAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
 
 export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspire AppHost');
 export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');

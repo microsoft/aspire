@@ -411,6 +411,53 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('warns on the main CodeLens row when a Rust AppHost is already running', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({ appHosts: [makeAppHost(appHostPath)] });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const warningLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost');
+
+        assert.ok(warningLens);
+        assert.strictEqual(warningLens.command?.title, '⚠️ Do not click the rust-analyzer Run or Debug actions; this AppHost is already running in Aspire');
+        assert.strictEqual(warningLens.command?.tooltip, 'Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
+        assert.deepStrictEqual(warningLens.command?.arguments, [appHostPath]);
+        assert.strictEqual(warningLens.range.start.line, 0);
+        harness.dispose();
+    });
+
+    test('directs stopped Rust AppHosts to Aspire Run or Debug', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = 'fn main() {\n    let builder = create_builder(None)?;\n}';
+        const harness = createHarness({});
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const warningLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost');
+
+        assert.ok(warningLens);
+        assert.strictEqual(warningLens.command?.title, '⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
+        assert.strictEqual(warningLens.command?.tooltip, 'Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
+        assert.deepStrictEqual(warningLens.command?.arguments, [appHostPath]);
+        assert.strictEqual(warningLens.range.start.line, 0);
+        harness.dispose();
+    });
+
+    test('does not add the Rust warning to a running C# AppHost', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(APP_HOST_DOC, docPath), cancellationToken) as vscode.CodeLens[];
+
+        assert.ok(!lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost'));
+        harness.dispose();
+    });
+
     test('returns empty array for non-AppHost documents', async () => {
         const harness = createHarness({ appHosts: [makeAppHost(p('repo', 'AppHost', 'AppHost.csproj'))] });
 
