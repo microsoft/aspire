@@ -66,6 +66,13 @@ internal static class ParseResultHelperTestData
             1
         },
         {
+            ["start", "--capture-profile-output=--", "--", "--custom-arg"],
+            UnmatchedTokenPlacement.AfterSeparator,
+            false,
+            [$"--capture-profile-output={new FileInfo("--").FullName}", "--", "--custom-arg"],
+            1
+        },
+        {
             ["run", "--debug", "--"],
             UnmatchedTokenPlacement.Preserve,
             false,
@@ -128,6 +135,18 @@ public sealed class ParseResultHelperTests : IDisposable
     }
 
     [Fact]
+    public void GetForwardedArguments_PreservesInvalidFileSystemInfoValue()
+    {
+        var parseResult = _command.Parse(["run", "--capture-profile-output", ""]);
+
+        Assert.NotEmpty(parseResult.Errors);
+        var forwardedArguments = GetForwardedArguments(parseResult, UnmatchedTokenPlacement.Preserve);
+
+        Assert.Equal(["--capture-profile-output", ""], forwardedArguments.Tokens);
+        Assert.Equal(2, forwardedArguments.OptionCount);
+    }
+
+    [Fact]
     public void GetForwardedArguments_NormalizesLiteralDoubleDashFileSystemInfoValue()
     {
         var parseResult = _command.Parse(["run", "--capture-profile-output=--"]);
@@ -185,7 +204,7 @@ public sealed class ParseResultHelperTests : IDisposable
             ["--isolated", "false", "--debug", "--non-interactive", "--capture-profile", "--", "--apphost", "app-value"],
             forwardedArguments.Tokens);
 
-        var childParseResult = _command.Parse(["run", .. forwardedArguments.Tokens.ToArray()]);
+        var childParseResult = _command.Parse(["run", .. forwardedArguments.Tokens]);
 
         Assert.Empty(childParseResult.Errors);
         Assert.False(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));

@@ -202,6 +202,7 @@ internal static class ParseResultHelper
         ref Token? lastForwardedToken)
     {
         var emittedValue = optionResult is { Tokens.Count: 1 } &&
+                           !optionResult.Errors.Any() &&
                            optionResult.Option.ValueType.IsAssignableTo(typeof(FileSystemInfo)) &&
                            optionResult.GetValueOrDefault<FileSystemInfo?>() is { } fileSystemInfo
             ? fileSystemInfo.FullName
