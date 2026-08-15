@@ -7,7 +7,6 @@ using Xunit;
 
 namespace Aspire.Deployment.EndToEnd.Tests;
 
-[Trait("Partition", "Deployment")]
 [Trait("category", "deployment")]
 [Trait("provider", "azure")]
 public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
