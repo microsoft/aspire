@@ -90,5 +90,4 @@ public class ScanTestPartitionsFromSourceGuardTests
             "form [Trait(\"Partition\", \"<literal>\")], or update the script's regex AND this guard " +
             $"together:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}");
     }
-
 }
