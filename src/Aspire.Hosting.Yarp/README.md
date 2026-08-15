@@ -178,6 +178,25 @@ builder.AddYarp("gateway")
        });
 ```
 
+### Terminate TLS and proxy h2c (for gRPC)
+
+```csharp
+var someH2CEndpoint = /** */;
+
+builder.AddYarp("gateway")
+    .WithHttpsHostPort(8080)
+    .WithConfiguration(yarp =>
+    {
+        var cluster = yarp.AddCluster(someH2CEndpoint)
+            .WithForwarderRequestConfig(new ForwarderRequestConfig
+            {
+                Version = HttpVersion.Version20,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            });
+        yarp.AddRoute(cluster);
+    });
+```
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
