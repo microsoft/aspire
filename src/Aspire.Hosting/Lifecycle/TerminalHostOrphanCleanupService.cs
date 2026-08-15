@@ -271,7 +271,7 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
                 {
                     logger.LogWarning(
                         ex,
-                        "Unable to inspect terminal metadata '{Path}'; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        "Unable to inspect terminal metadata '{Path}'; it is eligible for cleanup after {RetentionDays} days only when no socket artifacts exist.",
                         candidatePath,
                         InvalidMetadataRetentionPeriod.TotalDays);
                     ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
@@ -286,7 +286,7 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
                 if (metadata is null)
                 {
                     logger.LogWarning(
-                        "Terminal metadata '{Path}' is invalid; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        "Terminal metadata '{Path}' is invalid; it is eligible for cleanup after {RetentionDays} days only when no socket artifacts exist.",
                         candidatePath,
                         InvalidMetadataRetentionPeriod.TotalDays);
                     ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
@@ -306,15 +306,25 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
                     continue;
                 }
 
+                if (metadata.SchemaVersion is 1 or 2)
+                {
+                    // Schema v1 and the PR-preview schema v2 predate machine/PID-namespace
+                    // scoping. A missing PID in this namespace cannot prove that an owner using a
+                    // shared home directory is dead, so preserve these artifacts unconditionally.
+                    logger.LogDebug(
+                        "Skipping unscoped schema-v{SchemaVersion} terminal metadata '{Path}'.",
+                        metadata.SchemaVersion,
+                        candidatePath);
+                    continue;
+                }
+
                 if (!string.Equals(metadata.ReplicaId, replicaId, StringComparison.Ordinal)
                     || metadata.AppHostPid <= 0
-                    || (metadata.SchemaVersion == 2 && metadata.SchemaV2AppHostProcessIdentity is not > 0)
-                    || (metadata.SchemaVersion == TerminalHostMetadata.CurrentSchemaVersion
-                        && (metadata.AppHostProcessIdentity is not > 0
-                            || string.IsNullOrEmpty(metadata.AppHostProcessScopeId))))
+                    || metadata.AppHostProcessIdentity is not > 0
+                    || string.IsNullOrEmpty(metadata.AppHostProcessScopeId))
                 {
                     logger.LogWarning(
-                        "Terminal metadata '{Path}' is invalid; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        "Terminal metadata '{Path}' is invalid; it is eligible for cleanup after {RetentionDays} days only when no socket artifacts exist.",
                         candidatePath,
                         InvalidMetadataRetentionPeriod.TotalDays);
                     ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
@@ -322,52 +332,27 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
                 }
 
                 var unableToInspectOwner = false;
-                bool ownerIsRunning;
-                if (metadata.SchemaVersion == 1)
+                if (!string.Equals(metadata.AppHostProcessScopeId, currentScopeId, StringComparison.Ordinal))
                 {
-                    // Released schema-v1 sidecars have only a PID. Preserve compatibility with a
-                    // conservative existence check that assumes inaccessible processes are alive.
-                    ownerIsRunning = ProcessStartTimeHelper.IsProcessRunning(
-                        metadata.AppHostPid,
-                        expectedStartTimeUnixMilliseconds: null,
-                        tolerance: null,
-                        assumeRunningWhenUnableToInspect: true,
-                        unableToInspect: out unableToInspectOwner);
+                    logger.LogDebug(
+                        "Skipping terminal replica '{ReplicaId}' because its owner is in process scope '{OwnerScopeId}', not '{CurrentScopeId}'.",
+                        replicaId,
+                        metadata.AppHostProcessScopeId,
+                        currentScopeId);
+                    continue;
                 }
-                else if (metadata.SchemaVersion == 2)
-                {
-                    // Schema v2 was emitted by earlier preview builds of this feature. It has the
-                    // stable process identity but predates machine/PID-namespace and boot scoping.
-                    ownerIsRunning = ProcessStartTimeHelper.IsProcessRunning(
-                        metadata.AppHostPid,
-                        metadata.SchemaV2AppHostProcessIdentity,
-                        tolerance: null,
-                        assumeRunningWhenUnableToInspect: true,
-                        unableToInspect: out unableToInspectOwner);
-                }
-                else
-                {
-                    if (!string.Equals(metadata.AppHostProcessScopeId, currentScopeId, StringComparison.Ordinal))
-                    {
-                        logger.LogDebug(
-                            "Skipping terminal replica '{ReplicaId}' because its owner is in process scope '{OwnerScopeId}', not '{CurrentScopeId}'.",
-                            replicaId,
-                            metadata.AppHostProcessScopeId,
-                            currentScopeId);
-                        continue;
-                    }
 
-                    ownerIsRunning = metadata.AppHostBootId is not null
-                        && currentBootId is not null
-                        && !string.Equals(metadata.AppHostBootId, currentBootId, StringComparison.Ordinal)
-                        ? false
-                        : ProcessStartTimeHelper.IsProcessRunning(
-                            metadata.AppHostPid,
-                            metadata.AppHostProcessIdentity,
-                            tolerance: null,
-                            assumeRunningWhenUnableToInspect: true,
-                            unableToInspect: out unableToInspectOwner);
-                }
+                var ownerIsRunning = metadata.AppHostBootId is not null
+                    && currentBootId is not null
+                    && !string.Equals(metadata.AppHostBootId, currentBootId, StringComparison.Ordinal)
+                    ? false
+                    : ProcessStartTimeHelper.IsProcessRunning(
+                        metadata.AppHostPid,
+                        metadata.AppHostProcessIdentity,
+                        tolerance: null,
+                        assumeRunningWhenUnableToInspect: true,
+                        unableToInspect: out unableToInspectOwner);
+
                 if (unableToInspectOwner)
                 {
                     logger.LogWarning(
@@ -388,6 +373,8 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
                     metadata.AppHostPid);
                 DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
             }
+
+            CleanupExpiredMetadataTemporaryFiles(trmnlDirectory, logger, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -420,13 +407,80 @@ internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
             return;
         }
 
+        if (ReplicaSocketArtifactsExist(trmnlDirectory, replicaId))
+        {
+            logger.LogWarning(
+                "Expired invalid terminal metadata '{Path}' still has socket artifacts; preserving the replica because its owner cannot be verified.",
+                metadataPath);
+            return;
+        }
+
+        try
+        {
+            File.Delete(metadataPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Unable to reclaim expired invalid terminal metadata '{Path}'.", metadataPath);
+            return;
+        }
+
         logger.LogInformation(
-            "Reclaiming terminal artifacts for replica '{ReplicaId}' because invalid metadata '{Path}' was last modified at {LastWriteTimeUtc}.",
-            replicaId,
+            "Reclaimed expired invalid terminal metadata '{Path}' for socket-free replica '{ReplicaId}'; it was last modified at {LastWriteTimeUtc}.",
             metadataPath,
+            replicaId,
             lastWriteTimeUtc);
-        DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
     }
+
+    private static void CleanupExpiredMetadataTemporaryFiles(
+        string trmnlDirectory,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        foreach (var temporaryPath in Directory.GetFiles(trmnlDirectory, $"*.{TerminalHostPaths.MetadataTemporarySuffix}"))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!TerminalHostPaths.TryGetReplicaIdFromMetadataTemporaryPath(temporaryPath, out var replicaId))
+            {
+                continue;
+            }
+
+            DateTime lastWriteTimeUtc;
+            try
+            {
+                lastWriteTimeUtc = File.GetLastWriteTimeUtc(temporaryPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Unable to inspect temporary terminal metadata '{Path}'.", temporaryPath);
+                continue;
+            }
+
+            if (lastWriteTimeUtc > DateTime.UtcNow - InvalidMetadataRetentionPeriod)
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(temporaryPath);
+                logger.LogInformation(
+                    "Reclaimed stale temporary terminal metadata '{Path}' for replica '{ReplicaId}'.",
+                    temporaryPath,
+                    replicaId);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Unable to reclaim stale temporary terminal metadata '{Path}'.", temporaryPath);
+            }
+        }
+    }
+
+    private static bool ReplicaSocketArtifactsExist(string trmnlDirectory, string replicaId)
+        => File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose))
+            || File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose))
+            || File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ControlSockPurpose));
 
     private static string? TryReadTrimmedText(string path)
     {

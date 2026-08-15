@@ -49,6 +49,18 @@ public class TerminalHostPathsTests
     }
 
     [Fact]
+    public void GetMetadataTemporaryPathBuildsExpectedLayout()
+    {
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(ExampleHome);
+        var id = TerminalHostPaths.CreateReplicaId();
+        var metadata = TerminalHostPaths.GetMetadataPath(trmnlDirectory, id);
+
+        Assert.Equal(
+            Path.Combine(trmnlDirectory, $"{id}.{TerminalHostPaths.MetadataTemporarySuffix}"),
+            TerminalHostPaths.GetMetadataTemporaryPath(metadata));
+    }
+
+    [Fact]
     public void GetSocketPathFitsInsideMacOsSunPathLimit()
     {
         var home = "/Users/abcdefghijklmnop";

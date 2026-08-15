@@ -402,7 +402,7 @@ public class WithTerminalTests : IAsyncLifetime
             Assert.False(string.IsNullOrEmpty(root.GetProperty("appHostPath").GetString()));
             Assert.NotEqual(default, root.GetProperty("createdAtUtc").GetDateTime());
             Assert.Equal(_terminalDirectory, Path.GetDirectoryName(host.Layout.MetadataPath));
-            Assert.False(File.Exists(host.Layout.MetadataPath + ".tmp"));
+            Assert.False(File.Exists(TerminalHostPaths.GetMetadataTemporaryPath(host.Layout.MetadataPath)));
 
             if (!OperatingSystem.IsWindows())
             {
@@ -594,8 +594,8 @@ public class WithTerminalTests : IAsyncLifetime
         {
             await RunStartupSweepAsync();
 
-            Assert.False(File.Exists(metadataPath));
-            Assert.False(File.Exists(producerPath));
+            Assert.True(File.Exists(metadataPath));
+            Assert.True(File.Exists(producerPath));
             Assert.True(File.Exists(sentinelPath), "Metadata content must never be used as a file search pattern.");
         }
         finally
@@ -631,7 +631,7 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WithTerminalSweepReclaimsExpiredMalformedMetadata()
+    public async Task WithTerminalSweepPreservesExpiredMalformedMetadataWithSockets()
     {
         var trmnlDirectory = GetTerminalDirectory();
         var replicaId = CreateTestReplicaId("expired-malformed");
@@ -648,8 +648,53 @@ public class WithTerminalTests : IAsyncLifetime
 
         await RunStartupSweepAsync();
 
+        Assert.True(File.Exists(metadataPath));
+        Assert.True(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsExpiredMalformedMetadataWithoutSockets()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("expired-malformed-no-sockets");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        File.WriteAllText(metadataPath, """{"schemaVersion":""");
+        File.SetLastWriteTimeUtc(
+            metadataPath,
+            DateTime.UtcNow - TerminalHostOrphanCleanupService.InvalidMetadataRetentionPeriod - TimeSpan.FromMinutes(1));
+
+        await RunStartupSweepAsync();
+
         Assert.False(File.Exists(metadataPath));
-        Assert.False(File.Exists(producerPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsOnlyExpiredMetadataTemporaryFiles()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var expiredReplicaId = CreateTestReplicaId("expired-temp");
+        var recentReplicaId = CreateTestReplicaId("recent-temp");
+        var expiredPath = TerminalHostPaths.GetMetadataTemporaryPath(
+            TerminalHostPaths.GetMetadataPath(trmnlDirectory, expiredReplicaId));
+        var recentPath = TerminalHostPaths.GetMetadataTemporaryPath(
+            TerminalHostPaths.GetMetadataPath(trmnlDirectory, recentReplicaId));
+        File.WriteAllText(expiredPath, string.Empty);
+        File.WriteAllText(recentPath, string.Empty);
+        File.SetLastWriteTimeUtc(
+            expiredPath,
+            DateTime.UtcNow - TerminalHostOrphanCleanupService.InvalidMetadataRetentionPeriod - TimeSpan.FromMinutes(1));
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.False(File.Exists(expiredPath));
+            Assert.True(File.Exists(recentPath));
+        }
+        finally
+        {
+            DeleteIfExists(expiredPath, recentPath);
+        }
     }
 
     [Fact]
@@ -718,7 +763,7 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WithTerminalSweepReclaimsSchemaV1SidecarUsingPidOnly()
+    public async Task WithTerminalSweepPreservesUnscopedSchemaV1Sidecar()
     {
         var trmnlDirectory = GetTerminalDirectory();
         var replicaId = CreateTestReplicaId("schema-v1");
@@ -739,12 +784,12 @@ public class WithTerminalTests : IAsyncLifetime
 
         await RunStartupSweepAsync();
 
-        Assert.False(File.Exists(metadataPath));
-        Assert.False(File.Exists(producerPath));
+        Assert.True(File.Exists(metadataPath));
+        Assert.True(File.Exists(producerPath));
     }
 
     [Fact]
-    public async Task WithTerminalSweepReclaimsSchemaV2Sidecar()
+    public async Task WithTerminalSweepPreservesUnscopedSchemaV2Sidecar()
     {
         var trmnlDirectory = GetTerminalDirectory();
         var replicaId = CreateTestReplicaId("schema-v2");
@@ -765,8 +810,8 @@ public class WithTerminalTests : IAsyncLifetime
 
         await RunStartupSweepAsync();
 
-        Assert.False(File.Exists(metadataPath));
-        Assert.False(File.Exists(producerPath));
+        Assert.True(File.Exists(metadataPath));
+        Assert.True(File.Exists(producerPath));
     }
 
     [Fact]

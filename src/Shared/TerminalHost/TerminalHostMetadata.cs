@@ -68,7 +68,7 @@ internal sealed class TerminalHostMetadata
 
     /// <summary>
     /// Process identity name used by schema-v2 sidecars from earlier preview builds.
-    /// Retained only so their orphaned files remain reclaimable.
+    /// Retained so readers can recognize those unscoped sidecars and preserve them safely.
     /// </summary>
     [JsonPropertyName("appHostProcessStartTimeUnixMilliseconds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

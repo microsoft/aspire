@@ -58,6 +58,9 @@ internal static class TerminalHostPaths
     /// <summary>Suffix for the per-replica metadata sidecar (JSON).</summary>
     public const string MetadataSuffix = "metadata.json";
 
+    /// <summary>Suffix for a metadata sidecar while it is being written atomically.</summary>
+    public const string MetadataTemporarySuffix = MetadataSuffix + ".tmp";
+
     /// <summary>Internal configuration key that overrides the terminal artifact directory.</summary>
     public const string DirectoryOverrideConfigName = "AppHost:TerminalHostDirectory";
 
@@ -121,10 +124,25 @@ internal static class TerminalHostPaths
     }
 
     /// <summary>
+    /// Gets the temporary path used while atomically writing a metadata sidecar.
+    /// </summary>
+    public static string GetMetadataTemporaryPath(string metadataPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(metadataPath);
+        return metadataPath + ".tmp";
+    }
+
+    /// <summary>
     /// Extracts and validates the replica identifier encoded in a metadata sidecar filename.
     /// </summary>
     public static bool TryGetReplicaIdFromMetadataPath(string metadataPath, out string replicaId)
         => TryGetReplicaId(metadataPath, MetadataSuffix, out replicaId);
+
+    /// <summary>
+    /// Extracts and validates the replica identifier encoded in a temporary metadata filename.
+    /// </summary>
+    public static bool TryGetReplicaIdFromMetadataTemporaryPath(string metadataTemporaryPath, out string replicaId)
+        => TryGetReplicaId(metadataTemporaryPath, MetadataTemporarySuffix, out replicaId);
 
     private static bool TryGetReplicaId(string path, string suffix, out string replicaId)
     {

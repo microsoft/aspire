@@ -316,7 +316,7 @@ public static class TerminalResourceBuilderExtensions
         ILogger? logger,
         CancellationToken cancellationToken)
     {
-        var temporaryMetadataPath = metadataPath + ".tmp";
+        var temporaryMetadataPath = TerminalHostPaths.GetMetadataTemporaryPath(metadataPath);
         try
         {
             // Indented for human inspection: the file is small (<1 KiB) and is expected to
