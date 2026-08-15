@@ -202,6 +202,34 @@ suite('AspireDebugSession tests', () => {
         spawnStub.firstCall.args[3]?.exitCallback?.(0);
     });
 
+    test('logs only the forwarded AppHost argument count when starting the debugger', async () => {
+        const logStub = sinon.stub(extensionLogOutputChannel, 'info');
+        sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/AppHost.csproj',
+            ['run', '--no-build', '--', '--api-key', 'secret-value'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const startMessage = logStub.args
+            .map(([message]) => message)
+            .find(message => message.startsWith('Starting AppHost for project:'));
+        assert.strictEqual(
+            startMessage,
+            'Starting AppHost for project: /workspace/AppHost.csproj with argument count: 2');
+    });
+
     test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
         // `terminateCliProcess` is stubbed rather than executed: on Windows it shells out to
         // `taskkill /pid <pid> /t` instead of calling `child.kill`, so running it for real would

@@ -1210,7 +1210,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         launchConfig = { project_path: projectFile, type: 'project' } as ProjectLaunchConfiguration;
       }
 
-      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with args: ${appHostArgs.join(' ')}`);
+      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs.length}`);
 
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
         this.configuration,
