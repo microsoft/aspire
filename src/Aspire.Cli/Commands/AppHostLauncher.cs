@@ -113,8 +113,7 @@ internal sealed class AppHostLauncher(
         var optionCount = doubleDashIndex >= 0 ? doubleDashIndex : args.Count;
         for (var i = 0; i < optionCount; i++)
         {
-            if (args[i] == s_isolatedOption.Name ||
-                args[i].StartsWith($"{s_isolatedOption.Name}=", StringComparison.Ordinal))
+            if (MatchesOptionToken(s_isolatedOption, args[i]))
             {
                 return;
             }
@@ -124,6 +123,19 @@ internal sealed class AppHostLauncher(
         if (!isolated.Value)
         {
             args.Insert(optionCount + 1, "false");
+        }
+    }
+
+    /// <summary>
+    /// Returns whether a token matches an option name or alias, including equals syntax.
+    /// </summary>
+    internal static bool MatchesOptionToken(Option option, string token)
+    {
+        return MatchesName(option.Name) || option.Aliases.Any(MatchesName);
+
+        bool MatchesName(string name)
+        {
+            return token == name || token.StartsWith($"{name}=", StringComparison.Ordinal);
         }
     }
 

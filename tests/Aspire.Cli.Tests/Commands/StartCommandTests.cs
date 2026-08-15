@@ -349,6 +349,59 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             options.Args);
     }
 
+    public static TheoryData<string[], string[]> DelegatedUnmatchedTokenCases => new()
+    {
+        {
+            ["--debug", "--detach"],
+            ["--debug", "--", "--detach"]
+        },
+        {
+            ["--log-level", "Debug", "--unknown-option", "value"],
+            ["--log-level", "Debug", "--", "--unknown-option", "value"]
+        },
+        {
+            ["--unknown-option", "duplicate", "duplicate"],
+            ["--", "--unknown-option", "duplicate", "duplicate"]
+        },
+        {
+            ["--debug", "--"],
+            ["--debug"]
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(DelegatedUnmatchedTokenCases))]
+    public async Task StartCommand_WhenRunningInExtension_AppendsUnmatchedTokensAfterSeparator(
+        string[] commandArgs,
+        string[] expectedArgs)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var actualArgs = await InvokeStartInExtensionAsync(workspace, commandArgs);
+
+        Assert.NotNull(actualArgs);
+        Assert.Equal(expectedArgs, actualArgs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartCommand_WhenRunningInExtension_NormalizesCaptureProfileOutputPath(bool useEqualsSyntax)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var relativeOutputPath = Path.Combine("Profile Output", "profile.zip");
+        var commandArgs = useEqualsSyntax
+            ? new[] { "--capture-profile", $"--capture-profile-output={relativeOutputPath}" }
+            : new[] { "--capture-profile", "--capture-profile-output", relativeOutputPath };
+
+        var actualArgs = await InvokeStartInExtensionAsync(workspace, commandArgs);
+
+        Assert.NotNull(actualArgs);
+        Assert.Equal(
+            ["--capture-profile", "--capture-profile-output", new FileInfo(relativeOutputPath).FullName],
+            actualArgs);
+    }
+
     [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithStartDebugSession_StartsVsCodeDebugSession()
     {
@@ -605,6 +658,37 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             Assert.NotNull(actualArgs);
             Assert.Equal([expectedFirstArgument, expectedSecondArgument], actualArgs);
         }
+    }
+
+    private async Task<string[]?> InvokeStartInExtensionAsync(TemporaryWorkspace workspace, IReadOnlyList<string> commandArgs)
+    {
+        var appHostFile = CreateAppHostFile(workspace);
+        DebugSessionOptions? options = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var args = new List<string> { "start", "--apphost", appHostFile.FullName };
+        args.AddRange(commandArgs);
+        var result = command.Parse(args);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+
+        return options.Args;
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)

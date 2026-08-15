@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
 using Aspire.Cli.Resources;
+using CommandLineCommandResult = System.CommandLine.Parsing.CommandResult;
 
 namespace Aspire.Cli.Commands;
 
@@ -24,30 +25,7 @@ internal static class ParseResultHelper
     /// <returns>The forwarded tokens. All tokens following <c>--</c> are preserved.</returns>
     internal static List<string> GetForwardedTokens(ParseResult parseResult, params Option[] excludedOptions)
     {
-        // Use reference identity defensively so distinct token occurrences with the same value
-        // and type can never cause each other to be excluded.
-        var excludedTokens = new HashSet<Token>(ReferenceEqualityComparer.Instance);
-        var excludedOptionNames = new HashSet<string>(StringComparer.Ordinal);
-
-        System.CommandLine.Parsing.CommandResult? commandResult = parseResult.CommandResult;
-        while (commandResult is not null)
-        {
-            excludedTokens.Add(commandResult.IdentifierToken);
-            commandResult = commandResult.Parent as System.CommandLine.Parsing.CommandResult;
-        }
-
-        foreach (var option in excludedOptions)
-        {
-            excludedOptionNames.Add(option.Name);
-            excludedOptionNames.UnionWith(option.Aliases);
-
-            if (parseResult.GetResult(option) is not { Implicit: false } optionResult)
-            {
-                continue;
-            }
-
-            excludedTokens.UnionWith(optionResult.Tokens);
-        }
+        var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
 
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
         var afterDoubleDash = false;
@@ -67,7 +45,7 @@ internal static class ParseResultHelper
             }
 
             if (excludedTokens.Contains(token) ||
-                token.Type == TokenType.Option && excludedOptionNames.Contains(token.Value))
+                (token.Type == TokenType.Option && excludedOptionNames.Contains(token.Value)))
             {
                 continue;
             }
@@ -76,6 +54,143 @@ internal static class ParseResultHelper
         }
 
         return forwardedTokens;
+    }
+
+    /// <summary>
+    /// Returns explicitly supplied option tokens before <c>--</c>, followed by unmatched tokens after a separator.
+    /// </summary>
+    /// <remarks>
+    /// This preserves the historical <c>start</c> delegation behavior while allowing newly registered options to flow automatically.
+    /// </remarks>
+    internal static List<string> GetForwardedOptionTokensWithUnmatchedTokensAfterDoubleDash(
+        ParseResult parseResult,
+        params Option[] excludedOptions)
+    {
+        var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
+        var optionValueTokens = GetOptionValueTokens(parseResult.RootCommandResult);
+        var forwardedTokens = new List<string>(parseResult.Tokens.Count);
+
+        // System.CommandLine tokenizes both `--option value` and `--option=value` into
+        // option/value Token instances. OptionResult.Tokens owns the value instances,
+        // while unknown values do not belong to an OptionResult. Reference identity
+        // therefore distinguishes duplicate matched and unmatched values reliably.
+        foreach (var token in parseResult.Tokens)
+        {
+            if (token.Type == TokenType.DoubleDash)
+            {
+                break;
+            }
+
+            if (excludedTokens.Contains(token) ||
+                (token.Type == TokenType.Option && excludedOptionNames.Contains(token.Value)))
+            {
+                continue;
+            }
+
+            if (token.Type == TokenType.Option || optionValueTokens.Contains(token))
+            {
+                forwardedTokens.Add(token.Value);
+            }
+        }
+
+        if (parseResult.UnmatchedTokens.Count > 0)
+        {
+            forwardedTokens.Add("--");
+            forwardedTokens.AddRange(parseResult.UnmatchedTokens);
+        }
+
+        return forwardedTokens;
+    }
+
+    /// <summary>
+    /// Replaces an explicitly forwarded option value before the AppHost argument separator.
+    /// </summary>
+    internal static void ReplaceForwardedOptionValue(List<string> forwardedTokens, Option option, string value)
+    {
+        var optionNames = new HashSet<string>(option.Aliases, StringComparer.Ordinal)
+        {
+            option.Name
+        };
+        var doubleDashIndex = forwardedTokens.IndexOf("--");
+        var optionTokenCount = doubleDashIndex >= 0 ? doubleDashIndex : forwardedTokens.Count;
+
+        for (var i = 0; i < optionTokenCount; i++)
+        {
+            if (optionNames.Contains(forwardedTokens[i]))
+            {
+                if (i + 1 < optionTokenCount)
+                {
+                    forwardedTokens[i + 1] = value;
+                }
+
+                return;
+            }
+
+            foreach (var optionName in optionNames)
+            {
+                if (forwardedTokens[i].StartsWith($"{optionName}=", StringComparison.Ordinal))
+                {
+                    forwardedTokens[i] = $"{optionName}={value}";
+                    return;
+                }
+            }
+        }
+    }
+
+    private static (HashSet<Token> Tokens, HashSet<string> OptionNames) GetForwardingExclusions(
+        ParseResult parseResult,
+        Option[] excludedOptions)
+    {
+        // Use reference identity defensively so distinct token occurrences with the same value
+        // and type can never cause each other to be excluded.
+        var excludedTokens = new HashSet<Token>(ReferenceEqualityComparer.Instance);
+        var excludedOptionNames = new HashSet<string>(StringComparer.Ordinal);
+
+        CommandLineCommandResult? commandResult = parseResult.CommandResult;
+        while (commandResult is not null)
+        {
+            excludedTokens.Add(commandResult.IdentifierToken);
+            commandResult = commandResult.Parent as CommandLineCommandResult;
+        }
+
+        foreach (var option in excludedOptions)
+        {
+            excludedOptionNames.Add(option.Name);
+            excludedOptionNames.UnionWith(option.Aliases);
+
+            if (parseResult.GetResult(option) is not { Implicit: false } optionResult)
+            {
+                continue;
+            }
+
+            excludedTokens.UnionWith(optionResult.Tokens);
+        }
+
+        return (excludedTokens, excludedOptionNames);
+    }
+
+    private static HashSet<Token> GetOptionValueTokens(CommandLineCommandResult commandResult)
+    {
+        var optionValueTokens = new HashSet<Token>(ReferenceEqualityComparer.Instance);
+        AddOptionValueTokens(commandResult, optionValueTokens);
+
+        return optionValueTokens;
+
+        static void AddOptionValueTokens(CommandLineCommandResult currentCommandResult, HashSet<Token> tokens)
+        {
+            foreach (var child in currentCommandResult.Children)
+            {
+                switch (child)
+                {
+                    case OptionResult optionResult:
+                        tokens.UnionWith(optionResult.Tokens);
+                        break;
+                    case CommandLineCommandResult childCommandResult:
+                        AddOptionValueTokens(childCommandResult, tokens);
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>

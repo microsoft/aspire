@@ -71,13 +71,21 @@ internal sealed class StartCommand : BaseCommand
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
-            var debugSessionArgs = ParseResultHelper.GetForwardedTokens(
+            var debugSessionArgs = ParseResultHelper.GetForwardedOptionTokensWithUnmatchedTokensAfterDoubleDash(
                 parseResult,
                 AppHostLauncher.s_appHostOption.InnerOption,
                 AppHostLauncher.s_appHostOption.LegacyOption,
                 AppHostLauncher.s_formatOption,
                 RootCommand.StartDebugSessionOption,
                 RootCommand.NonInteractiveOption);
+            if (parseResult.GetValue(RootCommand.CaptureProfileOutputOption) is { } captureProfileOutput)
+            {
+                ParseResultHelper.ReplaceForwardedOptionValue(
+                    debugSessionArgs,
+                    RootCommand.CaptureProfileOutputOption,
+                    captureProfileOutput.FullName);
+            }
+
             var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
                 explicitIsolated,
                 passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);

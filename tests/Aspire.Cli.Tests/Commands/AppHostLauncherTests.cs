@@ -87,6 +87,19 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void MatchesOptionToken_RecognizesAliasesWithEqualsSyntax()
+    {
+        var option = new System.CommandLine.Option<bool>("--isolated")
+        {
+            Aliases = { "-i" }
+        };
+
+        Assert.True(AppHostLauncher.MatchesOptionToken(option, "-i"));
+        Assert.True(AppHostLauncher.MatchesOptionToken(option, "-i=false"));
+        Assert.False(AppHostLauncher.MatchesOptionToken(option, "--other"));
+    }
+
+    [Fact]
     public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
     {
         var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");
