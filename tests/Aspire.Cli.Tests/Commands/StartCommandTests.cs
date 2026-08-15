@@ -259,31 +259,22 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartCommand_WhenRunningInExtensionWithoutDebugSession_StartsVsCodeRunSession()
+    public async Task StartCommand_WhenRunningInExtension_ForwardsExplicitArgumentsInSemanticOrder()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostFile = CreateAppHostFile(workspace);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("App Host");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        var relativeCapturePath = Path.Combine("Profile Output", "profile.zip");
 
         string? workingDirectory = null;
         string? projectFile = null;
         bool? debug = null;
         DebugSessionOptions? options = null;
 
-        var projectLocator = new TestProjectLocator
-        {
-            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
-        };
-
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
         {
-            testOptions.ProjectLocatorFactory = _ => projectLocator;
             testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.CliHostEnvironmentFactory = sp =>
-            {
-                var configuration = sp.GetRequiredService<IConfiguration>();
-                return new CliHostEnvironment(configuration, nonInteractive: false);
-            };
             testOptions.InteractionServiceFactory = sp =>
             {
                 var service = new TestExtensionInteractionService(sp);
@@ -301,18 +292,50 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var captureProfileOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "profile.zip");
-        var result = command.Parse($"start --apphost {appHostFile.FullName} --isolated --no-build --debug --log-level Debug --wait-for-debugger --capture-profile --capture-profile-output {captureProfileOutputPath} --capture-profile-delay 1 -- --custom-arg value");
+        var result = command.Parse(
+        [
+            "start",
+            "--project", appHostFile.FullName,
+            "--debug",
+            "--capture-profile",
+            "--format=table",
+            "--no-build",
+            "--isolated=false",
+            "--wait-for-debugger",
+            "--capture-profile-output", relativeCapturePath,
+            "--non-interactive=false",
+            "--log-level", "Debug",
+            "--start-debug-session",
+            "--capture-profile-delay=1",
+            "--detach",
+            "--unknown-option", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
         Assert.Equal(appHostFile.FullName, projectFile);
-        Assert.False(debug);
+        Assert.True(debug);
         Assert.NotNull(options);
         Assert.Equal("run", options.Command);
         Assert.NotNull(options.Args);
-        Assert.Equal(["--isolated", "--no-build", "--debug", "--log-level", "Debug", "--wait-for-debugger", "--capture-profile", "--capture-profile-output", captureProfileOutputPath, "--capture-profile-delay", "1", "--", "--custom-arg", "value"], options.Args);
+        Assert.Equal(
+            [
+                "--debug",
+                "--capture-profile",
+                "--no-build",
+                "--isolated", "false",
+                "--wait-for-debugger",
+                "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,
+                "--log-level", "Debug",
+                "--capture-profile-delay", "1",
+                "--",
+                "--detach",
+                "--unknown-option", "value"
+            ],
+            options.Args);
     }
 
     [Fact]

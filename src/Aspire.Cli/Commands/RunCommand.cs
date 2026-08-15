@@ -72,6 +72,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
@@ -131,6 +132,7 @@ internal sealed class RunCommand : BaseCommand
         FileLoggerProvider fileLoggerProvider,
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
+        ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
@@ -147,6 +149,7 @@ internal sealed class RunCommand : BaseCommand
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
+        _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
 
         Options.Add(s_detachOption);
@@ -211,11 +214,19 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
-            var debugSessionArgs = new List<string>();
-            var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
+            var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
+                parseResult,
+                UnmatchedTokenPlacement.Preserve,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                s_detachOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
+            AppHostLauncher.InsertInferredIsolatedOption(
+                debugSessionArguments,
                 AppHostLauncher.GetExplicitIsolated(parseResult),
                 passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
-            AppHostLauncher.AddIsolatedOption(debugSessionArgs, isolatedOption);
 
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
             await extensionInteractionService.StartDebugSessionAsync(
@@ -225,8 +236,13 @@ internal sealed class RunCommand : BaseCommand
                 new DebugSessionOptions
                 {
                     Command = "run",
-                    Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
+                    Args = [.. debugSessionArguments.Tokens]
                 });
+            if (captureProfile)
+            {
+                _profileCaptureState.MarkTransferred();
+            }
+
             return CommandResult.Success();
         }
 

@@ -100,19 +100,17 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Appends the isolated option while preserving an explicitly supplied false value.
+    /// Inserts inferred isolation before AppHost arguments when the option was omitted.
     /// </summary>
-    internal static void AddIsolatedOption(List<string> args, bool? isolated)
+    internal static void InsertInferredIsolatedOption(
+        ForwardedArguments arguments,
+        bool? explicitIsolated,
+        string? startPath)
     {
-        if (isolated is null)
+        if (explicitIsolated is null &&
+            GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null)
         {
-            return;
-        }
-
-        args.Add(s_isolatedOption.Name);
-        if (!isolated.Value)
-        {
-            args.Add("false");
+            arguments.InsertCliOption(s_isolatedOption.Name);
         }
     }
 
@@ -358,7 +356,14 @@ internal sealed class AppHostLauncher(
 
         args.AddRange(globalArgs);
 
-        AddIsolatedOption(args, isolated);
+        if (isolated is not null)
+        {
+            args.Add(s_isolatedOption.Name);
+            if (!isolated.Value)
+            {
+                args.Add("false");
+            }
+        }
 
         foreach (var token in additionalArgs)
         {

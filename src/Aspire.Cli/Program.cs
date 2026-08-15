@@ -504,6 +504,7 @@ public class Program
         builder.Services.AddSingleton<IInstallationCandidateSource, DotnetToolStoreInstallationCandidateSource>();
         builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
+        builder.Services.AddSingleton<ProfileCaptureState>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
@@ -1078,6 +1079,7 @@ public class Program
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
         var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
         var profilingTelemetry = app.Services.GetRequiredService<ProfilingTelemetry>();
+        var profileCaptureState = app.Services.GetRequiredService<ProfileCaptureState>();
 
         // Log feature state at startup for diagnostics
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
@@ -1213,7 +1215,9 @@ public class Program
                 }
             }
 
-            if (profileCaptureSession is not null)
+            // A successful extension handoff transfers export to the delegated child. The parent
+            // still disposes its already-started capture session in the outer finally block.
+            if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
             {
                 try
                 {
