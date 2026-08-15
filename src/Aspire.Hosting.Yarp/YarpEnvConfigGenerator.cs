@@ -84,9 +84,9 @@ internal class YarpEnvConfigGenerator
                 }
             }
         }
-        else if (obj is Enum)
+        else if (obj is Enum enumValue)
         {
-            environmentVariables.Add(prefix, obj.ToString());
+            environmentVariables.Add(prefix, enumValue.ToString());
         }
         else
         {
