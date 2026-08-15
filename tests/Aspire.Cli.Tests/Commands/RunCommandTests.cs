@@ -3615,7 +3615,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         bool? debug = null;
         DebugSessionOptions? options = null;
-        using var provider = CreateExtensionServiceProvider(workspace, (_, _, dbg, debugSessionOptions) =>
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, dbg, debugSessionOptions) =>
         {
             debug = dbg;
             options = debugSessionOptions;
@@ -3678,8 +3678,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostFile.FullName, "<Project />");
 
         DebugSessionOptions? options = null;
-        using var provider = CreateExtensionServiceProvider(
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
             workspace,
+            outputHelper,
             (_, _, _, debugSessionOptions) => options = debugSessionOptions);
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--", "--custom-arg", "value"]);
@@ -3918,7 +3919,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostFile.FullName, "<Project />");
 
         ProfileCaptureState? captureState = null;
-        using var provider = CreateExtensionServiceProvider(workspace, (_, _, _, _) =>
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, _, _) =>
         {
             Assert.NotNull(captureState);
             Assert.False(captureState.IsTransferred);
@@ -3943,22 +3944,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(handoffSucceeds, captureState.IsTransferred);
-    }
-
-    private ServiceProvider CreateExtensionServiceProvider(
-        TemporaryWorkspace workspace,
-        Action<string, string?, bool, DebugSessionOptions?> startDebugSessionCallback)
-    {
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
-            {
-                StartDebugSessionCallback = startDebugSessionCallback
-            };
-        });
-
-        return services.BuildServiceProvider();
     }
 
     private static long GetProcessStartTimeUnixMilliseconds(Process process)

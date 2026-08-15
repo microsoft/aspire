@@ -271,7 +271,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         bool? debug = null;
         DebugSessionOptions? options = null;
 
-        using var provider = CreateExtensionServiceProvider(workspace, (wd, pf, dbg, debugSessionOptions) =>
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (wd, pf, dbg, debugSessionOptions) =>
         {
             workingDirectory = wd;
             projectFile = pf;
@@ -334,7 +334,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         bool? debug = null;
         DebugSessionOptions? options = null;
 
-        using var provider = CreateExtensionServiceProvider(workspace, (_, _, dbg, debugSessionOptions) =>
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, dbg, debugSessionOptions) =>
         {
             debug = dbg;
             options = debugSessionOptions;
@@ -354,6 +354,28 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StartCommand_WhenRunningInExtensionInLinkedWorktree_ForwardsInferredIsolation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+        var appHostFile = CreateAppHostFile(workspace);
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var result = provider.GetRequiredService<RootCommand>().Parse($"start --apphost {appHostFile.FullName}");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--isolated"], options.Args);
+    }
+
+    [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithDebugSession_DoesNotStartVsCodeRunSession()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -367,8 +389,9 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
         };
 
-        using var provider = CreateExtensionServiceProvider(
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
             workspace,
+            outputHelper,
             (_, _, _, _) => startDebugSessionCalled = true,
             configureOptions: testOptions =>
             {
@@ -406,8 +429,9 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
         };
 
-        using var provider = CreateExtensionServiceProvider(
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
             workspace,
+            outputHelper,
             (_, _, _, _) => startDebugSessionCalled = true,
             configureOptions: testOptions => testOptions.ProjectLocatorFactory = _ => projectLocator,
             configureServices: services =>
@@ -475,26 +499,6 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
         Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
         Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), workspace.WorkspaceRoot.FullName));
-    }
-
-    private ServiceProvider CreateExtensionServiceProvider(
-        TemporaryWorkspace workspace,
-        Action<string, string?, bool, DebugSessionOptions?> startDebugSessionCallback,
-        Action<CliServiceCollectionTestOptions>? configureOptions = null,
-        Action<IServiceCollection>? configureServices = null)
-    {
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            configureOptions?.Invoke(testOptions);
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
-            {
-                StartDebugSessionCallback = startDebugSessionCallback
-            };
-        });
-        configureServices?.Invoke(services);
-
-        return services.BuildServiceProvider();
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)

@@ -8,6 +8,7 @@ namespace Aspire.Cli.Profiling;
 /// </summary>
 internal sealed class ProfileCaptureState
 {
+    // A delegated command writes this before the same command flow reads it, so no synchronization is required.
     internal bool IsTransferred { get; private set; }
 
     internal void MarkTransferred() => IsTransferred = true;
