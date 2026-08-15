@@ -4,16 +4,11 @@
 namespace Aspire.Cli.Profiling;
 
 /// <summary>
-/// Tracks whether profile capture export was transferred to a delegated CLI process.
+/// Tracks whether command execution was transferred to a delegated CLI process.
 /// </summary>
 internal sealed class ProfileCaptureState
 {
-    private int _isTransferred;
+    internal bool IsTransferred { get; private set; }
 
-    internal bool IsTransferred => Volatile.Read(ref _isTransferred) != 0;
-
-    internal void MarkTransferred()
-    {
-        Interlocked.Exchange(ref _isTransferred, 1);
-    }
+    internal void MarkTransferred() => IsTransferred = true;
 }

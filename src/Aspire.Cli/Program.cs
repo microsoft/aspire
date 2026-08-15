@@ -1215,8 +1215,8 @@ public class Program
                 }
             }
 
-            // A successful extension handoff transfers export to the delegated child. The parent
-            // still disposes its already-started capture session in the outer finally block.
+            // This state is only consulted when the parent started a capture session. A successful
+            // extension handoff transfers export to the child, while the parent still disposes its session.
             if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
             {
                 try

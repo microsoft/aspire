@@ -96,12 +96,9 @@ internal sealed class StartCommand : BaseCommand
                 new DebugSessionOptions
                 {
                     Command = "run",
-                    Args = debugSessionArguments.Tokens.Count > 0 ? [.. debugSessionArguments.Tokens] : null
+                    Args = [.. debugSessionArguments.Tokens]
                 });
-            if (captureProfile)
-            {
-                _profileCaptureState.MarkTransferred();
-            }
+            _profileCaptureState.MarkTransferred();
 
             return CommandResult.Success();
         }

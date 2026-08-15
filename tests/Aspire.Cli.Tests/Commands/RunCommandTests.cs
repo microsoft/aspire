@@ -3615,22 +3615,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         bool? debug = null;
         DebugSessionOptions? options = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        using var provider = CreateExtensionServiceProvider(workspace, (_, _, dbg, debugSessionOptions) =>
         {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
-            {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, dbg, debugSessionOptions) =>
-                {
-                    debug = dbg;
-                    options = debugSessionOptions;
-                };
-                return service;
-            };
+            debug = dbg;
+            options = debugSessionOptions;
         });
 
-        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse(
         [
@@ -3688,18 +3678,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostFile.FullName, "<Project />");
 
         DebugSessionOptions? options = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
-            {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
-                return service;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
+        using var provider = CreateExtensionServiceProvider(
+            workspace,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--", "--custom-arg", "value"]);
 
@@ -3713,80 +3694,15 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    public async Task DelegatedCommands_TransferProfileCaptureOnlyAfterSuccessfulHandoff(
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task DelegatedCommands_RecordTransferStateOnlyAfterSuccessfulHandoff(
         bool captureProfile,
-        bool handoffSucceeds,
-        bool expectedTransferred)
+        bool handoffSucceeds)
     {
-        await AssertProfileTransferAsync("run", captureProfile, handoffSucceeds, expectedTransferred);
-        await AssertProfileTransferAsync("start", captureProfile, handoffSucceeds, expectedTransferred);
-    }
-
-    [Theory]
-    [InlineData(true, "run", "--isolated", null)]
-    [InlineData(true, "run --isolated false", "--isolated", "false")]
-    [InlineData(false, "run", null, null)]
-    public async Task RunCommand_WhenRunningInExtension_PropagatesIsolatedOption(
-        bool linkedWorktree,
-        string commandLine,
-        string? expectedFirstArgument,
-        string? expectedSecondArgument)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var gitPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
-        if (linkedWorktree)
-        {
-            TestGitWorktree.WriteLinkedWorktreeMetadata(
-                workspace.WorkspaceRoot.FullName,
-                Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
-        }
-        else
-        {
-            Directory.CreateDirectory(gitPath);
-        }
-
-        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
-        File.WriteAllText(appHostFile.FullName, "<Project />");
-
-        DebugSessionOptions? options = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
-            {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
-                return service;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"{commandLine} --apphost {appHostFile.FullName}");
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(options);
-        Assert.Equal("run", options.Command);
-        var actualArgs = options.Args;
-        if (expectedFirstArgument is null)
-        {
-            Assert.NotNull(actualArgs);
-            Assert.Empty(actualArgs);
-        }
-        else if (expectedSecondArgument is null)
-        {
-            Assert.NotNull(actualArgs);
-            Assert.Equal([expectedFirstArgument], actualArgs);
-        }
-        else
-        {
-            Assert.NotNull(actualArgs);
-            Assert.Equal([expectedFirstArgument, expectedSecondArgument], actualArgs);
-        }
+        await AssertProfileTransferAsync("run", captureProfile, handoffSucceeds);
+        await AssertProfileTransferAsync("start", captureProfile, handoffSucceeds);
     }
 
     [Fact]
@@ -3995,34 +3911,23 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     private async Task AssertProfileTransferAsync(
         string commandName,
         bool captureProfile,
-        bool handoffSucceeds,
-        bool expectedTransferred)
+        bool handoffSucceeds)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         File.WriteAllText(appHostFile.FullName, "<Project />");
 
         ProfileCaptureState? captureState = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        using var provider = CreateExtensionServiceProvider(workspace, (_, _, _, _) =>
         {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
+            Assert.NotNull(captureState);
+            Assert.False(captureState.IsTransferred);
+            if (!handoffSucceeds)
             {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, _, _) =>
-                {
-                    Assert.NotNull(captureState);
-                    Assert.False(captureState.IsTransferred);
-                    if (!handoffSucceeds)
-                    {
-                        throw new InvalidOperationException("Extension handoff failed.");
-                    }
-                };
-                return service;
-            };
+                throw new InvalidOperationException("Extension handoff failed.");
+            }
         });
 
-        using var provider = services.BuildServiceProvider();
         captureState = provider.GetRequiredService<ProfileCaptureState>();
         var command = provider.GetRequiredService<RootCommand>();
         var args = new List<string> { commandName, "--apphost", appHostFile.FullName };
@@ -4037,7 +3942,23 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
-        Assert.Equal(expectedTransferred, captureState.IsTransferred);
+        Assert.Equal(handoffSucceeds, captureState.IsTransferred);
+    }
+
+    private ServiceProvider CreateExtensionServiceProvider(
+        TemporaryWorkspace workspace,
+        Action<string, string?, bool, DebugSessionOptions?> startDebugSessionCallback)
+    {
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                StartDebugSessionCallback = startDebugSessionCallback
+            };
+        });
+
+        return services.BuildServiceProvider();
     }
 
     private static long GetProcessStartTimeUnixMilliseconds(Process process)

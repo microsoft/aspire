@@ -238,10 +238,7 @@ internal sealed class RunCommand : BaseCommand
                     Command = "run",
                     Args = [.. debugSessionArguments.Tokens]
                 });
-            if (captureProfile)
-            {
-                _profileCaptureState.MarkTransferred();
-            }
+            _profileCaptureState.MarkTransferred();
 
             return CommandResult.Success();
         }

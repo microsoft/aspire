@@ -184,7 +184,7 @@ internal static class ParseResultHelper
                         // Unknown values have no owner, so token identity distinguishes equal raw values.
                         foreach (var token in optionResult.Tokens)
                         {
-                            currentOwners.Add(token, optionResult);
+                            currentOwners.TryAdd(token, optionResult);
                         }
                         break;
                     case CommandLineCommandResult childCommandResult:
