@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Profiling;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -20,7 +19,6 @@ internal sealed class StartCommand : BaseCommand
 
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
-    private readonly ProfileCaptureState _profileCaptureState;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -30,14 +28,12 @@ internal sealed class StartCommand : BaseCommand
     public StartCommand(
         AppHostLauncher appHostLauncher,
         IConfiguration configuration,
-        ProfileCaptureState profileCaptureState,
         CommonCommandServices services)
         : base("start", StartCommandStrings.Description,
                services)
     {
         _appHostLauncher = appHostLauncher;
         _configuration = configuration;
-        _profileCaptureState = profileCaptureState;
 
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
@@ -75,25 +71,41 @@ internal sealed class StartCommand : BaseCommand
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
-            var debugSessionArgs = ParseResultHelper.GetForwardedOptionTokensWithUnmatchedTokensAfterDoubleDash(
-                parseResult,
-                AppHostLauncher.s_appHostOption.InnerOption,
-                AppHostLauncher.s_appHostOption.LegacyOption,
-                AppHostLauncher.s_formatOption,
-                RootCommand.StartDebugSessionOption,
-                RootCommand.NonInteractiveOption);
-            if (parseResult.GetValue(RootCommand.CaptureProfileOutputOption) is { } captureProfileOutput)
-            {
-                ParseResultHelper.ReplaceForwardedOptionValue(
-                    debugSessionArgs,
-                    RootCommand.CaptureProfileOutputOption,
-                    captureProfileOutput.FullName);
-            }
-
+            var debugSessionArgs = new List<string>();
             var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
                 explicitIsolated,
                 passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
             AppHostLauncher.AddIsolatedOption(debugSessionArgs, isolatedOption);
+
+            if (noBuild)
+            {
+                debugSessionArgs.Add("--no-build");
+            }
+
+            debugSessionArgs.AddRange(globalArgs);
+
+            if (captureProfile)
+            {
+                debugSessionArgs.Add("--capture-profile");
+
+                if (parseResult.GetValue(RootCommand.CaptureProfileOutputOption) is { } captureProfileOutput)
+                {
+                    debugSessionArgs.Add("--capture-profile-output");
+                    debugSessionArgs.Add(captureProfileOutput.FullName);
+                }
+
+                if (parseResult.GetResult(RootCommand.CaptureProfileDelayOption) is { Implicit: false })
+                {
+                    debugSessionArgs.Add("--capture-profile-delay");
+                    debugSessionArgs.Add(parseResult.GetValue(RootCommand.CaptureProfileDelayOption).ToString(CultureInfo.InvariantCulture));
+                }
+            }
+
+            if (additionalArgs.Count > 0)
+            {
+                debugSessionArgs.Add("--");
+                debugSessionArgs.AddRange(additionalArgs);
+            }
 
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "start"));
             await extensionInteractionService.StartDebugSessionAsync(
@@ -105,10 +117,6 @@ internal sealed class StartCommand : BaseCommand
                     Command = "run",
                     Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
                 });
-            if (captureProfile)
-            {
-                _profileCaptureState.MarkTransferred();
-            }
 
             return CommandResult.Success();
         }

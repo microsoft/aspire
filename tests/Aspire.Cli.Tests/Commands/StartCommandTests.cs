@@ -6,7 +6,6 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -263,9 +262,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     public async Task StartCommand_WhenRunningInExtensionWithoutDebugSession_StartsVsCodeRunSession()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("App Host");
-        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
-        File.WriteAllText(appHostFile.FullName, "<Project />");
+        var appHostFile = CreateAppHostFile(workspace);
 
         string? workingDirectory = null;
         string? projectFile = null;
@@ -304,169 +301,18 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var captureProfileOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Profile Output", "profile.zip");
-        var result = command.Parse(
-        [
-            "start",
-            "--project", appHostFile.FullName,
-            "--debug",
-            "--capture-profile",
-            "--format=table",
-            "--no-build",
-            "--isolated=false",
-            "--wait-for-debugger",
-            "--capture-profile-output", captureProfileOutputPath,
-            "--non-interactive=false",
-            "--log-level", "Debug",
-            "--start-debug-session",
-            "--capture-profile-delay=1",
-            "--",
-            "--custom-arg", "value"
-        ]);
-
-        Assert.Empty(result.Errors);
+        var captureProfileOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "profile.zip");
+        var result = command.Parse($"start --apphost {appHostFile.FullName} --isolated --no-build --debug --log-level Debug --wait-for-debugger --capture-profile --capture-profile-output {captureProfileOutputPath} --capture-profile-delay 1 -- --custom-arg value");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
         Assert.Equal(appHostFile.FullName, projectFile);
-        Assert.True(debug);
+        Assert.False(debug);
         Assert.NotNull(options);
         Assert.Equal("run", options.Command);
         Assert.NotNull(options.Args);
-        Assert.Equal(
-            [
-                "--debug",
-                "--capture-profile",
-                "--no-build",
-                "--isolated", "false",
-                "--wait-for-debugger",
-                "--capture-profile-output", captureProfileOutputPath,
-                "--log-level", "Debug",
-                "--capture-profile-delay", "1",
-                "--",
-                "--custom-arg", "value"
-            ],
-            options.Args);
-    }
-
-    public static TheoryData<string[], string[]> DelegatedUnmatchedTokenCases => new()
-    {
-        {
-            ["--debug", "--detach"],
-            ["--debug", "--", "--detach"]
-        },
-        {
-            ["--log-level", "Debug", "--unknown-option", "value"],
-            ["--log-level", "Debug", "--", "--unknown-option", "value"]
-        },
-        {
-            ["--unknown-option", "duplicate", "duplicate"],
-            ["--", "--unknown-option", "duplicate", "duplicate"]
-        },
-        {
-            ["--debug", "--"],
-            ["--debug"]
-        }
-    };
-
-    [Fact]
-    public void StartCommand_ForwardedOptionTokens_PreserveLiteralDoubleDashOptionValue()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse(["start", "--capture-profile-output=--", "--", "--custom-arg"]);
-
-        Assert.Empty(result.Errors);
-        var forwardedTokens = ParseResultHelper.GetForwardedOptionTokensWithUnmatchedTokensAfterDoubleDash(result);
-
-        Assert.Equal(["--capture-profile-output=--", "--", "--custom-arg"], forwardedTokens);
-    }
-
-    [Theory]
-    [MemberData(nameof(DelegatedUnmatchedTokenCases))]
-    public async Task StartCommand_WhenRunningInExtension_AppendsUnmatchedTokensAfterSeparator(
-        string[] commandArgs,
-        string[] expectedArgs)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var actualArgs = await InvokeStartInExtensionAsync(workspace, commandArgs);
-
-        Assert.NotNull(actualArgs);
-        Assert.Equal(expectedArgs, actualArgs);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task StartCommand_WhenRunningInExtension_NormalizesCaptureProfileOutputPath(bool useEqualsSyntax)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var relativeOutputPath = Path.Combine("Profile Output", "profile.zip");
-        var commandArgs = useEqualsSyntax
-            ? new[] { "--capture-profile", $"--capture-profile-output={relativeOutputPath}" }
-            : new[] { "--capture-profile", "--capture-profile-output", relativeOutputPath };
-
-        var actualArgs = await InvokeStartInExtensionAsync(workspace, commandArgs);
-
-        Assert.NotNull(actualArgs);
-        Assert.Equal(
-            ["--capture-profile", "--capture-profile-output", new FileInfo(relativeOutputPath).FullName],
-            actualArgs);
-    }
-
-    [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    public async Task StartCommand_WhenDelegatingToExtension_TransfersProfileCaptureAfterSuccessfulHandoff(
-        bool captureProfile,
-        bool handoffSucceeds,
-        bool expectedTransferred)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostFile = CreateAppHostFile(workspace);
-
-        ProfileCaptureState? captureState = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
-            {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, _, _) =>
-                {
-                    Assert.NotNull(captureState);
-                    Assert.False(captureState.IsTransferred);
-                    if (!handoffSucceeds)
-                    {
-                        throw new InvalidOperationException("Extension handoff failed.");
-                    }
-                };
-                return service;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-        captureState = provider.GetRequiredService<ProfileCaptureState>();
-        var command = provider.GetRequiredService<RootCommand>();
-        var args = new List<string> { "start", "--apphost", appHostFile.FullName };
-        if (captureProfile)
-        {
-            args.Add("--capture-profile");
-        }
-
-        var result = command.Parse(args);
-
-        Assert.Empty(result.Errors);
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
-        Assert.Equal(expectedTransferred, captureState.IsTransferred);
+        Assert.Equal(["--isolated", "--no-build", "--debug", "--log-level", "Debug", "--wait-for-debugger", "--capture-profile", "--capture-profile-output", captureProfileOutputPath, "--capture-profile-delay", "1", "--", "--custom-arg", "value"], options.Args);
     }
 
     [Fact]
@@ -703,8 +549,6 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"{commandLine} --apphost {appHostFile.FullName}");
-
-        Assert.Empty(result.Errors);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -725,37 +569,6 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             Assert.NotNull(actualArgs);
             Assert.Equal([expectedFirstArgument, expectedSecondArgument], actualArgs);
         }
-    }
-
-    private async Task<string[]?> InvokeStartInExtensionAsync(TemporaryWorkspace workspace, IReadOnlyList<string> commandArgs)
-    {
-        var appHostFile = CreateAppHostFile(workspace);
-        DebugSessionOptions? options = null;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
-        {
-            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            testOptions.InteractionServiceFactory = sp =>
-            {
-                var service = new TestExtensionInteractionService(sp);
-                service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
-                return service;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var args = new List<string> { "start", "--apphost", appHostFile.FullName };
-        args.AddRange(commandArgs);
-        var result = command.Parse(args);
-
-        Assert.Empty(result.Errors);
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(options);
-        Assert.Equal("run", options.Command);
-
-        return options.Args;
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)

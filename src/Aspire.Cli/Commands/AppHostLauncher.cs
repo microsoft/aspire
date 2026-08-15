@@ -100,7 +100,7 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Adds the isolated option before AppHost arguments unless it was explicitly supplied.
+    /// Appends the isolated option while preserving an explicitly supplied false value.
     /// </summary>
     internal static void AddIsolatedOption(List<string> args, bool? isolated)
     {
@@ -109,33 +109,10 @@ internal sealed class AppHostLauncher(
             return;
         }
 
-        var doubleDashIndex = args.IndexOf("--");
-        var optionCount = doubleDashIndex >= 0 ? doubleDashIndex : args.Count;
-        for (var i = 0; i < optionCount; i++)
-        {
-            if (MatchesOptionToken(s_isolatedOption, args[i]))
-            {
-                return;
-            }
-        }
-
-        args.Insert(optionCount, s_isolatedOption.Name);
+        args.Add(s_isolatedOption.Name);
         if (!isolated.Value)
         {
-            args.Insert(optionCount + 1, "false");
-        }
-    }
-
-    /// <summary>
-    /// Returns whether a token matches an option name or alias, including equals syntax.
-    /// </summary>
-    internal static bool MatchesOptionToken(Option option, string token)
-    {
-        return MatchesName(option.Name) || option.Aliases.Any(MatchesName);
-
-        bool MatchesName(string name)
-        {
-            return token == name || token.StartsWith($"{name}=", StringComparison.Ordinal);
+            args.Add("false");
         }
     }
 
