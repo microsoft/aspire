@@ -891,7 +891,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       extensionArgs.push('--start-debug-session');
     }
 
-    if (!commandArgs.includes('--nologo')) {
+    const appArgsSeparatorIndex = commandArgs.indexOf('--');
+    const cliCommandArgs = appArgsSeparatorIndex < 0 ? commandArgs : commandArgs.slice(0, appArgsSeparatorIndex);
+    if (!cliCommandArgs.includes('--nologo')) {
       extensionArgs.push('--nologo');
     }
 
