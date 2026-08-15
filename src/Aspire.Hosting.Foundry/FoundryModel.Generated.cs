@@ -2242,7 +2242,7 @@ public partial class FoundryModel
         /// gpt-chat-latest (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-06-24", Format = "OpenAI" };
+        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-08-06", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including high quality, cheap text to image generation
