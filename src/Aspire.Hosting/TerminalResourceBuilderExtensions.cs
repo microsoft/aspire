@@ -9,6 +9,7 @@ using Aspire.Hosting.Lifecycle;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -94,7 +95,8 @@ public static class TerminalResourceBuilderExtensions
 
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
-        appBuilder.Services.TryAddEventingSubscriber<TerminalHostOrphanCleanupService>();
+        appBuilder.Services.TryAddSingleton<TerminalHostOrphanCleanupService>();
+        appBuilder.Services.TryAddEventingSubscriber<TerminalHostOrphanCleanupEventingSubscriber>();
 
         // Subscribe directly on the IDistributedApplicationEventing rather than registering an
         // IDistributedApplicationEventingSubscriber: subscriptions registered during the builder
@@ -287,56 +289,11 @@ public static class TerminalResourceBuilderExtensions
             replicaIds[i] = replicaId;
         }
 
-        // Backstop cleanup on ApplicationStopped. The terminal-host children now own their own
-        // socket teardown on graceful shutdown — they handle SIGTERM and unlink
-        // {id}.dcp.sock / {id}.host.sock as their final step (see Aspire.TerminalHost) — so on a
-        // clean `aspire stop` the .sock files are usually already gone by the time this runs.
-        // This callback still matters for two cases:
-        //   1. metadata.json — only the AppHost ever writes it and the child never deletes it, so
-        //      this is the sole cleanup path for the sidecar.
-        //   2. children that died ungracefully mid-run (crash / SIGKILL) and never got to unlink
-        //      their sockets.
-        //
-        // Why ApplicationStopped (not ApplicationStopping): this gives children the normal shutdown
-        // window to unlink their sockets first. It does not guarantee they have exited, so the random
-        // replica ids and exact paths are what make an overlapping cleanup safe.
-        //
-        // The directory is shared across every AppHost on the machine, so delete only exact paths
-        // identified by this run's random replica ids.
-        var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
-        var loggerFactory = @event.Services.GetService<ILoggerFactory>();
-        if (lifetime is not null)
-        {
-            var capturedReplicaIds = replicaIds;
-            var capturedTrmnlDir = trmnlDirectory;
-            var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
-            lifetime.ApplicationStopped.Register(() =>
-            {
-                // ApplicationStopped callbacks run synchronously. Keep best-effort filesystem
-                // cleanup from delaying process exit indefinitely if a filesystem operation stalls.
-                var cleanupTask = Task.Run(() =>
-                {
-                    foreach (var replicaId in capturedReplicaIds)
-                    {
-                        TerminalHostOrphanCleanupService.DeleteReplicaFiles(
-                            capturedTrmnlDir,
-                            replicaId,
-                            cleanupLogger);
-                    }
-                }, CancellationToken.None);
-
-                try
-                {
-                    cleanupTask.WaitAsync(s_shutdownCleanupTimeout).GetAwaiter().GetResult();
-                }
-                catch (TimeoutException)
-                {
-                    cleanupLogger?.LogWarning(
-                        "Timed out after {TimeoutSeconds} seconds while deleting terminal artifacts during shutdown. The next AppHost startup will retry cleanup.",
-                        s_shutdownCleanupTimeout.TotalSeconds);
-                }
-            });
-        }
+        // The terminal-host children unlink their sockets on graceful shutdown, while this
+        // app-scoped backstop removes metadata and exact-path artifacts left by abrupt exits.
+        // The singleton applies one bounded ApplicationStopped wait across every terminal resource.
+        @event.Services.GetRequiredService<TerminalHostOrphanCleanupService>()
+            .RegisterReplicaArtifacts(trmnlDirectory, replicaIds);
 
         // The target waits until each host has started so its viewer-facing UDS listener
         // is bound before any consumer (Dashboard or CLI) tries to connect. A follow-up
@@ -415,8 +372,6 @@ public static class TerminalResourceBuilderExtensions
             }
         }
     }
-
-    private static readonly TimeSpan s_shutdownCleanupTimeout = TimeSpan.FromSeconds(2);
 
     private static readonly JsonSerializerOptions s_metadataSerializerOptions = new()
     {

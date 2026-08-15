@@ -283,8 +283,11 @@ public class WithTerminalTests : IAsyncLifetime
         // time, and the ApplicationStopped callback deletes the four known files for each
         // replica owned by this run.
         using var builder = CreateBuilder();
-        var resource = builder.AddExecutable("myapp", "myapp", ".");
-        resource.WithTerminal();
+        var resources = new[]
+        {
+            builder.AddExecutable("first", "myapp", ".").WithTerminal(),
+            builder.AddExecutable("second", "myapp", ".").WithTerminal(),
+        };
 
         var app = builder.Build();
         try
@@ -292,9 +295,14 @@ public class WithTerminalTests : IAsyncLifetime
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
 
-            var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
-            Assert.True(annotation.IsInitialized);
-            Assert.NotEmpty(annotation.TerminalHosts);
+            var annotations = resources
+                .Select(resource => resource.Resource.Annotations.OfType<TerminalAnnotation>().Single())
+                .ToArray();
+            Assert.All(annotations, annotation =>
+            {
+                Assert.True(annotation.IsInitialized);
+                Assert.NotEmpty(annotation.TerminalHosts);
+            });
 
             // BeforeStartEvent should have written the production metadata sidecar.
             // The three .sock files are normally created at runtime by DCP / the
@@ -302,7 +310,10 @@ public class WithTerminalTests : IAsyncLifetime
             // placeholders so the cleanup path has the full set of four known files
             // to delete. A regression that only deleted metadata would otherwise slip
             // past this test and leak stale sockets, causing UDS bind failures next run.
-            var allPaths = annotation.TerminalHosts
+            var terminalHosts = annotations
+                .SelectMany(annotation => annotation.TerminalHosts)
+                .ToArray();
+            var allPaths = terminalHosts
                 .SelectMany(h => new[]
                 {
                     h.Layout.MetadataPath,
@@ -312,7 +323,7 @@ public class WithTerminalTests : IAsyncLifetime
                 })
                 .ToArray();
 
-            foreach (var host in annotation.TerminalHosts)
+            foreach (var host in terminalHosts)
             {
                 Assert.True(
                     File.Exists(host.Layout.MetadataPath),
@@ -334,7 +345,10 @@ public class WithTerminalTests : IAsyncLifetime
         }
         finally
         {
-            CleanUpTerminalHostFiles(resource);
+            foreach (var resource in resources)
+            {
+                CleanUpTerminalHostFiles(resource);
+            }
             await app.DisposeAsync();
         }
     }
@@ -1271,10 +1285,7 @@ public class WithTerminalTests : IAsyncLifetime
 
     private static async Task WaitForSweepAsync(DistributedApplication app)
     {
-        var cleanupService = app.Services
-            .GetServices<IDistributedApplicationEventingSubscriber>()
-            .OfType<TerminalHostOrphanCleanupService>()
-            .Single();
+        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
         await cleanupService.Completion.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
@@ -1282,10 +1293,7 @@ public class WithTerminalTests : IAsyncLifetime
         IDistributedApplicationTestingBuilder builder,
         DistributedApplication app)
     {
-        var cleanupService = app.Services
-            .GetServices<IDistributedApplicationEventingSubscriber>()
-            .OfType<TerminalHostOrphanCleanupService>()
-            .Single();
+        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
         var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
         await cleanupService.SubscribeAsync(builder.Eventing, executionContext, CancellationToken.None);
         return cleanupService;

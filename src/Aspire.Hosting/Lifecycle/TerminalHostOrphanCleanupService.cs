@@ -12,12 +12,25 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Lifecycle;
 
-internal sealed class TerminalHostOrphanCleanupService(
-    ILogger<TerminalHostOrphanCleanupService> logger,
-    IHostApplicationLifetime applicationLifetime) : IDistributedApplicationEventingSubscriber, IAsyncDisposable
+internal sealed class TerminalHostOrphanCleanupService : IAsyncDisposable
 {
+    private static readonly TimeSpan s_shutdownCleanupTimeout = TimeSpan.FromSeconds(2);
     private readonly object _sync = new();
+    private readonly List<(string TrmnlDirectory, string[] ReplicaIds)> _registeredReplicaArtifacts = [];
+    private readonly ILogger<TerminalHostOrphanCleanupService> _logger;
+    private readonly IHostApplicationLifetime _applicationLifetime;
+    private readonly CancellationTokenRegistration _applicationStoppedRegistration;
     private Task? _cleanupTask;
+
+    public TerminalHostOrphanCleanupService(
+        ILogger<TerminalHostOrphanCleanupService> logger,
+        IHostApplicationLifetime applicationLifetime)
+    {
+        _logger = logger;
+        _applicationLifetime = applicationLifetime;
+        _applicationStoppedRegistration =
+            applicationLifetime.ApplicationStopped.Register(DeleteRegisteredReplicaFiles);
+    }
 
     internal static TimeSpan InvalidMetadataRetentionPeriod { get; } = TimeSpan.FromDays(7);
 
@@ -34,10 +47,10 @@ internal sealed class TerminalHostOrphanCleanupService(
 
     internal int StartCount { get; private set; }
 
-    public Task SubscribeAsync(
+    internal Task SubscribeAsync(
         IDistributedApplicationEventing eventing,
         DistributedApplicationExecutionContext executionContext,
-        CancellationToken cancellationToken)
+        CancellationToken _)
     {
         ArgumentNullException.ThrowIfNull(eventing);
 
@@ -63,6 +76,17 @@ internal sealed class TerminalHostOrphanCleanupService(
         return Task.CompletedTask;
     }
 
+    internal void RegisterReplicaArtifacts(string trmnlDirectory, IReadOnlyList<string> replicaIds)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
+        ArgumentNullException.ThrowIfNull(replicaIds);
+
+        lock (_sync)
+        {
+            _registeredReplicaArtifacts.Add((trmnlDirectory, [.. replicaIds]));
+        }
+    }
+
     internal void Start(string trmnlDirectory)
     {
         ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
@@ -76,13 +100,15 @@ internal sealed class TerminalHostOrphanCleanupService(
 
             StartCount++;
             _cleanupTask = Task.Run(
-                () => SweepAsync(trmnlDirectory, logger, applicationLifetime.ApplicationStopping),
+                () => SweepAsync(trmnlDirectory, _logger, _applicationLifetime.ApplicationStopping),
                 CancellationToken.None);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
+        _applicationStoppedRegistration.Dispose();
+
         Task? cleanupTask;
         lock (_sync)
         {
@@ -92,6 +118,39 @@ internal sealed class TerminalHostOrphanCleanupService(
         if (cleanupTask is not null)
         {
             await cleanupTask.ConfigureAwait(false);
+        }
+    }
+
+    private void DeleteRegisteredReplicaFiles()
+    {
+        (string TrmnlDirectory, string[] ReplicaIds)[] registeredReplicaArtifacts;
+        lock (_sync)
+        {
+            registeredReplicaArtifacts = [.. _registeredReplicaArtifacts];
+        }
+
+        // ApplicationStopped callbacks run synchronously. Use one app-wide wait budget so
+        // filesystem stalls cannot multiply the shutdown delay across terminal resources.
+        var cleanupTask = Task.Run(() =>
+        {
+            foreach (var (trmnlDirectory, replicaIds) in registeredReplicaArtifacts)
+            {
+                foreach (var replicaId in replicaIds)
+                {
+                    DeleteReplicaFiles(trmnlDirectory, replicaId, _logger);
+                }
+            }
+        }, CancellationToken.None);
+
+        try
+        {
+            cleanupTask.WaitAsync(s_shutdownCleanupTimeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning(
+                "Timed out after {TimeoutSeconds} seconds while deleting terminal artifacts during shutdown. The next AppHost startup will retry cleanup.",
+                s_shutdownCleanupTimeout.TotalSeconds);
         }
     }
 
@@ -393,4 +452,14 @@ internal sealed class TerminalHostOrphanCleanupService(
             return null;
         }
     }
+}
+
+internal sealed class TerminalHostOrphanCleanupEventingSubscriber(
+    TerminalHostOrphanCleanupService cleanupService) : IDistributedApplicationEventingSubscriber
+{
+    public Task SubscribeAsync(
+        IDistributedApplicationEventing eventing,
+        DistributedApplicationExecutionContext executionContext,
+        CancellationToken cancellationToken)
+        => cleanupService.SubscribeAsync(eventing, executionContext, cancellationToken);
 }
