@@ -8,7 +8,7 @@ import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
-import { getAspireDebugConfigurationExternalLaunchReservation, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation } from './AspireDebugConfigurationProviderInternal';
+import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationTrustedCliPath, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationCliPathAsTrusted, markAspireDebugConfigurationWithExternalLaunchReservation } from './AspireDebugConfigurationProviderInternal';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
@@ -62,7 +62,9 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
         if (!aspireConfig.skipCliAvailabilityCheck) {
-            const result = await checkCliAvailableOrRedirect('debug_gate');
+            const result = await checkCliAvailableOrRedirect(
+                'debug_gate',
+                getAspireDebugConfigurationTrustedCliPath(config));
             if (!result.available) {
                 return undefined; // Cancel the debug session
             }
@@ -102,9 +104,16 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         // property. A launch.json can spell `launchedByExtension`, but it cannot know the
         // per-activation value that makes the property authoritative.
         const launchedByExtension = isAspireDebugConfigurationExtensionOwned(config);
+        const trustedCliPath = getAspireDebugConfigurationTrustedCliPath(config);
         const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
         if (launchedByExtension) {
             markAspireDebugConfigurationAsExtensionOwned(config);
+        }
+        else if (trustedCliPath) {
+            // A toolbar restart must preserve the executable that was negotiated with its
+            // arguments, but it is a new launch generation. Keep only the CLI pin trusted so
+            // the ordinary external-launch path below acquires a fresh reservation.
+            markAspireDebugConfigurationCliPathAsTrusted(config);
         }
         else if (existingExternalReservation) {
             markAspireDebugConfigurationWithExternalLaunchReservation(
@@ -117,7 +126,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         else {
             delete configRecord[appHostLaunchReservationIdConfigKey];
         }
-        if (!launchedByExtension) {
+        if (!launchedByExtension && !trustedCliPath) {
             delete configRecord[appHostCliPathConfigKey];
         }
         delete aspireConfig.skipCliAvailabilityCheck;

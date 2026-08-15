@@ -129,6 +129,18 @@ suite('utils/cliPath tests', () => {
     });
 
     suite('findCliOnPath', () => {
+        test('returns a concrete POSIX executable from PATH', async () => {
+            const cliPath = '/opt/aspire/bin/aspire';
+            const result = await findCliOnPath({
+                platform: 'linux',
+                pathValue: '/missing/bin:/opt/aspire/bin',
+                fileExists: async candidate => candidate === cliPath,
+                tryExecute: async candidate => candidate === cliPath,
+            });
+
+            assert.strictEqual(result, cliPath);
+        });
+
         test('returns a concrete Windows command shim from PATH', async () => {
             const commandShim = 'C:\\npm\\aspire.cmd';
             const result = await findCliOnPath({

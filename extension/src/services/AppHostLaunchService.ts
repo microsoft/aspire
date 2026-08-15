@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
 import { startDebuggingDeclined } from '../loc/strings';
-import { ensureIsolatedCliArg, resolveIsolated } from '../utils/gitWorktree';
+import { ensureIsolatedCliArg, isLinkedGitWorktree } from '../utils/gitWorktree';
 import { compareAppHostIdentity, getAppHostIdentityKeyInfo, isAppHostPathWithinDirectory, type AppHostIdentityKeyInfo, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -11,18 +11,18 @@ import { markAspireDebugConfigurationAsExtensionOwned } from '../debugger/Aspire
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
 import { AppHostLaunchReservations } from './appHostLaunchReservations';
 import { getLaunchTelemetryProperties, isE2eDebugLaunchSuppressed } from './appHostLaunchTelemetry';
-import { isolatedLaunchCapability } from '../types/configInfo';
+import { isolatedLaunchCapability, type CapabilityStatus } from '../types/configInfo';
 
 export { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs } from './appHostLaunchContracts';
 export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
 
 export interface AppHostLaunchCapabilityProvider {
-    hasCapability(capability: string, options?: {
+    getCapabilityStatus(capability: string, options?: {
         suppressErrors?: boolean;
         forceRefresh?: boolean;
         cliPath?: string;
         cancellationToken?: vscode.CancellationToken;
-    }): Promise<boolean>;
+    }): Promise<CapabilityStatus>;
 }
 
 export interface AppHostLaunchIsolation {
@@ -568,8 +568,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                     throw new vscode.CancellationError();
                 }
 
-                const isolated = command === 'run' && resolveIsolated(undefined, appHostPath) ? true : undefined;
-                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, isolated);
+                await this.launchCore(appHostPath, command, noDebug, doStep, 'user-selection', launchToken, lockToken, undefined);
             });
         }
         catch (error) {
@@ -597,8 +596,8 @@ export class AppHostLaunchService implements vscode.Disposable {
 
     /**
      * Resolves requested or inferred isolation against the selected CLI's advertised
-     * capabilities. A missing capability means the CLI predates `--isolated`, so omitting
-     * the option is both compatible and effectively non-isolated.
+     * capabilities. Known older CLIs may omit inferred isolation or explicit false, but an
+     * explicit choice is never changed when capability support could not be determined.
      */
     async resolveLaunchIsolation(
         appHostPath: string,
@@ -607,21 +606,43 @@ export class AppHostLaunchService implements vscode.Disposable {
         cliPath?: string,
     ): Promise<AppHostLaunchIsolation> {
         throwIfCancelled(token);
-        const effective = resolveIsolated(isolated, appHostPath);
-        if (!effective && isolated === undefined) {
+        const inferredIsolation = isLinkedGitWorktree(appHostPath);
+        const effective = isolated ?? inferredIsolation;
+        const needsCapability = effective || isolated === false;
+        if (!needsCapability) {
             return { effective: false, option: undefined };
         }
 
-        const supported = await this._capabilityProvider.hasCapability(isolatedLaunchCapability, {
+        const capabilityStatus = await this._capabilityProvider.getCapabilityStatus(isolatedLaunchCapability, {
             suppressErrors: true,
             forceRefresh: cliPath !== undefined,
             cliPath,
-            cancellationToken: cliPath !== undefined ? token : undefined,
+            cancellationToken: token,
         });
         throwIfCancelled(token);
-        return supported
-            ? { effective, option: isolated ?? (effective ? true : undefined) }
-            : { effective: false, option: undefined };
+        if (capabilityStatus === 'supported') {
+            return { effective, option: isolated ?? true };
+        }
+
+        if (cliPath === undefined && isolated !== undefined) {
+            // Preflight capability data may describe an earlier PATH or setting snapshot.
+            // Preserve explicit user input for confirmation and let the exact-CLI refresh
+            // immediately before launch decide whether that executable can honor it.
+            return { effective: isolated, option: isolated };
+        }
+
+        const cannotHonorExplicitChoice = isolated === true ||
+            (capabilityStatus === 'unavailable' && isolated === false && inferredIsolation);
+        if (cannotHonorExplicitChoice) {
+            const reason = capabilityStatus === 'unsupported'
+                ? 'The selected Aspire CLI does not support the requested isolation mode.'
+                : 'The selected Aspire CLI isolation capability could not be verified.';
+            throw new Error(reason);
+        }
+
+        // An unconfirmed inferred preference may fall back for compatibility with CLIs that
+        // predate isolation. A known older CLI can also honor explicit false by omission.
+        return { effective: false, option: undefined };
     }
 
     private async launchCore(

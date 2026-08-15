@@ -8,7 +8,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
 import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
-import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
+import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationCliPathAsTrusted, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
@@ -713,6 +713,55 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
         assert.strictEqual(resolveCliPathStub.called, false);
         assert.strictEqual(showErrorMessageStub.called, false);
+    });
+
+    test('resolveDebugConfiguration validates the exact trusted CLI pinned for restart', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/current/aspire',
+            available: true,
+            source: 'configured',
+        });
+        const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+        const config = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            [appHostCliPathConfigKey]: '/pinned/aspire',
+        };
+        markAspireDebugConfigurationCliPathAsTrusted(config);
+
+        const resolved = await provider.resolveDebugConfiguration(undefined, config);
+
+        assert.ok(resolved);
+        sinon.assert.calledOnceWithExactly(tryExecuteCliStub, '/pinned/aspire');
+        assert.strictEqual(resolveCliPathStub.called, false);
+    });
+
+    test('resolveDebugConfiguration aborts restart when its trusted pinned CLI is unavailable', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/current/aspire',
+            available: true,
+            source: 'configured',
+        });
+        const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(false);
+        sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const config = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            [appHostCliPathConfigKey]: '/pinned/aspire',
+        };
+        markAspireDebugConfigurationCliPathAsTrusted(config);
+
+        const resolved = await provider.resolveDebugConfiguration(undefined, config);
+
+        assert.strictEqual(resolved, undefined);
+        sinon.assert.calledOnceWithExactly(tryExecuteCliStub, '/pinned/aspire');
+        assert.strictEqual(resolveCliPathStub.called, false);
     });
 
     test('resolveDebugConfigurationWithSubstitutedVariables removes internal skip flag before launch', async () => {

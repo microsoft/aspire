@@ -8,15 +8,18 @@ import { dirname, join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../utils/process/cliProcess';
+import * as cliPathModule from '../utils/cliPath';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
+import { AspireDebugConfigurationProvider } from '../debugger/AspireDebugConfigurationProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostCliPathConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { AspireResourceExtendedDebugConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
+import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 interface RecordedEvent {
     name: string;
@@ -3325,6 +3328,14 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
     });
 
     test('an AppHost restart preserves the CLI path negotiated with its arguments', async () => {
+        const pathResolvedCli = await cliPathModule.findCliOnPath({
+            platform: 'linux',
+            pathValue: '/selected/bin',
+            fileExists: async candidate => candidate === '/selected/bin/aspire',
+            tryExecute: async candidate => candidate === '/selected/bin/aspire',
+        });
+        assert.strictEqual(pathResolvedCli, '/selected/bin/aspire');
+
         let restartHandler: ((debugSessionId: string) => boolean) | undefined;
         let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;
         const parentDebugSession = {
@@ -3339,7 +3350,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 program: '/workspace/apphost.cs',
                 command: 'run',
                 args: ['--isolated'],
-                [appHostCliPathConfigKey]: '/selected/aspire',
+                [appHostCliPathConfigKey]: pathResolvedCli,
             },
             customRequest: sinon.stub(),
             getDebugProtocolBreakpoint: sinon.stub(),
@@ -3386,9 +3397,54 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         await terminateSessionCallback?.(appHostDebugSession as unknown as vscode.DebugSession);
 
         const restartedConfig = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
-        assert.strictEqual(restartedConfig[appHostCliPathConfigKey], '/selected/aspire');
+        assert.strictEqual(restartedConfig[appHostCliPathConfigKey], pathResolvedCli);
         assert.deepStrictEqual(restartedConfig.args, ['--isolated']);
-        assert.strictEqual(isAspireDebugConfigurationExtensionOwned(restartedConfig), true);
+        assert.strictEqual(isAspireDebugConfigurationExtensionOwned(restartedConfig), false);
+
+        const tryExecuteCliStub = sinon.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+        const reservedPaths: string[] = [];
+        const provider = new AspireDebugConfigurationProvider({
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService, {
+            tryReserveExternalLaunch: (appHostPath: string) => {
+                reservedPaths.push(appHostPath);
+                return 'restart-reservation';
+            },
+            replaceExternalLaunchReservation: () => {
+                throw new Error('The restart should acquire a fresh reservation.');
+            },
+        });
+        const checkedConfig = await provider.resolveDebugConfiguration(undefined, restartedConfig);
+        assert.strictEqual(checkedConfig, restartedConfig);
+        sinon.assert.calledOnceWithExactly(tryExecuteCliStub, pathResolvedCli);
+
+        const resolvedConfig = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, restartedConfig);
+
+        assert.deepStrictEqual(reservedPaths, ['/workspace/apphost.cs']);
+        assert.strictEqual(resolvedConfig?.[appHostLaunchReservationIdConfigKey], 'restart-reservation');
+        assert.strictEqual(resolvedConfig?.[appHostCliPathConfigKey], pathResolvedCli);
+
+        const replacementCliProcess = createFakeCliProcess(3391);
+        const spawnCliStub = sinon.stub(cliModule, 'spawnCliProcess').returns(replacementCliProcess);
+        const getAspireCliExecutablePath = sinon.stub().rejects(new Error('The trusted restart pin should be used.'));
+        const replacementSession = new AspireDebugSession(
+            {
+                id: 'replacement-aspire-session',
+                configuration: resolvedConfig,
+            } as unknown as vscode.DebugSession,
+            { onNewConnection: () => ({ dispose: () => { } }) } as any,
+            { recordAppHostProcessExit: () => { } } as any,
+            {
+                getAspireCliExecutablePath,
+                createEnvironment: () => ({}),
+            } as any,
+            () => { });
+
+        await replacementSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.strictEqual(spawnCliStub.firstCall.args[1], pathResolvedCli);
+        assert.strictEqual(getAspireCliExecutablePath.called, false);
     });
 
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {

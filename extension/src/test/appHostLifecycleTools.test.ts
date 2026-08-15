@@ -36,6 +36,7 @@ interface LaunchCall {
 
 class FakeLaunchService implements AppHostLifecycleLaunchService {
     readonly launchCalls: LaunchCall[] = [];
+    readonly launchInputIsolations: Array<boolean | undefined> = [];
     readonly stopCalls: string[] = [];
     launchingPaths = new Set<string>();
     editorSessions: FakeEditorSession[] = [];
@@ -47,6 +48,7 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
     stopError: Error | undefined;
     markLaunchingOnLaunch = true;
     lifecycleLockError: Error | undefined;
+    onBeforeLaunch: (() => void) | undefined;
     onLifecycleLockHeld: (() => void) | undefined;
     reserveLaunchAttempts = 0;
     onRunningAppHostsRequested: (() => void) | undefined;
@@ -149,12 +151,19 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
         }
 
         const effective = resolveIsolated(isolated, appHostPath);
-        return this.supportsIsolatedLaunch
-            ? { effective, option: isolated ?? (effective ? true : undefined) }
-            : { effective: false, option: undefined };
+        if (this.supportsIsolatedLaunch) {
+            return { effective, option: isolated ?? (effective ? true : undefined) };
+        }
+        if (isolated === true) {
+            throw new Error('The requested isolation mode cannot be verified.');
+        }
+
+        return { effective: false, option: undefined };
     }
 
     async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<{ effective: boolean; option: boolean | undefined }> {
+        this.launchInputIsolations.push(isolated);
+        this.onBeforeLaunch?.();
         const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token);
         this.launchCalls.push({ appHostPath, command, noDebug, isolated: launchIsolation.option });
         if (this.launchDelay) {
@@ -570,7 +579,7 @@ suite('AppHost lifecycle language model tools', () => {
             const result = await service.start({ appHostPath: 'Ghost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
 
             assert.strictEqual(result.outcome, 'started');
-            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: registryOnly, command: 'run', noDebug: true, isolated: undefined }]);
+            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: registryOnly, command: 'run', noDebug: true, isolated: false }]);
         });
 
         test('rejects a selector carrying invisible characters that the registry cannot match', async () => {
@@ -719,7 +728,7 @@ suite('AppHost lifecycle language model tools', () => {
 
                 assert.strictEqual(result.outcome, 'started');
                 assert.strictEqual(result.appHostPath, 'AppHost/AppHost.csproj');
-                assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: true, isolated: undefined }]);
+                assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: true, isolated: false }]);
             }
             finally {
                 fs.rmSync(secondRoot, { recursive: true, force: true });
@@ -845,7 +854,7 @@ suite('AppHost lifecycle language model tools', () => {
         test('maps run mode to a non-debug aspire run launch', async () => {
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
 
-            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: true, isolated: undefined }]);
+            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: true, isolated: false }]);
             assert.deepStrictEqual(
                 { outcome: result.outcome, requestedMode: result.requestedMode, effectiveMode: result.effectiveMode, controller: result.controller, isolated: result.isolated },
                 { outcome: 'started', requestedMode: 'run', effectiveMode: 'run', controller: 'editor', isolated: false });
@@ -854,7 +863,7 @@ suite('AppHost lifecycle language model tools', () => {
         test('maps debug mode to a debugger-attached aspire run launch', async () => {
             await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, new vscode.CancellationTokenSource().token);
 
-            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: false, isolated: undefined }]);
+            assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: false, isolated: false }]);
         });
 
         test('passes explicit isolated true through to the launch', async () => {
@@ -922,7 +931,51 @@ suite('AppHost lifecycle language model tools', () => {
             }]);
         });
 
-        test('revalidates isolation support after acquiring the lifecycle lock', async () => {
+        test('preserves explicit false through the authoritative launch probe', async () => {
+            launchService.supportsIsolatedLaunch = false;
+            launchService.onBeforeLaunch = () => {
+                launchService.supportsIsolatedLaunch = true;
+            };
+
+            const result = await service.start(
+                { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: false },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.isolated, false);
+            assert.deepStrictEqual(launchService.launchInputIsolations, [false]);
+            assert.deepStrictEqual(launchService.launchCalls, [{
+                appHostPath: appHostProjectPath,
+                command: 'run',
+                noDebug: true,
+                isolated: false,
+            }]);
+        });
+
+        test('preserves confirmed effective false through the authoritative launch probe', async () => {
+            fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
+            writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
+            launchService.supportsIsolatedLaunch = false;
+            launchService.onBeforeLaunch = () => {
+                launchService.supportsIsolatedLaunch = true;
+            };
+
+            const result = await service.start(
+                { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(result.outcome, 'started');
+            assert.strictEqual(result.isolated, false);
+            assert.deepStrictEqual(launchService.launchInputIsolations, [false]);
+            assert.deepStrictEqual(launchService.launchCalls, [{
+                appHostPath: appHostProjectPath,
+                command: 'run',
+                noDebug: true,
+                isolated: false,
+            }]);
+        });
+
+        test('does not downgrade confirmed isolation after acquiring the lifecycle lock', async () => {
             fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
             writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
             launchService.onLifecycleLockHeld = () => {
@@ -933,14 +986,10 @@ suite('AppHost lifecycle language model tools', () => {
                 { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
                 new vscode.CancellationTokenSource().token);
 
-            assert.strictEqual(result.isolated, false);
+            assert.strictEqual(result.outcome, 'failed');
+            assert.strictEqual(result.isolated, true);
             assert.strictEqual(launchService.resolveLaunchIsolationCalls, 2);
-            assert.deepStrictEqual(launchService.launchCalls, [{
-                appHostPath: appHostProjectPath,
-                command: 'run',
-                noDebug: true,
-                isolated: undefined,
-            }]);
+            assert.deepStrictEqual(launchService.launchCalls, []);
         });
 
         test('returns alreadyStarting without launching a second process', async () => {
@@ -1624,7 +1673,7 @@ suite('AppHost lifecycle language model tools', () => {
                     prepared?.confirmationMessages?.message,
                     'Start the Aspire AppHost second/Other/AppHost.csproj in debug mode?');
                 assert.strictEqual(result.outcome, 'started');
-                assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: false, isolated: undefined }]);
+                assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: false, isolated: false }]);
             }
             finally {
                 fs.rmSync(secondRoot, { recursive: true, force: true });

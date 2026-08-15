@@ -3,7 +3,7 @@ import { appHostCandidateDescription, cliNotAvailable, cliFoundAtDefaultPath, di
 import path from 'path';
 import { AspireConfigFile, aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { extensionLogOutputChannel } from './logging';
-import { resolveCliPath } from './cliPath';
+import { resolveCliPath, tryExecuteCli, type CliPathResolutionResult } from './cliPath';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
@@ -251,10 +251,17 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
-export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate'): Promise<{ cliPath: string; available: boolean }> {
-    // Resolve CLI path fresh each time — settings or PATH may have changed
+export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate', pinnedCliPath?: string): Promise<{ cliPath: string; available: boolean }> {
+    // A restart must validate the executable that its already-negotiated arguments target.
+    // Ordinary launches still resolve fresh because settings or PATH may have changed.
     const startTime = Date.now();
-    const result = await resolveCliPath();
+    const result: CliPathResolutionResult = pinnedCliPath === undefined
+        ? await resolveCliPath()
+        : {
+            cliPath: pinnedCliPath,
+            available: await tryExecuteCli(pinnedCliPath),
+            source: 'configured',
+        };
     sendTelemetryEvent('aspire/vscode/cli/availability', {
         available: result.available ? 'true' : 'false',
         source: result.source,

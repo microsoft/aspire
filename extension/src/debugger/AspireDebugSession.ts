@@ -29,7 +29,7 @@ import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostCliPathConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
-import { markAspireDebugConfigurationAsExtensionOwned } from "./AspireDebugConfigurationProviderInternal";
+import { markAspireDebugConfigurationCliPathAsTrusted } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
@@ -1274,10 +1274,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             }
 
             extensionLogOutputChannel.info('AppHost restart requested, restarting Aspire debug session');
-            // The descriptor factory strips the per-activation ownership marker before the
-            // adapter starts. Re-mark this trusted in-memory configuration so the resolver
-            // preserves the CLI path that was negotiated together with its launch arguments.
-            markAspireDebugConfigurationAsExtensionOwned(config);
+            // The descriptor factory strips the per-activation trust marker before the adapter
+            // starts. Trust the pinned executable again without marking the replacement as owned
+            // by the old launch generation; the configuration provider must reserve it afresh.
+            markAspireDebugConfigurationCliPathAsTrusted(config);
             await vscode.debug.startDebugging(undefined, config);
           }
           else {

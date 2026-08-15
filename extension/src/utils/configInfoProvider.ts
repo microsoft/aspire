@@ -3,7 +3,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { extensionLogOutputChannel } from './logging';
-import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
+import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 
@@ -63,6 +63,7 @@ interface ConfigInfoOptions {
 export class ConfigInfoProvider {
     private readonly _cachedConfigInfoByCliPath = new Map<string, ConfigInfo>();
     private readonly _inFlightByCliPath = new Map<string, Promise<ConfigInfo | null>>();
+    private readonly _probeGenerationByCliPath = new Map<string, number>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
@@ -74,12 +75,12 @@ export class ConfigInfoProvider {
      * @param options.suppressErrors When true, failures are logged but not surfaced to the user via
      *   error notifications. Use this for background/best-effort probes (e.g. capability detection)
      *   where a missing or older CLI should degrade silently rather than nag the user.
-     * @param options.forceRefresh When true, bypasses cached and in-flight results for the selected
-     *   CLI path so the executable is queried again.
+     * @param options.forceRefresh When true, runs an invocation-owned probe that bypasses cached
+     *   and shared in-flight work. A failed refresh leaves the last successful cache entry intact.
      * @param options.cliPath The already-resolved CLI executable path. Supplying this guarantees the
      *   probe describes the same executable the caller is about to invoke.
-     * @param options.cancellationToken Cancels an invocation-specific probe and terminates its CLI
-     *   process. Shared cached probes should not pass a caller token.
+     * @param options.cancellationToken Cancels this caller's wait. For a force refresh it also
+     *   terminates that invocation-owned CLI process; shared probes continue for other callers.
      */
     async getConfigInfo(options?: ConfigInfoOptions): Promise<ConfigInfo | null> {
         const suppressErrors = options?.suppressErrors ?? false;
@@ -88,15 +89,12 @@ export class ConfigInfoProvider {
         }
 
         const startTime = Date.now();
-        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors);
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors, options?.cancellationToken);
         if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
 
-        if (options?.forceRefresh) {
-            this._cachedConfigInfoByCliPath.delete(cliPath);
-        }
-        else {
+        if (!options?.forceRefresh) {
             const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cliPath);
             if (cachedConfigInfo) {
                 return cachedConfigInfo;
@@ -109,27 +107,30 @@ export class ConfigInfoProvider {
             return null;
         }
 
-        if (!options?.forceRefresh) {
-            const existingProbe = this._inFlightByCliPath.get(cliPath);
-            if (existingProbe) {
-                return await this._awaitProbe(existingProbe, remainingTimeoutMs, suppressErrors);
-            }
-        }
-
-        const probe = this._fetchConfigInfo(cliPath, suppressErrors, remainingTimeoutMs, options?.cancellationToken);
-        this._inFlightByCliPath.set(cliPath, probe);
-        try {
-            const result = await probe;
-            if (result && this._inFlightByCliPath.get(cliPath) === probe) {
+        if (options?.forceRefresh) {
+            const generation = this._beginProbe(cliPath);
+            const result = await this._fetchConfigInfo(
+                cliPath,
+                suppressErrors,
+                remainingTimeoutMs,
+                options.cancellationToken);
+            if (result && this._probeGenerationByCliPath.get(cliPath) === generation) {
                 this._cachedConfigInfoByCliPath.set(cliPath, result);
             }
             return result;
         }
-        finally {
-            if (this._inFlightByCliPath.get(cliPath) === probe) {
-                this._inFlightByCliPath.delete(cliPath);
-            }
+
+        const existingProbe = this._inFlightByCliPath.get(cliPath);
+        if (existingProbe) {
+            return await this._awaitProbe(
+                existingProbe,
+                remainingTimeoutMs,
+                suppressErrors,
+                options?.cancellationToken);
         }
+
+        const probe = this._startSharedProbe(cliPath, suppressErrors, remainingTimeoutMs);
+        return await this._awaitProbe(probe, undefined, suppressErrors, options?.cancellationToken);
     }
 
     /**
@@ -137,35 +138,87 @@ export class ConfigInfoProvider {
      * tokens are stable, locale-independent identifiers (see {@link ConfigInfo.capabilities}).
      */
     async hasCapability(capability: string, options?: ConfigInfoOptions): Promise<boolean> {
-        const configInfo = await this.getConfigInfo(options);
-        return configInfo?.capabilities?.includes(capability) ?? false;
+        return await this.getCapabilityStatus(capability, options) === 'supported';
     }
 
-    private async _awaitProbe(probe: Promise<ConfigInfo | null>, timeoutMs: number, suppressErrors: boolean): Promise<ConfigInfo | null> {
+    /**
+     * Distinguishes a successful probe of an older CLI from a probe that could not complete.
+     * Callers that must honor an explicit capability-dependent choice cannot safely treat both
+     * cases as unsupported.
+     */
+    async getCapabilityStatus(capability: string, options?: ConfigInfoOptions): Promise<CapabilityStatus> {
+        const configInfo = await this.getConfigInfo(options);
+        if (!configInfo) {
+            return 'unavailable';
+        }
+
+        return configInfo.capabilities?.includes(capability) ? 'supported' : 'unsupported';
+    }
+
+    private _startSharedProbe(cliPath: string, suppressErrors: boolean, timeoutMs: number): Promise<ConfigInfo | null> {
+        const generation = this._beginProbe(cliPath);
+        let probe!: Promise<ConfigInfo | null>;
+        probe = this._fetchConfigInfo(cliPath, suppressErrors, timeoutMs)
+            .then(result => {
+                if (result && this._probeGenerationByCliPath.get(cliPath) === generation) {
+                    this._cachedConfigInfoByCliPath.set(cliPath, result);
+                }
+                return result;
+            })
+            .finally(() => {
+                if (this._inFlightByCliPath.get(cliPath) === probe) {
+                    this._inFlightByCliPath.delete(cliPath);
+                }
+            });
+        this._inFlightByCliPath.set(cliPath, probe);
+        return probe;
+    }
+
+    private _beginProbe(cliPath: string): number {
+        const generation = (this._probeGenerationByCliPath.get(cliPath) ?? 0) + 1;
+        this._probeGenerationByCliPath.set(cliPath, generation);
+        return generation;
+    }
+
+    private async _awaitProbe(
+        probe: Promise<ConfigInfo | null>,
+        timeoutMs: number | undefined,
+        suppressErrors: boolean,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<ConfigInfo | null> {
+        if (cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
         let timeout: ReturnType<typeof setTimeout> | undefined;
-        const timeoutPromise = new Promise<null>(resolve => {
-            timeout = setTimeout(() => {
-                this._reportTimeout(suppressErrors);
-                resolve(null);
-            }, timeoutMs);
+        let cancellation: vscode.Disposable | undefined;
+        const callerCompletion = new Promise<null>(resolve => {
+            if (timeoutMs !== undefined) {
+                timeout = setTimeout(() => {
+                    this._reportTimeout(suppressErrors);
+                    resolve(null);
+                }, timeoutMs);
+            }
+            cancellation = cancellationToken?.onCancellationRequested(() => resolve(null));
         });
 
         try {
-            // This timeout belongs to the caller, not the shared process. A caller that spent most of
-            // its budget resolving the CLI path must be allowed to leave without cancelling the probe
-            // for subscribers that joined later with a fresh budget.
-            return await Promise.race([probe, timeoutPromise]);
+            // Timeout and cancellation belong to this caller, not the shared process. A caller
+            // may leave without terminating work that other subscribers still need.
+            return await Promise.race([probe, callerCompletion]);
         }
         finally {
             if (timeout) {
                 clearTimeout(timeout);
             }
+            cancellation?.dispose();
         }
     }
 
-    private _resolveCliPath(suppressErrors: boolean): Promise<string | null> {
+    private _resolveCliPath(suppressErrors: boolean, cancellationToken?: vscode.CancellationToken): Promise<string | null> {
         return new Promise<string | null>((resolve) => {
             let settled = false;
+            let cancellation: vscode.Disposable | undefined;
             const settle = (result: string | null) => {
                 if (settled) {
                     return;
@@ -173,6 +226,7 @@ export class ConfigInfoProvider {
 
                 settled = true;
                 clearTimeout(timeout);
+                cancellation?.dispose();
                 resolve(result);
             };
             const reportError = (error: unknown) => {
@@ -187,6 +241,7 @@ export class ConfigInfoProvider {
                 this._reportTimeout(suppressErrors);
                 settle(null);
             }, configInfoTimeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => settle(null));
 
             try {
                 this._terminalProvider.getAspireCliExecutablePath().then(

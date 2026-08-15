@@ -71,14 +71,14 @@ class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
         capability: string;
         options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken } | undefined;
     }> = [];
-    supportsIsolatedLaunch = true;
+    capabilityStatus: 'supported' | 'unsupported' | 'unavailable' = 'supported';
 
-    async hasCapability(
+    async getCapabilityStatus(
         capability: string,
         options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken },
-    ): Promise<boolean> {
+    ): Promise<'supported' | 'unsupported' | 'unavailable'> {
         this.calls.push({ capability, options });
-        return capability === isolatedLaunchCapability && this.supportsIsolatedLaunch;
+        return capability === isolatedLaunchCapability ? this.capabilityStatus : 'unsupported';
     }
 }
 
@@ -106,7 +106,7 @@ suite('AppHostLaunchService', () => {
         service = new AppHostLaunchService(capabilityProvider);
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
         stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
-        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/path/bin/aspire', available: true, source: 'path' });
     });
 
     teardown(() => {
@@ -186,32 +186,58 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(config.args, ['--isolated']);
     });
 
-    test('lifecycle-owned launch omits isolation arguments for an older CLI', async () => {
-        capabilityProvider.supportsIsolatedLaunch = false;
-        const appHostPath = '/repo/AppHost.csproj';
+    test('non-authoritative isolation probes preserve explicit choices from stale capability data', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+
+        for (const capabilityStatus of ['unsupported', 'unavailable'] as const) {
+            capabilityProvider.capabilityStatus = capabilityStatus;
+            for (const isolated of [true, false]) {
+                const cancellation = new vscode.CancellationTokenSource();
+                const isolation = await service.resolveLaunchIsolation(appHostPath, isolated, cancellation.token);
+
+                assert.deepStrictEqual(isolation, { effective: isolated, option: isolated });
+                assert.strictEqual(capabilityProvider.calls.at(-1)?.options?.forceRefresh, false);
+                assert.strictEqual(capabilityProvider.calls.at(-1)?.options?.cliPath, undefined);
+                assert.strictEqual(capabilityProvider.calls.at(-1)?.options?.cancellationToken, cancellation.token);
+            }
+        }
+    });
+
+    test('lifecycle-owned launch downgrades inferred isolation for an older CLI', async () => {
+        capabilityProvider.capabilityStatus = 'unsupported';
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
         const cancellation = new vscode.CancellationTokenSource();
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
 
-        const isolation = await service.launchFromLifecycleOwner(appHostPath, 'run', true, true, cancellation.token);
+        const isolation = await service.launchFromLifecycleOwner(appHostPath, 'run', true, undefined, cancellation.token);
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.args, undefined);
-        assert.strictEqual(config[appHostCliPathConfigKey], 'aspire');
+        assert.strictEqual(config[appHostCliPathConfigKey], '/path/bin/aspire');
         assert.deepStrictEqual(isolation, { effective: false, option: undefined });
         assert.deepStrictEqual(capabilityProvider.calls, [{
             capability: isolatedLaunchCapability,
             options: {
                 suppressErrors: true,
                 forceRefresh: true,
-                cliPath: 'aspire',
+                cliPath: '/path/bin/aspire',
                 cancellationToken: cancellation.token,
             },
         }]);
     });
 
-    test('lifecycle-owned launch omits explicit isolation false for an older CLI', async () => {
-        capabilityProvider.supportsIsolatedLaunch = false;
-        const appHostPath = '/repo/AppHost.csproj';
+    test('lifecycle-owned launch honors explicit isolation false for an older CLI', async () => {
+        capabilityProvider.capabilityStatus = 'unsupported';
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
 
         const isolation = await service.launchFromLifecycleOwner(
@@ -224,6 +250,45 @@ suite('AppHostLaunchService', () => {
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.args, undefined);
         assert.deepStrictEqual(isolation, { effective: false, option: undefined });
+    });
+
+    test('lifecycle-owned launch rejects explicit isolation true for an older CLI', async () => {
+        capabilityProvider.capabilityStatus = 'unsupported';
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        await assert.rejects(
+            service.launchFromLifecycleOwner(
+                appHostPath,
+                'run',
+                true,
+                true,
+                new vscode.CancellationTokenSource().token),
+            /isolation/i);
+
+        assert.strictEqual(startDebuggingStub.called, false);
+    });
+
+    test('lifecycle-owned launch rejects explicit isolation when capability detection fails', async () => {
+        capabilityProvider.capabilityStatus = 'unavailable';
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+
+        for (const isolated of [true, false]) {
+            assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+            await assert.rejects(
+                service.launchFromLifecycleOwner(
+                    appHostPath,
+                    'run',
+                    true,
+                    isolated,
+                    new vscode.CancellationTokenSource().token),
+                /isolation/i);
+        }
+
+        assert.strictEqual(startDebuggingStub.called, false);
     });
 
     test('launch omits inferred isolation for a primary checkout AppHost path', async () => {

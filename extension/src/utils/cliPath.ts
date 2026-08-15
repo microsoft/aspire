@@ -227,23 +227,33 @@ interface CliPathLookupOptions {
 /**
  * Finds an executable Aspire CLI on PATH.
  *
- * Windows command shims must be resolved to their concrete path so downstream
- * process launches can route them through cmd.exe instead of passing the bare
- * command name to Node's executable-only spawn path.
+ * PATH lookups return a concrete path so capability negotiation, launch, and
+ * restart all target the same executable. Windows command shims additionally
+ * need their concrete path so downstream process launches can route them through
+ * cmd.exe instead of passing the bare command name to Node's executable-only spawn path.
  */
 export async function findCliOnPath(options: CliPathLookupOptions = {}): Promise<string | undefined> {
     const platform = options.platform ?? process.platform;
     const tryExecute = options.tryExecute ?? tryExecuteCli;
-    if (platform !== 'win32') {
-        return await tryExecute('aspire') ? 'aspire' : undefined;
-    }
-
     const pathValue = options.pathValue ?? process.env.PATH;
     if (!pathValue) {
         return undefined;
     }
 
     const candidateExists = options.fileExists ?? fileExists;
+    if (platform !== 'win32') {
+        for (const pathEntry of pathValue.split(path.posix.delimiter)) {
+            // Empty and relative POSIX PATH entries are resolved against the extension host's
+            // current directory, matching executable lookup while still producing an absolute pin.
+            const candidate = path.posix.resolve(pathEntry || '.', 'aspire');
+            if (await candidateExists(candidate) && await tryExecute(candidate)) {
+                return candidate;
+            }
+        }
+
+        return undefined;
+    }
+
     const executableNames = ['aspire.exe', 'aspire.cmd', 'aspire.bat', 'aspire'];
     for (const pathEntry of pathValue.split(path.win32.delimiter)) {
         const directory = pathEntry.trim().replace(/^"(.*)"$/, '$1');

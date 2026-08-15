@@ -310,6 +310,150 @@ suite('configInfoProvider tests', () => {
         sinon.assert.calledOnceWithExactly(terminateStub, childProcess, 'cancelled aspire config info command');
     });
 
+    test('a token-bound force refresh is not shared with unrelated callers', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const childProcesses: ChildProcessWithoutNullStreams[] = [];
+        const probeOptions: cliModule.SpawnProcessOptions[] = [];
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+            childProcesses.push(childProcess);
+            if (options) {
+                probeOptions.push(options);
+            }
+            return childProcess;
+        });
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const provider = new ConfigInfoProvider(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        const refresh = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+            forceRefresh: true,
+            cancellationToken: cancellation.token,
+        });
+        const shared = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+        });
+
+        assert.strictEqual(probeOptions.length, 2);
+        cancellation.cancel();
+        assert.strictEqual(await refresh, null);
+        sinon.assert.calledOnceWithExactly(terminateStub, childProcesses[0], 'cancelled aspire config info command');
+
+        probeOptions[1].stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [lsJsonStreamCapability],
+        }));
+        probeOptions[1].exitCallback?.(0);
+
+        assert.deepStrictEqual((await shared)?.capabilities, [lsJsonStreamCapability]);
+    });
+
+    test('cancelling one shared caller does not terminate the shared probe', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let probeOptions: cliModule.SpawnProcessOptions | undefined;
+        const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            probeOptions = options;
+            return childProcess;
+        });
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const provider = new ConfigInfoProvider(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        const cancelledCaller = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+            cancellationToken: cancellation.token,
+        });
+        const unrelatedCaller = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+        });
+
+        cancellation.cancel();
+        assert.strictEqual(await cancelledCaller, null);
+        assert.strictEqual(terminateStub.called, false);
+
+        probeOptions?.stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [lsJsonStreamCapability],
+        }));
+        probeOptions?.exitCallback?.(0);
+
+        assert.deepStrictEqual((await unrelatedCaller)?.capabilities, [lsJsonStreamCapability]);
+    });
+
+    test('a cancelled force refresh preserves the last successful cached result', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const probeOptions: cliModule.SpawnProcessOptions[] = [];
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            if (options) {
+                probeOptions.push(options);
+            }
+            return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        });
+        sinon.stub(cliModule, 'terminateCliProcess');
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const initial = provider.getConfigInfo({ cliPath: '/usr/bin/aspire', suppressErrors: true });
+        probeOptions[0].stdoutCallback?.(JSON.stringify({
+            localSettingsPath: '/workspace/aspire.config.json',
+            globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [lsJsonStreamCapability],
+        }));
+        probeOptions[0].exitCallback?.(0);
+        await initial;
+
+        const cancellation = new vscode.CancellationTokenSource();
+        const refresh = provider.getConfigInfo({
+            cliPath: '/usr/bin/aspire',
+            suppressErrors: true,
+            forceRefresh: true,
+            cancellationToken: cancellation.token,
+        });
+        cancellation.cancel();
+        assert.strictEqual(await refresh, null);
+
+        const cached = provider.getConfigInfo({ cliPath: '/usr/bin/aspire', suppressErrors: true });
+        if (probeOptions[2]) {
+            probeOptions[2].stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/workspace/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [],
+            }));
+            probeOptions[2].exitCallback?.(0);
+        }
+
+        assert.deepStrictEqual((await cached)?.capabilities, [lsJsonStreamCapability]);
+        assert.strictEqual(probeOptions.length, 2);
+    });
+
     test('caller timeout does not cancel a newer shared probe after delayed path resolution', async () => {
         const clock = sinon.useFakeTimers();
         let resolveCliPath: ((cliPath: string) => void) | undefined;

@@ -203,7 +203,11 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 }
 
                 const current = recheck.target;
-                let currentIsolation: { effective: boolean; option: boolean | undefined } | undefined;
+                let currentIsolation = this._dependencies.launchService.compareAppHostIdentity(
+                    preflight.target.absolutePath,
+                    current.absolutePath) === 'same'
+                    ? isolation
+                    : undefined;
                 const getCurrentIsolation = async () => {
                     currentIsolation ??= await this._dependencies.launchService.resolveLaunchIsolation(
                         current.absolutePath,
@@ -261,7 +265,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         current.absolutePath,
                         'run',
                         requestedMode === 'run',
-                        input.isolated,
+                        input.isolated ?? (await getCurrentIsolation()).effective,
                         lockToken);
                     return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, launchedIsolation.effective);
                 }

@@ -36,6 +36,8 @@ export interface ConfigInfo {
     capabilities?: string[];
 }
 
+export type CapabilityStatus = 'supported' | 'unsupported' | 'unavailable';
+
 /**
  * Capability advertised by the CLI when `aspire describe` supports the hidden
  * `--include-disabled-commands` flag. Tooling uses this to avoid passing the flag to older CLIs
