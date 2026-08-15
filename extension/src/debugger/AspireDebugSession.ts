@@ -886,12 +886,6 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
     this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
 
-    // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
-    const step = this.configuration.step;
-    if (command === 'do' && step && commandArgs.length === 0) {
-      extensionArgs.push(step);
-    }
-
     // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
     if (!noDebug) {
       extensionArgs.push('--start-debug-session');
@@ -917,7 +911,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       extensionArgs.push('--apphost', appHostPath);
     }
 
-    const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
+    const args = buildAspireCommandArgs(command, commandArgs, extensionArgs, this.configuration.step);
     const commandLabel = `aspire ${command}`;
     const sessionType = noDebug ? 'run' : 'debug';
 
@@ -1718,8 +1712,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 }
 
-export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {
+export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[], step?: string): string[] {
   const args = [command];
+  if (command === 'do' && step) {
+    args.push(step);
+  }
+
   const separatorIndex = commandArgs.indexOf('--');
   if (separatorIndex < 0) {
     args.push(...commandArgs, ...extensionArgs);

@@ -4494,6 +4494,24 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
     });
 
     suite('buildAspireCommandArgs', () => {
+        test('appends a do step before additional command arguments', () => {
+            const args = buildAspireCommandArgs('do', ['--verbose'], ['--start-debug-session', '--apphost', '/workspace/AppHost.csproj'], 'deploy');
+
+            assert.deepStrictEqual(args, ['do', 'deploy', '--verbose', '--start-debug-session', '--apphost', '/workspace/AppHost.csproj']);
+        });
+
+        test('appends a do step before command arguments and keeps extension arguments before the app argument separator', () => {
+            const args = buildAspireCommandArgs('do', ['--verbose', '--', '--custom-arg', 'value'], ['--nologo', '--apphost', '/workspace/AppHost.csproj'], 'deploy');
+
+            assert.deepStrictEqual(args, ['do', 'deploy', '--verbose', '--nologo', '--apphost', '/workspace/AppHost.csproj', '--', '--custom-arg', 'value']);
+        });
+
+        test('does not append a step to run arguments', () => {
+            const args = buildAspireCommandArgs('run', ['--isolated'], ['--start-debug-session', '--apphost', '/workspace/AppHost.csproj'], 'deploy');
+
+            assert.deepStrictEqual(args, ['run', '--isolated', '--start-debug-session', '--apphost', '/workspace/AppHost.csproj']);
+        });
+
         test('appends extension arguments when command has no app argument separator', () => {
             const args = buildAspireCommandArgs('run', ['--isolated'], ['--start-debug-session', '--apphost', '/workspace/AppHost.csproj']);
 
