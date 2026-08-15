@@ -932,8 +932,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withVolume);
         Assert.Equal("resource", withVolume.TargetParameterName);
-        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", withVolume.TargetTypeId);
-        Assert.True(withVolume.TargetType?.IsInterface);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", withVolume.TargetTypeId);
+        Assert.False(withVolume.TargetType?.IsInterface);
 
         // Preserve the existing parameter order and append env so generated callers remain compatible.
         Assert.Equal("target", withVolume.Parameters[0].Name);
@@ -941,6 +941,20 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("isReadOnly", withVolume.Parameters[2].Name);
         Assert.Equal("env", withVolume.Parameters[3].Name);
         Assert.True(withVolume.Parameters[3].IsOptional);
+
+        var withProjectVolume = Assert.Single(
+            capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/withProjectVolume");
+        Assert.Equal("withVolume", withProjectVolume.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", withProjectVolume.TargetTypeId);
+        Assert.False(withProjectVolume.TargetType?.IsInterface);
+
+        var withExecutableVolume = Assert.Single(
+            capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/withExecutableVolume");
+        Assert.Equal("withVolume", withExecutableVolume.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", withExecutableVolume.TargetTypeId);
+        Assert.False(withExecutableVolume.TargetType?.IsInterface);
 
         // Note: withBindMount still uses "builder" - it hasn't been moved to CoreExports yet
         var withBindMount = capabilities

@@ -1263,8 +1263,8 @@
     CapabilityId: Aspire.Hosting/withVolume,
     MethodName: withVolume,
     TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource,
-      IsInterface: true
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+      IsInterface: false
     },
     ExpandedTargetTypes: [
       {

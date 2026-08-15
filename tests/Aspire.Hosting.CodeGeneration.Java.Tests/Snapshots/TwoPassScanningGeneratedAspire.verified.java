@@ -2881,6 +2881,36 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a volume to a project resource. */
+    public CSharpAppResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
+    }
+
+    public CSharpAppResource withVolume(String target) {
+        return withVolume(target, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    private CSharpAppResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
+        return this;
+    }
+
     /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7005,7 +7035,8 @@ public class ContainerResource extends ResourceBuilderBase {
     public ContainerResource withVolume(String target, WithVolumeOptions optionsBag) {
         var name = optionsBag == null ? null : optionsBag.getName();
         var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
-        return withVolumeImpl(target, name, isReadOnly);
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
     }
 
     public ContainerResource withVolume(String target) {
@@ -7013,7 +7044,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a volume to a container resource. */
-    private ContainerResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
+    private ContainerResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         reqArgs.put("target", AspireClient.serializeValue(target));
@@ -7022,6 +7053,9 @@ public class ContainerResource extends ResourceBuilderBase {
         }
         if (isReadOnly != null) {
             reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
         }
         getClient().invokeCapability("Aspire.Hosting/withVolume", reqArgs);
         return this;
@@ -9669,6 +9703,36 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a volume to an executable resource. */
+    public DotnetToolResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
+    }
+
+    public DotnetToolResource withVolume(String target) {
+        return withVolume(target, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    private DotnetToolResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
+        return this;
+    }
+
     /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -11977,6 +12041,36 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Adds a volume to an executable resource. */
+    public ExecutableResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
+    }
+
+    public ExecutableResource withVolume(String target) {
+        return withVolume(target, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    private ExecutableResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
         return this;
     }
 
@@ -19958,6 +20052,36 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a volume to a project resource. */
+    public ProjectResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
+    }
+
+    public ProjectResource withVolume(String target) {
+        return withVolume(target, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    private ProjectResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
+        return this;
+    }
+
     /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -23341,7 +23465,8 @@ public class TestDatabaseResource extends ContainerResource {
     public TestDatabaseResource withVolume(String target, WithVolumeOptions optionsBag) {
         var name = optionsBag == null ? null : optionsBag.getName();
         var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
-        return withVolumeImpl(target, name, isReadOnly);
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
     }
 
     public TestDatabaseResource withVolume(String target) {
@@ -23349,7 +23474,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    private TestDatabaseResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
+    private TestDatabaseResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         reqArgs.put("target", AspireClient.serializeValue(target));
@@ -23358,6 +23483,9 @@ public class TestDatabaseResource extends ContainerResource {
         }
         if (isReadOnly != null) {
             reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
         }
         getClient().invokeCapability("Aspire.Hosting/withVolume", reqArgs);
         return this;
@@ -25529,7 +25657,8 @@ public class TestRedisResource extends ContainerResource {
     public TestRedisResource withVolume(String target, WithVolumeOptions optionsBag) {
         var name = optionsBag == null ? null : optionsBag.getName();
         var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
-        return withVolumeImpl(target, name, isReadOnly);
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
     }
 
     public TestRedisResource withVolume(String target) {
@@ -25537,7 +25666,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    private TestRedisResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
+    private TestRedisResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         reqArgs.put("target", AspireClient.serializeValue(target));
@@ -25546,6 +25675,9 @@ public class TestRedisResource extends ContainerResource {
         }
         if (isReadOnly != null) {
             reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
         }
         getClient().invokeCapability("Aspire.Hosting/withVolume", reqArgs);
         return this;
@@ -27735,7 +27867,8 @@ public class TestVaultResource extends ContainerResource {
     public TestVaultResource withVolume(String target, WithVolumeOptions optionsBag) {
         var name = optionsBag == null ? null : optionsBag.getName();
         var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
-        return withVolumeImpl(target, name, isReadOnly);
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        return withVolumeImpl(target, name, isReadOnly, env);
     }
 
     public TestVaultResource withVolume(String target) {
@@ -27743,7 +27876,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    private TestVaultResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
+    private TestVaultResource withVolumeImpl(String target, String name, Boolean isReadOnly, String env) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         reqArgs.put("target", AspireClient.serializeValue(target));
@@ -27752,6 +27885,9 @@ public class TestVaultResource extends ContainerResource {
         }
         if (isReadOnly != null) {
             reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        if (env != null) {
+            reqArgs.put("env", AspireClient.serializeValue(env));
         }
         getClient().invokeCapability("Aspire.Hosting/withVolume", reqArgs);
         return this;
@@ -29102,6 +29238,7 @@ import java.util.function.*;
 public final class WithVolumeOptions {
     private String name;
     private Boolean isReadOnly;
+    private String env;
 
     public String getName() { return name; }
     public WithVolumeOptions name(String value) {
@@ -29112,6 +29249,12 @@ public final class WithVolumeOptions {
     public Boolean isReadOnly() { return isReadOnly; }
     public WithVolumeOptions isReadOnly(Boolean value) {
         this.isReadOnly = value;
+        return this;
+    }
+
+    public String getEnv() { return env; }
+    public WithVolumeOptions env(String value) {
+        this.env = value;
         return this;
     }
 

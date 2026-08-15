@@ -1922,11 +1922,11 @@ export interface WithUrlOptions {
 }
 
 export interface WithVolumeOptions {
-    /** The volume name. Containers can omit it to create an anonymous volume. Projects and executables require it. */
+    /** The volume name. If null, an anonymous volume is created. */
     name?: string;
     /** Whether the volume is read-only. */
     isReadOnly?: boolean;
-    /** An environment variable that receives the effective volume path. Optional for containers and required for projects and executables. */
+    /** An optional environment variable that receives the target mount path. */
     env?: string;
 }
 
@@ -17270,10 +17270,10 @@ export interface ContainerResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -18079,10 +18079,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -20336,10 +20336,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -21932,17 +21932,10 @@ export interface CSharpAppResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
     /**
@@ -22570,17 +22563,10 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
     /**
@@ -24397,24 +24383,17 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
         if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withVolume',
+            'Aspire.Hosting/withProjectVolume',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
     }
 
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
         const name = options?.name;
@@ -25983,17 +25962,10 @@ export interface DotnetToolResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
     /**
@@ -26643,17 +26615,10 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
     /**
@@ -28554,24 +28519,17 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
         if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withVolume',
+            'Aspire.Hosting/withExecutableVolume',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
     }
 
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
         const name = options?.name;
@@ -30111,17 +30069,10 @@ export interface ExecutableResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise;
     /**
@@ -30738,17 +30689,10 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise;
     /**
@@ -32545,24 +32489,17 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
         if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withVolume',
+            'Aspire.Hosting/withExecutableVolume',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
     }
 
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to an executable resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same executable resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise {
         const name = options?.name;
@@ -38508,17 +38445,10 @@ export interface ProjectResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise;
     /**
@@ -39146,17 +39076,10 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise;
     /**
@@ -40974,24 +40897,17 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
         if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withVolume',
+            'Aspire.Hosting/withProjectVolume',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
     }
 
     /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
+     * Adds a volume to a project resource.
+     * @param target The mount path inside the published container.
      * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
+     * @returns The same project resource builder handle for chaining.
      */
     withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise {
         const name = options?.name;
@@ -42709,10 +42625,10 @@ export interface TestDatabaseResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -43518,10 +43434,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -45774,10 +45690,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -47563,10 +47479,10 @@ export interface TestRedisResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -48436,10 +48352,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -50776,10 +50692,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -52820,10 +52736,10 @@ export interface TestVaultResource {
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -53631,10 +53547,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -55889,10 +55805,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Adds a volume to a compute resource.
+     * Adds a volume to a container resource.
      *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
+     * Volumes persist data across container restarts. Named volumes are managed
+     * by Docker/Podman and stored in a system-managed location.
      * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
      * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
      * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
@@ -57053,20 +56969,6 @@ export interface ComputeResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
-    /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
-     * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
-     */
-    withVolume(target: string, options?: WithVolumeOptions): ComputeResourcePromise;
 }
 
 export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
@@ -57106,20 +57008,6 @@ export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
-    /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
-     * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
-     */
-    withVolume(target: string, options?: WithVolumeOptions): ComputeResourcePromise;
 }
 
 // ============================================================================
@@ -57225,39 +57113,6 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
         return new ComputeResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
     }
 
-    /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<ComputeResource> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
-        if (name !== undefined) rpcArgs.name = name;
-        if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
-        const result = await this._client.invokeCapability<IComputeResourceHandle>(
-            'Aspire.Hosting/withVolume',
-            rpcArgs
-        );
-        return new ComputeResourceImpl(result, this._client);
-    }
-
-    /**
-     * Adds a volume to a compute resource.
-     *
-     * Containers use runtime-managed volumes in run mode. Projects and executables
-     * use a required environment variable to access workload-scoped local storage.
-     * Why this wrapper exists: The original `ContainerResourceBuilderExtensions.WithVolume`
-     * has parameter order `(name?, target, isReadOnly)` where the optional `name` comes first.
-     * This wrapper reorders parameters to `(target, name?, isReadOnly)` so the required `target`
-     * parameter comes first, providing a better API for polyglot consumers.
-     * @param target The mount path inside the container.
-     * @param options Additional options.
-     * @returns The same resource builder handle for chaining.
-     */
-    withVolume(target: string, options?: WithVolumeOptions): ComputeResourcePromise {
-        const name = options?.name;
-        const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new ComputeResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
-    }
-
 }
 
 /**
@@ -57291,10 +57146,6 @@ class ComputeResourcePromiseImpl implements ComputeResourcePromise {
 
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
-    }
-
-    withVolume(target: string, options?: WithVolumeOptions): ComputeResourcePromise {
-        return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, options)), this._client);
     }
 
 }

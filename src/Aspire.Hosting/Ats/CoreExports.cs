@@ -57,12 +57,12 @@ internal static class CoreExports
     #region Compute Configuration
 
     /// <summary>
-    /// Adds a volume to a compute resource.
+    /// Adds a volume to a container resource.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Containers use runtime-managed volumes in run mode. Projects and executables
-    /// use a required environment variable to access workload-scoped local storage.
+    /// Volumes persist data across container restarts. Named volumes are managed
+    /// by Docker/Podman and stored in a system-managed location.
     /// </para>
     /// <para>
     /// <strong>Why this wrapper exists:</strong> The original <c>ContainerResourceBuilderExtensions.WithVolume</c>
@@ -71,22 +71,72 @@ internal static class CoreExports
     /// parameter comes first, providing a better API for polyglot consumers.
     /// </para>
     /// </remarks>
-    /// <param name="resource">The compute resource builder handle.</param>
+    /// <param name="resource">The container resource builder handle.</param>
     /// <param name="target">The mount path inside the container.</param>
-    /// <param name="name">The volume name. Containers can omit it to create an anonymous volume. Projects and executables require it.</param>
+    /// <param name="name">The volume name. If null, an anonymous volume is created.</param>
     /// <param name="isReadOnly">Whether the volume is read-only.</param>
-    /// <param name="env">An environment variable that receives the effective volume path. Optional for containers and required for projects and executables.</param>
+    /// <param name="env">An optional environment variable that receives the target mount path.</param>
     /// <returns>The same resource builder handle for chaining.</returns>
     [AspireExport]
-    public static IResourceBuilder<T> WithVolume<T>(
-        this IResourceBuilder<T> resource,
+    public static IResourceBuilder<ContainerResource> WithVolume(
+        this IResourceBuilder<ContainerResource> resource,
         string target,
         string? name = null,
         bool isReadOnly = false,
         string? env = null)
-        where T : IComputeResource
     {
-        if (resource.Resource is not ContainerResource && env is null)
+        return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env);
+    }
+
+    /// <summary>
+    /// Adds a volume to a project resource.
+    /// </summary>
+    /// <param name="resource">The project resource builder handle.</param>
+    /// <param name="target">The mount path inside the published container.</param>
+    /// <param name="name">The volume name. Required for projects.</param>
+    /// <param name="isReadOnly">Whether the published volume is read-only.</param>
+    /// <param name="env">An environment variable that receives the effective volume path. Required for projects.</param>
+    /// <returns>The same project resource builder handle for chaining.</returns>
+    [AspireExport("withProjectVolume", MethodName = "withVolume")]
+    public static IResourceBuilder<ProjectResource> WithProjectVolumeForPolyglot(
+        this IResourceBuilder<ProjectResource> resource,
+        string target,
+        string? name = null,
+        bool isReadOnly = false,
+        string? env = null)
+    {
+        return WithProcessVolume(resource, target, name, isReadOnly, env);
+    }
+
+    /// <summary>
+    /// Adds a volume to an executable resource.
+    /// </summary>
+    /// <param name="resource">The executable resource builder handle.</param>
+    /// <param name="target">The mount path inside the published container.</param>
+    /// <param name="name">The volume name. Required for executables.</param>
+    /// <param name="isReadOnly">Whether the published volume is read-only.</param>
+    /// <param name="env">An environment variable that receives the effective volume path. Required for executables.</param>
+    /// <returns>The same executable resource builder handle for chaining.</returns>
+    [AspireExport("withExecutableVolume", MethodName = "withVolume")]
+    public static IResourceBuilder<ExecutableResource> WithExecutableVolumeForPolyglot(
+        this IResourceBuilder<ExecutableResource> resource,
+        string target,
+        string? name = null,
+        bool isReadOnly = false,
+        string? env = null)
+    {
+        return WithProcessVolume(resource, target, name, isReadOnly, env);
+    }
+
+    private static IResourceBuilder<T> WithProcessVolume<T>(
+        IResourceBuilder<T> resource,
+        string target,
+        string? name,
+        bool isReadOnly,
+        string? env)
+        where T : IComputeResource, IResourceWithEnvironment
+    {
+        if (env is null)
         {
             throw new InvalidOperationException(
                 $"Resource '{resource.Resource.Name}' must specify an environment variable when adding a volume.");
