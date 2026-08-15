@@ -82,13 +82,15 @@ internal sealed class AppHostConnectionResolver(
     /// <param name="selectPrompt">Prompt to display when multiple AppHosts are found.</param>
     /// <param name="notFoundMessage">Message to display when no AppHosts are found.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="allowOutOfScopeSelection">Whether interactive callers may select an AppHost outside the current scope.</param>
     /// <returns>The resolved connection, or null with an error message.</returns>
     public async Task<AppHostConnectionResult> ResolveConnectionAsync(
         FileInfo? projectFile,
         string scanningMessage,
         string selectPrompt,
         string notFoundMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowOutOfScopeSelection = true)
     {
         // Fast path: If --apphost was specified, check directly for its socket
         if (projectFile is not null)
@@ -221,11 +223,10 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (outOfScopeConnections.Count > 0)
         {
-            if (!hostEnvironment.SupportsInteractiveInput)
+            if (!allowOutOfScopeSelection || !hostEnvironment.SupportsInteractiveInput)
             {
-                // No in-scope AppHosts, and selecting from out-of-scope AppHosts requires
-                // a prompt. In non-interactive mode treat this as "not found" so scripts
-                // get a clean error and exit code instead of an unexpected prompt failure.
+                // Treat out-of-scope AppHosts as not found when the caller requires strict
+                // scope or cannot prompt. Explicit --apphost and --all flows bypass this path.
                 return new AppHostConnectionResult
                 {
                     ErrorMessage = notFoundMessage,

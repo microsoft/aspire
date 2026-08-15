@@ -305,11 +305,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_SingleOutOfScopeAppHostUsesFullPathInMessages()
+    public async Task StopCommand_SingleOutOfScopeAppHostWithoutOverrideDoesNotPromptOrStop()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outOfScopeDir = workspace.CreateDirectory("out-of-scope");
         var interactionService = new TestInteractionService();
+        interactionService.PromptForSelectionCallback = (_, _, _, _) =>
+            throw new InvalidOperationException("Out-of-scope AppHosts must not be offered by aspire stop without --apphost or --all.");
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
 
@@ -332,10 +334,11 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
-
-        Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostPath));
-        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostPath));
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal([SharedCommandStrings.ScanningForRunningAppHosts], statusMessages);
+        Assert.Empty(interactionService.DisplayedSuccess);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, Assert.Single(interactionService.DisplayedErrors));
+        Assert.True(File.Exists(connection.SocketPath));
     }
 
     [Fact]
