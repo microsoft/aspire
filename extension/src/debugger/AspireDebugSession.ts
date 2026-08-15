@@ -5,7 +5,7 @@ import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler 
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
-import { spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
+import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
 import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled } from "../loc/strings";
 import { isExtensionInstalled } from "../capabilities";
 import { projectDebuggerExtension } from "./languages/dotnet";
@@ -1094,7 +1094,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         void this.requestCliStopForExtensionShutdown().catch((err) => {
           extensionLogOutputChannel.info(`stopCli failed (connection may already be closed): ${err}`);
         });
-        extensionLogOutputChannel.info(`Requested Aspire CLI exit with args: ${args.join(' ')}`);
+        extensionLogOutputChannel.info(`Requested Aspire CLI exit with args: ${redactCliArgsForLogging(args).join(' ')}`);
         // `stopCli` is cooperative and cannot be the only stop mechanism: it resolves without
         // effect when the transport is already closed, and never settles when the CLI has stopped
         // servicing the connection. Escalate to signalling the process group once the CLI has had

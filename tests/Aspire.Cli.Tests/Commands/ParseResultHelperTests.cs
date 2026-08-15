@@ -176,6 +176,37 @@ public sealed class ParseResultHelperTests : IDisposable
     }
 
     [Fact]
+    public void ForwardedArguments_RoundTripsOptionShapedMultiValue()
+    {
+        var valuesOption = new System.CommandLine.Option<string[]>("--values")
+        {
+            Arity = System.CommandLine.ArgumentArity.ZeroOrMore,
+            AllowMultipleArgumentsPerToken = true,
+        };
+        var flagOption = new System.CommandLine.Option<bool>("--flag");
+        var command = new System.CommandLine.Command("test");
+        command.Options.Add(valuesOption);
+        command.Options.Add(flagOption);
+
+        var parentParseResult = command.Parse(["test", "--values=--flag"]);
+
+        Assert.Empty(parentParseResult.Errors);
+        var parentValues = Assert.IsType<string[]>(parentParseResult.GetValue(valuesOption));
+        Assert.Equal(["--flag"], parentValues);
+        Assert.False(parentParseResult.GetValue(flagOption));
+
+        var forwardedArguments = ParseResultHelper.GetForwardedArguments(
+            parentParseResult,
+            UnmatchedTokenPlacement.Preserve);
+        var childParseResult = command.Parse(["test", .. forwardedArguments.Tokens]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.Equal(parentValues, Assert.IsType<string[]>(childParseResult.GetValue(valuesOption)));
+        Assert.Equal(parentParseResult.GetValue(flagOption), childParseResult.GetValue(flagOption));
+        Assert.Equal(["--values=--flag"], forwardedArguments.Tokens);
+    }
+
+    [Fact]
     public void GetForwardedArguments_ExcludesOptionAliases()
     {
         var parseResult = _command.Parse(["run", "-d", "--isolated"]);

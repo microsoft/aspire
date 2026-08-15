@@ -36,7 +36,7 @@ export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCo
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
     const startupTimeout = getEnvironmentValue(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT);
-    return `Spawning Aspire CLI process: ${[command, ...redactCliSpawnArgs(args)].join(' ')}; cwd=${workingDirectory}; noDebug=${noDebug}; debugSessionId=${debugSessionId}; ${EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT}=${startupTimeout}`;
+    return `Spawning Aspire CLI process: ${[command, ...redactCliArgsForLogging(args)].join(' ')}; cwd=${workingDirectory}; noDebug=${noDebug}; debugSessionId=${debugSessionId}; ${EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT}=${startupTimeout}`;
 }
 
 export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>, envVars?: EnvVar[]): void {
@@ -301,7 +301,7 @@ function isPosixProcessGroupAlive(pid: number): boolean {
     }
 }
 
-function redactCliSpawnArgs(args: string[] | undefined): string[] {
+export function redactCliArgsForLogging(args: string[] | undefined): string[] {
     if (!args) {
         return [];
     }

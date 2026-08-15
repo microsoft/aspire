@@ -175,6 +175,33 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(getAspireCliExecutablePath.called, false);
     });
 
+    test('redacts forwarded AppHost arguments from shutdown logs', async () => {
+        const cliProcess = createFakeCliProcess(4323);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
+        sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const logStub = sinon.stub(extensionLogOutputChannel, 'info');
+        const aspireDebugSession = createSessionForSpawn();
+
+        await aspireDebugSession.spawnAspireCommand(
+            ['run', '--isolated', '--', '--api-key', 'secret-value'],
+            '/workspace',
+            false,
+            'aspire run');
+
+        aspireDebugSession.dispose();
+        await aspireDebugSession.stopDebugging();
+
+        const shutdownMessage = logStub.args
+            .map(([message]) => message)
+            .find(message => message.startsWith('Requested Aspire CLI exit with args:'));
+        assert.strictEqual(
+            shutdownMessage,
+            'Requested Aspire CLI exit with args: run --isolated -- <redacted>');
+
+        spawnStub.firstCall.args[3]?.exitCallback?.(0);
+    });
+
     test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
         // `terminateCliProcess` is stubbed rather than executed: on Windows it shells out to
         // `taskkill /pid <pid> /t` instead of calling `child.kill`, so running it for real would

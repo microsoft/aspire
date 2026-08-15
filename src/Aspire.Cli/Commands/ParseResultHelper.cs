@@ -208,11 +208,13 @@ internal static class ParseResultHelper
             ? fileSystemInfo.FullName
             : token.Value;
 
-        // A matched single-value option can own the raw value `--`. Normalize typed values
-        // before using equals syntax so a FileSystemInfo value remains an absolute path:
-        //   --capture-profile-output=/working/directory/--
-        if (token.Value == "--"
-            && optionResult is { Tokens.Count: 1, IdentifierToken: { } identifierToken }
+        // System.CommandLine splits an equals-form option into owned identifier and value tokens:
+        //   --values=--flag  ->  "--values", "--flag"
+        // Re-emitting that as `--values --flag` can make a child parse `--flag` as an option
+        // instead of a value. Keep equals syntax for the first option-shaped value, after typed
+        // normalization so a FileSystemInfo value such as `--` remains an absolute path.
+        if (token.Value.StartsWith('-')
+            && optionResult is { IdentifierToken: { } identifierToken }
             && ReferenceEquals(lastForwardedToken, identifierToken))
         {
             forwardedTokens[^1] = $"{identifierToken.Value}={emittedValue}";
