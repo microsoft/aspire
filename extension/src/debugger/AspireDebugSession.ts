@@ -33,6 +33,7 @@ import { markAspireDebugConfigurationCliPathAsTrusted } from "./AspireDebugConfi
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
+import { hasRootNoLogoOption } from "../utils/cliCompatibility";
 
 export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
 
@@ -891,9 +892,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       extensionArgs.push('--start-debug-session');
     }
 
-    const appArgsSeparatorIndex = commandArgs.indexOf('--');
-    const cliCommandArgs = appArgsSeparatorIndex < 0 ? commandArgs : commandArgs.slice(0, appArgsSeparatorIndex);
-    if (!cliCommandArgs.includes('--nologo')) {
+    if (!hasRootNoLogoOption(commandArgs)) {
       extensionArgs.push('--nologo');
     }
 
