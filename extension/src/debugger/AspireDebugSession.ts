@@ -54,19 +54,26 @@ function getOperationKind(value: unknown): AspireOperationKind {
 }
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
+  // Debugger argument lists can include forwarded AppHost secrets. Redact them before the
+  // environment branches so the include-environment fast path also returns a safe clone.
+  const loggableConfig = {
+    ...debugConfig,
+    args: debugConfig.args === undefined ? undefined : '<redacted>',
+  };
+
   if (includeEnvironment && !debugConfigurationsWithSensitiveEnvironment.has(debugConfig)) {
     if (debugConfig.type !== 'maui') {
-      return debugConfig;
+      return loggableConfig;
     }
 
     return {
-      ...debugConfig,
+      ...loggableConfig,
       environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
     };
   }
 
   return {
-    ...debugConfig,
+    ...loggableConfig,
     env: debugConfig.env ? '<redacted>' : undefined,
     environment: debugConfig.environment ? '<redacted>' : undefined,
     environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,

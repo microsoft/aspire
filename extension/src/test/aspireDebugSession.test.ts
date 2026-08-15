@@ -3933,6 +3933,43 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
     });
 
+    test('redacts debug configuration arguments when environment logging is disabled', () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: '.NET',
+            request: 'launch',
+            args: ['--api-key', 'secret-value'],
+        } as AspireResourceExtendedDebugConfiguration;
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, false);
+
+        assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.deepStrictEqual(debugConfig.args, ['--api-key', 'secret-value']);
+    });
+
+    test('redacts debug configuration arguments without mutating the source when environment logging is enabled', () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: '.NET',
+            request: 'launch',
+            args: ['--api-key', 'secret-value'],
+            env: {
+                LOG_LEVEL: 'debug',
+            },
+        } as AspireResourceExtendedDebugConfiguration;
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, true);
+
+        assert.notStrictEqual(loggableConfig, debugConfig);
+        assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.deepStrictEqual(loggableConfig.env, { LOG_LEVEL: 'debug' });
+        assert.deepStrictEqual(debugConfig.args, ['--api-key', 'secret-value']);
+    });
+
     test('redacts MAUI environmentVariables even when environment logging is enabled', () => {
         const debugConfig = {
             runId: 'run-1',
