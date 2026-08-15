@@ -2,7 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Shared.TerminalHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -10,10 +14,12 @@ namespace Aspire.Hosting.Lifecycle;
 
 internal sealed class TerminalHostOrphanCleanupService(
     ILogger<TerminalHostOrphanCleanupService> logger,
-    IHostApplicationLifetime applicationLifetime) : IAsyncDisposable
+    IHostApplicationLifetime applicationLifetime) : IDistributedApplicationEventingSubscriber, IAsyncDisposable
 {
     private readonly object _sync = new();
     private Task? _cleanupTask;
+
+    internal static TimeSpan InvalidMetadataRetentionPeriod { get; } = TimeSpan.FromDays(7);
 
     internal Task Completion
     {
@@ -27,6 +33,35 @@ internal sealed class TerminalHostOrphanCleanupService(
     }
 
     internal int StartCount { get; private set; }
+
+    public Task SubscribeAsync(
+        IDistributedApplicationEventing eventing,
+        DistributedApplicationExecutionContext executionContext,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(eventing);
+
+        if (executionContext.IsRunMode)
+        {
+            // DI subscribers attach after builder-phase WithTerminal handlers. Starting the
+            // sweep here prevents it from observing another resource's sidecar mid-write.
+            eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+            {
+                var configuration = @event.Services.GetRequiredService<IConfiguration>();
+                var trmnlDirectory = configuration[TerminalHostPaths.DirectoryOverrideConfigName];
+                if (string.IsNullOrEmpty(trmnlDirectory))
+                {
+                    var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+                }
+
+                Start(trmnlDirectory);
+                return Task.CompletedTask;
+            });
+        }
+
+        return Task.CompletedTask;
+    }
 
     internal void Start(string trmnlDirectory)
     {
@@ -151,13 +186,6 @@ internal sealed class TerminalHostOrphanCleanupService(
                     continue;
                 }
 
-                if (!TryAcquireLegacyLock(trmnlDirectory, replicaId, logger, out var legacyLock))
-                {
-                    continue;
-                }
-
-                using var heldLegacyLock = legacyLock;
-
                 TerminalHostMetadata? metadata;
                 try
                 {
@@ -180,17 +208,57 @@ internal sealed class TerminalHostOrphanCleanupService(
                             cancellationToken: cancellationToken).ConfigureAwait(false);
                     }
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                catch (JsonException ex)
+                {
+                    logger.LogWarning(
+                        ex,
+                        "Unable to inspect terminal metadata '{Path}'; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        candidatePath,
+                        InvalidMetadataRetentionPeriod.TotalDays);
+                    ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
+                    continue;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     logger.LogWarning(ex, "Unable to inspect terminal metadata '{Path}'; leaving its artifacts in place.", candidatePath);
                     continue;
                 }
 
-                if (metadata is null
-                    || !string.Equals(metadata.ReplicaId, replicaId, StringComparison.Ordinal)
-                    || metadata.AppHostPid <= 0)
+                if (metadata is null)
                 {
-                    logger.LogWarning("Terminal metadata '{Path}' is invalid; leaving its artifacts in place.", candidatePath);
+                    logger.LogWarning(
+                        "Terminal metadata '{Path}' is invalid; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        candidatePath,
+                        InvalidMetadataRetentionPeriod.TotalDays);
+                    ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
+                    continue;
+                }
+
+                if (metadata.SchemaVersion != 1
+                    && metadata.SchemaVersion != 2
+                    && metadata.SchemaVersion != TerminalHostMetadata.CurrentSchemaVersion)
+                {
+                    // A newer Aspire build may own this replica. Its age alone is not enough
+                    // evidence for an older build to delete an unknown schema's live sockets.
+                    logger.LogWarning(
+                        "Skipping terminal metadata '{Path}' with unsupported schema version {SchemaVersion}.",
+                        candidatePath,
+                        metadata.SchemaVersion);
+                    continue;
+                }
+
+                if (!string.Equals(metadata.ReplicaId, replicaId, StringComparison.Ordinal)
+                    || metadata.AppHostPid <= 0
+                    || (metadata.SchemaVersion == 2 && metadata.SchemaV2AppHostProcessIdentity is not > 0)
+                    || (metadata.SchemaVersion == TerminalHostMetadata.CurrentSchemaVersion
+                        && (metadata.AppHostProcessIdentity is not > 0
+                            || string.IsNullOrEmpty(metadata.AppHostProcessScopeId))))
+                {
+                    logger.LogWarning(
+                        "Terminal metadata '{Path}' is invalid; invalid artifacts are retained for up to {RetentionDays} days before cleanup.",
+                        candidatePath,
+                        InvalidMetadataRetentionPeriod.TotalDays);
+                    ReclaimExpiredInvalidMetadata(candidatePath, trmnlDirectory, replicaId, logger);
                     continue;
                 }
 
@@ -207,8 +275,7 @@ internal sealed class TerminalHostOrphanCleanupService(
                         assumeRunningWhenUnableToInspect: true,
                         unableToInspect: out unableToInspectOwner);
                 }
-                else if (metadata.SchemaVersion == 2
-                    && metadata.SchemaV2AppHostProcessIdentity is > 0)
+                else if (metadata.SchemaVersion == 2)
                 {
                     // Schema v2 was emitted by earlier preview builds of this feature. It has the
                     // stable process identity but predates machine/PID-namespace and boot scoping.
@@ -219,9 +286,7 @@ internal sealed class TerminalHostOrphanCleanupService(
                         assumeRunningWhenUnableToInspect: true,
                         unableToInspect: out unableToInspectOwner);
                 }
-                else if (metadata.SchemaVersion == TerminalHostMetadata.CurrentSchemaVersion
-                    && metadata.AppHostProcessIdentity is > 0
-                    && !string.IsNullOrEmpty(metadata.AppHostProcessScopeId))
+                else
                 {
                     if (!string.Equals(metadata.AppHostProcessScopeId, currentScopeId, StringComparison.Ordinal))
                     {
@@ -244,15 +309,6 @@ internal sealed class TerminalHostOrphanCleanupService(
                             assumeRunningWhenUnableToInspect: true,
                             unableToInspect: out unableToInspectOwner);
                 }
-                else
-                {
-                    logger.LogWarning(
-                        "Skipping terminal metadata '{Path}' with unsupported schema version {SchemaVersion}.",
-                        candidatePath,
-                        metadata.SchemaVersion);
-                    continue;
-                }
-
                 if (unableToInspectOwner)
                 {
                     logger.LogWarning(
@@ -273,8 +329,6 @@ internal sealed class TerminalHostOrphanCleanupService(
                     metadata.AppHostPid);
                 DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
             }
-
-            CleanupLegacyLocks(trmnlDirectory, logger, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -285,92 +339,35 @@ internal sealed class TerminalHostOrphanCleanupService(
         }
     }
 
-    private static void CleanupLegacyLocks(string trmnlDirectory, ILogger logger, CancellationToken cancellationToken)
-    {
-        foreach (var lockPath in Directory.GetFiles(trmnlDirectory, $"*.{TerminalHostPaths.LockSuffix}"))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!TerminalHostPaths.TryGetReplicaIdFromLockPath(lockPath, out var replicaId)
-                || ReplicaArtifactsExist(trmnlDirectory, replicaId))
-            {
-                continue;
-            }
-
-            try
-            {
-                // Earlier PR builds serialized replica operations through persistent .lock files.
-                // Hold the exact inode exclusively while deleting its directory entry so another
-                // process cannot swap in a new lock between acquisition and deletion.
-                using var stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Delete);
-                if (ReplicaArtifactsExist(trmnlDirectory, replicaId))
-                {
-                    continue;
-                }
-
-                File.Delete(lockPath);
-            }
-            catch (FileNotFoundException)
-            {
-            }
-            catch (IOException)
-            {
-                // An earlier build still owns the lock. Its artifacts will be reconsidered later.
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                logger.LogWarning(ex, "Unable to reclaim legacy terminal lock '{Path}'.", lockPath);
-            }
-        }
-    }
-
-    private static bool TryAcquireLegacyLock(
+    private static void ReclaimExpiredInvalidMetadata(
+        string metadataPath,
         string trmnlDirectory,
         string replicaId,
-        ILogger logger,
-        out FileStream? legacyLock)
+        ILogger logger)
     {
-        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
-        if (!File.Exists(lockPath))
-        {
-            legacyLock = null;
-            return true;
-        }
-
+        DateTime lastWriteTimeUtc;
         try
         {
-            // Schema-v2 preview builds use this persistent lock around metadata replacement and cleanup.
-            // Deny read/write sharing so those builds cannot replace deterministic paths while this sweep
-            // inspects them; FileShare.Delete lets stale-lock collection remove this exact inode later.
-            legacyLock = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Delete);
-            return true;
+            lastWriteTimeUtc = File.GetLastWriteTimeUtc(metadataPath);
         }
-        catch (FileNotFoundException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            legacyLock = null;
-            return false;
+            logger.LogWarning(ex, "Unable to inspect the age of invalid terminal metadata '{Path}'.", metadataPath);
+            return;
         }
-        catch (IOException)
-        {
-            logger.LogDebug(
-                "Skipping terminal replica '{ReplicaId}' because an earlier build is updating it.",
-                replicaId);
-            legacyLock = null;
-            return false;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            logger.LogWarning(ex, "Unable to acquire legacy terminal lock '{Path}'; leaving its artifacts in place.", lockPath);
-            legacyLock = null;
-            return false;
-        }
-    }
 
-    private static bool ReplicaArtifactsExist(string trmnlDirectory, string replicaId)
-        => File.Exists(TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId))
-            || File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose))
-            || File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose))
-            || File.Exists(TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ControlSockPurpose));
+        if (lastWriteTimeUtc > DateTime.UtcNow - InvalidMetadataRetentionPeriod)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Reclaiming terminal artifacts for replica '{ReplicaId}' because invalid metadata '{Path}' was last modified at {LastWriteTimeUtc}.",
+            replicaId,
+            metadataPath,
+            lastWriteTimeUtc);
+        DeleteReplicaFiles(trmnlDirectory, replicaId, logger);
+    }
 
     private static string? TryReadTrimmedText(string path)
     {

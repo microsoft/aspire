@@ -58,9 +58,6 @@ internal static class TerminalHostPaths
     /// <summary>Suffix for the per-replica metadata sidecar (JSON).</summary>
     public const string MetadataSuffix = "metadata.json";
 
-    /// <summary>Suffix used by legacy cross-process replica locks.</summary>
-    public const string LockSuffix = "lock";
-
     /// <summary>Internal configuration key that overrides the terminal artifact directory.</summary>
     public const string DirectoryOverrideConfigName = "AppHost:TerminalHostDirectory";
 
@@ -128,12 +125,6 @@ internal static class TerminalHostPaths
     /// </summary>
     public static bool TryGetReplicaIdFromMetadataPath(string metadataPath, out string replicaId)
         => TryGetReplicaId(metadataPath, MetadataSuffix, out replicaId);
-
-    /// <summary>
-    /// Extracts and validates the replica identifier encoded in a legacy lock filename.
-    /// </summary>
-    public static bool TryGetReplicaIdFromLockPath(string lockPath, out string replicaId)
-        => TryGetReplicaId(lockPath, LockSuffix, out replicaId);
 
     private static bool TryGetReplicaId(string path, string suffix, out string replicaId)
     {

@@ -18,7 +18,7 @@ internal static class ParentProcessWatchdog
     // after a short grace period so it cannot outlive its parent. 124 mirrors the conventional
     // "terminated by timeout" exit code.
     private const int TerminatedExitCode = 124;
-    private static readonly TimeSpan s_forceExitGracePeriod = TimeSpan.FromSeconds(5);
+    internal static TimeSpan ForceExitGracePeriod { get; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Starts monitoring the parent identified by <c>ASPIRE_CLI_PID</c>/<c>ASPIRE_CLI_STARTED</c>.
@@ -58,7 +58,7 @@ internal static class ParentProcessWatchdog
         return ParentProcessLivenessMonitor.Start(
             parentPid,
             expectedStartTimeUnix,
-            stopToken => OnParentExitedAsync(operationCts, stopToken, s_forceExitGracePeriod, Environment.Exit),
+            stopToken => CancelAndForceExitAsync(operationCts, stopToken, ForceExitGracePeriod, Environment.Exit),
             useRuntimeStartTime: useRuntimeStartTime);
     }
 
@@ -90,13 +90,16 @@ internal static class ParentProcessWatchdog
             : ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(legacyStartVariable));
     }
 
-    internal static async Task OnParentExitedAsync(
+    internal static async Task CancelAndForceExitAsync(
         CancellationTokenSource operationCts,
         CancellationToken stopToken,
         TimeSpan forceExitGracePeriod,
         Action<int> exit)
     {
-        // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
+        // Cancellation callbacks run synchronously and can themselves stall. Arm the timer
+        // first so the force-exit backstop remains independent of cooperative shutdown.
+        var forceExitTask = ForceExitAfterDelayAsync(stopToken, forceExitGracePeriod, exit);
+
         try
         {
             if (!operationCts.IsCancellationRequested)
@@ -114,6 +117,14 @@ internal static class ParentProcessWatchdog
             // the force-exit backstop because that is what prevents aspire-managed from leaking.
         }
 
+        await forceExitTask.ConfigureAwait(false);
+    }
+
+    private static async Task ForceExitAfterDelayAsync(
+        CancellationToken stopToken,
+        TimeSpan forceExitGracePeriod,
+        Action<int> exit)
+    {
         await Task.Delay(forceExitGracePeriod, stopToken).ConfigureAwait(false);
         exit(TerminatedExitCode);
     }

@@ -19,29 +19,34 @@ public static class TerminalHostProcessRunner
     public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var forceExitCts = new CancellationTokenSource();
         var parentWatchdog = ParentProcessWatchdog.Start(
             cts,
             KnownConfigNames.TerminalHostParentProcessId,
             KnownConfigNames.TerminalHostParentProcessStartedStable,
             legacyStartVariable: null);
+        var terminationSignalReceived = 0;
 
-        void RequestCancellation()
+        bool TryRequestGracefulShutdown()
         {
-            try
+            if (Interlocked.Exchange(ref terminationSignalReceived, 1) != 0)
             {
-                cts.Cancel();
+                return false;
             }
-            catch (ObjectDisposedException)
-            {
-                // A signal can race process teardown after cancellation has been disposed.
-            }
+
+            _ = ParentProcessWatchdog.CancelAndForceExitAsync(
+                cts,
+                forceExitCts.Token,
+                ParentProcessWatchdog.ForceExitGracePeriod,
+                Environment.Exit);
+            return true;
         }
 
         void OnPosixSignal(PosixSignalContext context)
         {
-            // Suppress immediate process termination so TerminalHostApp can unlink its sockets.
-            context.Cancel = true;
-            RequestCancellation();
+            // The first signal grants TerminalHostApp a bounded window to unlink its sockets.
+            // A second signal retains the platform default so operators can terminate immediately.
+            context.Cancel = TryRequestGracefulShutdown();
         }
 
         PosixSignalRegistration? sigIntRegistration = null;
@@ -76,8 +81,7 @@ public static class TerminalHostProcessRunner
                 // executable is ever used on a platform without PosixSignalRegistration.
                 cancelKeyPressHandler = (_, eventArgs) =>
                 {
-                    eventArgs.Cancel = true;
-                    RequestCancellation();
+                    eventArgs.Cancel = TryRequestGracefulShutdown();
                 };
                 Console.CancelKeyPress += cancelKeyPressHandler;
             }
@@ -86,6 +90,7 @@ public static class TerminalHostProcessRunner
         }
         finally
         {
+            forceExitCts.Cancel();
             sigIntRegistration?.Dispose();
             sigTermRegistration?.Dispose();
             sigQuitRegistration?.Dispose();

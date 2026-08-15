@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
-using Aspire.Shared;
+using Aspire.Managed.NuGet.Commands;
 using Aspire.TerminalHost;
 using Xunit;
 
@@ -207,7 +207,7 @@ public partial class TerminalHostSignalTests
         };
         if (hostAssemblyPath is null)
         {
-            startInfo.ArgumentList.Add(typeof(ParentProcessWatchdog).Assembly.Location);
+            startInfo.ArgumentList.Add(typeof(LayoutCommand).Assembly.Location);
             startInfo.ArgumentList.Add("terminalhost");
         }
         else

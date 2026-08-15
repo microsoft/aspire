@@ -388,6 +388,7 @@ public class WithTerminalTests : IAsyncLifetime
             Assert.False(string.IsNullOrEmpty(root.GetProperty("appHostPath").GetString()));
             Assert.NotEqual(default, root.GetProperty("createdAtUtc").GetDateTime());
             Assert.Equal(_terminalDirectory, Path.GetDirectoryName(host.Layout.MetadataPath));
+            Assert.False(File.Exists(host.Layout.MetadataPath + ".tmp"));
 
             if (!OperatingSystem.IsWindows())
             {
@@ -442,6 +443,7 @@ public class WithTerminalTests : IAsyncLifetime
         var app = builder.Build();
         try
         {
+            await SubscribeOrphanCleanupAsync(builder, app);
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
             await WaitForSweepAsync(app);
@@ -493,6 +495,7 @@ public class WithTerminalTests : IAsyncLifetime
         var app = builder.Build();
         try
         {
+            await SubscribeOrphanCleanupAsync(builder, app);
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
             await WaitForSweepAsync(app);
@@ -553,6 +556,10 @@ public class WithTerminalTests : IAsyncLifetime
         var trmnlDirectory = GetTerminalDirectory();
         var fileReplicaId = CreateTestReplicaId("mismatch");
         var metadataPath = Path.Combine(trmnlDirectory, $"{fileReplicaId}.{TerminalHostPaths.MetadataSuffix}");
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            fileReplicaId,
+            TerminalHostPaths.ProducerSockPurpose);
         var maliciousPrefix = "terminal-sweep-" + Guid.NewGuid().ToString("N");
         var sentinelPath = Path.Combine(trmnlDirectory, maliciousPrefix + "-sentinel.tmp");
 
@@ -563,19 +570,72 @@ public class WithTerminalTests : IAsyncLifetime
             appHostPid: int.MaxValue,
             appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion);
+        File.WriteAllText(producerPath, string.Empty);
         File.WriteAllText(sentinelPath, string.Empty);
+        File.SetLastWriteTimeUtc(
+            metadataPath,
+            DateTime.UtcNow - TerminalHostOrphanCleanupService.InvalidMetadataRetentionPeriod - TimeSpan.FromMinutes(1));
 
         try
         {
             await RunStartupSweepAsync();
 
-            Assert.True(File.Exists(metadataPath), "A filename/content mismatch must not authorize deletion.");
+            Assert.False(File.Exists(metadataPath));
+            Assert.False(File.Exists(producerPath));
             Assert.True(File.Exists(sentinelPath), "Metadata content must never be used as a file search pattern.");
         }
         finally
         {
-            DeleteIfExists(metadataPath, sentinelPath);
+            DeleteIfExists(metadataPath, producerPath, sentinelPath);
         }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepPreservesRecentMalformedMetadata()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("recent-malformed");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+        File.WriteAllText(metadataPath, """{"schemaVersion":""");
+        File.WriteAllText(producerPath, string.Empty);
+
+        try
+        {
+            await RunStartupSweepAsync();
+
+            Assert.True(File.Exists(metadataPath));
+            Assert.True(File.Exists(producerPath));
+        }
+        finally
+        {
+            DeleteIfExists(metadataPath, producerPath);
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalSweepReclaimsExpiredMalformedMetadata()
+    {
+        var trmnlDirectory = GetTerminalDirectory();
+        var replicaId = CreateTestReplicaId("expired-malformed");
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(
+            trmnlDirectory,
+            replicaId,
+            TerminalHostPaths.ProducerSockPurpose);
+        File.WriteAllText(metadataPath, """{"schemaVersion":""");
+        File.WriteAllText(producerPath, string.Empty);
+        File.SetLastWriteTimeUtc(
+            metadataPath,
+            DateTime.UtcNow - TerminalHostOrphanCleanupService.InvalidMetadataRetentionPeriod - TimeSpan.FromMinutes(1));
+
+        await RunStartupSweepAsync();
+
+        Assert.False(File.Exists(metadataPath));
+        Assert.False(File.Exists(producerPath));
     }
 
     [Fact]
@@ -626,6 +686,9 @@ public class WithTerminalTests : IAsyncLifetime
             appHostProcessIdentity: 1,
             schemaVersion: TerminalHostMetadata.CurrentSchemaVersion + 1);
         File.WriteAllText(producerPath, string.Empty);
+        File.SetLastWriteTimeUtc(
+            metadataPath,
+            DateTime.UtcNow - TerminalHostOrphanCleanupService.InvalidMetadataRetentionPeriod - TimeSpan.FromMinutes(1));
 
         try
         {
@@ -751,53 +814,6 @@ public class WithTerminalTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WithTerminalSweepRemovesUnusedLegacyLock()
-    {
-        var trmnlDirectory = GetTerminalDirectory();
-        var replicaId = CreateTestReplicaId("legacy-lock");
-        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
-        File.WriteAllText(lockPath, string.Empty);
-
-        await RunStartupSweepAsync();
-
-        Assert.False(File.Exists(lockPath));
-    }
-
-    [Fact]
-    public async Task WithTerminalSweepPreservesLegacyReplicaWhileLockIsOwned()
-    {
-        var trmnlDirectory = GetTerminalDirectory();
-        var replicaId = CreateTestReplicaId("active-legacy-lock");
-        var lockPath = Path.Combine(trmnlDirectory, $"{replicaId}.{TerminalHostPaths.LockSuffix}");
-        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
-        var producerPath = TerminalHostPaths.GetSocketPath(
-            trmnlDirectory,
-            replicaId,
-            TerminalHostPaths.ProducerSockPurpose);
-        WriteSidecar(
-            metadataPath,
-            replicaId,
-            replicaId,
-            appHostPid: int.MaxValue,
-            appHostProcessIdentity: 1,
-            schemaVersion: 2);
-        File.WriteAllText(producerPath, string.Empty);
-
-        using (new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
-        {
-            await RunStartupSweepAsync();
-            Assert.True(File.Exists(lockPath));
-            Assert.True(File.Exists(metadataPath));
-            Assert.True(File.Exists(producerPath));
-        }
-
-        await RunStartupSweepAsync();
-        Assert.False(File.Exists(lockPath));
-        Assert.False(File.Exists(metadataPath));
-        Assert.False(File.Exists(producerPath));
-    }
-
-    [Fact]
     public void DeleteReplicaFilesKeepsMetadataUntilEverySocketIsRemoved()
     {
         var trmnlDirectory = GetTerminalDirectory();
@@ -830,10 +846,10 @@ public class WithTerminalTests : IAsyncLifetime
         builder.AddExecutable("second", "myapp", ".").WithTerminal();
 
         await using var app = builder.Build();
+        var cleanupService = await SubscribeOrphanCleanupAsync(builder, app);
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
 
-        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
         Assert.Equal(1, cleanupService.StartCount);
         await cleanupService.Completion.WaitAsync(TimeSpan.FromSeconds(10));
     }
@@ -864,6 +880,7 @@ public class WithTerminalTests : IAsyncLifetime
         var app = builder.Build();
         try
         {
+            await SubscribeOrphanCleanupAsync(builder, app);
             var model = app.Services.GetRequiredService<DistributedApplicationModel>();
             await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
             await WaitForSweepAsync(app);
@@ -1254,8 +1271,24 @@ public class WithTerminalTests : IAsyncLifetime
 
     private static async Task WaitForSweepAsync(DistributedApplication app)
     {
-        var cleanupService = app.Services.GetRequiredService<TerminalHostOrphanCleanupService>();
+        var cleanupService = app.Services
+            .GetServices<IDistributedApplicationEventingSubscriber>()
+            .OfType<TerminalHostOrphanCleanupService>()
+            .Single();
         await cleanupService.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    private static async Task<TerminalHostOrphanCleanupService> SubscribeOrphanCleanupAsync(
+        IDistributedApplicationTestingBuilder builder,
+        DistributedApplication app)
+    {
+        var cleanupService = app.Services
+            .GetServices<IDistributedApplicationEventingSubscriber>()
+            .OfType<TerminalHostOrphanCleanupService>()
+            .Single();
+        var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        await cleanupService.SubscribeAsync(builder.Eventing, executionContext, CancellationToken.None);
+        return cleanupService;
     }
 
     private sealed class TestProject : IProjectMetadata

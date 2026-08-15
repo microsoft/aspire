@@ -9,7 +9,6 @@ using Aspire.Hosting.Lifecycle;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -95,7 +94,7 @@ public static class TerminalResourceBuilderExtensions
 
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
-        appBuilder.Services.TryAddSingleton<TerminalHostOrphanCleanupService>();
+        appBuilder.Services.TryAddEventingSubscriber<TerminalHostOrphanCleanupService>();
 
         // Subscribe directly on the IDistributedApplicationEventing rather than registering an
         // IDistributedApplicationEventingSubscriber: subscriptions registered during the builder
@@ -298,8 +297,9 @@ public static class TerminalResourceBuilderExtensions
         //   2. children that died ungracefully mid-run (crash / SIGKILL) and never got to unlink
         //      their sockets.
         //
-        // Why ApplicationStopped (not ApplicationStopping): deleting after the children have fully
-        // exited avoids racing a child that is still mid-drain.
+        // Why ApplicationStopped (not ApplicationStopping): this gives children the normal shutdown
+        // window to unlink their sockets first. It does not guarantee they have exited, so the random
+        // replica ids and exact paths are what make an overlapping cleanup safe.
         //
         // The directory is shared across every AppHost on the machine, so delete only exact paths
         // identified by this run's random replica ids.
@@ -312,19 +312,31 @@ public static class TerminalResourceBuilderExtensions
             var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
             lifetime.ApplicationStopped.Register(() =>
             {
-                foreach (var replicaId in capturedReplicaIds)
+                // ApplicationStopped callbacks run synchronously. Keep best-effort filesystem
+                // cleanup from delaying process exit indefinitely if a filesystem operation stalls.
+                var cleanupTask = Task.Run(() =>
                 {
-                    TerminalHostOrphanCleanupService.DeleteReplicaFiles(
-                        capturedTrmnlDir,
-                        replicaId,
-                        cleanupLogger);
+                    foreach (var replicaId in capturedReplicaIds)
+                    {
+                        TerminalHostOrphanCleanupService.DeleteReplicaFiles(
+                            capturedTrmnlDir,
+                            replicaId,
+                            cleanupLogger);
+                    }
+                }, CancellationToken.None);
+
+                try
+                {
+                    cleanupTask.WaitAsync(s_shutdownCleanupTimeout).GetAwaiter().GetResult();
+                }
+                catch (TimeoutException)
+                {
+                    cleanupLogger?.LogWarning(
+                        "Timed out after {TimeoutSeconds} seconds while deleting terminal artifacts during shutdown. The next AppHost startup will retry cleanup.",
+                        s_shutdownCleanupTimeout.TotalSeconds);
                 }
             });
         }
-
-        // Machine-wide cleanup is best-effort and must not extend startup latency. The singleton
-        // service starts only once even when multiple resources call WithTerminal().
-        @event.Services.GetRequiredService<TerminalHostOrphanCleanupService>().Start(trmnlDirectory);
 
         // The target waits until each host has started so its viewer-facing UDS listener
         // is bound before any consumer (Dashboard or CLI) tries to connect. A follow-up
@@ -347,19 +359,18 @@ public static class TerminalResourceBuilderExtensions
         ILogger? logger,
         CancellationToken cancellationToken)
     {
+        var temporaryMetadataPath = metadataPath + ".tmp";
         try
         {
             // Indented for human inspection: the file is small (<1 KiB) and is expected to
             // be `cat`-ed by users debugging terminal-host issues. Performance is irrelevant.
             var json = JsonSerializer.Serialize(metadata, s_metadataSerializerOptions);
 
-            // Two-step write: create the file (so we have a path to chmod) THEN apply
-            // perms BEFORE writing the actual bytes. This shrinks the window where another
-            // local user could see file existence (though the parent dir is already 0700
-            // so the contents are not readable). On Windows the user-profile ACL handles
-            // this and File.SetUnixFileMode is a no-op.
+            // Write and chmod a sibling temporary file before atomically replacing the sidecar.
+            // A crash during serialization can then leave only an undiscoverable .tmp file, never
+            // a truncated metadata document that permanently blocks orphan recovery.
             using (var fs = new FileStream(
-                metadataPath,
+                temporaryMetadataPath,
                 FileMode.Create,
                 FileAccess.Write,
                 FileShare.None,
@@ -370,19 +381,21 @@ public static class TerminalResourceBuilderExtensions
                 {
                     try
                     {
-                        File.SetUnixFileMode(metadataPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                        File.SetUnixFileMode(temporaryMetadataPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                     }
                     catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                     {
                         // Filesystem may not support chmod (e.g. FAT). The parent dir is 0700
                         // so the file is still unreachable by other users.
-                        logger?.LogDebug(ex, "Failed to chmod terminal host metadata file '{Path}'.", metadataPath);
+                        logger?.LogDebug(ex, "Failed to chmod terminal host metadata file '{Path}'.", temporaryMetadataPath);
                     }
                 }
 
                 var bytes = System.Text.Encoding.UTF8.GetBytes(json);
                 await fs.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             }
+
+            File.Move(temporaryMetadataPath, metadataPath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -390,7 +403,20 @@ public static class TerminalResourceBuilderExtensions
             // external discovery and crash recovery for this terminal.
             logger?.LogDebug(ex, "Failed to write terminal host metadata sidecar '{Path}'.", metadataPath);
         }
+        finally
+        {
+            try
+            {
+                File.Delete(temporaryMetadataPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger?.LogDebug(ex, "Failed to delete temporary terminal host metadata file '{Path}'.", temporaryMetadataPath);
+            }
+        }
     }
+
+    private static readonly TimeSpan s_shutdownCleanupTimeout = TimeSpan.FromSeconds(2);
 
     private static readonly JsonSerializerOptions s_metadataSerializerOptions = new()
     {
