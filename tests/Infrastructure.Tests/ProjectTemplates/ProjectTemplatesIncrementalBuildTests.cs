@@ -127,7 +127,14 @@ public sealed class ProjectTemplatesIncrementalBuildTests : IDisposable
         AssertReplacementRan(await BuildAsync());
 
         var originalScript = File.ReadAllText(_scriptPath);
-        File.WriteAllText(_scriptPath, "System.Environment.Exit(42);");
+        File.WriteAllText(
+            _scriptPath,
+            """
+            // Licensed to the .NET Foundation under one or more agreements.
+            // The .NET Foundation licenses this file to you under the MIT license.
+
+            System.Environment.Exit(42);
+            """);
         var failedBuild = await BuildAsync();
         Assert.NotEqual(0, failedBuild.ExitCode);
         File.WriteAllText(_scriptPath, originalScript);
@@ -326,6 +333,9 @@ public sealed class ProjectTemplatesIncrementalBuildTests : IDisposable
         File.WriteAllText(
             path,
             """
+            // Licensed to the .NET Foundation under one or more agreements.
+            // The .NET Foundation licenses this file to you under the MIT license.
+
             var responseArgument = args.Single(argument => argument.StartsWith('@'));
             var lines = File.ReadAllLines(responseArgument[1..].Trim('"'));
             var replacementsIndex = Array.IndexOf(lines, "--replacements");
