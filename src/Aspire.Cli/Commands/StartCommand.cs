@@ -77,7 +77,6 @@ internal sealed class StartCommand : BaseCommand
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
             var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
                 parseResult,
-                UnmatchedTokenPlacement.AfterSeparator,
                 AppHostLauncher.s_appHostOption.InnerOption,
                 AppHostLauncher.s_appHostOption.LegacyOption,
                 AppHostLauncher.s_formatOption,

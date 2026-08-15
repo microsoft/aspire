@@ -10,23 +10,6 @@ using CommandLineCommandResult = System.CommandLine.Parsing.CommandResult;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Controls where unmatched tokens are placed in projected arguments.
-/// </summary>
-internal enum UnmatchedTokenPlacement
-{
-    /// <summary>
-    /// Preserves unmatched tokens in their original positions.
-    /// </summary>
-    Preserve,
-
-    /// <summary>
-    /// Projects matched options and relocates unmatched tokens after a separator.
-    /// Matched positional arguments are not projected; the live start and run commands currently have none.
-    /// </summary>
-    AfterSeparator
-}
-
-/// <summary>
 /// Contains projected CLI and AppHost arguments.
 /// </summary>
 internal sealed class ForwardedArguments
@@ -72,35 +55,20 @@ internal static class ParseResultHelper
     /// </summary>
     internal static ForwardedArguments GetForwardedArguments(
         ParseResult parseResult,
-        UnmatchedTokenPlacement unmatchedTokenPlacement,
         params Option[] excludedOptions)
     {
         var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
         var optionValueOwners = GetOptionValueOwners(parseResult.RootCommandResult);
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
         int? optionCount = null;
-        var afterSeparator = false;
         Token? lastForwardedToken = null;
 
         foreach (var token in parseResult.Tokens)
         {
-            if (afterSeparator)
-            {
-                forwardedTokens.Add(token.Value);
-                continue;
-            }
-
             if (token.Type == TokenType.DoubleDash)
             {
                 optionCount = forwardedTokens.Count;
-                if (unmatchedTokenPlacement == UnmatchedTokenPlacement.AfterSeparator)
-                {
-                    break;
-                }
-
-                forwardedTokens.Add(token.Value);
-                afterSeparator = true;
-                continue;
+                break;
             }
 
             var hasOptionValueOwner = optionValueOwners.TryGetValue(token, out var optionResult);
@@ -110,8 +78,7 @@ internal static class ParseResultHelper
                 continue;
             }
 
-            if (unmatchedTokenPlacement == UnmatchedTokenPlacement.AfterSeparator &&
-                token.Type != TokenType.Option &&
+            if (token.Type != TokenType.Option &&
                 !hasOptionValueOwner)
             {
                 continue;
@@ -122,8 +89,7 @@ internal static class ParseResultHelper
 
         var finalOptionCount = optionCount ?? forwardedTokens.Count;
 
-        if (unmatchedTokenPlacement == UnmatchedTokenPlacement.AfterSeparator &&
-            parseResult.UnmatchedTokens.Count > 0)
+        if (parseResult.UnmatchedTokens.Count > 0)
         {
             forwardedTokens.Add("--");
             forwardedTokens.AddRange(parseResult.UnmatchedTokens);
