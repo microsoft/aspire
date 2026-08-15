@@ -3694,6 +3694,41 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(["--debug", "--isolated", "--", "--custom-arg", "value"], options.Args);
     }
 
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtension_SynthesizesSeparatorBeforeDelimiterFreeAppHostArguments()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--secret", "value"]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--debug", "--isolated", "--", "--secret", "value"], options.Args);
+
+        var childParseResult = command.Parse(["run", .. options.Args]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.True(childParseResult.GetValue(RootCommand.DebugOption));
+        Assert.True(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));
+        Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
+    }
+
     [Theory]
     [InlineData(true, true)]
     [InlineData(false, true)]

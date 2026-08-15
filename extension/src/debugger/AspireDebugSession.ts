@@ -59,6 +59,7 @@ export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtende
   const loggableConfig = {
     ...debugConfig,
     args: debugConfig.args === undefined ? undefined : '<redacted>',
+    runtimeArgs: debugConfig.runtimeArgs === undefined ? undefined : '<redacted>',
   };
 
   if (includeEnvironment && !debugConfigurationsWithSensitiveEnvironment.has(debugConfig)) {

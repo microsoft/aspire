@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as sinon from 'sinon';
 import {
     determineBaseLaunchProfile,
     determineDefaultLaunchProfile,
@@ -15,6 +16,7 @@ import {
     LaunchProfile
 } from '../debugger/launchProfiles';
 import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('Launch Profile Tests', () => {
     suite('determineBaseLaunchProfile', () => {
@@ -522,6 +524,20 @@ suite('Launch Profile Tests', () => {
             const result = determineArguments(baseProfileArgs, runSessionArgs);
 
             assert.deepStrictEqual(result, '--session-arg value');
+        });
+
+        test('logs only the run session argument count', () => {
+            const debugStub = sinon.stub(extensionLogOutputChannel, 'debug');
+
+            try {
+                const result = determineArguments(undefined, ['--api-key', 'secret-value']);
+
+                assert.strictEqual(result, '--api-key secret-value');
+                assert.strictEqual(debugStub.callCount, 1);
+                assert.strictEqual(debugStub.firstCall.args[0], 'Using run session arguments (count: 2)');
+            } finally {
+                debugStub.restore();
+            }
         });
 
         test('uses empty run session args when explicitly provided', () => {

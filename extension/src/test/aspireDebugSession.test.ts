@@ -3941,22 +3941,27 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             name: '.NET',
             request: 'launch',
             args: ['--api-key', 'secret-value'],
+            runtimeArgs: ['--runtime-secret'],
         } as AspireResourceExtendedDebugConfiguration;
 
         const loggableConfig = getLoggableDebugConfiguration(debugConfig, false);
 
         assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.strictEqual(loggableConfig.runtimeArgs, '<redacted>');
         assert.deepStrictEqual(debugConfig.args, ['--api-key', 'secret-value']);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['--runtime-secret']);
     });
 
     test('redacts debug configuration arguments without mutating the source when environment logging is enabled', () => {
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
-            type: 'coreclr',
-            name: '.NET',
+            type: 'pwa-node',
+            name: 'Node.js package script',
             request: 'launch',
-            args: ['--api-key', 'secret-value'],
+            runtimeExecutable: 'npm',
+            runtimeArgs: ['run', 'start', '--', '--api-key', 'runtime-secret'],
+            args: ['--api-key', 'app-secret'],
             env: {
                 LOG_LEVEL: 'debug',
             },
@@ -3966,8 +3971,10 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.notStrictEqual(loggableConfig, debugConfig);
         assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.strictEqual(loggableConfig.runtimeArgs, '<redacted>');
         assert.deepStrictEqual(loggableConfig.env, { LOG_LEVEL: 'debug' });
-        assert.deepStrictEqual(debugConfig.args, ['--api-key', 'secret-value']);
+        assert.deepStrictEqual(debugConfig.args, ['--api-key', 'app-secret']);
+        assert.deepStrictEqual(debugConfig.runtimeArgs, ['run', 'start', '--', '--api-key', 'runtime-secret']);
     });
 
     test('redacts MAUI environmentVariables even when environment logging is enabled', () => {
@@ -3977,6 +3984,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             type: 'maui',
             name: 'MAUI',
             request: 'launch',
+            args: ['--api-key', 'app-secret'],
+            runtimeArgs: ['--runtime-secret'],
             env: {
                 SECRET_TOKEN: 'env-secret',
             },
@@ -3987,6 +3996,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.deepStrictEqual(loggableConfig.env, { SECRET_TOKEN: 'env-secret' });
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
+        assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.strictEqual(loggableConfig.runtimeArgs, '<redacted>');
     });
 
     test('redacts sensitive debugger environments even when environment logging is enabled', () => {
@@ -3996,6 +4007,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             type: 'lldb',
             name: 'Rust',
             request: 'launch',
+            args: ['--api-key', 'app-secret'],
+            runtimeArgs: ['--runtime-secret'],
             env: {
                 SECRET_TOKEN: 'env-secret',
             },
@@ -4009,6 +4022,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(loggableConfig.env, '<redacted>');
         assert.strictEqual(loggableConfig.environment, '<redacted>');
+        assert.strictEqual(loggableConfig.args, '<redacted>');
+        assert.strictEqual(loggableConfig.runtimeArgs, '<redacted>');
         assert.ok(!JSON.stringify(loggableConfig).includes('secret'));
     });
 

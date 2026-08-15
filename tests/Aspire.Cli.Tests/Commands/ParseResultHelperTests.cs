@@ -29,6 +29,13 @@ internal static class ParseResultHelperTestData
             1
         },
         {
+            ["run", "--debug", "--secret", "value"],
+            UnmatchedTokenPlacement.AfterSeparator,
+            false,
+            ["--debug", "--", "--secret", "value"],
+            1
+        },
+        {
             ["start", "--log-level", "Debug", "--unknown", "value"],
             UnmatchedTokenPlacement.AfterSeparator,
             false,
@@ -244,6 +251,28 @@ public sealed class ParseResultHelperTests : IDisposable
         Assert.True(childParseResult.GetValue(RootCommand.CaptureProfileOption));
         Assert.Null(childParseResult.GetValue(AppHostLauncher.s_appHostOption));
         Assert.Equal(["--apphost", "app-value"], childParseResult.UnmatchedTokens);
+    }
+
+    [Fact]
+    public void ForwardedArguments_RoundTripsDelimiterFreeAppHostArgumentsAfterSeparator()
+    {
+        var parseResult = _command.Parse(["run", "--debug", "--secret", "value"]);
+        var forwardedArguments = GetForwardedArguments(parseResult, UnmatchedTokenPlacement.AfterSeparator);
+
+        forwardedArguments.InsertCliOption("--non-interactive", "--capture-profile");
+
+        Assert.Equal(3, forwardedArguments.OptionCount);
+        Assert.Equal(
+            ["--debug", "--non-interactive", "--capture-profile", "--", "--secret", "value"],
+            forwardedArguments.Tokens);
+
+        var childParseResult = _command.Parse(["run", .. forwardedArguments.Tokens]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.True(childParseResult.GetValue(RootCommand.DebugOption));
+        Assert.True(childParseResult.GetValue(RootCommand.NonInteractiveOption));
+        Assert.True(childParseResult.GetValue(RootCommand.CaptureProfileOption));
+        Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
     }
 
     public void Dispose()

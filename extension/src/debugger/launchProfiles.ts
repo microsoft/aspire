@@ -317,7 +317,7 @@ export function determineArguments(
 ): string | undefined {
     // If run session args are explicitly provided (including empty array), use them
     if (runSessionArgs !== undefined && runSessionArgs !== null) {
-        extensionLogOutputChannel.debug(`Using run session arguments: ${JSON.stringify(runSessionArgs)}`);
+        extensionLogOutputChannel.debug(`Using run session arguments (count: ${runSessionArgs.length})`);
         return runSessionArgs.join(' ');
     }
 
