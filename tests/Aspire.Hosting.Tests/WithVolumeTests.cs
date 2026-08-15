@@ -1,13 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001
+
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-public class WithVolumeTests
+public class WithVolumeTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
@@ -145,5 +148,65 @@ public class WithVolumeTests
         Assert.All(
             ["UPPER_PATH", "LOWER_PATH", "ESCAPE_PATH"],
             name => Assert.StartsWith(storePrefix, environment[name], comparison));
+    }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentReusesLocalPathAcrossAppHostRunsAndLifetimes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var sessionPath = await GetVolumePathAsync(usePersistentLifetime: false);
+        var markerPath = Path.Combine(sessionPath, "marker.txt");
+        await File.WriteAllTextAsync(markerPath, "persisted");
+
+        var persistentPath = await GetVolumePathAsync(usePersistentLifetime: true);
+
+        Assert.Equal(sessionPath, persistentPath);
+        Assert.Equal("persisted", await File.ReadAllTextAsync(Path.Combine(persistentPath, "marker.txt")));
+
+        async Task<string> GetVolumePathAsync(bool usePersistentLifetime)
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+            builder.Configuration[AspireStore.AspireStorePathKeyName] = workspace.Path;
+
+            var executable = builder.AddExecutable("worker", "test-command", ".")
+                .WithVolume("data", "/srv/data", env: "DATA_PATH");
+            if (usePersistentLifetime)
+            {
+                executable.WithPersistentLifetime();
+            }
+            else
+            {
+                executable.WithSessionLifetime();
+            }
+
+            using var app = builder.Build();
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                executable.Resource,
+                serviceProvider: app.Services);
+            return environment["DATA_PATH"];
+        }
+    }
+
+    [Fact]
+    public void NamedContainerVolumeIdentityAndPersistenceAreIndependentOfContainerLifetime()
+    {
+        using var sessionBuilder = TestDistributedApplicationBuilder.Create();
+        var sessionContainer = sessionBuilder.AddContainer("session", "image")
+            .WithSessionLifetime()
+            .WithVolume("shared-data", "/srv/data");
+
+        using var persistentBuilder = TestDistributedApplicationBuilder.Create();
+        var persistentContainer = persistentBuilder.AddContainer("persistent", "image")
+            .WithPersistentLifetime()
+            .WithVolume("shared-data", "/srv/data");
+
+        var sessionMount = Assert.Single(sessionContainer.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        var persistentMount = Assert.Single(persistentContainer.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("shared-data", sessionMount.Source);
+        Assert.Equal(sessionMount.Source, persistentMount.Source);
+
+        var dcpVolume = ContainerVolume.Create("shared-data-resource", sessionMount.Source!);
+        Assert.True(dcpVolume.Spec.Persistent);
     }
 }

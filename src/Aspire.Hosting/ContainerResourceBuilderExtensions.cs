@@ -198,6 +198,11 @@ public static class ContainerResourceBuilderExtensions
     /// They are not shared with the host's file-system. To mount files from the host inside the container, call <see cref="WithBindMount{T}(IResourceBuilder{T}, string, string, bool)"/>.
     /// </para>
     /// <para>
+    /// Named volumes are preserved independently of the container lifetime. A session-lifetime
+    /// container is removed when the AppHost stops and reuses the named volume on its next run.
+    /// A persistent-lifetime container can remain running and keeps the same attached volume.
+    /// </para>
+    /// <para>
     /// If a value for the <paramref name="name"/> of the volume is not provided, the volume is created as an "anonymous volume" and will be given a random name by the container
     /// runtime. To share a volume between multiple containers, specify the same <paramref name="name"/>.
     /// </para>

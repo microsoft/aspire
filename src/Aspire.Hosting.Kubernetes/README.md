@@ -43,7 +43,7 @@ builder.AddProject<Projects.Api>("api")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 
-Projects and executables receive a workload-scoped Aspire store directory in run mode. When published, the volume uses the Kubernetes environment's `DefaultStorageType` and `DATA_PATH` contains `/data`.
+Projects and executables receive a workload-scoped Aspire store directory in run mode. The directory is reused across AppHost runs regardless of whether the process has a session or persistent lifetime. When published, the volume uses the Kubernetes environment's `DefaultStorageType` and `DATA_PATH` contains `/data`.
 
 ### Persistent volumes
 

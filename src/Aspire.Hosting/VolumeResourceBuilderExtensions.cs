@@ -25,6 +25,10 @@ public static class VolumeResourceBuilderExtensions
     /// Containers receive <paramref name="target"/> in run and publish modes. Projects and
     /// executables receive a workload-scoped <see cref="IAspireStore"/> directory in run mode
     /// and <paramref name="target"/> in publish mode.
+    /// Named storage is independent of the resource lifetime. Session resources stop with the
+    /// AppHost and reuse their named storage on the next run; persistent resources can keep the
+    /// compute instance alive and continue using the same storage. Cleaning the AppHost store can
+    /// remove local project and executable data.
     /// </remarks>
     /// <example>
     /// <code language="csharp">
