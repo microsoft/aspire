@@ -14,7 +14,15 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal enum UnmatchedTokenPlacement
 {
+    /// <summary>
+    /// Preserves unmatched tokens in their original positions.
+    /// </summary>
     Preserve,
+
+    /// <summary>
+    /// Projects matched options and relocates unmatched tokens after a separator.
+    /// Matched positional arguments are not projected; the live start and run commands currently have none.
+    /// </summary>
     AfterSeparator
 }
 
@@ -23,19 +31,21 @@ internal enum UnmatchedTokenPlacement
 /// </summary>
 internal sealed class ForwardedArguments
 {
+    private readonly List<string> _tokens;
+
     /// <summary>
     /// Initializes projected arguments with the insertion boundary for CLI options.
     /// </summary>
     internal ForwardedArguments(List<string> tokens, int optionCount)
     {
-        Tokens = tokens;
+        _tokens = tokens;
         OptionCount = optionCount;
     }
 
     /// <summary>
     /// Gets the projected argument tokens.
     /// </summary>
-    internal List<string> Tokens { get; }
+    internal IReadOnlyList<string> Tokens => _tokens;
 
     /// <summary>
     /// Gets the insertion boundary before AppHost arguments.
@@ -47,11 +57,7 @@ internal sealed class ForwardedArguments
     /// </summary>
     internal void InsertCliOption(params ReadOnlySpan<string> tokens)
     {
-        for (var i = 0; i < tokens.Length; i++)
-        {
-            Tokens.Insert(OptionCount + i, tokens[i]);
-        }
-
+        _tokens.InsertRange(OptionCount, tokens);
         OptionCount += tokens.Length;
     }
 }
@@ -72,7 +78,7 @@ internal static class ParseResultHelper
         var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
         var optionValueOwners = GetOptionValueOwners(parseResult.RootCommandResult);
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
-        var optionCount = -1;
+        int? optionCount = null;
         var afterSeparator = false;
         Token? lastForwardedToken = null;
 
@@ -84,8 +90,7 @@ internal static class ParseResultHelper
                 continue;
             }
 
-            var hasOptionValueOwner = optionValueOwners.TryGetValue(token, out var optionResult);
-            if (token.Type == TokenType.DoubleDash && !hasOptionValueOwner)
+            if (token.Type == TokenType.DoubleDash)
             {
                 optionCount = forwardedTokens.Count;
                 if (unmatchedTokenPlacement == UnmatchedTokenPlacement.AfterSeparator)
@@ -98,6 +103,7 @@ internal static class ParseResultHelper
                 continue;
             }
 
+            var hasOptionValueOwner = optionValueOwners.TryGetValue(token, out var optionResult);
             if (excludedTokens.Contains(token) ||
                 (token.Type == TokenType.Option && excludedOptionNames.Contains(token.Value)))
             {
@@ -114,10 +120,7 @@ internal static class ParseResultHelper
             AddForwardedToken(token, optionResult, forwardedTokens, ref lastForwardedToken);
         }
 
-        if (optionCount < 0)
-        {
-            optionCount = forwardedTokens.Count;
-        }
+        var finalOptionCount = optionCount ?? forwardedTokens.Count;
 
         if (unmatchedTokenPlacement == UnmatchedTokenPlacement.AfterSeparator &&
             parseResult.UnmatchedTokens.Count > 0)
@@ -126,7 +129,7 @@ internal static class ParseResultHelper
             forwardedTokens.AddRange(parseResult.UnmatchedTokens);
         }
 
-        return new ForwardedArguments(forwardedTokens, optionCount);
+        return new ForwardedArguments(forwardedTokens, finalOptionCount);
     }
 
     private static (HashSet<Token> Tokens, HashSet<string> OptionNames) GetForwardingExclusions(
@@ -198,24 +201,24 @@ internal static class ParseResultHelper
         List<string> forwardedTokens,
         ref Token? lastForwardedToken)
     {
-        // A matched single-value option can own the literal `--`; only an unowned
-        // TokenType.DoubleDash is a separator. Encode the value as:
-        //   --capture-profile-output=--
+        var emittedValue = optionResult is { Tokens.Count: 1 } &&
+                           optionResult.Option.ValueType.IsAssignableTo(typeof(FileSystemInfo)) &&
+                           optionResult.GetValueOrDefault<FileSystemInfo?>() is { } fileSystemInfo
+            ? fileSystemInfo.FullName
+            : token.Value;
+
+        // A matched single-value option can own the raw value `--`. Normalize typed values
+        // before using equals syntax so a FileSystemInfo value remains an absolute path:
+        //   --capture-profile-output=/working/directory/--
         if (token.Value == "--"
             && optionResult is { Tokens.Count: 1, IdentifierToken: { } identifierToken }
             && ReferenceEquals(lastForwardedToken, identifierToken))
         {
-            forwardedTokens[^1] = $"{identifierToken.Value}=--";
-        }
-        else if (optionResult is { Tokens.Count: 1 } &&
-                 optionResult.Option.ValueType.IsAssignableTo(typeof(FileSystemInfo)) &&
-                 optionResult.GetValueOrDefault<FileSystemInfo?>() is { } fileSystemInfo)
-        {
-            forwardedTokens.Add(fileSystemInfo.FullName);
+            forwardedTokens[^1] = $"{identifierToken.Value}={emittedValue}";
         }
         else
         {
-            forwardedTokens.Add(token.Value);
+            forwardedTokens.Add(emittedValue);
         }
 
         lastForwardedToken = token;
