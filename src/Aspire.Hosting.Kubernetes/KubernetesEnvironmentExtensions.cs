@@ -5,6 +5,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,9 +28,8 @@ public static class KubernetesEnvironmentExtensions
         //
         // The per-environment work (creating Kubernetes service resources and DeploymentTargetAnnotations)
         // is registered as a separate per-environment pipeline step on KubernetesEnvironmentResource.
-        // This global step only validates that no resource has a PublishAsKubernetesService annotation
-        // when there are no KubernetesEnvironmentResource instances or Kubernetes-backed
-        // compute environments in the model.
+        // This global step validates model-wide Kubernetes configuration before those steps filter
+        // resources to their selected compute environments.
         if (builder.Services.All(d => d.ServiceType != typeof(KubernetesPipelineStepMarker)))
         {
             builder.Services.AddSingleton<KubernetesPipelineStepMarker>();
@@ -38,6 +38,8 @@ public static class KubernetesEnvironmentExtensions
                 name: KubernetesPipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    ValidateAndFinalizePersistentVolumeBindings(ctx);
+
                     if (!ctx.ExecutionContext.IsPublishMode)
                     {
                         return Task.CompletedTask;
@@ -60,11 +62,146 @@ public static class KubernetesEnvironmentExtensions
 
                     return Task.CompletedTask;
                 },
+                dependsOn: WellKnownPipelineSteps.ValidateComputeEnvironments,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
         }
 
         return builder;
     }
+
+    private static void ValidateAndFinalizePersistentVolumeBindings(PipelineStepContext context)
+    {
+        var bindings = GetPersistentVolumeBindings(context);
+
+        if (context.ExecutionContext.IsRunMode)
+        {
+            ValidateRunModePersistentVolumeBindings(bindings);
+            ApplyRunModeContainerVolumeNames(bindings);
+            return;
+        }
+
+        ValidatePublishModePersistentVolumeBindings(bindings);
+    }
+
+    private static PersistentVolumeBinding[] GetPersistentVolumeBindings(PipelineStepContext context)
+    {
+        // GetComputeResources intentionally represents publishable workloads and excludes plain
+        // executables. Run mode must inspect every compute resource because those executables can
+        // consume the local IAspireStore-backed volume path.
+        var computeResources = context.ExecutionContext.IsRunMode
+            ? context.Model.Resources.Where(resource => resource is IComputeResource)
+            : context.Model.GetComputeResources();
+
+        return computeResources
+            .SelectMany(resource =>
+                resource.Annotations
+                    .OfType<KubernetesPersistentVolumeBindingAnnotation>()
+                    .Select(binding => new PersistentVolumeBinding(resource, binding)))
+            .ToArray();
+    }
+
+    private static void ValidateRunModePersistentVolumeBindings(PersistentVolumeBinding[] bindings)
+    {
+        foreach (var (resource, annotation) in bindings)
+        {
+            if (annotation.EnvironmentVariableName is not null &&
+                resource is not ProjectResource and not ExecutableResource and not ContainerResource)
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' cannot resolve the '{annotation.EnvironmentVariableName}' persistent-volume path in run mode. " +
+                    $"Only project, executable, and container resources are supported.");
+            }
+        }
+
+        ValidateRunModeBackingStoreCompatibility(bindings);
+    }
+
+    private static void ValidateRunModeBackingStoreCompatibility(PersistentVolumeBinding[] bindings)
+    {
+        // Host processes use an IAspireStore directory while containers use a named runtime
+        // volume. Treating those as one logical volume would silently split the data in run mode.
+        foreach (var environmentGroup in bindings.GroupBy(
+            item => item.Annotation.Volume.Parent.Name,
+            StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var volumeGroup in environmentGroup.GroupBy(
+                item => item.Annotation.Volume.Name,
+                StringComparer.OrdinalIgnoreCase))
+            {
+                var hasContainer = volumeGroup.Any(item => item.Resource is ContainerResource);
+                var hasHostProcess = volumeGroup.Any(item => item.Resource is ProjectResource or ExecutableResource);
+
+                if (hasContainer && hasHostProcess)
+                {
+                    var volume = volumeGroup.First().Annotation.Volume;
+                    var resourceNames = string.Join(", ", volumeGroup.Select(item => $"'{item.Resource.Name}'"));
+                    throw new InvalidOperationException(
+                        $"Kubernetes persistent volume '{volume.Name}' is used by both local container and host-process resources ({resourceNames}). " +
+                        $"Run mode cannot provide one shared backing store across those execution types. Use only containers or only projects/executables for this volume.");
+                }
+            }
+        }
+    }
+
+    private static void ApplyRunModeContainerVolumeNames(PersistentVolumeBinding[] bindings)
+    {
+        foreach (var (resource, annotation) in bindings)
+        {
+            ApplyRunModeContainerVolumeName(resource, annotation);
+        }
+    }
+
+    private static void ValidatePublishModePersistentVolumeBindings(PersistentVolumeBinding[] bindings)
+    {
+        foreach (var (resource, annotation) in bindings)
+        {
+            var targetEnvironment = resource.GetComputeEnvironment();
+            var volumeEnvironment = annotation.Volume.Parent;
+
+            // AKS owns an inner Kubernetes environment, so a binding is valid when the workload
+            // targets either the Kubernetes environment directly or its owning compute environment.
+            if (targetEnvironment != volumeEnvironment &&
+                targetEnvironment != volumeEnvironment.OwningComputeEnvironment)
+            {
+                var targetName = targetEnvironment?.Name ?? "<none>";
+                var supportedTargetName = (volumeEnvironment.OwningComputeEnvironment ?? volumeEnvironment).Name;
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' is assigned to compute environment '{targetName}' but binds " +
+                    $"Kubernetes persistent volume '{annotation.Volume.Name}' which belongs to environment " +
+                    $"'{volumeEnvironment.Name}'. A workload can only bind persistent volumes declared on its " +
+                    $"Kubernetes compute environment. Declare the volume on the workload's Kubernetes environment, " +
+                    $"or assign the workload to '{supportedTargetName}' with WithComputeEnvironment.");
+            }
+        }
+    }
+
+    private static void ApplyRunModeContainerVolumeName(
+        IResource resource,
+        KubernetesPersistentVolumeBindingAnnotation binding)
+    {
+        if (resource is not ContainerResource || binding.RunModeContainerVolumeName is not { } localVolumeName)
+        {
+            return;
+        }
+
+        var matchingMounts = resource.Annotations
+            .OfType<ContainerMountAnnotation>()
+            .Where(mount => mount.Type == ContainerMountType.Volume &&
+                string.Equals(mount.Source, binding.Volume.Name, StringComparison.Ordinal))
+            .ToArray();
+
+        // Resolve after the model is complete so WithPersistentVolume and WithVolume remain
+        // order-independent while publish mode can continue matching the original claim name.
+        foreach (var mount in matchingMounts)
+        {
+            resource.Annotations.Remove(mount);
+            resource.Annotations.Add(new ContainerMountAnnotation(localVolumeName, mount.Target, mount.Type, mount.IsReadOnly));
+        }
+    }
+
+    private readonly record struct PersistentVolumeBinding(
+        IResource Resource,
+        KubernetesPersistentVolumeBindingAnnotation Annotation);
 
     private sealed class KubernetesPipelineStepMarker
     {

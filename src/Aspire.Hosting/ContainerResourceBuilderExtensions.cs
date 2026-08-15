@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
@@ -217,14 +218,11 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     // Note: [AspireExport] is on CoreExports.WithVolume which reorders parameters
     // so the required 'target' comes before the optional 'name' - better for polyglot APIs.
+    [OverloadResolutionPriority(1)]
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which reorders parameters.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string? name, string target, bool isReadOnly = false) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name, target, isReadOnly, env: null);
     }
 
     /// <summary>
@@ -261,11 +259,7 @@ public static class ContainerResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which accepts optional name parameter.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string target) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(null, target, ContainerMountType.Volume, false);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name: null, target, isReadOnly: false, env: null);
     }
 
     /// <summary>

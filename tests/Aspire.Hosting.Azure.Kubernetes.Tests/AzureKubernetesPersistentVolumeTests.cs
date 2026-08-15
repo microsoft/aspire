@@ -4,6 +4,10 @@
 #pragma warning disable ASPIREAZURE003, ASPIRECOMPUTE002
 
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Tests.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -38,5 +42,25 @@ public class AzureKubernetesPersistentVolumeTests(ITestOutputHelper outputHelper
 
         var content = await File.ReadAllTextAsync(claimPath);
         await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task AksPersistentVolumeEnvironmentUsesAspireStoreInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var volume = aks.AddPersistentVolume("data");
+        var executable = builder.AddExecutable("executable", "test-command", ".")
+            .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var expectedPath = KubernetesPersistentVolumeLocalStorage.GetPath(store, volume.Resource);
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            executable.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal(expectedPath, environment["DATA_PATH"]);
+        Assert.True(Directory.Exists(expectedPath));
     }
 }

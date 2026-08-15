@@ -196,6 +196,28 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper outputHelper)
         Assert.Null(projectDockerResource.GetDeploymentTargetAnnotation(kubernetes.Resource));
     }
 
+    [Fact]
+    public async Task KubernetesPersistentVolumeCannotTargetDockerCompose()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var kubernetes = builder.AddKubernetesEnvironment("kubernetes");
+        var dockerCompose = builder.AddDockerComposeEnvironment("docker-compose");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithComputeEnvironment(dockerCompose)
+            .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("project", exception.Message);
+        Assert.Contains("docker-compose", exception.Message);
+        Assert.Contains("data", exception.Message);
+        Assert.Contains("kubernetes", exception.Message);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

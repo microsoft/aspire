@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRECOMPUTE002
 
 using System.Reflection;
 using Aspire.Hosting.Azure;
@@ -931,10 +932,15 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withVolume);
         Assert.Equal("resource", withVolume.TargetParameterName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", withVolume.TargetTypeId);
+        Assert.True(withVolume.TargetType?.IsInterface);
 
-        // Verify correct parameter order: target comes first (required), then name (optional)
+        // Preserve the existing parameter order and append env so generated callers remain compatible.
         Assert.Equal("target", withVolume.Parameters[0].Name);
         Assert.Equal("name", withVolume.Parameters[1].Name);
+        Assert.Equal("isReadOnly", withVolume.Parameters[2].Name);
+        Assert.Equal("env", withVolume.Parameters[3].Name);
+        Assert.True(withVolume.Parameters[3].IsOptional);
 
         // Note: withBindMount still uses "builder" - it hasn't been moved to CoreExports yet
         var withBindMount = capabilities
@@ -949,6 +955,30 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.NotNull(withCommand);
         Assert.Equal("builder", withCommand.TargetParameterName);
+    }
+
+    [Fact]
+    public void Generate_KubernetesPersistentVolumeMount_UsesOptionsObject()
+    {
+        var scanResult = AtsCapabilityScanner.ScanAssemblies(
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(global::Aspire.Hosting.Kubernetes.KubernetesPersistentVolumeResource).Assembly
+        ]);
+        var files = _generator.GenerateDistributedApplication(scanResult.ToAtsContext());
+        var generatedCode = files["aspire.mts"];
+
+        Assert.Contains("export interface WithKubernetesPersistentVolumeMountOptions", generatedCode);
+        Assert.Contains("isReadOnly?: boolean;", generatedCode);
+        Assert.Contains("env?: string;", generatedCode);
+        Assert.Contains(
+            generatedCode.Split('\n'),
+            line => line.Contains(
+                "withKubernetesPersistentVolumeMount(",
+                StringComparison.Ordinal) &&
+                line.Contains(
+                    "options?: WithKubernetesPersistentVolumeMountOptions",
+                    StringComparison.Ordinal));
     }
 
     // ===== 2-Pass Scanning / Cross-Assembly Expansion Tests =====

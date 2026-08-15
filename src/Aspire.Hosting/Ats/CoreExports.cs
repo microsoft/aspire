@@ -54,15 +54,15 @@ internal static class CoreExports
 
     #endregion
 
-    #region Container Configuration
+    #region Compute Configuration
 
     /// <summary>
-    /// Adds a volume to a container resource.
+    /// Adds a volume to a compute resource.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Volumes persist data across container restarts. Named volumes are managed
-    /// by Docker/Podman and stored in a system-managed location.
+    /// Containers use runtime-managed volumes in run mode. Projects and executables
+    /// use a required environment variable to access workload-scoped local storage.
     /// </para>
     /// <para>
     /// <strong>Why this wrapper exists:</strong> The original <c>ContainerResourceBuilderExtensions.WithVolume</c>
@@ -71,19 +71,28 @@ internal static class CoreExports
     /// parameter comes first, providing a better API for polyglot consumers.
     /// </para>
     /// </remarks>
-    /// <param name="resource">The container resource builder handle.</param>
+    /// <param name="resource">The compute resource builder handle.</param>
     /// <param name="target">The mount path inside the container.</param>
-    /// <param name="name">The volume name. If null, an anonymous volume is created.</param>
+    /// <param name="name">The volume name. Containers can omit it to create an anonymous volume. Projects and executables require it.</param>
     /// <param name="isReadOnly">Whether the volume is read-only.</param>
+    /// <param name="env">An environment variable that receives the effective volume path. Optional for containers and required for projects and executables.</param>
     /// <returns>The same resource builder handle for chaining.</returns>
     [AspireExport]
-    public static IResourceBuilder<ContainerResource> WithVolume(
-        this IResourceBuilder<ContainerResource> resource,
+    public static IResourceBuilder<T> WithVolume<T>(
+        this IResourceBuilder<T> resource,
         string target,
         string? name = null,
-        bool isReadOnly = false)
+        bool isReadOnly = false,
+        string? env = null)
+        where T : IComputeResource
     {
-        return ContainerResourceBuilderExtensions.WithVolume(resource, name, target, isReadOnly);
+        if (resource.Resource is not ContainerResource && env is null)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Resource.Name}' must specify an environment variable when adding a volume.");
+        }
+
+        return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env);
     }
 
     #endregion
