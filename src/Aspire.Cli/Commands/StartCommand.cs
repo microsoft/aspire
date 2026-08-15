@@ -71,41 +71,17 @@ internal sealed class StartCommand : BaseCommand
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
-            var debugSessionArgs = new List<string>();
+            var debugSessionArgs = ParseResultHelper.GetForwardedTokens(
+                parseResult,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
             var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
                 explicitIsolated,
                 passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
             AppHostLauncher.AddIsolatedOption(debugSessionArgs, isolatedOption);
-
-            if (noBuild)
-            {
-                debugSessionArgs.Add("--no-build");
-            }
-
-            debugSessionArgs.AddRange(globalArgs);
-
-            if (captureProfile)
-            {
-                debugSessionArgs.Add("--capture-profile");
-
-                if (parseResult.GetValue(RootCommand.CaptureProfileOutputOption) is { } captureProfileOutput)
-                {
-                    debugSessionArgs.Add("--capture-profile-output");
-                    debugSessionArgs.Add(captureProfileOutput.FullName);
-                }
-
-                if (parseResult.GetResult(RootCommand.CaptureProfileDelayOption) is { Implicit: false })
-                {
-                    debugSessionArgs.Add("--capture-profile-delay");
-                    debugSessionArgs.Add(parseResult.GetValue(RootCommand.CaptureProfileDelayOption).ToString(CultureInfo.InvariantCulture));
-                }
-            }
-
-            if (additionalArgs.Count > 0)
-            {
-                debugSessionArgs.Add("--");
-                debugSessionArgs.AddRange(additionalArgs);
-            }
 
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "start"));
             await extensionInteractionService.StartDebugSessionAsync(

@@ -262,7 +262,9 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     public async Task StartCommand_WhenRunningInExtensionWithoutDebugSession_StartsVsCodeRunSession()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostFile = CreateAppHostFile(workspace);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("App Host");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
 
         string? workingDirectory = null;
         string? projectFile = null;
@@ -301,18 +303,50 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var captureProfileOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "profile.zip");
-        var result = command.Parse($"start --apphost {appHostFile.FullName} --isolated --no-build --debug --log-level Debug --wait-for-debugger --capture-profile --capture-profile-output {captureProfileOutputPath} --capture-profile-delay 1 -- --custom-arg value");
+        var captureProfileOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Profile Output", "profile.zip");
+        var result = command.Parse(
+        [
+            "start",
+            "--project", appHostFile.FullName,
+            "--debug",
+            "--capture-profile",
+            "--format=table",
+            "--no-build",
+            "--isolated=false",
+            "--wait-for-debugger",
+            "--capture-profile-output", captureProfileOutputPath,
+            "--non-interactive=false",
+            "--log-level", "Debug",
+            "--start-debug-session",
+            "--capture-profile-delay=1",
+            "--",
+            "--custom-arg", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
         Assert.Equal(appHostFile.FullName, projectFile);
-        Assert.False(debug);
+        Assert.True(debug);
         Assert.NotNull(options);
         Assert.Equal("run", options.Command);
         Assert.NotNull(options.Args);
-        Assert.Equal(["--isolated", "--no-build", "--debug", "--log-level", "Debug", "--wait-for-debugger", "--capture-profile", "--capture-profile-output", captureProfileOutputPath, "--capture-profile-delay", "1", "--", "--custom-arg", "value"], options.Args);
+        Assert.Equal(
+            [
+                "--debug",
+                "--capture-profile",
+                "--no-build",
+                "--isolated", "false",
+                "--wait-for-debugger",
+                "--capture-profile-output", captureProfileOutputPath,
+                "--log-level", "Debug",
+                "--capture-profile-delay", "1",
+                "--",
+                "--custom-arg", "value"
+            ],
+            options.Args);
     }
 
     [Fact]
@@ -549,6 +583,8 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"{commandLine} --apphost {appHostFile.FullName}");
+
+        Assert.Empty(result.Errors);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);

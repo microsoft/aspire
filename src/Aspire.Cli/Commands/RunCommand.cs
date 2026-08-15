@@ -211,7 +211,14 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
-            var debugSessionArgs = new List<string>();
+            var debugSessionArgs = ParseResultHelper.GetForwardedTokens(
+                parseResult,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                s_detachOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
             var isolatedOption = AppHostLauncher.ResolveIsolatedOption(
                 AppHostLauncher.GetExplicitIsolated(parseResult),
                 passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);

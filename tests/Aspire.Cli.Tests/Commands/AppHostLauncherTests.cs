@@ -55,6 +55,38 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddIsolatedOption_InsertsBeforeDoubleDash()
+    {
+        var args = new List<string> { "--debug", "--", "--isolated" };
+
+        AppHostLauncher.AddIsolatedOption(args, isolated: true);
+
+        Assert.Equal(["--debug", "--isolated", "--", "--isolated"], args);
+    }
+
+    [Theory]
+    [InlineData("--isolated")]
+    [InlineData("--isolated=false")]
+    public void AddIsolatedOption_DoesNotDuplicateExplicitSingleTokenSyntax(string explicitOption)
+    {
+        var args = new List<string> { "--debug", explicitOption };
+
+        AppHostLauncher.AddIsolatedOption(args, isolated: true);
+
+        Assert.Equal(["--debug", explicitOption], args);
+    }
+
+    [Fact]
+    public void AddIsolatedOption_DoesNotDuplicateExplicitSeparatedFalse()
+    {
+        var args = new List<string> { "--isolated", "false", "--", "--isolated" };
+
+        AppHostLauncher.AddIsolatedOption(args, isolated: true);
+
+        Assert.Equal(["--isolated", "false", "--", "--isolated"], args);
+    }
+
+    [Fact]
     public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
     {
         var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");

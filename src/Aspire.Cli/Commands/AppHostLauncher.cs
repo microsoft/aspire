@@ -100,7 +100,7 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Appends the isolated option while preserving an explicitly supplied false value.
+    /// Adds the isolated option before AppHost arguments unless it was explicitly supplied.
     /// </summary>
     internal static void AddIsolatedOption(List<string> args, bool? isolated)
     {
@@ -109,10 +109,21 @@ internal sealed class AppHostLauncher(
             return;
         }
 
-        args.Add(s_isolatedOption.Name);
+        var doubleDashIndex = args.IndexOf("--");
+        var optionCount = doubleDashIndex >= 0 ? doubleDashIndex : args.Count;
+        for (var i = 0; i < optionCount; i++)
+        {
+            if (args[i] == s_isolatedOption.Name ||
+                args[i].StartsWith($"{s_isolatedOption.Name}=", StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+
+        args.Insert(optionCount, s_isolatedOption.Name);
         if (!isolated.Value)
         {
-            args.Add("false");
+            args.Insert(optionCount + 1, "false");
         }
     }
 
