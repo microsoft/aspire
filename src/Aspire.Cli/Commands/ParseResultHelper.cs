@@ -26,14 +26,17 @@ internal static class ParseResultHelper
     internal static List<string> GetForwardedTokens(ParseResult parseResult, params Option[] excludedOptions)
     {
         var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
+        var optionValueOwners = GetOptionValueOwners(parseResult.RootCommandResult);
 
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
         var afterDoubleDash = false;
+        Token? lastForwardedToken = null;
         foreach (var token in parseResult.Tokens)
         {
             if (token.Type == TokenType.DoubleDash)
             {
                 forwardedTokens.Add(token.Value);
+                lastForwardedToken = token;
                 afterDoubleDash = true;
                 continue;
             }
@@ -41,6 +44,7 @@ internal static class ParseResultHelper
             if (afterDoubleDash)
             {
                 forwardedTokens.Add(token.Value);
+                lastForwardedToken = token;
                 continue;
             }
 
@@ -50,7 +54,7 @@ internal static class ParseResultHelper
                 continue;
             }
 
-            forwardedTokens.Add(token.Value);
+            AddForwardedToken(token, optionValueOwners, forwardedTokens, ref lastForwardedToken);
         }
 
         return forwardedTokens;
@@ -67,8 +71,9 @@ internal static class ParseResultHelper
         params Option[] excludedOptions)
     {
         var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
-        var optionValueTokens = GetOptionValueTokens(parseResult.RootCommandResult);
+        var optionValueOwners = GetOptionValueOwners(parseResult.RootCommandResult);
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
+        Token? lastForwardedToken = null;
 
         // System.CommandLine tokenizes both `--option value` and `--option=value` into
         // option/value Token instances. OptionResult.Tokens owns the value instances,
@@ -87,9 +92,9 @@ internal static class ParseResultHelper
                 continue;
             }
 
-            if (token.Type == TokenType.Option || optionValueTokens.Contains(token))
+            if (token.Type == TokenType.Option || optionValueOwners.ContainsKey(token))
             {
-                forwardedTokens.Add(token.Value);
+                AddForwardedToken(token, optionValueOwners, forwardedTokens, ref lastForwardedToken);
             }
         }
 
@@ -169,28 +174,57 @@ internal static class ParseResultHelper
         return (excludedTokens, excludedOptionNames);
     }
 
-    private static HashSet<Token> GetOptionValueTokens(CommandLineCommandResult commandResult)
+    private static Dictionary<Token, OptionResult> GetOptionValueOwners(CommandLineCommandResult commandResult)
     {
-        var optionValueTokens = new HashSet<Token>(ReferenceEqualityComparer.Instance);
-        AddOptionValueTokens(commandResult, optionValueTokens);
+        var optionValueOwners = new Dictionary<Token, OptionResult>(ReferenceEqualityComparer.Instance);
+        AddOptionValueOwners(commandResult, optionValueOwners);
 
-        return optionValueTokens;
+        return optionValueOwners;
 
-        static void AddOptionValueTokens(CommandLineCommandResult currentCommandResult, HashSet<Token> tokens)
+        static void AddOptionValueOwners(CommandLineCommandResult currentCommandResult, Dictionary<Token, OptionResult> owners)
         {
             foreach (var child in currentCommandResult.Children)
             {
                 switch (child)
                 {
                     case OptionResult optionResult:
-                        tokens.UnionWith(optionResult.Tokens);
+                        foreach (var token in optionResult.Tokens)
+                        {
+                            owners.Add(token, optionResult);
+                        }
                         break;
                     case CommandLineCommandResult childCommandResult:
-                        AddOptionValueTokens(childCommandResult, tokens);
+                        AddOptionValueOwners(childCommandResult, owners);
                         break;
                 }
             }
         }
+    }
+
+    private static void AddForwardedToken(
+        Token token,
+        IReadOnlyDictionary<Token, OptionResult> optionValueOwners,
+        List<string> forwardedTokens,
+        ref Token? lastForwardedToken)
+    {
+        // A matched single-value option can own the literal value "--", which is not a
+        // separator in the original parse. DebugSessionOptions only transports strings,
+        // so use equals syntax to keep that value distinct from a real separator:
+        //   --capture-profile-output=--
+        if (token.Value == "--"
+            && optionValueOwners.TryGetValue(token, out var optionResult)
+            && optionResult.Tokens.Count == 1
+            && optionResult.IdentifierToken is { } identifierToken
+            && ReferenceEquals(lastForwardedToken, identifierToken))
+        {
+            forwardedTokens[^1] = $"{identifierToken.Value}=--";
+        }
+        else
+        {
+            forwardedTokens.Add(token.Value);
+        }
+
+        lastForwardedToken = token;
     }
 
     /// <summary>

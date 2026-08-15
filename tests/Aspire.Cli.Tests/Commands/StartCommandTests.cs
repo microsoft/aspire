@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -369,6 +370,22 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         }
     };
 
+    [Fact]
+    public void StartCommand_ForwardedOptionTokens_PreserveLiteralDoubleDashOptionValue()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["start", "--capture-profile-output=--", "--", "--custom-arg"]);
+
+        Assert.Empty(result.Errors);
+        var forwardedTokens = ParseResultHelper.GetForwardedOptionTokensWithUnmatchedTokensAfterDoubleDash(result);
+
+        Assert.Equal(["--capture-profile-output=--", "--", "--custom-arg"], forwardedTokens);
+    }
+
     [Theory]
     [MemberData(nameof(DelegatedUnmatchedTokenCases))]
     public async Task StartCommand_WhenRunningInExtension_AppendsUnmatchedTokensAfterSeparator(
@@ -400,6 +417,56 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             ["--capture-profile", "--capture-profile-output", new FileInfo(relativeOutputPath).FullName],
             actualArgs);
+    }
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    public async Task StartCommand_WhenDelegatingToExtension_TransfersProfileCaptureAfterSuccessfulHandoff(
+        bool captureProfile,
+        bool handoffSucceeds,
+        bool expectedTransferred)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+
+        ProfileCaptureState? captureState = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, _, _, _) =>
+                {
+                    Assert.NotNull(captureState);
+                    Assert.False(captureState.IsTransferred);
+                    if (!handoffSucceeds)
+                    {
+                        throw new InvalidOperationException("Extension handoff failed.");
+                    }
+                };
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        captureState = provider.GetRequiredService<ProfileCaptureState>();
+        var command = provider.GetRequiredService<RootCommand>();
+        var args = new List<string> { "start", "--apphost", appHostFile.FullName };
+        if (captureProfile)
+        {
+            args.Add("--capture-profile");
+        }
+
+        var result = command.Parse(args);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(expectedTransferred, captureState.IsTransferred);
     }
 
     [Fact]

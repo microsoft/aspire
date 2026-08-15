@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -19,6 +20,7 @@ internal sealed class StartCommand : BaseCommand
 
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
+    private readonly ProfileCaptureState _profileCaptureState;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -28,12 +30,14 @@ internal sealed class StartCommand : BaseCommand
     public StartCommand(
         AppHostLauncher appHostLauncher,
         IConfiguration configuration,
+        ProfileCaptureState profileCaptureState,
         CommonCommandServices services)
         : base("start", StartCommandStrings.Description,
                services)
     {
         _appHostLauncher = appHostLauncher;
         _configuration = configuration;
+        _profileCaptureState = profileCaptureState;
 
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
@@ -101,6 +105,10 @@ internal sealed class StartCommand : BaseCommand
                     Command = "run",
                     Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
                 });
+            if (captureProfile)
+            {
+                _profileCaptureState.MarkTransferred();
+            }
 
             return CommandResult.Success();
         }
