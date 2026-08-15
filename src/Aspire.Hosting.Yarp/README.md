@@ -181,13 +181,13 @@ builder.AddYarp("gateway")
 ### Terminate TLS and proxy h2c (for gRPC)
 
 ```csharp
-var someH2CEndpoint = /** */;
-
 builder.AddYarp("gateway")
     .WithHttpsHostPort(8080)
     .WithConfiguration(yarp =>
     {
-        var cluster = yarp.AddCluster(someH2CEndpoint)
+        var cluster = yarp.AddCluster(
+                "h2c-backend",
+                new Uri("http://localhost:5000"))
             .WithForwarderRequestConfig(new ForwarderRequestConfig
             {
                 Version = HttpVersion.Version20,
@@ -196,6 +196,8 @@ builder.AddYarp("gateway")
         yarp.AddRoute(cluster);
     });
 ```
+
+The destination must use `http://` and the backend must be configured to accept HTTP/2 without TLS (h2c).
 
 ## Additional documentation
 
