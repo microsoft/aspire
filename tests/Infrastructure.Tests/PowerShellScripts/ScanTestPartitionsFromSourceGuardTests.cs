@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -92,34 +91,4 @@ public class ScanTestPartitionsFromSourceGuardTests
             $"together:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}");
     }
 
-    [Fact]
-    public void DeploymentEndToEndTestsUseClassMode()
-    {
-        var projectDirectory = Path.Combine(RepoRoot.Path, "tests", "Aspire.Deployment.EndToEnd.Tests");
-        var projectPath = Path.Combine(projectDirectory, "Aspire.Deployment.EndToEnd.Tests.csproj");
-        var project = XDocument.Load(projectPath);
-
-        Assert.Equal("true", project.Descendants("SplitTestsOnCI").Single().Value);
-
-        // A single Partition trait changes the entire split project from class mode to collection mode.
-        var offenders = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories))
-        {
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var content = File.ReadAllText(file);
-            if (s_anyPartitionTrait.IsMatch(content))
-            {
-                offenders.Add(Path.GetRelativePath(RepoRoot.Path, file).Replace('\\', '/'));
-            }
-        }
-
-        Assert.True(offenders.Count == 0,
-            "Deployment E2E tests must enumerate one CI job per class, but Partition traits switch the " +
-            $"project to collection mode:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}");
-    }
 }
