@@ -9,6 +9,8 @@ using Aspire.Hosting.Postgres;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.PostgreSQL.Tests;
 
@@ -20,6 +22,23 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
         var builder = DistributedApplication.CreateBuilder();
         var redis = builder.AddPostgres("postgres");
         Assert.Single(redis.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "postgres_check");
+    }
+
+    [Fact]
+    public void AddPostgresRegistersServerHealthCheckAsASingleStatefulInstance()
+    {
+        // The server health check latches once the server is durably ready. The default health check
+        // service invokes the registration factory on every poll, so it must resolve to the same
+        // instance or the latch would reset on every poll and run the full probe window forever.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddPostgres("pg");
+
+        using var app = builder.Build();
+
+        var options = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>();
+        var registration = Assert.Single(options.Value.Registrations, r => r.Name == "pg_check");
+
+        Assert.Same(registration.Factory(app.Services), registration.Factory(app.Services));
     }
 
     [Fact]
