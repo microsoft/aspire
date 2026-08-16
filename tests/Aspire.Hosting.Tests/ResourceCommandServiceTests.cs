@@ -1719,7 +1719,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 },
                 commandOptions: new CommandOptions
                 {
-                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                    Progress = new CommandProgressOptions { Message = "Processing...", Title = "Cancelable Command" }
                 });
 
         var app = builder.Build();
@@ -1730,6 +1730,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Wait for the Work callback to write the interaction and for the command to start.
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
         Assert.Equal(InteractionType.Progress, interaction.Type);
+        Assert.Equal("Cancelable Command", interaction.Title);
         Assert.Equal("Processing...", interaction.Message);
         await commandStarted.Task.DefaultTimeout();
 
