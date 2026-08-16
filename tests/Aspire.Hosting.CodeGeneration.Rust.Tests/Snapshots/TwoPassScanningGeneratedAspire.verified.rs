@@ -3126,18 +3126,14 @@ impl CSharpAppResource {
     }
 
     /// Adds a volume to a project resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
-        if let Some(ref v) = name {
-            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withProjectVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -5987,7 +5983,7 @@ impl ContainerResource {
     }
 
     /// Adds a volume to a container resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
@@ -5996,9 +5992,6 @@ impl ContainerResource {
         }
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -7869,18 +7862,14 @@ impl DotnetToolResource {
     }
 
     /// Adds a volume to an executable resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
-        if let Some(ref v) = name {
-            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withExecutableVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -9724,18 +9713,14 @@ impl ExecutableResource {
     }
 
     /// Adds a volume to an executable resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
-        if let Some(ref v) = name {
-            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withExecutableVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -15616,18 +15601,14 @@ impl ProjectResource {
     }
 
     /// Adds a volume to a project resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
-        if let Some(ref v) = name {
-            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withProjectVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -17899,7 +17880,7 @@ impl TestDatabaseResource {
     }
 
     /// Adds a volume to a container resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
@@ -17908,9 +17889,6 @@ impl TestDatabaseResource {
         }
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -19499,7 +19477,7 @@ impl TestRedisResource {
     }
 
     /// Adds a volume to a container resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
@@ -19508,9 +19486,6 @@ impl TestRedisResource {
         }
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -21165,7 +21140,7 @@ impl TestVaultResource {
     }
 
     /// Adds a volume to a container resource.
-    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>, env: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+    pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
@@ -21174,9 +21149,6 @@ impl TestVaultResource {
         }
         if let Some(ref v) = is_read_only {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = env {
-            args.insert("env".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withVolume", args)?;
         let handle: Handle = serde_json::from_value(result)?;

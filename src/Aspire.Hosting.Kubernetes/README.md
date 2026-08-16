@@ -38,9 +38,18 @@ await builder.addKubernetesEnvironment("k8s");
 
 Use a target-neutral volume when the Kubernetes environment's default storage policy is sufficient:
 
+**C#**
+
 ```csharp
 builder.AddProject<Projects.Api>("api")
     .WithVolume("data", "/data", env: "DATA_PATH");
+```
+
+**TypeScript**
+
+```typescript
+const api = await builder.addNodeApp("api", "../api", "server.js");
+await api.withVolume("/data", "data", "DATA_PATH");
 ```
 
 Projects and executables receive a workload-scoped Aspire store directory in run mode. The directory is reused across AppHost runs regardless of whether the process has a session or persistent lifetime. When published, the volume uses the Kubernetes environment's `DefaultStorageType` and `DATA_PATH` contains `/data`.

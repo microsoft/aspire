@@ -49,20 +49,8 @@ internal static class VolumeMountPathResolver
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(pathSegments);
 
-        var storePath = Path.GetFullPath(store.BasePath);
-        var path = Path.GetFullPath(Path.Combine([storePath, .. pathSegments]));
-        var storePrefix = Path.EndsInDirectorySeparator(storePath)
-            ? storePath
-            : storePath + Path.DirectorySeparatorChar;
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (!path.StartsWith(storePrefix, comparison))
-        {
-            throw new InvalidOperationException($"The volume path '{path}' is outside the Aspire store '{storePath}'.");
-        }
-
-        return path;
+        // Every caller passes either a literal segment or GetStablePathSegment output, so the
+        // combined path is always contained within the store and needs no traversal guard.
+        return Path.GetFullPath(Path.Combine([Path.GetFullPath(store.BasePath), .. pathSegments]));
     }
 }

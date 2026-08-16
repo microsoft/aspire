@@ -935,12 +935,14 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", withVolume.TargetTypeId);
         Assert.False(withVolume.TargetType?.IsInterface);
 
-        // Preserve the existing parameter order and append env so generated callers remain compatible.
-        Assert.Equal("target", withVolume.Parameters[0].Name);
-        Assert.Equal("name", withVolume.Parameters[1].Name);
-        Assert.Equal("isReadOnly", withVolume.Parameters[2].Name);
-        Assert.Equal("env", withVolume.Parameters[3].Name);
-        Assert.True(withVolume.Parameters[3].IsOptional);
+        // Preserve the exported parameter list exactly. The Rust generator emits optional capability
+        // parameters positionally and Rust has no overloading, so appending a parameter here would be
+        // a source-breaking change for existing Rust AppHosts. A container always receives `target` as
+        // its effective volume path, so the C# `env` convenience parameter is intentionally not
+        // exported: polyglot callers use withEnvironment(env, target) for the same result.
+        Assert.Equal(
+            ["target", "name", "isReadOnly"],
+            withVolume.Parameters.Select(parameter => parameter.Name));
 
         var withProjectVolume = Assert.Single(
             capabilities,
@@ -949,12 +951,24 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", withProjectVolume.TargetTypeId);
         Assert.False(withProjectVolume.TargetType?.IsInterface);
 
+        // Projects and executables compute their run-mode path in the host, so `name` and `env` are
+        // required rather than optional. Modelling them as optional would generate polyglot APIs that
+        // type-check but always fail at runtime.
+        Assert.Equal(
+            ["target", "name", "env", "isReadOnly"],
+            withProjectVolume.Parameters.Select(parameter => parameter.Name));
+        Assert.False(withProjectVolume.Parameters[1].IsOptional);
+        Assert.False(withProjectVolume.Parameters[2].IsOptional);
+
         var withExecutableVolume = Assert.Single(
             capabilities,
             capability => capability.CapabilityId == "Aspire.Hosting/withExecutableVolume");
         Assert.Equal("withVolume", withExecutableVolume.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", withExecutableVolume.TargetTypeId);
         Assert.False(withExecutableVolume.TargetType?.IsInterface);
+        Assert.Equal(
+            ["target", "name", "env", "isReadOnly"],
+            withExecutableVolume.Parameters.Select(parameter => parameter.Name));
 
         // Note: withBindMount still uses "builder" - it hasn't been moved to CoreExports yet
         var withBindMount = capabilities

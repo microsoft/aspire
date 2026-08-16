@@ -47,6 +47,7 @@ public static class VolumeResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(target);
         ArgumentException.ThrowIfNullOrEmpty(env);
 
         return WithVolumeCore(builder, name, target, isReadOnly, env);

@@ -1559,7 +1559,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithPersistentVolume(data);
 
         var app = builder.Build();
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
         Assert.Contains("service", ex.Message);
         Assert.Contains("envA", ex.Message);
         Assert.Contains("envB", ex.Message);

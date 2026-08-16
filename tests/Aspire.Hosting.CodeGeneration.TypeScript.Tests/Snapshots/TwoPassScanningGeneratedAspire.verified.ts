@@ -1926,8 +1926,6 @@ export interface WithVolumeOptions {
     name?: string;
     /** Whether the volume is read-only. */
     isReadOnly?: boolean;
-    /** An optional environment variable that receives the target mount path. */
-    env?: string;
 }
 
 // ============================================================================
@@ -20323,11 +20321,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<ContainerResource> {
+    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withVolume',
             rpcArgs
@@ -20351,8 +20348,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     withVolume(target: string, options?: WithVolumeOptions): ContainerResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new ContainerResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new ContainerResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly), this._client);
     }
 
     /**
@@ -21934,10 +21930,12 @@ export interface CSharpAppResource {
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -22565,10 +22563,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -24377,11 +24377,9 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
-        if (name !== undefined) rpcArgs.name = name;
+    private async _withVolumeInternal(target: string, name: string, env: string, isReadOnly?: boolean): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, target, name, env };
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withProjectVolume',
             rpcArgs
@@ -24392,14 +24390,14 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
-        const name = options?.name;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new CSharpAppResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new CSharpAppResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
 
     /**
@@ -25284,8 +25282,8 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withPipelineConfiguration(callback)), this._client);
     }
 
-    withVolume(target: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, options)), this._client);
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, name, env, options)), this._client);
     }
 
     getResourceName(): Promise<string> {
@@ -25964,10 +25962,12 @@ export interface DotnetToolResource {
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -26617,10 +26617,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -28513,11 +28515,9 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
-        if (name !== undefined) rpcArgs.name = name;
+    private async _withVolumeInternal(target: string, name: string, env: string, isReadOnly?: boolean): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, target, name, env };
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withExecutableVolume',
             rpcArgs
@@ -28528,14 +28528,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
-        const name = options?.name;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new DotnetToolResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new DotnetToolResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
 
     /**
@@ -29421,8 +29421,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withPipelineConfiguration(callback)), this._client);
     }
 
-    withVolume(target: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, options)), this._client);
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, name, env, options)), this._client);
     }
 
     getResourceName(): Promise<string> {
@@ -30071,10 +30071,12 @@ export interface ExecutableResource {
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -30691,10 +30693,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -32483,11 +32487,9 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
-        if (name !== undefined) rpcArgs.name = name;
+    private async _withVolumeInternal(target: string, name: string, env: string, isReadOnly?: boolean): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, target, name, env };
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withExecutableVolume',
             rpcArgs
@@ -32498,14 +32500,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds a volume to an executable resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise {
-        const name = options?.name;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise {
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new ExecutableResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new ExecutableResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
 
     /**
@@ -33367,8 +33369,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withPipelineConfiguration(callback)), this._client);
     }
 
-    withVolume(target: string, options?: WithVolumeOptions): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, options)), this._client);
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, name, env, options)), this._client);
     }
 
     getResourceName(): Promise<string> {
@@ -38447,10 +38449,12 @@ export interface ProjectResource {
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -39078,10 +39082,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -40891,11 +40897,9 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
-        if (name !== undefined) rpcArgs.name = name;
+    private async _withVolumeInternal(target: string, name: string, env: string, isReadOnly?: boolean): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, target, name, env };
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withProjectVolume',
             rpcArgs
@@ -40906,14 +40910,14 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds a volume to a project resource.
      * @param target The mount path inside the published container.
+     * @param name The volume name.
+     * @param env The environment variable that receives the effective volume path.
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise {
-        const name = options?.name;
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise {
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new ProjectResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new ProjectResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
 
     /**
@@ -41798,8 +41802,8 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withPipelineConfiguration(callback)), this._client);
     }
 
-    withVolume(target: string, options?: WithVolumeOptions): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, options)), this._client);
+    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withVolume(target, name, env, options)), this._client);
     }
 
     getResourceName(): Promise<string> {
@@ -45677,11 +45681,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<TestDatabaseResource> {
+    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withVolume',
             rpcArgs
@@ -45705,8 +45708,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     withVolume(target: string, options?: WithVolumeOptions): TestDatabaseResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new TestDatabaseResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new TestDatabaseResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly), this._client);
     }
 
     /**
@@ -50679,11 +50681,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<TestRedisResource> {
+    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withVolume',
             rpcArgs
@@ -50707,8 +50708,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     withVolume(target: string, options?: WithVolumeOptions): TestRedisResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new TestRedisResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new TestRedisResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly), this._client);
     }
 
     /**
@@ -55792,11 +55792,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean, env?: string): Promise<TestVaultResource> {
+    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
-        if (env !== undefined) rpcArgs.env = env;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withVolume',
             rpcArgs
@@ -55820,8 +55819,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     withVolume(target: string, options?: WithVolumeOptions): TestVaultResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
-        const env = options?.env;
-        return new TestVaultResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly, env), this._client);
+        return new TestVaultResourcePromiseImpl(this._withVolumeInternal(target, name, isReadOnly), this._client);
     }
 
     /**

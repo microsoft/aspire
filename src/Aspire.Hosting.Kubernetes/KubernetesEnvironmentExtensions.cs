@@ -107,7 +107,7 @@ public static class KubernetesEnvironmentExtensions
             if (annotation.EnvironmentVariableName is not null &&
                 resource is not ProjectResource and not ExecutableResource and not ContainerResource)
             {
-                throw new InvalidOperationException(
+                throw new DistributedApplicationException(
                     $"Resource '{resource.Name}' cannot resolve the '{annotation.EnvironmentVariableName}' persistent-volume path in run mode. " +
                     $"Only project, executable, and container resources are supported.");
             }
@@ -135,7 +135,7 @@ public static class KubernetesEnvironmentExtensions
                 {
                     var volume = volumeGroup.First().Annotation.Volume;
                     var resourceNames = string.Join(", ", volumeGroup.Select(item => $"'{item.Resource.Name}'"));
-                    throw new InvalidOperationException(
+                    throw new DistributedApplicationException(
                         $"Kubernetes persistent volume '{volume.Name}' is used by both local container and host-process resources ({resourceNames}). " +
                         $"Run mode cannot provide one shared backing store across those execution types. Use only containers or only projects/executables for this volume.");
                 }
@@ -165,7 +165,7 @@ public static class KubernetesEnvironmentExtensions
             {
                 var targetName = targetEnvironment?.Name ?? "<none>";
                 var supportedTargetName = (volumeEnvironment.OwningComputeEnvironment ?? volumeEnvironment).Name;
-                throw new InvalidOperationException(
+                throw new DistributedApplicationException(
                     $"Resource '{resource.Name}' is assigned to compute environment '{targetName}' but binds " +
                     $"Kubernetes persistent volume '{annotation.Volume.Name}' which belongs to environment " +
                     $"'{volumeEnvironment.Name}'. A workload can only bind persistent volumes declared on its " +

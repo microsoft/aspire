@@ -75,17 +75,27 @@ internal static class CoreExports
     /// <param name="target">The mount path inside the container.</param>
     /// <param name="name">The volume name. If null, an anonymous volume is created.</param>
     /// <param name="isReadOnly">Whether the volume is read-only.</param>
-    /// <param name="env">An optional environment variable that receives the target mount path.</param>
     /// <returns>The same resource builder handle for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This capability deliberately does not expose the C# <c>env</c> parameter. A container always
+    /// receives <paramref name="target"/> as its effective volume path in every mode, so the C#
+    /// convenience overload is exactly equivalent to <c>withVolume(target, name).withEnvironment(env, target)</c>
+    /// in a polyglot AppHost. Keeping the exported parameter list frozen matters because the Rust
+    /// generator emits optional capability parameters positionally and has no overloading, so appending
+    /// a parameter here would be a source-breaking change for existing Rust AppHosts. Projects and
+    /// executables genuinely need the parameter because their run-mode path is computed by the host,
+    /// and they get it through the separate withProjectVolume/withExecutableVolume capabilities.
+    /// </para>
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<ContainerResource> WithVolume(
         this IResourceBuilder<ContainerResource> resource,
         string target,
         string? name = null,
-        bool isReadOnly = false,
-        string? env = null)
+        bool isReadOnly = false)
     {
-        return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env: null);
     }
 
     /// <summary>
@@ -93,17 +103,17 @@ internal static class CoreExports
     /// </summary>
     /// <param name="resource">The project resource builder handle.</param>
     /// <param name="target">The mount path inside the published container.</param>
-    /// <param name="name">The volume name. Required for projects.</param>
+    /// <param name="name">The volume name.</param>
+    /// <param name="env">The environment variable that receives the effective volume path.</param>
     /// <param name="isReadOnly">Whether the published volume is read-only.</param>
-    /// <param name="env">An environment variable that receives the effective volume path. Required for projects.</param>
     /// <returns>The same project resource builder handle for chaining.</returns>
     [AspireExport("withProjectVolume", MethodName = "withVolume")]
     public static IResourceBuilder<ProjectResource> WithProjectVolumeForPolyglot(
         this IResourceBuilder<ProjectResource> resource,
         string target,
-        string? name = null,
-        bool isReadOnly = false,
-        string? env = null)
+        string name,
+        string env,
+        bool isReadOnly = false)
     {
         return WithProcessVolume(resource, target, name, isReadOnly, env);
     }
@@ -113,17 +123,17 @@ internal static class CoreExports
     /// </summary>
     /// <param name="resource">The executable resource builder handle.</param>
     /// <param name="target">The mount path inside the published container.</param>
-    /// <param name="name">The volume name. Required for executables.</param>
+    /// <param name="name">The volume name.</param>
+    /// <param name="env">The environment variable that receives the effective volume path.</param>
     /// <param name="isReadOnly">Whether the published volume is read-only.</param>
-    /// <param name="env">An environment variable that receives the effective volume path. Required for executables.</param>
     /// <returns>The same executable resource builder handle for chaining.</returns>
     [AspireExport("withExecutableVolume", MethodName = "withVolume")]
     public static IResourceBuilder<ExecutableResource> WithExecutableVolumeForPolyglot(
         this IResourceBuilder<ExecutableResource> resource,
         string target,
-        string? name = null,
-        bool isReadOnly = false,
-        string? env = null)
+        string name,
+        string env,
+        bool isReadOnly = false)
     {
         return WithProcessVolume(resource, target, name, isReadOnly, env);
     }
@@ -131,17 +141,11 @@ internal static class CoreExports
     private static IResourceBuilder<T> WithProcessVolume<T>(
         IResourceBuilder<T> resource,
         string target,
-        string? name,
+        string name,
         bool isReadOnly,
-        string? env)
+        string env)
         where T : IComputeResource, IResourceWithEnvironment
     {
-        if (env is null)
-        {
-            throw new InvalidOperationException(
-                $"Resource '{resource.Resource.Name}' must specify an environment variable when adding a volume.");
-        }
-
         return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env);
     }
 

@@ -364,6 +364,8 @@ public static class KubernetesPersistentVolumeExtensions
         bool isReadOnly = false)
         where T : IComputeResource, IResourceWithEnvironment
     {
+        ArgumentException.ThrowIfNullOrEmpty(env);
+
         return WithPersistentVolumeCore(builder, volume, mountPath, isReadOnly, env);
     }
 

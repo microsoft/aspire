@@ -241,7 +241,7 @@ public class KubernetesPersistentVolumeRunModeTests
             .WithPersistentVolume(volume, "/srv/data", env: "DATA_PATH");
 
         using var app = builder.Build();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
 
         Assert.Contains("both local container and host-process resources", exception.Message);
