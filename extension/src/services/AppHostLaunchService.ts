@@ -16,6 +16,8 @@ import { isolatedLaunchCapability, type CapabilityStatus } from '../types/config
 export { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs } from './appHostLaunchContracts';
 export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
 
+const isolatedLaunchProbeArgs = ['run', '--isolated', '--help'] as const;
+
 export interface AppHostLaunchCapabilityProvider {
     getCapabilityStatus(capability: string, options?: {
         suppressErrors?: boolean;
@@ -23,6 +25,11 @@ export interface AppHostLaunchCapabilityProvider {
         cliPath?: string;
         cancellationToken?: vscode.CancellationToken;
     }): Promise<CapabilityStatus>;
+    getCliOptionStatus(
+        cliPath: string,
+        args: readonly string[],
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<CapabilityStatus>;
 }
 
 export interface AppHostLaunchIsolation {
@@ -613,14 +620,14 @@ export class AppHostLaunchService implements vscode.Disposable {
             return { effective: false, option: undefined };
         }
 
-        const capabilityStatus = await this._capabilityProvider.getCapabilityStatus(isolatedLaunchCapability, {
+        let supportStatus = await this._capabilityProvider.getCapabilityStatus(isolatedLaunchCapability, {
             suppressErrors: true,
             forceRefresh: cliPath !== undefined,
             cliPath,
             cancellationToken: token,
         });
         throwIfCancelled(token);
-        if (capabilityStatus === 'supported') {
+        if (supportStatus === 'supported') {
             return { effective, option: isolated ?? true };
         }
 
@@ -631,10 +638,24 @@ export class AppHostLaunchService implements vscode.Disposable {
             return { effective: isolated, option: isolated };
         }
 
-        const cannotHonorExplicitChoice = isolated === true ||
-            (capabilityStatus === 'unavailable' && isolated === false && inferredIsolation);
-        if (cannotHonorExplicitChoice) {
-            const reason = capabilityStatus === 'unsupported'
+        if (cliPath !== undefined) {
+            // `--isolated` shipped before the capability token. Probe the exact executable's
+            // parser so a newer extension can keep working with compatible 13.2-era CLIs
+            // without relying on localized help or error text.
+            supportStatus = await this._capabilityProvider.getCliOptionStatus(
+                cliPath,
+                isolatedLaunchProbeArgs,
+                token);
+            throwIfCancelled(token);
+            if (supportStatus === 'supported') {
+                return { effective, option: isolated ?? true };
+            }
+        }
+
+        const mustFailSafely = isolated === true ||
+            (supportStatus === 'unavailable' && effective);
+        if (mustFailSafely) {
+            const reason = supportStatus === 'unsupported'
                 ? 'The selected Aspire CLI does not support the requested isolation mode.'
                 : 'The selected Aspire CLI isolation capability could not be verified.';
             throw new Error(reason);

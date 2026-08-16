@@ -22,7 +22,10 @@ function createEditor(filePath: string): vscode.TextEditor {
 }
 
 function createLaunchService(): AppHostLaunchService {
-    return new AppHostLaunchService({ getCapabilityStatus: async () => 'supported' });
+    return new AppHostLaunchService({
+        getCapabilityStatus: async () => 'supported',
+        getCliOptionStatus: async () => 'supported',
+    });
 }
 
 suite('AspireEditorCommandProvider', () => {

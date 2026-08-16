@@ -126,7 +126,10 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
-    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService({ getCapabilityStatus: async () => 'supported' }));
+    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService({
+        getCapabilityStatus: async () => 'supported',
+        getCliOptionStatus: async () => 'supported',
+    }));
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
