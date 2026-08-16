@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -18,8 +17,6 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     private const string ProjectName = "AspireDockerDeployTest";
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15882")]
     public async Task CreateAndDeployToDockerCompose()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -118,8 +115,6 @@ builder.Build().Run();
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15871")]
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
