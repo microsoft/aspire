@@ -79,7 +79,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         // On a fresh data volume the Postgres image runs initdb and then restarts to the real listener.
         // Native database creation must survive that restart window (no "Failed to create database"),
         // and the server must not release WaitFor dependents until it is durably past the restart.
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1), ShouldHandle = new PredicateBuilder().Handle<NpgsqlException>() })
             .Build();
