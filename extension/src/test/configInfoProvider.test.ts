@@ -9,7 +9,19 @@ import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../utils/process/cliProcess';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
-import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { describeIncludeDisabledCommandsCapability, isolatedLaunchCapability, lsJsonStreamCapability } from '../types/configInfo';
+
+function emitConfigInfo(options: cliModule.SpawnProcessOptions | undefined, capabilities: readonly string[] = []): void {
+    options?.stdoutCallback?.(JSON.stringify({
+        localSettingsPath: '/workspace/aspire.config.json',
+        globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+        availableFeatures: [],
+        localSettingsSchema: { properties: [] },
+        globalSettingsSchema: { properties: [] },
+        capabilities,
+    }));
+    options?.exitCallback?.(0);
+}
 
 suite('configInfoProvider tests', () => {
     teardown(() => sinon.restore());
@@ -159,174 +171,273 @@ suite('configInfoProvider tests', () => {
         assert.deepStrictEqual(spawnStub.secondCall.args[2], ['config', 'info', '--json']);
     });
 
-    test('getCliOptionStatus reports supported for exit zero with exact arguments and no extension variables', async () => {
+    test('getCapabilityStatus uses advertised capabilities before the minimum-version fallback', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
-        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            options?.exitCallback?.(0);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            assert.deepStrictEqual(args, ['config', 'info', '--json', '--nologo']);
+            emitConfigInfo(options, [isolatedLaunchCapability]);
             return {} as ChildProcessWithoutNullStreams;
         });
         const provider = new ConfigInfoProvider(terminalProvider);
 
-        const status = await provider.getCliOptionStatus(
-            '/exact/aspire',
-            ['run', '--isolated', '--help']);
+        const status = await provider.getCapabilityStatus(isolatedLaunchCapability, {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+            minimumVersion: '13.2.0',
+        });
 
         assert.strictEqual(status, 'supported');
-        assert.strictEqual(spawnStub.firstCall.args[1], '/exact/aspire');
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['run', '--isolated', '--help']);
-        assert.strictEqual(spawnStub.firstCall.args[3]?.createProcessGroup, true);
-        assert.strictEqual(spawnStub.firstCall.args[3]?.noExtensionVariables, true);
+        assert.strictEqual(spawnStub.callCount, 1);
     });
 
-    test('getCliOptionStatus reports unsupported for an ordinary nonzero exit', async () => {
+    test('getCapabilityStatus classifies bounded CLI version cores and accepts prerelease suffixes', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
-        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            options?.stdoutCallback?.('localized help output');
-            options?.stderrCallback?.('localized error output');
-            options?.exitCallback?.(2);
-            return {} as ChildProcessWithoutNullStreams;
-        });
-        const provider = new ConfigInfoProvider(terminalProvider);
-
-        const status = await provider.getCliOptionStatus(
-            '/exact/aspire',
-            ['run', '--isolated', '--help']);
-
-        assert.strictEqual(status, 'unsupported');
-    });
-
-    test('getCliOptionStatus caches and deduplicates by exact CLI path and arguments', async () => {
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => '/unused/aspire',
-            createEnvironment: () => ({}),
-        } as unknown as AspireTerminalProvider;
-        const probeOptions: cliModule.SpawnProcessOptions[] = [];
-        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            if (options) {
-                probeOptions.push(options);
-            }
-            return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
-        });
-        const provider = new ConfigInfoProvider(terminalProvider);
-        const isolatedArgs = ['run', '--isolated', '--help'];
-        const otherArgs = ['run', '--other', '--help'];
-
-        const supportedProbe = provider.getCliOptionStatus('/exact/aspire', isolatedArgs);
-        const duplicateSupportedProbe = provider.getCliOptionStatus('/exact/aspire', isolatedArgs);
-        const unsupportedProbe = provider.getCliOptionStatus('/exact/aspire', otherArgs);
-        const otherCliProbe = provider.getCliOptionStatus('/other/aspire', isolatedArgs);
-
-        assert.strictEqual(spawnStub.callCount, 3);
-        probeOptions[0].exitCallback?.(0);
-        probeOptions[1].exitCallback?.(1);
-        probeOptions[2].exitCallback?.(0);
-
-        assert.strictEqual(await supportedProbe, 'supported');
-        assert.strictEqual(await duplicateSupportedProbe, 'supported');
-        assert.strictEqual(await unsupportedProbe, 'unsupported');
-        assert.strictEqual(await otherCliProbe, 'supported');
-        assert.strictEqual(await provider.getCliOptionStatus('/exact/aspire', isolatedArgs), 'supported');
-        assert.strictEqual(await provider.getCliOptionStatus('/exact/aspire', otherArgs), 'unsupported');
-        assert.strictEqual(await provider.getCliOptionStatus('/other/aspire', isolatedArgs), 'supported');
-        assert.strictEqual(spawnStub.callCount, 3);
-    });
-
-    test('getCliOptionStatus reports spawn failures as unavailable and retries', async () => {
-        const terminalProvider = {
-            getAspireCliExecutablePath: async () => '/unused/aspire',
-            createEnvironment: () => ({}),
-        } as unknown as AspireTerminalProvider;
-        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            if (spawnStub.callCount === 1) {
-                options?.errorCallback?.(new Error('spawn failed'));
+        const versions = [
+            ['13.2.0', 'supported'],
+            ['13.2.0-preview.1.12345.6', 'supported'],
+            ['13.2.0-dev.123+abcdef', 'supported'],
+            ['13.1.99', 'unsupported'],
+        ] as const;
+        let versionIndex = 0;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, '/exact/aspire');
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
             } else {
+                assert.deepStrictEqual(args, ['--version']);
+                options?.stdoutCallback?.(`${versions[versionIndex++][0]}\n`);
                 options?.exitCallback?.(0);
             }
             return {} as ChildProcessWithoutNullStreams;
         });
         const provider = new ConfigInfoProvider(terminalProvider);
 
-        assert.strictEqual(
-            await provider.getCliOptionStatus('/exact/aspire', ['run', '--isolated', '--help']),
-            'unavailable');
-        assert.strictEqual(
-            await provider.getCliOptionStatus('/exact/aspire', ['run', '--isolated', '--help']),
-            'supported');
-        assert.strictEqual(spawnStub.callCount, 2);
+        for (const [, expectedStatus] of versions) {
+            assert.strictEqual(
+                await provider.getCapabilityStatus(isolatedLaunchCapability, {
+                    cliPath: '/exact/aspire',
+                    forceRefresh: true,
+                    minimumVersion: '13.2.0',
+                }),
+                expectedStatus);
+        }
+
+        assert.strictEqual(spawnStub.callCount, versions.length * 2);
+        for (const call of spawnStub.getCalls().filter(call => call.args[2]?.[0] === '--version')) {
+            assert.strictEqual(call.args[3]?.createProcessGroup, true);
+            assert.strictEqual(call.args[3]?.noExtensionVariables, true);
+        }
     });
 
-    test('getCliOptionStatus reports timeouts as unavailable, terminates the process, and retries', async () => {
+    test('getCapabilityStatus reports malformed or unbounded version output as unavailable', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const invalidVersions = [
+            '',
+            'Aspire CLI 13.2.0',
+            '13.2',
+            '13.2.0\n13.2.1',
+            '100000.2.0',
+            '13.2.0-preview!',
+        ];
+        let versionIndex = 0;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
+            } else {
+                options?.stdoutCallback?.(invalidVersions[versionIndex++]);
+                options?.exitCallback?.(0);
+            }
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        for (const _invalidVersion of invalidVersions) {
+            assert.strictEqual(
+                await provider.getCapabilityStatus(isolatedLaunchCapability, {
+                    cliPath: '/exact/aspire',
+                    forceRefresh: true,
+                    minimumVersion: '13.2.0',
+                }),
+                'unavailable');
+        }
+    });
+
+    test('getCapabilityStatus falls back to exact CLI version when config info is unavailable', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, '/exact/aspire');
+            if (args?.[0] === 'config') {
+                options?.exitCallback?.(1);
+            } else {
+                assert.deepStrictEqual(args, ['--version']);
+                options?.stdoutCallback?.('13.2.4');
+                options?.exitCallback?.(0);
+            }
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const status = await provider.getCapabilityStatus(isolatedLaunchCapability, {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+            suppressErrors: true,
+            minimumVersion: '13.2.0',
+        });
+
+        assert.strictEqual(status, 'supported');
+        assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
+            ['config', 'info', '--json', '--nologo'],
+            ['--version'],
+        ]);
+    });
+
+    test('getCapabilityStatus reports version spawn and exit failures as unavailable', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let versionAttempt = 0;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
+            } else if (versionAttempt++ === 0) {
+                options?.errorCallback?.(new Error('spawn failed'));
+            } else {
+                options?.stdoutCallback?.('13.2.0');
+                options?.exitCallback?.(2);
+            }
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            assert.strictEqual(
+                await provider.getCapabilityStatus(isolatedLaunchCapability, {
+                    cliPath: '/exact/aspire',
+                    forceRefresh: true,
+                    minimumVersion: '13.2.0',
+                }),
+                'unavailable');
+        }
+    });
+
+    test('getCapabilityStatus reports version timeouts as unavailable and terminates the process', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
-        const childProcesses: ChildProcessWithoutNullStreams[] = [];
-        const probeOptions: cliModule.SpawnProcessOptions[] = [];
-        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
-            childProcesses.push(childProcess);
-            if (options) {
-                probeOptions.push(options);
+        const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
+                return {} as ChildProcessWithoutNullStreams;
             }
+
             return childProcess;
         });
         const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
         const provider = new ConfigInfoProvider(terminalProvider);
 
         try {
-            const timedOutProbe = provider.getCliOptionStatus(
-                '/exact/aspire',
-                ['run', '--isolated', '--help']);
+            const probe = provider.getCapabilityStatus(isolatedLaunchCapability, {
+                cliPath: '/exact/aspire',
+                forceRefresh: true,
+                minimumVersion: '13.2.0',
+            });
             await clock.tickAsync(30_000);
 
-            assert.strictEqual(await timedOutProbe, 'unavailable');
+            assert.strictEqual(await probe, 'unavailable');
             sinon.assert.calledOnceWithExactly(
                 terminateStub,
-                childProcesses[0],
-                'timed-out Aspire CLI option probe');
-
-            const retry = provider.getCliOptionStatus(
-                '/exact/aspire',
-                ['run', '--isolated', '--help']);
-            probeOptions[1].exitCallback?.(0);
-
-            assert.strictEqual(await retry, 'supported');
-            assert.strictEqual(spawnStub.callCount, 2);
+                childProcess,
+                'timed-out Aspire CLI version probe');
         }
         finally {
             clock.restore();
         }
     });
 
-    test('getCliOptionStatus propagates cancellation as unavailable and terminates the process', async () => {
+    test('getCapabilityStatus reports cancellation as unavailable and terminates the version process', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
         const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
-        sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess);
+        let signalVersionStarted!: () => void;
+        const versionStarted = new Promise<void>(resolve => signalVersionStarted = resolve);
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
+                return {} as ChildProcessWithoutNullStreams;
+            }
+
+            signalVersionStarted();
+            return childProcess;
+        });
         const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
         const provider = new ConfigInfoProvider(terminalProvider);
         const cancellation = new vscode.CancellationTokenSource();
 
-        const probe = provider.getCliOptionStatus(
-            '/exact/aspire',
-            ['run', '--isolated', '--help'],
-            cancellation.token);
+        const probe = provider.getCapabilityStatus(isolatedLaunchCapability, {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+            minimumVersion: '13.2.0',
+            cancellationToken: cancellation.token,
+        });
+        await versionStarted;
         cancellation.cancel();
 
         assert.strictEqual(await probe, 'unavailable');
         sinon.assert.calledOnceWithExactly(
             terminateStub,
             childProcess,
-            'cancelled Aspire CLI option probe');
+            'cancelled Aspire CLI version probe');
+    });
+
+    test('getCapabilityStatus refreshes version fallback when a CLI changes in place', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let version = '13.1.3';
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                emitConfigInfo(options);
+            } else {
+                options?.stdoutCallback?.(version);
+                options?.exitCallback?.(0);
+            }
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+        const options = {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+            minimumVersion: '13.2.0',
+        };
+
+        assert.strictEqual(await provider.getCapabilityStatus(isolatedLaunchCapability, options), 'unsupported');
+        version = '13.2.0';
+        assert.strictEqual(await provider.getCapabilityStatus(isolatedLaunchCapability, options), 'supported');
+        assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
+            ['config', 'info', '--json', '--nologo'],
+            ['--version'],
+            ['config', 'info', '--json', '--nologo'],
+            ['--version'],
+        ]);
     });
 
     test('shared provider deduplicates eager capability probes', async () => {

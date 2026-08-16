@@ -5,9 +5,10 @@ import * as path from 'path';
 import { findRunningAppHost, getCommandInvocationCount, getDebugLaunchCount, isSamePath, readStateFile, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { runProcess, terminateProcessTree } from './helpers/process';
-import { commandLineArgumentEquals, getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
+import { getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
+import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../utils/processArguments';
 
 interface LifecycleToolResult {
     tool: string;
@@ -56,74 +57,6 @@ interface ExtensionSpawnLog {
 
 const startToolName = 'aspire_apphost_start';
 const stopToolName = 'aspire_apphost_stop';
-
-test('accepts exact Windows launch arguments and compares paths case-insensitively', () => {
-    assert.doesNotThrow(() => assertLinkedAppHostCliLaunch(
-        ['C:\\Tools\\aspire.exe', 'run', '--isolated', '--start-debug-session', '--apphost', 'c:\\Users\\runner\\workspace with spaces\\AppHost.csproj'],
-        'C:\\Users\\runner\\workspace with spaces\\AppHost.csproj',
-        'C:\\Tools\\ASPIRE.EXE',
-        'win32'));
-});
-
-test('rejects --isolated=false as evidence of inferred isolation', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated=false', '--start-debug-session', '--apphost', appHostPath],
-            appHostPath),
-        /Expected exact '--isolated'/);
-});
-
-test('rejects false immediately after --isolated', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated', 'false', '--start-debug-session', '--apphost', appHostPath],
-            appHostPath),
-        /Expected inferred isolation to use only the true-form --isolated switch/);
-});
-
-test('rejects --start-debug-session embedded in another argument', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated', '--prefix--start-debug-session', '--apphost', appHostPath],
-            appHostPath),
-        /Expected exact '--start-debug-session'/);
-});
-
-test('rejects --apphost embedded in another argument', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--prefix--apphost', appHostPath],
-            appHostPath),
-        /Expected exact '--apphost'/);
-});
-
-test('rejects an AppHost path embedded in another argument', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--apphost', `${appHostPath}.backup`],
-            appHostPath),
-        /Expected exact --apphost path/);
-});
-
-test('requires the AppHost path immediately after --apphost', () => {
-    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
-
-    assert.throws(
-        () => assertLinkedAppHostCliLaunch(
-            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--apphost', '--other', appHostPath],
-            appHostPath),
-        /Expected exact --apphost path/);
-});
 
 suite('Aspire AppHost lifecycle language model tools E2E', function () {
     this.timeout(900000);
@@ -368,7 +301,6 @@ suite('Aspire AppHost lifecycle language model tools E2E', function () {
             assert.ok(cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process: ${JSON.stringify(processInfoStatus)}`);
 
             const cliProcess = await waitForLinkedAppHostCliProcess(cliPid, fixture.appHostPath, 180000);
-            assertLinkedAppHostCliLaunch(cliProcess.arguments, fixture.appHostPath);
             const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
 
             const runningState = readStateFile();
@@ -575,7 +507,7 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
     while (Date.now() - started < timeoutMs) {
         const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            assertLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath);
+            assertLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath());
             return cliProcess;
         }
 
@@ -583,38 +515,6 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire CLI process ${cliPid} to launch ${appHostPath}.`);
-}
-
-function assertLinkedAppHostCliLaunch(
-    argumentsList: readonly string[],
-    appHostPath: string,
-    cliPath = getCliPath(),
-    platform = process.platform
-): void {
-    const formattedArguments = JSON.stringify(argumentsList);
-    assert.ok(
-        argumentsList.length > 0 && commandLineArgumentEquals(argumentsList[0], cliPath, platform),
-        `Expected the current E2E CLI '${cliPath}' as argv[0] in: ${formattedArguments}`);
-
-    const runIndex = argumentsList.indexOf('run', 1);
-    assert.ok(runIndex > 0, `Expected exact 'run' after the CLI path in: ${formattedArguments}`);
-
-    const isolatedIndex = argumentsList.indexOf('--isolated', runIndex + 1);
-    assert.ok(isolatedIndex > runIndex, `Expected exact '--isolated' after 'run' in: ${formattedArguments}`);
-    assert.strictEqual(
-        argumentsList.some(argument => argument === '--isolated=false') || argumentsList[isolatedIndex + 1]?.toLowerCase() === 'false',
-        false,
-        `Expected inferred isolation to use only the true-form --isolated switch: ${formattedArguments}`);
-
-    const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session', isolatedIndex + 1);
-    assert.ok(startDebugSessionIndex > isolatedIndex, `Expected exact '--start-debug-session' after '--isolated' in: ${formattedArguments}`);
-
-    const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
-    assert.ok(appHostIndex > startDebugSessionIndex, `Expected exact '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
-    assert.ok(
-        appHostIndex + 1 < argumentsList.length &&
-        commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),
-        `Expected exact --apphost path '${appHostPath}' immediately after '--apphost' in: ${formattedArguments}`);
 }
 
 async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: number): Promise<ExtensionSpawnLog> {

@@ -8,7 +8,9 @@ import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 
 const configInfoTimeoutMs = 30_000;
-const cliOptionProbeTimeoutMs = 30_000;
+const cliVersionProbeTimeoutMs = 30_000;
+const maxCliVersionOutputLength = 128;
+const cliVersionPattern = /^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -48,13 +50,13 @@ interface ConfigInfoOptions {
     forceRefresh?: boolean;
     cliPath?: string;
     cancellationToken?: vscode.CancellationToken;
+    minimumVersion?: string;
 }
 
-interface InFlightCliOptionProbe {
-    readonly promise: Promise<CapabilityStatus>;
-    readonly cancellationSource: vscode.CancellationTokenSource;
-    callerCount: number;
-    completed: boolean;
+interface CliVersion {
+    major: number;
+    minor: number;
+    patch: number;
 }
 
 /**
@@ -68,15 +70,14 @@ interface InFlightCliOptionProbe {
  * capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that can't
  * answer, or a transient spawn error, should be retried on the next call.
  *
- * Exact-CLI option probes are separately cached and shared by executable path plus argument list.
- * Only definitive exit-code results are cached so a failed spawn or timeout can recover on retry.
+ * Capability checks can fall back to a minimum CLI version when the token predates structured
+ * capability reporting. Version probes are intentionally not cached: an exact launch must observe
+ * an executable replaced in place rather than reusing stale support data.
  */
 export class ConfigInfoProvider {
     private readonly _cachedConfigInfoByCliPath = new Map<string, ConfigInfo>();
     private readonly _inFlightByCliPath = new Map<string, Promise<ConfigInfo | null>>();
     private readonly _probeGenerationByCliPath = new Map<string, number>();
-    private readonly _cachedCliOptionStatusByKey = new Map<string, Exclude<CapabilityStatus, 'unavailable'>>();
-    private readonly _inFlightCliOptionProbeByKey = new Map<string, InFlightCliOptionProbe>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
@@ -160,106 +161,48 @@ export class ConfigInfoProvider {
      * cases as unsupported.
      */
     async getCapabilityStatus(capability: string, options?: ConfigInfoOptions): Promise<CapabilityStatus> {
-        const configInfo = await this.getConfigInfo(options);
-        if (!configInfo) {
-            return 'unavailable';
-        }
-
-        return configInfo.capabilities?.includes(capability) ? 'supported' : 'unsupported';
-    }
-
-    /**
-     * Probes an exact Aspire CLI executable with the supplied arguments and classifies only its exit
-     * code. Output is intentionally ignored because help and error text may be localized.
-     */
-    async getCliOptionStatus(
-        cliPath: string,
-        args: readonly string[],
-        cancellationToken?: vscode.CancellationToken,
-    ): Promise<CapabilityStatus> {
-        if (cancellationToken?.isCancellationRequested) {
-            return 'unavailable';
-        }
-
-        const probeKey = JSON.stringify([cliPath, args]);
-        const cachedStatus = this._cachedCliOptionStatusByKey.get(probeKey);
-        if (cachedStatus) {
-            return cachedStatus;
-        }
-
-        let probe = this._inFlightCliOptionProbeByKey.get(probeKey);
-        if (!probe) {
-            probe = this._startCliOptionProbe(probeKey, cliPath, [...args]);
-        }
-
-        return await this._awaitCliOptionProbe(probe, cancellationToken);
-    }
-
-    private _startCliOptionProbe(probeKey: string, cliPath: string, args: string[]): InFlightCliOptionProbe {
-        const cancellationSource = new vscode.CancellationTokenSource();
-        let probe!: InFlightCliOptionProbe;
-        const promise = this._fetchCliOptionStatus(cliPath, args, cancellationSource.token)
-            .then(status => {
-                if (status !== 'unavailable') {
-                    this._cachedCliOptionStatusByKey.set(probeKey, status);
-                }
-                return status;
-            })
-            .finally(() => {
-                probe.completed = true;
-                if (this._inFlightCliOptionProbeByKey.get(probeKey) === probe) {
-                    this._inFlightCliOptionProbeByKey.delete(probeKey);
-                }
-                cancellationSource.dispose();
-            });
-        probe = {
-            promise,
-            cancellationSource,
-            callerCount: 0,
-            completed: false,
-        };
-        this._inFlightCliOptionProbeByKey.set(probeKey, probe);
-        return probe;
-    }
-
-    private async _awaitCliOptionProbe(
-        probe: InFlightCliOptionProbe,
-        cancellationToken?: vscode.CancellationToken,
-    ): Promise<CapabilityStatus> {
-        probe.callerCount++;
-        let callerCancelled = false;
-        let cancellation: vscode.Disposable | undefined;
-        const callerCompletion = new Promise<CapabilityStatus>(resolve => {
-            cancellation = cancellationToken?.onCancellationRequested(() => {
-                callerCancelled = true;
-                resolve('unavailable');
-            });
-        });
-
-        try {
-            return cancellationToken
-                ? await Promise.race([probe.promise, callerCompletion])
-                : await probe.promise;
-        }
-        finally {
-            cancellation?.dispose();
-            probe.callerCount--;
-            // Shared probes follow the same convention as config-info probes: cancelling one
-            // subscriber does not disrupt another, but the process is terminated once nobody
-            // is waiting for it.
-            if (callerCancelled && probe.callerCount === 0 && !probe.completed) {
-                probe.cancellationSource.cancel();
+        if (!options?.minimumVersion) {
+            const configInfo = await this.getConfigInfo(options);
+            if (!configInfo) {
+                return 'unavailable';
             }
+
+            return configInfo.capabilities?.includes(capability) ? 'supported' : 'unsupported';
         }
+
+        const minimumVersion = parseCliVersion(options.minimumVersion);
+        if (!minimumVersion) {
+            extensionLogOutputChannel.warn(`Unable to probe Aspire CLI capability '${capability}': invalid minimum version '${options.minimumVersion}'.`);
+            return 'unavailable';
+        }
+
+        const suppressErrors = options.suppressErrors ?? false;
+        const cliPath = options.cliPath ?? await this._resolveCliPath(suppressErrors, options.cancellationToken);
+        if (!cliPath || options.cancellationToken?.isCancellationRequested) {
+            return 'unavailable';
+        }
+
+        const configInfo = await this.getConfigInfo({ ...options, cliPath });
+        if (configInfo?.capabilities?.includes(capability)) {
+            return 'supported';
+        }
+
+        if (options.cancellationToken?.isCancellationRequested) {
+            return 'unavailable';
+        }
+
+        return await this._getCliMinimumVersionStatus(cliPath, minimumVersion, options.cancellationToken);
     }
 
-    private _fetchCliOptionStatus(
+    private _getCliMinimumVersionStatus(
         cliPath: string,
-        args: string[],
-        cancellationToken: vscode.CancellationToken,
+        minimumVersion: CliVersion,
+        cancellationToken?: vscode.CancellationToken,
     ): Promise<CapabilityStatus> {
         return new Promise<CapabilityStatus>((resolve) => {
             let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let output = '';
+            let outputTooLong = false;
             let settled = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
             let cancellation: vscode.Disposable | undefined;
@@ -280,10 +223,10 @@ export class ConfigInfoProvider {
                     return;
                 }
 
-                extensionLogOutputChannel.warn(`Unable to probe Aspire CLI option support: ${String(error)}`);
+                extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: ${String(error)}`);
                 settle('unavailable');
             };
-            if (cancellationToken.isCancellationRequested) {
+            if (cancellationToken?.isCancellationRequested) {
                 settle('unavailable');
                 return;
             }
@@ -291,20 +234,38 @@ export class ConfigInfoProvider {
             timeout = setTimeout(() => {
                 settle('unavailable');
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'timed-out Aspire CLI option probe');
+                    terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe');
                 }
-            }, cliOptionProbeTimeoutMs);
-            cancellation = cancellationToken.onCancellationRequested(() => {
+            }, cliVersionProbeTimeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => {
                 settle('unavailable');
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'cancelled Aspire CLI option probe');
+                    terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe');
                 }
             });
 
             try {
-                childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, ['--version'], {
                     createProcessGroup: true,
-                    exitCallback: code => settle(code === 0 ? 'supported' : code === null ? 'unavailable' : 'unsupported'),
+                    stdoutCallback: value => {
+                        if (output.length + value.length > maxCliVersionOutputLength) {
+                            outputTooLong = true;
+                            return;
+                        }
+
+                        output += value;
+                    },
+                    exitCallback: code => {
+                        if (code !== 0 || outputTooLong) {
+                            settle('unavailable');
+                            return;
+                        }
+
+                        const version = parseCliVersion(output);
+                        settle(version
+                            ? compareCliVersions(version, minimumVersion) >= 0 ? 'supported' : 'unsupported'
+                            : 'unavailable');
+                    },
                     errorCallback: reportUnavailable,
                     noExtensionVariables: true,
                 });
@@ -552,6 +513,34 @@ export class ConfigInfoProvider {
             vscode.window.showErrorMessage(message);
         }
     }
+}
+
+function parseCliVersion(value: string): CliVersion | undefined {
+    // `aspire --version` emits a bare semver-like value, for example:
+    //   13.2.0
+    //   13.2.0-preview.1.12345.6+abcdef
+    // Only the bounded numeric core participates in comparison; any other output is unavailable.
+    const normalized = value.trim();
+    if (normalized.length === 0 || normalized.length > maxCliVersionOutputLength) {
+        return undefined;
+    }
+
+    const match = cliVersionPattern.exec(normalized);
+    if (!match) {
+        return undefined;
+    }
+
+    return {
+        major: Number.parseInt(match[1], 10),
+        minor: Number.parseInt(match[2], 10),
+        patch: Number.parseInt(match[3], 10),
+    };
+}
+
+function compareCliVersions(left: CliVersion, right: CliVersion): number {
+    return left.major - right.major ||
+        left.minor - right.minor ||
+        left.patch - right.patch;
 }
 
 export function parseConfigInfoOutput(output: string): ConfigInfo {

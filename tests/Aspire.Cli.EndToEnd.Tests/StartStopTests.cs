@@ -446,12 +446,20 @@ print("{{assertionSuccessMarker}}")
             counter,
             TimeSpan.FromMinutes(3));
 
-        // Docker network deletion is asynchronous after the last DCP process exits.
+        // Docker network deletion is asynchronous after the last DCP process exits. Require five
+        // consecutive empty samples so a briefly empty list cannot let teardown race a late network
+        // creation. Capture `docker network ls` before testing its output so command failure cannot
+        // be mistaken for an empty list. Keep the command compact because the retry helper locates
+        // output relative to the command row, which a wrapped Hex1b command obscures.
+        var quotedProjectName = AspireCliShellCommandHelpers.QuoteBashArg(projectName);
         await auto.ExecuteCommandUntilOutputAsync(
             counter,
-            $"docker network ls --format '{{{{.Name}}}}' | grep -i -F -- {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} | wc -l",
-            "0",
-            timeout: TimeSpan.FromMinutes(5));
+            "for i in {1..5};do " +
+            $"n=$(docker network ls -q -f name={quotedProjectName})||exit 2;" +
+            "[ -z \"$n\" ]||exit 1;sleep 1;done;echo stable-empty",
+            "stable-empty",
+            timeout: TimeSpan.FromMinutes(5),
+            retryInterval: TimeSpan.FromSeconds(8));
     }
 
     private static IReadOnlyList<RunningAppHostInfo> ReadRunningAppHosts(string path)

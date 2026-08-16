@@ -128,7 +128,6 @@ function createHarness(opts: {
     const repository = new AppHostDataRepository(terminalProvider);
     const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
-        getCliOptionStatus: async () => 'supported',
     }));
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);

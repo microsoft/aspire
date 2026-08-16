@@ -59,7 +59,6 @@ function makeAppHost(overrides: Partial<AppHostDisplayInfo> = {}): AppHostDispla
 function makeLaunchService(): AppHostLaunchService {
     return new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
-        getCliOptionStatus: async () => 'supported',
     });
 }
 

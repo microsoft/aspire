@@ -43,12 +43,6 @@ export async function listProcessEntries(commandLineHint?: string): Promise<Proc
         : entries.filter(entry => entry.arguments.includes(commandLineHint));
 }
 
-export function commandLineArgumentEquals(actual: string, expected: string, platform = process.platform): boolean {
-    return platform === 'win32'
-        ? actual.toLowerCase() === expected.toLowerCase()
-        : actual === expected;
-}
-
 function listLinuxProcessEntries(commandLineHint: string | undefined): ProcessEntry[] {
     return fs.readdirSync('/proc', { withFileTypes: true })
         .filter(entry => entry.isDirectory() && /^\d+$/.test(entry.name))

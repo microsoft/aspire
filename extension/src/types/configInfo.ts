@@ -60,3 +60,8 @@ export const lsJsonStreamCapability = 'ls-json-stream.v1';
  * Keep in sync with `KnownCapabilities.IsolatedLaunch` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const isolatedLaunchCapability = 'isolated-launch.v1';
+
+/**
+ * First Aspire CLI version that accepts `aspire run --isolated`.
+ */
+export const isolatedLaunchMinimumVersion = '13.2.0';
