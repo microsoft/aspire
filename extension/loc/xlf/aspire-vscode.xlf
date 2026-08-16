@@ -805,6 +805,12 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationModeNotSupported">
+      <source xml:lang="en">The selected Aspire CLI does not support the requested isolation mode.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationCapabilityCouldNotBeVerified">
+      <source xml:lang="en">The selected Aspire CLI isolation capability could not be verified.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchAlreadyClaimed">
       <source xml:lang="en">This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.</source>
     </trans-unit>

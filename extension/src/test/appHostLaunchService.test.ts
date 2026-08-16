@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
 import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
+import * as locStrings from '../loc/strings';
 import { appHostLifecycleBusy } from '../loc/strings';
 import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchCapabilityProvider, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
@@ -396,6 +397,9 @@ suite('AppHostLaunchService', () => {
         capabilityProvider.capabilityStatus = 'unsupported';
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+        const message = (locStrings as Record<string, unknown>).appHostLifecycleIsolationModeNotSupported;
+
+        assert.strictEqual(message, 'The selected Aspire CLI does not support the requested isolation mode.');
 
         await assert.rejects(
             service.launchFromLifecycleOwner(
@@ -404,7 +408,10 @@ suite('AppHostLaunchService', () => {
                 true,
                 true,
                 new vscode.CancellationTokenSource().token),
-            /isolation/i);
+            (error: Error) => {
+                assert.strictEqual(error.message, message);
+                return true;
+            });
 
         assert.strictEqual(startDebuggingStub.called, false);
     });
@@ -415,6 +422,9 @@ suite('AppHostLaunchService', () => {
         fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
         writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
         const appHostPath = path.join(directory, 'AppHost.csproj');
+        const message = (locStrings as Record<string, unknown>).appHostLifecycleIsolationCapabilityCouldNotBeVerified;
+
+        assert.strictEqual(message, 'The selected Aspire CLI isolation capability could not be verified.');
 
         for (const isolated of [true, false, undefined]) {
             assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
@@ -425,7 +435,10 @@ suite('AppHostLaunchService', () => {
                     true,
                     isolated,
                     new vscode.CancellationTokenSource().token),
-                /isolation/i);
+                (error: Error) => {
+                    assert.strictEqual(error.message, message);
+                    return true;
+                });
         }
 
         assert.strictEqual(startDebuggingStub.called, false);

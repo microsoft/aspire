@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { startDebuggingDeclined } from '../loc/strings';
+import { appHostLifecycleIsolationCapabilityCouldNotBeVerified, appHostLifecycleIsolationModeNotSupported, startDebuggingDeclined } from '../loc/strings';
 import { ensureIsolatedCliArg, getRootIsolatedCliArg, isLinkedGitWorktree } from '../utils/gitWorktree';
 import { compareAppHostIdentity, getAppHostIdentityKeyInfo, isAppHostPathWithinDirectory, type AppHostIdentityKeyInfo, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
@@ -674,8 +674,8 @@ export class AppHostLaunchService implements vscode.Disposable {
             (supportStatus === 'unavailable' && (effective || (isolated === false && inferredIsolation)));
         if (mustFailSafely) {
             const reason = supportStatus === 'unsupported'
-                ? 'The selected Aspire CLI does not support the requested isolation mode.'
-                : 'The selected Aspire CLI isolation capability could not be verified.';
+                ? appHostLifecycleIsolationModeNotSupported
+                : appHostLifecycleIsolationCapabilityCouldNotBeVerified;
             throw new Error(reason);
         }
 

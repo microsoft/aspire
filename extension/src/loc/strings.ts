@@ -271,4 +271,6 @@ export const appHostLifecycleStopInvocationMessage = (appHostPath: string) => vs
 export const appHostLifecycleUnspecifiedMode = vscode.l10n.t('unspecified');
 export const appHostLifecycleUnresolvedPath = vscode.l10n.t('an unresolved path');
 export const appHostLifecycleBusy = vscode.l10n.t('Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.');
+export const appHostLifecycleIsolationModeNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested isolation mode.');
+export const appHostLifecycleIsolationCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI isolation capability could not be verified.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
