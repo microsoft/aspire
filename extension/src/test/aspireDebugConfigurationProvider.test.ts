@@ -18,8 +18,12 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
     readonly reserved: string[] = [];
     readonly directoryScoped: string[] = [];
     readonly replacements: { previousAppHostPath: string; previousReservationId: string; appHostPath: string }[] = [];
+    readonly released: { appHostPath: string; reservationId: string }[] = [];
+    readonly prepared: { appHostPath: string; command: string; args: string[] | undefined; cliPath: string | undefined }[] = [];
     /** When set, the claim is refused as if a lifecycle-owned launch already held it. */
     claimedByLifecycle = false;
+    preparedArgs: string[] | undefined;
+    preparationError: Error | undefined;
 
     tryReserveExternalLaunch(appHostPath: string, isDirectoryScope = false): string | false {
         this.reserved.push(appHostPath);
@@ -33,17 +37,53 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         this.replacements.push({ previousAppHostPath, previousReservationId, appHostPath });
         return this.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
     }
+
+    releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void {
+        this.released.push({ appHostPath, reservationId });
+    }
+
+    async prepareLaunchArguments(
+        appHostPath: string,
+        command: string,
+        args: string[] | undefined,
+        token: vscode.CancellationToken,
+        cliPath?: string,
+    ): Promise<{ args: string[] | undefined }> {
+        this.prepared.push({
+            appHostPath,
+            command,
+            args: args ? [...args] : undefined,
+            cliPath,
+        });
+
+        if (token.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+        if (this.preparationError) {
+            throw this.preparationError;
+        }
+
+        return { args: this.preparedArgs ?? args };
+    }
 }
 
 suite('AspireDebugConfigurationProvider', () => {
     let tempDir: string;
     let sandbox: sinon.SinonSandbox;
     let launchReservation: RecordingLaunchReservation;
+    let resolveCliPathStub: sinon.SinonStub;
+    let tryExecuteCliStub: sinon.SinonStub;
 
     setup(() => {
         sandbox = sinon.createSandbox();
         launchReservation = new RecordingLaunchReservation();
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-debug-configuration-provider-'));
+        resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/resolved/aspire',
+            available: true,
+            source: 'configured',
+        });
+        tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
     });
 
     teardown(() => {
@@ -292,9 +332,33 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.deepStrictEqual(launchReservation.reserved, []);
     });
 
-    test('does not trust a launch.json pinned CLI path', async () => {
+    test('does not preserve a launch.json reservation ID after phase one trusts the resolved CLI', async () => {
         const appHostPath = path.join(tempDir, 'AppHost.csproj');
         fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const input: vscode.DebugConfiguration = {
+            name: 'Publish AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'publish',
+            program: appHostPath,
+            [appHostLaunchReservationIdConfigKey]: 'forged-reservation',
+        };
+
+        const phaseOne = await provider.resolveDebugConfiguration(undefined, input);
+        const phaseTwo = phaseOne
+            ? await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, phaseOne)
+            : undefined;
+
+        assert.strictEqual(phaseTwo?.[appHostLaunchReservationIdConfigKey], undefined);
+        assert.strictEqual(phaseTwo?.[appHostCliPathConfigKey], '/resolved/aspire');
+        assert.deepStrictEqual(launchReservation.reserved, []);
+    });
+
+    test('uses the resolved CLI path when a launch.json pinned CLI path is untrusted', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        launchReservation.preparedArgs = ['--isolated'];
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
 
         const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
@@ -305,7 +369,14 @@ suite('AspireDebugConfigurationProvider', () => {
             [appHostCliPathConfigKey]: '/forged/aspire',
         });
 
-        assert.strictEqual(config?.[appHostCliPathConfigKey], undefined);
+        assert.strictEqual(config?.[appHostCliPathConfigKey], '/resolved/aspire');
+        assert.deepStrictEqual(config?.args, ['--isolated']);
+        assert.deepStrictEqual(launchReservation.prepared, [{
+            appHostPath,
+            command: 'run',
+            args: undefined,
+            cliPath: '/resolved/aspire',
+        }]);
     });
 
     test('preserves the launch service pinned CLI path', async () => {
@@ -324,6 +395,33 @@ suite('AspireDebugConfigurationProvider', () => {
         const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, input);
 
         assert.strictEqual(config?.[appHostCliPathConfigKey], '/selected/aspire');
+    });
+
+    test('uses the trusted pinned CLI path when preparing run arguments', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        launchReservation.preparedArgs = ['--isolated'];
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const input = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            [appHostCliPathConfigKey]: '/trusted/aspire',
+        };
+        markAspireDebugConfigurationCliPathAsTrusted(input);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, input);
+
+        assert.strictEqual(config?.[appHostCliPathConfigKey], '/trusted/aspire');
+        assert.deepStrictEqual(config?.args, ['--isolated']);
+        assert.deepStrictEqual(launchReservation.prepared, [{
+            appHostPath,
+            command: 'run',
+            args: undefined,
+            cliPath: '/trusted/aspire',
+        }]);
+        assert.strictEqual(resolveCliPathStub.called, false);
     });
 
     test('reuses one reservation across repeated resolver passes for an external launch', async () => {
@@ -345,6 +443,53 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.deepStrictEqual(launchReservation.reserved, [appHostPath]);
         assert.strictEqual(firstPass?.[appHostLaunchReservationIdConfigKey], 'reservation-1');
         assert.strictEqual(secondPass?.[appHostLaunchReservationIdConfigKey], 'reservation-1');
+    });
+
+    test('releases the repeated-pass reservation when argument preparation fails', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+        });
+        assert.ok(firstPass);
+        launchReservation.preparationError = new Error('preparation failed');
+
+        await assert.rejects(
+            provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, firstPass),
+            /preparation failed/);
+
+        assert.deepStrictEqual(launchReservation.released, [{
+            appHostPath,
+            reservationId: 'reservation-1',
+        }]);
+    });
+
+    test('releases the repeated-pass reservation when argument preparation is canceled', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+        });
+        assert.ok(firstPass);
+        const cancellation = new vscode.CancellationTokenSource();
+        cancellation.cancel();
+
+        await assert.rejects(
+            provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, firstPass, cancellation.token),
+            error => error instanceof vscode.CancellationError);
+
+        assert.deepStrictEqual(launchReservation.released, [{
+            appHostPath,
+            reservationId: 'reservation-1',
+        }]);
     });
 
     test('reuses one reservation when repeated resolver passes use equivalent AppHost paths', async () => {
@@ -692,7 +837,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
     test('resolveDebugConfiguration keeps skip flag through repeated resolver calls after launch service already checked CLI', async () => {
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
-        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
         const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
 
         const initialConfig = {
@@ -717,12 +862,12 @@ suite('AspireDebugConfigurationProvider', () => {
 
     test('resolveDebugConfiguration validates the exact trusted CLI pinned for restart', async () => {
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
-        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+        resolveCliPathStub.resolves({
             cliPath: '/current/aspire',
             available: true,
             source: 'configured',
         });
-        const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+        tryExecuteCliStub.resolves(true);
         const config = {
             name: 'Debug AppHost',
             type: 'aspire',
@@ -741,12 +886,12 @@ suite('AspireDebugConfigurationProvider', () => {
 
     test('resolveDebugConfiguration aborts restart when its trusted pinned CLI is unavailable', async () => {
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
-        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+        resolveCliPathStub.resolves({
             cliPath: '/current/aspire',
             available: true,
             source: 'configured',
         });
-        const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(false);
+        tryExecuteCliStub.resolves(false);
         sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         const config = {
             name: 'Debug AppHost',

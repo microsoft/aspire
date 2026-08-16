@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
 import { startDebuggingDeclined } from '../loc/strings';
-import { ensureIsolatedCliArg, isLinkedGitWorktree } from '../utils/gitWorktree';
+import { ensureIsolatedCliArg, getRootIsolatedCliArg, isLinkedGitWorktree } from '../utils/gitWorktree';
 import { compareAppHostIdentity, getAppHostIdentityKeyInfo, isAppHostPathWithinDirectory, type AppHostIdentityKeyInfo, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -29,6 +29,11 @@ export interface AppHostLaunchCapabilityProvider {
 export interface AppHostLaunchIsolation {
     readonly effective: boolean;
     readonly option: boolean | undefined;
+}
+
+export interface PreparedAppHostLaunchArguments {
+    readonly args: string[] | undefined;
+    readonly isolation: AppHostLaunchIsolation;
 }
 
 function isAspireCommandType(value: unknown): value is AspireCommandType {
@@ -506,6 +511,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         return this._reservations.replaceExternalLaunchReservation(previousAppHostPath, previousReservationId, appHostPath, isDirectoryScope);
     }
 
+    releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void {
+        this._reservations.clearMatchingLaunching(appHostPath, reservationId);
+    }
+
     private hasActiveLifecycleOperationWithinDirectory(directoryPath: string): boolean {
         return Array.from(this._lifecycleLockPathKeys.values())
             .some(activePathKeys => Array.from(activePathKeys)
@@ -593,6 +602,34 @@ export class AppHostLaunchService implements vscode.Disposable {
             this._pendingRunPathByToken.delete(launchToken);
             throw error;
         }
+    }
+
+    /**
+     * Computes the root Aspire CLI args for a launch without reserving or starting anything.
+     *
+     * The launch.json/F5 resolver reuses this so it can negotiate isolation with the exact
+     * CLI it already selected, rather than recursing back through `startDebugging`.
+     */
+    async prepareLaunchArguments(
+        appHostPath: string,
+        command: AspireCommandType,
+        args: string[] | undefined,
+        token: vscode.CancellationToken,
+        cliPath?: string,
+        isolated: boolean | undefined = getRootIsolatedCliArg(args),
+    ): Promise<PreparedAppHostLaunchArguments> {
+        if (command !== 'run') {
+            return {
+                args,
+                isolation: { effective: false, option: undefined },
+            };
+        }
+
+        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath);
+        return {
+            args: ensureIsolatedCliArg(args, launchIsolation.option),
+            isolation: launchIsolation,
+        };
     }
 
     /**
@@ -729,9 +766,8 @@ export class AppHostLaunchService implements vscode.Disposable {
         });
         abortIfCancelled();
         if (executionSuppressed) {
-            const launchIsolation = command === 'run'
-                ? await releaseReservationOnFailure(() => this.resolveLaunchIsolation(appHostPath, isolated, token))
-                : { effective: false, option: undefined };
+            const launchPreparation = await releaseReservationOnFailure(
+                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, isolated));
             this.clearMatchingLaunching(appHostPath, reservationId);
             sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
@@ -739,7 +775,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             }, {
                 duration_ms: Date.now() - startTime,
             });
-            return launchIsolation;
+            return launchPreparation.isolation;
         }
 
         try {
@@ -750,14 +786,19 @@ export class AppHostLaunchService implements vscode.Disposable {
             throwIfCancelled(token);
             config.skipCliAvailabilityCheck = true;
             config[appHostCliPathConfigKey] = cliAvailability.cliPath;
-            const launchIsolation = command === 'run'
-                ? await this.resolveLaunchIsolation(appHostPath, isolated, token, cliAvailability.cliPath)
-                : { effective: false, option: undefined };
-            const isolatedArgs = ensureIsolatedCliArg(config.args, launchIsolation.option);
-            if (isolatedArgs) {
-                config.args = isolatedArgs;
+            const launchPreparation = await this.prepareLaunchArguments(
+                appHostPath,
+                command,
+                config.args,
+                token,
+                cliAvailability.cliPath,
+                isolated);
+            if (launchPreparation.args === undefined) {
+                delete config.args;
             }
-
+            else {
+                config.args = launchPreparation.args;
+            }
             const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
                 // A false result means VS Code declined the launch before the
@@ -775,7 +816,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             }, {
                 duration_ms: Date.now() - startTime,
             });
-            return launchIsolation;
+            return launchPreparation.isolation;
         } catch (err) {
             this._pendingRunPathByToken.delete(launchToken);
             this.clearMatchingLaunching(appHostPath, reservationId);

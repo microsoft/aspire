@@ -61,14 +61,40 @@ export function resolveIsolated(explicit: boolean | undefined, startPath: string
     return explicit ?? isLinkedGitWorktree(startPath);
 }
 
+/**
+ * Reads the root Aspire CLI `--isolated` option, ignoring any AppHost-owned args after
+ * the first `--` separator. `aspire run -- --isolated false` forwards `--isolated false`
+ * to the AppHost itself, so counting those entries as root options would stop the
+ * extension from adding the launch isolation the linked-worktree path still needs.
+ */
+export function getRootIsolatedCliArg(args: readonly string[] | undefined): boolean | undefined {
+    if (!args) {
+        return undefined;
+    }
+
+    const beforeSeparator = getArgsBeforeAppSeparator(args);
+    for (let i = 0; i < beforeSeparator.length; i++) {
+        const current = beforeSeparator[i];
+        if (current === '--isolated') {
+            return beforeSeparator[i + 1]?.toLowerCase() === 'false' ? false : true;
+        }
+
+        if (current.startsWith('--isolated=')) {
+            return current.slice('--isolated='.length).toLowerCase() === 'false' ? false : true;
+        }
+    }
+
+    return undefined;
+}
+
 export function ensureIsolatedCliArg(args: string[] | undefined, isolated: boolean | undefined): string[] | undefined {
     if (isolated === undefined) {
-        return args;
+        return removeRootIsolatedCliArgs(args);
     }
 
     const existing = args ?? [];
     const separatorIndex = existing.indexOf('--');
-    const beforeSeparator = separatorIndex === -1 ? existing : existing.slice(0, separatorIndex);
+    const beforeSeparator = getArgsBeforeAppSeparator(existing);
     if (beforeSeparator.some(arg => arg === '--isolated' || arg.startsWith('--isolated='))) {
         return args;
     }
@@ -79,6 +105,46 @@ export function ensureIsolatedCliArg(args: string[] | undefined, isolated: boole
     }
 
     return [...beforeSeparator, ...isolationArgs, ...existing.slice(separatorIndex)];
+}
+
+function removeRootIsolatedCliArgs(args: string[] | undefined): string[] | undefined {
+    if (!args) {
+        return undefined;
+    }
+
+    const separatorIndex = args.indexOf('--');
+    const beforeSeparator = getArgsBeforeAppSeparator(args);
+    const filtered: string[] = [];
+    let changed = false;
+    for (let i = 0; i < beforeSeparator.length; i++) {
+        const current = beforeSeparator[i];
+        if (current === '--isolated') {
+            changed = true;
+            const value = beforeSeparator[i + 1]?.toLowerCase();
+            if (value === 'true' || value === 'false') {
+                i++;
+            }
+        }
+        else if (current.startsWith('--isolated=')) {
+            changed = true;
+        }
+        else {
+            filtered.push(current);
+        }
+    }
+
+    if (!changed) {
+        return args;
+    }
+
+    return separatorIndex === -1
+        ? filtered
+        : [...filtered, ...args.slice(separatorIndex)];
+}
+
+function getArgsBeforeAppSeparator(args: readonly string[]): readonly string[] {
+    const separatorIndex = args.indexOf('--');
+    return separatorIndex === -1 ? args : args.slice(0, separatorIndex);
 }
 
 function getWalkStartDirectory(startPath: string): string {

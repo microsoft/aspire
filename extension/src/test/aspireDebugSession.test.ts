@@ -3506,6 +3506,12 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             replaceExternalLaunchReservation: () => {
                 throw new Error('The restart should acquire a fresh reservation.');
             },
+            releaseExternalLaunchReservation: () => {
+                throw new Error('The successful restart should keep its reservation.');
+            },
+            prepareLaunchArguments: async (_appHostPath: string, _command: string, args: string[] | undefined) => ({
+                args,
+            }),
         });
         const checkedConfig = await provider.resolveDebugConfiguration(undefined, restartedConfig);
         assert.strictEqual(checkedConfig, restartedConfig);

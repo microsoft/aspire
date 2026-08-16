@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName } from '../loc/strings';
-import type { AspireExtendedDebugConfiguration } from '../dcp/types';
+import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity } from '../utils/appHostIdentity';
@@ -21,6 +21,16 @@ export interface ExternalLaunchReservation {
     tryReserveExternalLaunch(appHostPath: string, isDirectoryScope?: boolean): string | false;
     /** Replaces this resolver's previous reservation, or returns `false` when the new AppHost is already owned. */
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
+    /** Releases the reservation only when the path and reservation ID still identify the same launch. */
+    releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void;
+    /** Prepares root Aspire CLI args for the exact executable that will handle this launch. */
+    prepareLaunchArguments(
+        appHostPath: string,
+        command: AspireCommandType,
+        args: string[] | undefined,
+        token: vscode.CancellationToken,
+        cliPath?: string,
+    ): Promise<{ args: string[] | undefined }>;
 }
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
@@ -62,10 +72,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
         if (!aspireConfig.skipCliAvailabilityCheck) {
-            const result = await checkCliAvailableOrRedirect(
-                'debug_gate',
-                getAspireDebugConfigurationTrustedCliPath(config));
-            if (!result.available) {
+            if (!(await this.validateAndTrustCliPath(config))) {
                 return undefined; // Cancel the debug session
             }
         }
@@ -121,9 +128,11 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 existingExternalReservation.reservationId,
                 existingExternalReservation.appHostPath,
                 existingExternalReservation.isDirectoryScope);
+        }
+        if (existingExternalReservation) {
             configRecord[appHostLaunchReservationIdConfigKey] = existingExternalReservation.reservationId;
         }
-        else {
+        else if (!launchedByExtension) {
             delete configRecord[appHostLaunchReservationIdConfigKey];
         }
         if (!launchedByExtension && !trustedCliPath) {
@@ -149,6 +158,43 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 delete config[appHostTelemetryTargetPathConfigKey];
             }
 
+            const command = getAspireDebugConfigurationCommand(aspireConfig);
+            const launchTargetPath = telemetryTarget?.path ?? (typeof config.program === 'string' ? config.program : undefined);
+            if (!launchedByExtension && command === 'run' && launchTargetPath) {
+                const cliPath = trustedCliPath ?? await this.validateAndTrustCliPath(config);
+                if (!cliPath) {
+                    return undefined;
+                }
+
+                const cancellationToken = token ?? {
+                    isCancellationRequested: false,
+                    onCancellationRequested: () => ({ dispose: () => { } }),
+                } as vscode.CancellationToken;
+                let prepared: Awaited<ReturnType<ExternalLaunchReservation['prepareLaunchArguments']>>;
+                try {
+                    prepared = await this._launchReservation.prepareLaunchArguments(
+                        launchTargetPath,
+                        command,
+                        Array.isArray(config.args) ? [...config.args] : undefined,
+                        cancellationToken,
+                        cliPath);
+                }
+                catch (error) {
+                    if (existingExternalReservation) {
+                        this._launchReservation.releaseExternalLaunchReservation(
+                            existingExternalReservation.appHostPath,
+                            existingExternalReservation.reservationId);
+                    }
+                    throw error;
+                }
+                if (prepared.args === undefined) {
+                    delete config.args;
+                }
+                else {
+                    config.args = prepared.args;
+                }
+            }
+
             // This is the last hook before VS Code creates the session, and it is the only
             // point a `launch.json`/F5 launch shares with the tool-driven path, which goes
             // through `AppHostLaunchService`. Claiming here is what stops an agent from
@@ -159,8 +205,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             // default `${workspaceFolder}` configuration deliberately leaves `program` as
             // the directory, and a directory is not the same identity as the AppHost inside
             // it, so claiming the directory would leave the tool free to start a duplicate.
-            if (!launchedByExtension && getAspireDebugConfigurationCommand(aspireConfig) === 'run') {
-                const claimedPath = telemetryTarget?.path ?? (typeof config.program === 'string' ? config.program : undefined);
+            if (!launchedByExtension && command === 'run') {
+                const claimedPath = launchTargetPath;
                 if (!claimedPath) {
                     return config;
                 }
@@ -258,5 +304,18 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 ? 'explicit-launch-configuration'
                 : 'default-discovery';
         }
+    }
+
+    private async validateAndTrustCliPath(config: vscode.DebugConfiguration): Promise<string | undefined> {
+        const result = await checkCliAvailableOrRedirect(
+            'debug_gate',
+            getAspireDebugConfigurationTrustedCliPath(config));
+        if (!result.available) {
+            return undefined;
+        }
+
+        config[appHostCliPathConfigKey] = result.cliPath;
+        markAspireDebugConfigurationCliPathAsTrusted(config);
+        return result.cliPath;
     }
 }

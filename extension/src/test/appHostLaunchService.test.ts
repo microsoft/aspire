@@ -82,6 +82,23 @@ class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
     }
 }
 
+interface LaunchArgumentPreparer {
+    prepareLaunchArguments(
+        appHostPath: string,
+        command: 'run' | 'deploy' | 'publish' | 'do',
+        args: string[] | undefined,
+        token: vscode.CancellationToken,
+        cliPath?: string,
+        isolated?: boolean,
+    ): Promise<{
+        args: string[] | undefined;
+        isolation: {
+            effective: boolean;
+            option: boolean | undefined;
+        };
+    }>;
+}
+
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
     let capabilityProvider: FakeCapabilityProvider;
@@ -184,6 +201,85 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('prepareLaunchArguments infers root isolation when only app args specify isolated', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        const cancellation = new vscode.CancellationTokenSource();
+
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            appHostPath,
+            'run',
+            ['--', '--isolated', 'false'],
+            cancellation.token,
+            '/path/bin/aspire');
+
+        assert.deepStrictEqual(prepared, {
+            args: ['--isolated', '--', '--isolated', 'false'],
+            isolation: { effective: true, option: true },
+        });
+        assert.deepStrictEqual(capabilityProvider.calls, [{
+            capability: isolatedLaunchCapability,
+            options: {
+                suppressErrors: true,
+                forceRefresh: true,
+                cliPath: '/path/bin/aspire',
+                cancellationToken: cancellation.token,
+                minimumVersion: '13.2.0',
+            },
+        }]);
+    });
+
+    test('prepareLaunchArguments preserves explicit root isolated false', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            appHostPath,
+            'run',
+            ['--isolated', 'false', '--', '--isolated'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire');
+
+        assert.deepStrictEqual(prepared, {
+            args: ['--isolated', 'false', '--', '--isolated'],
+            isolation: { effective: false, option: false },
+        });
+    });
+
+    test('older CLI external launch removes separate root isolation while preserving AppHost args', async () => {
+        capabilityProvider.capabilityStatus = 'unsupported';
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            ['--verbose', '--isolated', 'false', '--', '--isolated', 'false'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire');
+
+        assert.deepStrictEqual(prepared, {
+            args: ['--verbose', '--', '--isolated', 'false'],
+            isolation: { effective: false, option: undefined },
+        });
+    });
+
+    test('older CLI external launch removes equals root isolation while preserving AppHost args', async () => {
+        capabilityProvider.capabilityStatus = 'unsupported';
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            ['--isolated=false', '--', '--isolated=false'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire');
+
+        assert.deepStrictEqual(prepared, {
+            args: ['--', '--isolated=false'],
+            isolation: { effective: false, option: undefined },
+        });
     });
 
     test('non-authoritative isolation probes preserve explicit choices from stale capability data', async () => {
