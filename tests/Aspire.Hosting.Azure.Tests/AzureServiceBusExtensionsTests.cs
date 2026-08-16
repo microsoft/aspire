@@ -660,7 +660,8 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
 
         var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
-        Assert.IsType<SqlServerServerResource>(sql);
+        var sqlServer = Assert.IsType<SqlServerServerResource>(sql);
+        Assert.Equal("sb-sql-pwd", sqlServer.PasswordParameter.Name);
         var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal("mssql/server", imageAnnotation.Image);
 
@@ -756,7 +757,9 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
             .WithSqlServer(sql));
 
-        Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
+        Assert.Collection(
+            builder.Resources.OfType<SqlServerServerResource>(),
+            resource => Assert.Same(sql.Resource, resource));
         AssertWaitsForHealthy(serviceBus.Resource, sql.Resource);
 
         AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
@@ -821,7 +824,9 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
                     sql.Resource.Annotations.Remove(endpoint);
                 })));
 
-        Assert.Contains("must keep its 'tcp' endpoint", exception.Message);
+        Assert.Equal(
+            "The SQL Server resource for the Azure Service Bus emulator must keep its 'tcp' endpoint. Update the 'WithSqlServer' callback so it does not remove or rename the endpoint.",
+            exception.Message);
     }
 
     [Fact]
@@ -860,7 +865,29 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         // The superseded SQL Server resource is no longer waited for either.
         AssertWaitsForHealthy(serviceBus.Resource, sql2.Resource);
-        Assert.DoesNotContain(serviceBus.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Resource == sql1.Resource);
+        Assert.Collection(
+            serviceBus.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => Assert.Same(sql2.Resource, relationship.Resource));
+    }
+
+    [Fact]
+    public void WithSqlServer_CalledMultipleTimes_PreservesUserAuthoredWait()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql1 = builder.AddSqlServer("sql1");
+        var sql2 = builder.AddSqlServer("sql2");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WaitFor(sql1)
+            .WithSqlServer(sql1)
+            .WithSqlServer(sql2));
+
+        var waits = serviceBus.Resource.Annotations.OfType<WaitAnnotation>().ToArray();
+        Assert.Collection(
+            waits,
+            wait => Assert.Same(sql1.Resource, wait.Resource),
+            wait => Assert.Same(sql2.Resource, wait.Resource));
     }
 
     [Theory]
@@ -887,7 +914,9 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
                 }
             }));
 
-        Assert.Contains("cannot use both", exception.Message);
+        Assert.Equal(
+            "The Azure Service Bus emulator cannot use both an existing SQL Server resource and a customized built-in SQL Server resource. Remove either the 'WithSqlServer(sqlServer)' call or the 'WithSqlServer(configureSqlServer)' call.",
+            exception.Message);
     }
 
     [Theory]
@@ -912,7 +941,9 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
                 }
             }));
 
-        Assert.Contains("cannot use both", exception.Message);
+        Assert.Equal(
+            "The Azure Service Bus emulator cannot use both an existing SQL Server resource and a customized built-in SQL Server resource. Remove either the 'WithSqlServer(sqlServer)' call or the 'WithSqlServer(configureSqlServer)' call.",
+            exception.Message);
     }
 
     [Fact]
@@ -955,8 +986,6 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         return Assert.IsAssignableFrom<IResource>(annotation.SourceResource);
     }
 
-    // Simulates the orchestrator allocating the resource's 'tcp' endpoint on the container network,
-    // which is the network context the emulator resolves its SQL Server endpoint in.
     private static void AssertWaitsForHealthy(IResource resource, IResource dependency)
     {
         var wait = Assert.Single(resource.Annotations.OfType<WaitAnnotation>());
@@ -966,6 +995,8 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
     private static void AllocateContainerNetworkEndpoint(IResource resource, string address, int port)
     {
+        // Simulates the orchestrator allocating the resource's 'tcp' endpoint on the container network,
+        // which is the network context the emulator resolves its SQL Server endpoint in.
         var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");
         endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
             KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
