@@ -288,7 +288,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 await executeE2eControlCommand({ name: 'refreshAppHosts' });
                 await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
                 const discovered = await waitForSelectedWorkspaceAppHost(fixture.appHostPath);
-                assert.strictEqual(discovered.state.workspaceAppHostPath, fixture.appHostPath);
+                assert.ok(discovered.state.workspaceAppHostPath && isSamePath(discovered.state.workspaceAppHostPath, fixture.appHostPath));
 
                 const preparedStart = await invokeControlCommand<PreparedInvocation>({
                     name: 'prepareLanguageModelToolInvocation',
@@ -318,15 +318,15 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 await waitForDebugSessionStartup(fixture.appHostPath, 600000);
                 const processInfoStatus = await executeE2eControlCommand({ name: 'getDebugSessionProcessInfo', appHostPath: fixture.appHostPath });
                 const processInfo = processInfoStatus.result as { appHostPath?: string; cliPid?: number; appHostPid?: number };
-                assert.strictEqual(processInfo.appHostPath, fixture.appHostPath);
+                assert.ok(processInfo.appHostPath && isSamePath(processInfo.appHostPath, fixture.appHostPath));
                 assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process: ${JSON.stringify(processInfoStatus)}`);
 
                 const cliProcess = await waitForLinkedAppHostCliProcess(processInfo.cliPid, fixture.appHostPath, 180000);
                 const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
                 const runningState = readStateFile();
-                assert.strictEqual(runningState.state.workspaceAppHostPath, fixture.appHostPath);
+                assert.ok(runningState.state.workspaceAppHostPath && isSamePath(runningState.state.workspaceAppHostPath, fixture.appHostPath));
                 const activeDebugSession = runningState.state.debugSessions.find(session =>
-                    session.appHostPath === fixture?.appHostPath && session.startupCompleted);
+                    fixture && session.appHostPath && isSamePath(session.appHostPath, fixture.appHostPath) && session.startupCompleted);
                 assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath}.`);
 
                 Object.assign(artifact, {
@@ -444,7 +444,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
 
                     const processInfoStatus = await executeE2eControlCommand({ name: 'getDebugSessionProcessInfo', appHostPath: fixture.appHostPath });
                     const processInfo = processInfoStatus.result as { appHostPath?: string; cliPid?: number; appHostPid?: number };
-                    assert.strictEqual(processInfo.appHostPath, fixture.appHostPath);
+                    assert.ok(processInfo.appHostPath && isSamePath(processInfo.appHostPath, fixture.appHostPath));
                     assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process on pass ${pass}: ${JSON.stringify(processInfoStatus)}`);
 
                     const cliProcess = await waitForExactLinkedAppHostCliProcess(fixture.appHostPath, appHostArguments, 180000);
@@ -461,7 +461,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     fs.copyFileSync(argvEvidencePath, retainedArgvEvidencePath);
                     const runningState = readStateFile();
                     const activeDebugSession = runningState.state.debugSessions.find(session =>
-                        session.appHostPath === fixture?.appHostPath && session.startupCompleted);
+                        fixture && session.appHostPath && isSamePath(session.appHostPath, fixture.appHostPath) && session.startupCompleted);
                     assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath} on pass ${pass}.`);
 
                     passes.push({
