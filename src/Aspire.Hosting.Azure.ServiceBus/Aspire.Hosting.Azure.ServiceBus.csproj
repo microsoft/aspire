@@ -10,10 +10,12 @@
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" />
   </ItemGroup>
   
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.SqlServer\Aspire.Hosting.SqlServer.csproj" />
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.ServiceBus" />
   </ItemGroup>
