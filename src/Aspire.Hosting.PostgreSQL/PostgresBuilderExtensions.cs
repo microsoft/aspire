@@ -764,8 +764,29 @@ public static class PostgresBuilderExtensions
                         continue;
                     }
 
-                    await CreateDatabaseAsync(npgsqlConnection, database, serviceProvider, cancellationToken).ConfigureAwait(false);
-                    handled.Add(database.Name);
+                    var hasCustomCreationScript = database.Annotations.OfType<PostgresCreateDatabaseScriptAnnotation>().Any();
+                    if (hasCustomCreationScript)
+                    {
+                        // A connection reset makes the outcome ambiguous: PostgreSQL may have committed
+                        // the script before the client observed the failure. Mark custom scripts before
+                        // execution so the retry loop never repeats potentially non-idempotent SQL.
+                        handled.Add(database.Name);
+                    }
+
+                    try
+                    {
+                        await CreateDatabaseAsync(npgsqlConnection, database, serviceProvider, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (hasCustomCreationScript && IsTransientConnectionFailure(ex))
+                    {
+                        logger.LogError(ex, "The custom creation script for database '{DatabaseName}' had an unknown outcome and will not be retried.", database.DatabaseName);
+                        throw;
+                    }
+
+                    if (!hasCustomCreationScript)
+                    {
+                        handled.Add(database.Name);
+                    }
                 }
 
                 return;
