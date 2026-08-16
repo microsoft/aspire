@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { assertLinkedAppHostCliLaunch } from '../utils/processArguments';
+import { assertLinkedAppHostCliLaunch } from './helpers/processArguments';
 
 suite('process argument parsing', () => {
     const cliPath = '/tools/aspire';

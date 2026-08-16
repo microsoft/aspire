@@ -193,15 +193,18 @@ suite('configInfoProvider tests', () => {
         assert.strictEqual(spawnStub.callCount, 1);
     });
 
-    test('getCapabilityStatus classifies bounded CLI version cores and accepts prerelease suffixes', async () => {
+    test('getCapabilityStatus accepts the stable minimum and higher numeric cores but rejects minimum-core prereleases', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
         const versions = [
             ['13.2.0', 'supported'],
-            ['13.2.0-preview.1.12345.6', 'supported'],
-            ['13.2.0-dev.123+abcdef', 'supported'],
+            ['13.2.4+abcdef', 'supported'],
+            ['13.3.0-preview.1.12345.6', 'supported'],
+            ['13.3.0-dev.123+abcdef', 'supported'],
+            ['13.2.0-preview.1.12345.6', 'unsupported'],
+            ['13.2.0-dev.123+abcdef', 'unsupported'],
             ['13.1.99', 'unsupported'],
         ] as const;
         let versionIndex = 0;

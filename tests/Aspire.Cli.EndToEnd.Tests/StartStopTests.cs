@@ -449,14 +449,27 @@ print("{{assertionSuccessMarker}}")
         // Docker network deletion is asynchronous after the last DCP process exits. Require five
         // consecutive empty samples so a briefly empty list cannot let teardown race a late network
         // creation. Capture `docker network ls` before testing its output so command failure cannot
-        // be mistaken for an empty list. Keep the command compact because the retry helper locates
-        // output relative to the command row, which a wrapped Hex1b command obscures.
+        // be mistaken for an empty list. First force one short, subshell-scoped retry and then run
+        // another command, proving the persistent Hex1b shell survived the nonzero sample.
+        await auto.ExecuteCommandUntilOutputAsync(
+            counter,
+            "r=$((r+1));([ $r -gt 1 ]||exit 1;echo retry-sampled)",
+            "retry-sampled",
+            timeout: TimeSpan.FromSeconds(30),
+            retryInterval: TimeSpan.FromSeconds(1));
+        await auto.RunCommandAsync(
+            "[ \"$r\" -ge 2 ]&&echo shell-usable-after-retry&&unset r",
+            counter);
+
+        // Keep the stabilization command compact because the retry helper locates output relative
+        // to the command row, which a wrapped Hex1b command obscures. The subshell scopes every
+        // nonzero exit to this sample rather than terminating the persistent interactive shell.
         var quotedProjectName = AspireCliShellCommandHelpers.QuoteBashArg(projectName);
         await auto.ExecuteCommandUntilOutputAsync(
             counter,
-            "for i in {1..5};do " +
+            "(for i in {1..5};do " +
             $"n=$(docker network ls -q -f name={quotedProjectName})||exit 2;" +
-            "[ -z \"$n\" ]||exit 1;sleep 1;done;echo stable-empty",
+            "[ -z \"$n\" ]||exit 1;sleep 1;done;echo stable-empty)",
             "stable-empty",
             timeout: TimeSpan.FromMinutes(5),
             retryInterval: TimeSpan.FromSeconds(8));

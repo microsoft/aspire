@@ -10,7 +10,7 @@ import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
 const maxCliVersionOutputLength = 128;
-const cliVersionPattern = /^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const cliVersionPattern = /^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -57,6 +57,7 @@ interface CliVersion {
     major: number;
     minor: number;
     patch: number;
+    isPrerelease: boolean;
 }
 
 /**
@@ -262,9 +263,19 @@ export class ConfigInfoProvider {
                         }
 
                         const version = parseCliVersion(output);
-                        settle(version
-                            ? compareCliVersions(version, minimumVersion) >= 0 ? 'supported' : 'unsupported'
-                            : 'unavailable');
+                        if (!version) {
+                            settle('unavailable');
+                            return;
+                        }
+
+                        const comparison = compareCliVersions(version, minimumVersion);
+                        // A prerelease at the exact minimum core predates the stable version that
+                        // introduced the option, so treat it as known unsupported. Prerelease/dev
+                        // builds with a higher numeric core remain supported because the feature
+                        // already exists on that later release line.
+                        settle(comparison > 0 || (comparison === 0 && (!version.isPrerelease || minimumVersion.isPrerelease))
+                            ? 'supported'
+                            : 'unsupported');
                     },
                     errorCallback: reportUnavailable,
                     noExtensionVariables: true,
@@ -534,6 +545,7 @@ function parseCliVersion(value: string): CliVersion | undefined {
         major: Number.parseInt(match[1], 10),
         minor: Number.parseInt(match[2], 10),
         patch: Number.parseInt(match[3], 10),
+        isPrerelease: match[4] !== undefined,
     };
 }
 

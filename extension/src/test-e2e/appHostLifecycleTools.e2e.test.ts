@@ -8,7 +8,7 @@ import { runProcess, terminateProcessTree } from './helpers/process';
 import { getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
-import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../utils/processArguments';
+import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
 
 interface LifecycleToolResult {
     tool: string;
