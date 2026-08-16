@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.ServiceBus;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Azure.Messaging.ServiceBus;
@@ -651,10 +652,324 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         Assert.Throws<InvalidOperationException>(() => serviceBus.RunAsEmulator());
     }
 
+    [Fact]
+    public async Task AddAzureServiceBusWithEmulator_CreatesDefaultSqlServerContainer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        Assert.IsType<SqlServerServerResource>(sql);
+        var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("mssql/server", imageAnnotation.Image);
+
+        AllocateContainerNetworkEndpoint(sql, "sb-mssql.dev.internal", 1433);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("Y", env["ACCEPT_EULA"]);
+        Assert.Equal("sb-mssql.dev.internal:1433", env["SQL_SERVER"]);
+        Assert.False(string.IsNullOrEmpty(env["MSSQL_SA_PASSWORD"]));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusWithEmulator_WaitsForSqlServer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+
+        AssertWaitsForHealthy(serviceBus.Resource, sql);
+    }
+
+    [Fact]
+    public void WithSqlServer_WithoutArguments_UsesTheSqlServerResourceCreatedForTheEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure.WithSqlServer());
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        Assert.IsType<SqlServerServerResource>(sql);
+    }
+
+    [Fact]
+    public void WithSqlServer_CustomizesSqlServerResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql => sql
+                .WithImageTag("2019-latest")
+                .WithContainerName("custom-sql")));
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+
+        var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("2019-latest", imageAnnotation.Tag);
+
+        var nameAnnotation = Assert.Single(sql.Annotations.OfType<ContainerNameAnnotation>());
+        Assert.Equal("custom-sql", nameAnnotation.Name);
+    }
+
+    [Fact]
+    public void WithSqlServer_SupportsSqlServerIntegrationApis()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql => sql.WithHostPort(12345)));
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        var endpoint = Assert.Single(sql.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal(12345, endpoint.Port);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_PasswordChangedInCallback_IsUsedByEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var password = builder.AddParameter("sql-password", "p@ssw0rd1");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql => sql.WithPassword(password)));
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        AllocateContainerNetworkEndpoint(sql, "sb-mssql.dev.internal", 1433);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("p@ssw0rd1", env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_ReusesExistingSqlServerResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql));
+
+        Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
+        AssertWaitsForHealthy(serviceBus.Resource, sql.Resource);
+
+        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("Y", env["ACCEPT_EULA"]);
+        Assert.Equal("sql.dev.internal:1433", env["SQL_SERVER"]);
+        Assert.Equal(await sql.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_PasswordChangedAfterCall_IsUsedByEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql));
+
+        sql.WithPassword(builder.AddParameter("new-password", "p@ssw0rd2"));
+
+        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("p@ssw0rd2", env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_UsesTheAddressProjectedIntoTheContainerNetwork()
+    {
+        // The emulator reaches the SQL Server resource through the emulator container's network, so the
+        // endpoint must resolve to the address the orchestrator projects into that network rather than to
+        // the resource name. That address is the container host address when the SQL Server isn't itself
+        // running in the container network.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql));
+
+        AllocateContainerNetworkEndpoint(sql.Resource, "host.docker.internal", 52133);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("host.docker.internal:52133", env["SQL_SERVER"]);
+    }
+
+    [Fact]
+    public void WithSqlServer_RemovingTcpEndpoint_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+                .WithSqlServer(sql =>
+                {
+                    var endpoint = sql.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");
+                    sql.Resource.Annotations.Remove(endpoint);
+                })));
+
+        Assert.Contains("must keep its 'tcp' endpoint", exception.Message);
+    }
+
+    [Fact]
+    public void WithSqlServer_CallbackCalledMultipleTimes_AppliesCallbacksInOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql => sql.WithImageTag("2019-latest"))
+            .WithSqlServer(sql => sql.WithImageTag("2022-latest")));
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("2022-latest", imageAnnotation.Tag);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_CalledMultipleTimes_LastWins()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql1 = builder.AddSqlServer("sql1");
+        var sql2 = builder.AddSqlServer("sql2");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql1)
+            .WithSqlServer(sql2));
+
+        // Only sql2's endpoint is allocated; resolving successfully also proves sql1 is not consulted.
+        AllocateContainerNetworkEndpoint(sql2.Resource, "sql2.dev.internal", 1433);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("sql2.dev.internal:1433", env["SQL_SERVER"]);
+        Assert.Equal(await sql2.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
+
+        // The superseded SQL Server resource is no longer waited for either.
+        AssertWaitsForHealthy(serviceBus.Resource, sql2.Resource);
+        Assert.DoesNotContain(serviceBus.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Resource == sql1.Resource);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithSqlServer_ExistingResourceAndCallback_AreMutuallyExclusive(bool sqlServerFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddAzureServiceBus("sb").RunAsEmulator(configure =>
+            {
+                if (sqlServerFirst)
+                {
+                    configure.WithSqlServer(sql)
+                        .WithSqlServer(emulatorSql => emulatorSql.WithImageTag("2019-latest"));
+                }
+                else
+                {
+                    configure.WithSqlServer(emulatorSql => emulatorSql.WithImageTag("2019-latest"))
+                        .WithSqlServer(sql);
+                }
+            }));
+
+        Assert.Contains("cannot use both", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithSqlServer_ExistingResourceAndDefault_AreMutuallyExclusive(bool sqlServerFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddAzureServiceBus("sb").RunAsEmulator(configure =>
+            {
+                if (sqlServerFirst)
+                {
+                    configure.WithSqlServer(sql).WithSqlServer();
+                }
+                else
+                {
+                    configure.WithSqlServer().WithSqlServer(sql);
+                }
+            }));
+
+        Assert.Contains("cannot use both", exception.Message);
+    }
+
+    [Fact]
+    public async Task AddAzureServiceBusWithEmulator_EnvironmentOverridesInCallbackTakePrecedence()
+    {
+        // Users have historically pointed the emulator at their own SQL Server by overriding the
+        // SQL_SERVER/MSSQL_SA_PASSWORD environment variables in the configuration callback. Such
+        // overrides must keep taking precedence over the values set by RunAsEmulator.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithEnvironment("SQL_SERVER", "external-sql:1433"));
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("external-sql:1433", env["SQL_SERVER"]);
+    }
+
+    [Fact]
+    public void AddAzureServiceBusWithEmulator_SqlServerContainerIsInModelAfterRunAsEmulatorReturns()
+    {
+        // Users work around the lack of configurability by locating the SQL container in the model
+        // after RunAsEmulator returns (e.g. to rename or remove it). Keep that working.
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("servicebus").RunAsEmulator(configure => configure.WithLifetime(ContainerLifetime.Persistent));
+
+        var serviceBusSql = builder.Resources.OfType<ContainerResource>().Last(x => x.Name == "servicebus-mssql");
+        serviceBusSql.Annotations.Add(new ContainerNameAnnotation { Name = "my-servicebus-mssql-container" });
+
+        var nameAnnotation = Assert.Single(serviceBusSql.Annotations.OfType<ContainerNameAnnotation>());
+        Assert.Equal("my-servicebus-mssql-container", nameAnnotation.Name);
+
+        Assert.True(builder.Resources.Remove(serviceBusSql));
+    }
+
     private static IResource GetPersistenceReferenceSource(IResource resource)
     {
         var annotation = Assert.Single(resource.Annotations.OfType<PersistenceAnnotation>());
         return Assert.IsAssignableFrom<IResource>(annotation.SourceResource);
+    }
+
+    // Simulates the orchestrator allocating the resource's 'tcp' endpoint on the container network,
+    // which is the network context the emulator resolves its SQL Server endpoint in.
+    private static void AssertWaitsForHealthy(IResource resource, IResource dependency)
+    {
+        var wait = Assert.Single(resource.Annotations.OfType<WaitAnnotation>());
+        Assert.Same(dependency, wait.Resource);
+        Assert.Equal(WaitType.WaitUntilHealthy, wait.WaitType);
+    }
+
+    private static void AllocateContainerNetworkEndpoint(IResource resource, string address, int port)
+    {
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");
+        endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new AllocatedEndpoint(endpoint, address, port, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
     }
 
     private static PersistenceMode ToPersistenceMode(Lifetime lifetime) =>
