@@ -644,7 +644,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         using var host = builder.Build();
 
         var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
-        Assert.Contains(registrations, r => r.Name == "Microsoft.Azure.Cosmos");
+        Assert.Collection(registrations, registration => Assert.Equal("Microsoft.Azure.Cosmos", registration.Name));
     }
 
     [Fact]
@@ -659,7 +659,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         using var host = builder.Build();
 
         var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
-        Assert.DoesNotContain(registrations, r => r.Name == "Microsoft.Azure.Cosmos");
+        Assert.Empty(registrations);
     }
 
     [Fact]
@@ -675,7 +675,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         using var host = builder.Build();
 
         var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
-        Assert.Contains(registrations, r => r.Name == $"Microsoft.Azure.Cosmos_{serviceKey}");
+        Assert.Collection(registrations, registration => Assert.Equal($"Microsoft.Azure.Cosmos_{serviceKey}", registration.Name));
     }
 
     private static void PopulateConfiguration(ConfigurationManager configuration, string connectionString, string? key = null) =>
