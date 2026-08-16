@@ -715,10 +715,14 @@ async function waitForExactLinkedAppHostCliProcess(
 ): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-        const cliProcess = (await listProcessEntries(appHostPath)).find(processEntry =>
-            processEntry.arguments.length > 0 &&
-            commandLineArgumentEquals(processEntry.arguments[0], getCliPath()) &&
-            processEntry.arguments.includes('--start-debug-session'));
+        const cliProcess = (await listProcessEntries('--start-debug-session')).find(processEntry => {
+            const appHostOptionIndex = processEntry.arguments.indexOf('--apphost');
+            return processEntry.arguments.length > 0 &&
+                commandLineArgumentEquals(processEntry.arguments[0], getCliPath()) &&
+                processEntry.arguments.includes('--start-debug-session') &&
+                appHostOptionIndex >= 0 &&
+                commandLineArgumentEquals(processEntry.arguments[appHostOptionIndex + 1], appHostPath);
+        });
         if (cliProcess) {
             assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath(), appHostArguments);
             return cliProcess;
@@ -748,7 +752,12 @@ function waitForCliFallbackAndLaunchInvocations(
         ...appHostArguments,
     ];
     const runInvocations = invocations.filter(invocation => invocation[0] === 'run');
-    assert.deepStrictEqual(runInvocations, [expectedRunInvocation]);
+    assert.strictEqual(runInvocations.length, 1, `Expected one run invocation, got ${JSON.stringify(runInvocations)}.`);
+    assert.strictEqual(runInvocations[0].length, expectedRunInvocation.length);
+    assert.ok(runInvocations[0].every((argument, index) =>
+        index === 5
+            ? commandLineArgumentEquals(argument, expectedRunInvocation[index])
+            : argument === expectedRunInvocation[index]));
 
     const configInfoIndex = invocations.findIndex(invocation =>
         JSON.stringify(invocation) === JSON.stringify(['config', 'info', '--json', '--nologo']));
@@ -793,7 +802,7 @@ async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: numb
             const line = [...lines].reverse().find(candidate =>
                 candidate.includes('Spawning Aspire CLI process:') &&
                 candidate.includes('--start-debug-session') &&
-                candidate.includes(`--apphost ${appHostPath}`) &&
+                commandLineTextIncludes(candidate, `--apphost ${appHostPath}`) &&
                 candidate.includes('; cwd='));
             if (line) {
                 return { path: logPath, line };
@@ -804,6 +813,12 @@ async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: numb
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire Extension.log to record the linked AppHost launch for ${appHostPath}.`);
+}
+
+function commandLineTextIncludes(value: string, expected: string): boolean {
+    return process.platform === 'win32'
+        ? value.toLowerCase().includes(expected.toLowerCase())
+        : value.includes(expected);
 }
 
 function findFilesNamed(rootPath: string, fileName: string): string[] {
