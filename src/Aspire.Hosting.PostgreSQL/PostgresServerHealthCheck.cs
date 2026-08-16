@@ -15,12 +15,13 @@ namespace Aspire.Hosting.Postgres;
 /// the unix socket (with TCP closed) and then <b>restarts</b> to the real listener. A single probe can
 /// pass before that restart, which would flip the resource Healthy, release every <c>WaitFor</c>
 /// dependent, and trigger native database creation — all straight into the restart's connection reset.
+/// See <see href="https://github.com/docker-library/postgres/blob/4a1f78ff7e7a6e7ecb6a584c540c07946ad66e80/docker-entrypoint.sh"/>.
 /// <para>
 /// To avoid that, this check requires a single connection to survive several consecutive <c>SELECT 1</c>
 /// probes (the restart resets the connection mid-loop) before reporting Healthy. Once the server has
-/// proven durably ready, the check latches and falls back to a single cheap probe per call, so the gate
-/// only adds latency during first start. It only ever <i>delays</i> Healthy within a bounded window, so it
-/// cannot deadlock dependents.
+/// proven durably ready, the check latches and falls back to a single cheap probe per call. A failed
+/// probe resets the latch so a restarted server must prove stability again. The gate only ever
+/// <i>delays</i> Healthy within a bounded window, so it cannot deadlock dependents.
 /// </para>
 /// </remarks>
 internal sealed class PostgresServerHealthCheck : IHealthCheck
@@ -34,6 +35,7 @@ internal sealed class PostgresServerHealthCheck : IHealthCheck
 
     // Once the server has been observed durably ready we latch and stop running the full probe window.
     private volatile bool _stable;
+    private int _stabilityGeneration;
 
     public PostgresServerHealthCheck(Func<string?> connectionStringAccessor)
     {
@@ -65,6 +67,7 @@ internal sealed class PostgresServerHealthCheck : IHealthCheck
 
         // Until proven stable, require the full consecutive-probe window; afterwards a single probe.
         var probeCount = _stable ? 1 : ConsecutiveProbes;
+        var stabilityGeneration = Volatile.Read(ref _stabilityGeneration);
 
         try
         {
@@ -76,12 +79,19 @@ internal sealed class PostgresServerHealthCheck : IHealthCheck
         }
         catch (Exception ex)
         {
-            // A probe failed (e.g. the connection was reset by the initdb restart). Stay Unhealthy; the
-            // next poll retries the full window because we have not latched.
+            // A probe failure can indicate that the resource restarted. Reset the latch so the next
+            // successful poll must prove the new server instance is stable before releasing dependents.
+            // Increment the generation so an overlapping single-probe success cannot restore the latch.
+            _stable = false;
+            Interlocked.Increment(ref _stabilityGeneration);
             return HealthCheckResult.Unhealthy(ex.Message, ex);
         }
 
-        _stable = true;
+        if (probeCount > 1 || stabilityGeneration == Volatile.Read(ref _stabilityGeneration))
+        {
+            _stable = true;
+        }
+
         return HealthCheckResult.Healthy();
     }
 

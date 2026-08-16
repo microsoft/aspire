@@ -770,18 +770,15 @@ public static class PostgresBuilderExtensions
 
                 return;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested && IsTransientConnectionFailure(ex))
             {
                 logger.LogDebug(ex, "Transient failure while creating databases for '{ResourceName}' (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", postgresServer.Name, attempt, maxAttempts, delay);
 
-                try
-                {
-                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
 
                 delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, maxDelay.TotalMilliseconds));
             }
@@ -851,7 +848,7 @@ public static class PostgresBuilderExtensions
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
-        catch (PostgresException p) when (p.SqlState is "42P04" or "23505")
+        catch (PostgresException p) when (IsDatabaseAlreadyExists(p))
         {
             // Treat an already-existing database as success: 42P04 (duplicate_database) for a plain
             // CREATE DATABASE, or 23505 (unique_violation on pg_database_datname_index) when a creation
@@ -868,4 +865,12 @@ public static class PostgresBuilderExtensions
         // connection-level failures (resets during the initdb restart window) intentionally propagate to
         // CreateDatabasesAsync, which retries the whole open + create-all sequence on a fresh connection.
     }
+
+    internal static bool IsDatabaseAlreadyExists(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.DuplicateDatabase ||
+        exception is
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "pg_database_datname_index"
+        };
 }

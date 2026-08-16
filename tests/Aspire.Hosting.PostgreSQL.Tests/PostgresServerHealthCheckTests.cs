@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -89,16 +90,65 @@ public class PostgresServerHealthCheckTests
     }
 
     [Fact]
-    public async Task AfterLatch_ProbeFailure_ReturnsUnhealthy()
+    public async Task AfterLatch_ProbeFailure_ReturnsUnhealthy_AndResetsLatch()
     {
         var fail = false;
+        var counts = new List<int>();
         var check = new PostgresServerHealthCheck(() => "Host=localhost", (count, ct) =>
-            fail ? Task.FromException(new InvalidOperationException("down")) : Task.CompletedTask);
+        {
+            counts.Add(count);
+            return fail ? Task.FromException(new InvalidOperationException("down")) : Task.CompletedTask;
+        });
 
         Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
 
         fail = true;
         Assert.Equal(HealthStatus.Unhealthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        fail = false;
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        Assert.True(counts[0] > 1);
+        Assert.Equal(1, counts[1]);
+        Assert.True(counts[2] > 1);
+    }
+
+    [Fact]
+    public async Task ConcurrentSingleProbeSuccess_DoesNotRestoreLatchAfterFailure()
+    {
+        var singleProbeCount = 0;
+        var staleProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStaleProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var counts = new ConcurrentQueue<int>();
+        var check = new PostgresServerHealthCheck(() => "Host=localhost", async (count, ct) =>
+        {
+            counts.Enqueue(count);
+            if (count > 1)
+            {
+                return;
+            }
+
+            if (Interlocked.Increment(ref singleProbeCount) == 1)
+            {
+                staleProbeStarted.SetResult();
+                await releaseStaleProbe.Task.WaitAsync(ct);
+                return;
+            }
+
+            throw new InvalidOperationException("down");
+        });
+
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        var staleSuccess = check.CheckHealthAsync(new HealthCheckContext());
+        await staleProbeStarted.Task;
+        Assert.Equal(HealthStatus.Unhealthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        releaseStaleProbe.SetResult();
+        Assert.Equal(HealthStatus.Healthy, (await staleSuccess).Status);
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        Assert.True(counts.Last() > 1);
     }
 
     [Fact]
