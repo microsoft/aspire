@@ -7,7 +7,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -440,9 +439,19 @@ public static class AzureServiceBusExtensions
         // so they are visible on builder.Resource here.
         if (!builder.Resource.HasAnnotationOfType<SqlServerConnectionAnnotation>())
         {
+            // Preserve the password parameter name used before the SQL Server integration owned this resource.
+            // Existing configuration and persisted emulator stores can depend on that stable parameter name.
+            var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(
+                builder.ApplicationBuilder,
+                $"{builder.Resource.Name}-sql-pwd",
+                minLower: 1,
+                minUpper: 1,
+                minNumeric: 1);
+            var passwordBuilder = builder.ApplicationBuilder.CreateResourceBuilder(password);
+
             var sqlServerBuilder = builder.ApplicationBuilder
-                    .AddSqlServer($"{builder.Resource.Name}-mssql")
-                    .WithParentRelationship(builder);
+                .AddSqlServer($"{builder.Resource.Name}-mssql", passwordBuilder)
+                .WithParentRelationship(builder);
 
             if (configureContainer != null)
             {
@@ -463,7 +472,7 @@ public static class AzureServiceBusExtensions
             // The emulator fails to start when its backing store isn't accepting connections yet.
             surrogateBuilder.WaitFor(sqlServerBuilder);
 
-            builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServerBuilder.Resource));
+            builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServerBuilder.Resource, []));
         }
 
         // The environment callback is registered after the SQL Server connection has been resolved so a failed
@@ -710,29 +719,24 @@ public static class AzureServiceBusExtensions
         // resource it no longer uses.
         if (builder.Resource.TryGetLastAnnotation<SqlServerConnectionAnnotation>(out var previousConnection))
         {
-            RemoveWaitFor(builder.Resource, previousConnection.SqlServer);
+            RemoveWaitFor(builder.Resource, previousConnection.WaitAnnotations);
         }
 
         // The emulator fails to start when its backing store isn't accepting connections yet.
+        var existingAnnotations = builder.Resource.Annotations.ToHashSet();
         builder.WaitFor(sqlServer);
+        var waitAnnotations = builder.Resource.Annotations
+            .Where(annotation => !existingAnnotations.Contains(annotation))
+            .ToArray();
 
-        return builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServer.Resource), ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServer.Resource, waitAnnotations), ResourceAnnotationMutationBehavior.Replace);
     }
 
-    private static void RemoveWaitFor(IResource resource, IResource dependency)
+    private static void RemoveWaitFor(IResource resource, IReadOnlyList<IResourceAnnotation> waitAnnotations)
     {
-        var staleAnnotations = resource.Annotations
-            .Where(annotation => annotation switch
-            {
-                WaitAnnotation wait => wait.Resource == dependency,
-                ResourceRelationshipAnnotation relationship => relationship.Resource == dependency && relationship.Type == KnownRelationshipTypes.WaitFor,
-                _ => false
-            })
-            .ToList();
-
-        foreach (var staleAnnotation in staleAnnotations)
+        foreach (var waitAnnotation in waitAnnotations)
         {
-            resource.Annotations.Remove(staleAnnotation);
+            resource.Annotations.Remove(waitAnnotation);
         }
     }
 
