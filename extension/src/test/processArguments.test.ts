@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { assertLinkedAppHostCliLaunch } from './helpers/processArguments';
+import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch } from './helpers/processArguments';
 
 suite('process argument parsing', () => {
     const cliPath = '/tools/aspire';
@@ -71,5 +71,71 @@ suite('process argument parsing', () => {
                 cliPath,
                 'linux'),
             /Expected exact --apphost path/);
+    });
+
+    test('accepts the exact linked AppHost CLI argv including application argument boundaries', () => {
+        const appHostArguments = ['--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`];
+
+        assert.doesNotThrow(() => assertExactLinkedAppHostCliLaunch(
+            [
+                'C:\\Tools\\aspire.exe',
+                'run',
+                '--isolated',
+                '--start-debug-session',
+                '--nologo',
+                '--apphost',
+                'c:\\Users\\runner\\workspace with spaces\\AppHost.csproj',
+                '--',
+                ...appHostArguments,
+            ],
+            'C:\\Users\\runner\\workspace with spaces\\AppHost.csproj',
+            'C:\\Tools\\ASPIRE.EXE',
+            appHostArguments,
+            'win32'));
+    });
+
+    test('rejects a repeated resolver result that duplicates the root isolation switch', () => {
+        assert.throws(
+            () => assertExactLinkedAppHostCliLaunch(
+                [
+                    cliPath,
+                    'run',
+                    '--isolated',
+                    '--isolated',
+                    '--start-debug-session',
+                    '--nologo',
+                    '--apphost',
+                    appHostPath,
+                    '--',
+                    '--custom',
+                ],
+                appHostPath,
+                cliPath,
+                ['--custom'],
+                'linux'),
+            /Expected exact Aspire CLI argv/);
+    });
+
+    test('rejects flattened or changed AppHost argument tokens', () => {
+        assert.throws(
+            () => assertExactLinkedAppHostCliLaunch(
+                [
+                    cliPath,
+                    'run',
+                    '--isolated',
+                    '--start-debug-session',
+                    '--nologo',
+                    '--apphost',
+                    appHostPath,
+                    '--',
+                    '--custom',
+                    'value with spaces  literal "quote"',
+                    String.raw`C:\tools\backslash\path`,
+                ],
+                appHostPath,
+                cliPath,
+                ['--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`],
+                'linux'),
+            /Expected exact Aspire CLI argv/);
     });
 });

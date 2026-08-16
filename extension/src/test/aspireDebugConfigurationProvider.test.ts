@@ -18,10 +18,12 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
     readonly reserved: string[] = [];
     readonly directoryScoped: string[] = [];
     readonly replacements: { previousAppHostPath: string; previousReservationId: string; appHostPath: string }[] = [];
+    readonly validations: { appHostPath: string; reservationId: string; isDirectoryScope: boolean }[] = [];
     readonly released: { appHostPath: string; reservationId: string }[] = [];
     readonly prepared: { appHostPath: string; command: string; args: string[] | undefined; cliPath: string | undefined }[] = [];
     /** When set, the claim is refused as if a lifecycle-owned launch already held it. */
     claimedByLifecycle = false;
+    validationResult: string | false | undefined;
     preparedArgs: string[] | undefined;
     preparationError: Error | undefined;
 
@@ -36,6 +38,11 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope = false): string | false {
         this.replacements.push({ previousAppHostPath, previousReservationId, appHostPath });
         return this.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
+    }
+
+    validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope = false): string | false {
+        this.validations.push({ appHostPath, reservationId, isDirectoryScope });
+        return this.validationResult ?? reservationId;
     }
 
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void {
@@ -441,8 +448,61 @@ suite('AspireDebugConfigurationProvider', () => {
             : undefined;
 
         assert.deepStrictEqual(launchReservation.reserved, [appHostPath]);
+        assert.deepStrictEqual(launchReservation.validations, [{
+            appHostPath,
+            reservationId: 'reservation-1',
+            isDirectoryScope: false,
+        }]);
         assert.strictEqual(firstPass?.[appHostLaunchReservationIdConfigKey], 'reservation-1');
         assert.strictEqual(secondPass?.[appHostLaunchReservationIdConfigKey], 'reservation-1');
+    });
+
+    test('uses a reacquired reservation when a repeated resolver pass outlives the original reservation', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+        });
+        assert.ok(firstPass);
+        launchReservation.validationResult = 'reservation-2';
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, firstPass);
+
+        assert.strictEqual(secondPass?.[appHostLaunchReservationIdConfigKey], 'reservation-2');
+        assert.deepStrictEqual(launchReservation.validations, [{
+            appHostPath,
+            reservationId: 'reservation-1',
+            isDirectoryScope: false,
+        }]);
+    });
+
+    test('cancels a stale repeated resolver pass when a newer launch owns the AppHost', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+        });
+        assert.ok(firstPass);
+        launchReservation.validationResult = false;
+        const message = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, firstPass);
+
+        assert.strictEqual(secondPass, undefined);
+        assert.strictEqual(message.calledOnce, true);
+        assert.deepStrictEqual(launchReservation.validations, [{
+            appHostPath,
+            reservationId: 'reservation-1',
+            isDirectoryScope: false,
+        }]);
     });
 
     test('releases the repeated-pass reservation when argument preparation fails', async () => {

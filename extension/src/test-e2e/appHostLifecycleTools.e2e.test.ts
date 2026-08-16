@@ -3,12 +3,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { findRunningAppHost, getCommandInvocationCount, getDebugLaunchCount, isSamePath, readStateFile, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { executeE2eControlCommand, getCliWrapperInvocations, restoreE2eCliPathForE2E, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setE2eCliPathForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeTokenlessStableCliWrapper, writeWorkspaceAppHostConfigForPath, writeWorkspaceCliPath } from './helpers/fixtures';
 import { runProcess, terminateProcessTree } from './helpers/process';
 import { getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
-import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
+import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
 
 interface LifecycleToolResult {
     tool: string;
@@ -57,8 +57,9 @@ interface ExtensionSpawnLog {
 
 const startToolName = 'aspire_apphost_start';
 const stopToolName = 'aspire_apphost_stop';
+const appHostArgvEvidenceEnvironmentVariable = 'ASPIRE_EXTENSION_E2E_APPHOST_ARGV_EVIDENCE';
 
-suite('Aspire AppHost lifecycle language model tools E2E', function () {
+suite('Aspire AppHost lifecycle E2E', function () {
     this.timeout(900000);
 
     teardown(async () => {
@@ -239,118 +240,269 @@ suite('Aspire AppHost lifecycle language model tools E2E', function () {
         }
     });
 
-    test('starts a linked-worktree AppHost with inferred isolation through vscode.lm.invokeTool', async () => {
-        await openAspireView();
-        await waitForRepositoryIdle();
-        const fixture = await createLinkedWorktreeAppHostFixture();
-        let artifact: Record<string, unknown> = {};
+    suite('linked-worktree isolation', function () {
+        const launchConfigurationName = 'Aspire linked worktree exact argv proof';
+        const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
+        let originalLaunchJson: string | undefined;
+        let fixture: LinkedWorktreeAppHostFixture | undefined;
 
-        try {
-            const relativeAppHostPath = path.relative(getWorkspaceRoot(), fixture.appHostPath).split(path.sep).join('/');
-            artifact = {
-                status: 'created',
-                ...fixture,
-                relativeAppHostPath,
-            };
-            Object.assign(artifact, {
-                cli: {
-                    path: getCliPath(),
-                    version: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
-                    repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
-                },
-            });
-            writeLinkedWorktreeArtifact(artifact);
+        suiteSetup(async () => {
+            await openAspireView();
+            await waitForRepositoryIdle();
+            originalLaunchJson = fs.existsSync(launchJsonPath) ? fs.readFileSync(launchJsonPath, 'utf8') : undefined;
+            fixture = await createLinkedWorktreeAppHostFixture();
+        });
 
-            writeWorkspaceAppHostConfigForPath(fixture.appHostPath);
-            const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
-            await executeE2eControlCommand({ name: 'refreshAppHosts' });
-            await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
-            const discovered = await waitForSelectedWorkspaceAppHost(fixture.appHostPath);
-            assert.strictEqual(discovered.state.workspaceAppHostPath, fixture.appHostPath);
+        teardown(async () => {
+            if (fixture) {
+                await resetLinkedWorktreeAppHostFixture(fixture, launchJsonPath, originalLaunchJson);
+            }
+        });
 
-            const preparedStart = await invokeControlCommand<PreparedInvocation>({
-                name: 'prepareLanguageModelToolInvocation',
-                toolName: startToolName,
-                input: { appHostPath: relativeAppHostPath, mode: 'debug' },
-            });
-            assert.strictEqual(preparedStart.confirmationTitle, 'Start Aspire AppHost');
-            assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
+        suiteTeardown(async () => {
+            if (fixture) {
+                await cleanupLinkedWorktreeAppHostFixture(fixture, launchJsonPath, originalLaunchJson);
+            }
+        });
 
-            const startInvocation = await invokeLifecycleTool({
-                name: 'invokeLanguageModelTool',
-                toolName: startToolName,
-                input: { appHostPath: relativeAppHostPath, mode: 'debug' },
-            }, 600000, 1, 'apphost-lifecycle-linked-worktree-start-confirmation');
-            assert.strictEqual(startInvocation.dialogs[0].message, 'Start Aspire AppHost');
-            assert.strictEqual(startInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
-            assert.deepStrictEqual(startInvocation.results, [{
-                tool: startToolName,
-                outcome: 'started',
-                appHostPath: relativeAppHostPath,
-                requestedMode: 'debug',
-                effectiveMode: 'debug',
-                isolated: true,
-                controller: 'editor',
-            }]);
+        test('starts a linked-worktree AppHost with inferred isolation through vscode.lm.invokeTool', async () => {
+            assert.ok(fixture);
+            let artifact: Record<string, unknown> = {};
 
-            await waitForDebugSessionStartup(fixture.appHostPath, 600000);
-            const processInfoStatus = await executeE2eControlCommand({ name: 'getDebugSessionProcessInfo', appHostPath: fixture.appHostPath });
-            const processInfo = processInfoStatus.result as { appHostPath?: string; cliPid?: number; appHostPid?: number };
-            assert.strictEqual(processInfo.appHostPath, fixture.appHostPath);
-            const cliPid = processInfo.cliPid;
-            assert.ok(cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process: ${JSON.stringify(processInfoStatus)}`);
+            try {
+                const relativeAppHostPath = path.relative(getWorkspaceRoot(), fixture.appHostPath).split(path.sep).join('/');
+                artifact = {
+                    status: 'created',
+                    ...fixture,
+                    relativeAppHostPath,
+                    cli: {
+                        path: getCliPath(),
+                        version: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
+                        repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
+                    },
+                };
+                writeLinkedWorktreeArtifact('lm', artifact);
 
-            const cliProcess = await waitForLinkedAppHostCliProcess(cliPid, fixture.appHostPath, 180000);
-            const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
+                writeWorkspaceAppHostConfigForPath(fixture.appHostPath);
+                const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+                await executeE2eControlCommand({ name: 'refreshAppHosts' });
+                await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+                const discovered = await waitForSelectedWorkspaceAppHost(fixture.appHostPath);
+                assert.strictEqual(discovered.state.workspaceAppHostPath, fixture.appHostPath);
 
-            const runningState = readStateFile();
-            assert.strictEqual(runningState.state.workspaceAppHostPath, fixture.appHostPath);
-            const activeDebugSession = runningState.state.debugSessions.find(session =>
-                session.appHostPath === fixture.appHostPath && session.startupCompleted);
-            assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath}.`);
+                const preparedStart = await invokeControlCommand<PreparedInvocation>({
+                    name: 'prepareLanguageModelToolInvocation',
+                    toolName: startToolName,
+                    input: { appHostPath: relativeAppHostPath, mode: 'debug' },
+                });
+                assert.strictEqual(preparedStart.confirmationTitle, 'Start Aspire AppHost');
+                assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
 
-            Object.assign(artifact, {
-                status: 'running',
-                preparedStart,
-                startConfirmation: startInvocation.dialogs[0],
-                startResult: startInvocation.results[0],
-                processInfo,
-                cliProcess,
-                extensionLog,
-                workspaceAppHostPath: runningState.state.workspaceAppHostPath,
-                activeDebugSession,
-            });
-            writeLinkedWorktreeArtifact(artifact);
+                const startInvocation = await invokeLifecycleTool({
+                    name: 'invokeLanguageModelTool',
+                    toolName: startToolName,
+                    input: { appHostPath: relativeAppHostPath, mode: 'debug' },
+                }, 600000, 1, 'apphost-lifecycle-linked-worktree-start-confirmation');
+                assert.strictEqual(startInvocation.dialogs[0].message, 'Start Aspire AppHost');
+                assert.strictEqual(startInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
+                assert.deepStrictEqual(startInvocation.results, [{
+                    tool: startToolName,
+                    outcome: 'started',
+                    appHostPath: relativeAppHostPath,
+                    requestedMode: 'debug',
+                    effectiveMode: 'debug',
+                    isolated: true,
+                    controller: 'editor',
+                }]);
 
-            const stopInvocation = await invokeLifecycleTool({
-                name: 'invokeLanguageModelTool',
-                toolName: stopToolName,
-                input: { appHostPath: relativeAppHostPath },
-            }, 300000, 1, 'apphost-lifecycle-linked-worktree-stop-confirmation');
-            assert.strictEqual(stopInvocation.results[0].outcome, 'stopped');
-            assert.strictEqual(stopInvocation.results[0].appHostPath, relativeAppHostPath);
-            assert.strictEqual(stopInvocation.results[0].controller, 'editor');
+                await waitForDebugSessionStartup(fixture.appHostPath, 600000);
+                const processInfoStatus = await executeE2eControlCommand({ name: 'getDebugSessionProcessInfo', appHostPath: fixture.appHostPath });
+                const processInfo = processInfoStatus.result as { appHostPath?: string; cliPid?: number; appHostPid?: number };
+                assert.strictEqual(processInfo.appHostPath, fixture.appHostPath);
+                assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process: ${JSON.stringify(processInfoStatus)}`);
 
-            await waitForNoDebugSessions(180000);
-            await waitForNoRunningAppHost(180000, fixture.appHostPath);
-            Object.assign(artifact, {
-                status: 'passed',
-                stopConfirmation: stopInvocation.dialogs[0],
-                stopResult: stopInvocation.results[0],
-            });
-            writeLinkedWorktreeArtifact(artifact);
-        }
-        catch (error) {
-            Object.assign(artifact, {
-                status: 'failed',
-                error: error instanceof Error ? `${error.name}: ${error.message.split(/\r?\n/, 1)[0]}` : String(error),
-            });
-            writeLinkedWorktreeArtifact(artifact);
-            throw error;
-        }
-        finally {
-            await cleanupLinkedWorktreeAppHostFixture(fixture);
-        }
+                const cliProcess = await waitForLinkedAppHostCliProcess(processInfo.cliPid, fixture.appHostPath, 180000);
+                const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
+                const runningState = readStateFile();
+                assert.strictEqual(runningState.state.workspaceAppHostPath, fixture.appHostPath);
+                const activeDebugSession = runningState.state.debugSessions.find(session =>
+                    session.appHostPath === fixture?.appHostPath && session.startupCompleted);
+                assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath}.`);
+
+                Object.assign(artifact, {
+                    status: 'running',
+                    preparedStart,
+                    startConfirmation: startInvocation.dialogs[0],
+                    startResult: startInvocation.results[0],
+                    processInfo,
+                    cliProcess,
+                    extensionLog,
+                    workspaceAppHostPath: runningState.state.workspaceAppHostPath,
+                    activeDebugSession,
+                });
+                writeLinkedWorktreeArtifact('lm', artifact);
+
+                const stopInvocation = await invokeLifecycleTool({
+                    name: 'invokeLanguageModelTool',
+                    toolName: stopToolName,
+                    input: { appHostPath: relativeAppHostPath },
+                }, 300000, 1, 'apphost-lifecycle-linked-worktree-stop-confirmation');
+                assert.strictEqual(stopInvocation.dialogs[0].message, 'Stop Aspire AppHost');
+                assert.strictEqual(stopInvocation.dialogs[0].details, `Stop the Aspire AppHost ${relativeAppHostPath}?`);
+                assert.strictEqual(stopInvocation.results.length, 1);
+                assert.strictEqual(stopInvocation.results[0].tool, stopToolName);
+                assert.strictEqual(stopInvocation.results[0].outcome, 'stopped');
+                assert.strictEqual(stopInvocation.results[0].appHostPath, relativeAppHostPath);
+                assert.strictEqual(stopInvocation.results[0].controller, 'editor');
+
+                await waitForNoDebugSessions(180000);
+                await waitForNoRunningAppHost(180000, fixture.appHostPath);
+                Object.assign(artifact, {
+                    status: 'passed',
+                    stopConfirmation: stopInvocation.dialogs[0],
+                    stopResult: stopInvocation.results[0],
+                });
+                writeLinkedWorktreeArtifact('lm', artifact);
+            }
+            catch (error) {
+                Object.assign(artifact, {
+                    status: 'failed',
+                    error: error instanceof Error ? `${error.name}: ${error.message.split(/\r?\n/, 1)[0]}` : String(error),
+                });
+                writeLinkedWorktreeArtifact('lm', artifact);
+                throw error;
+            }
+        });
+
+        test('launch.json F5 isolates a linked worktree and preserves exact .NET AppHost argv twice', async () => {
+            assert.ok(fixture);
+            const diagnosticsDirectory = ensureDiagnosticsDir();
+            const argvEvidencePath = path.join(diagnosticsDirectory, 'apphost-f5-argv-live.json');
+            const cliInvocationLogPath = path.join(diagnosticsDirectory, 'apphost-f5-cli-invocations.jsonl');
+            const appHostArguments = [
+                '--custom',
+                'value with spaces',
+                '',
+                'literal "quote"',
+                path.join('e2e path with spaces', 'backslash\\segment'),
+            ];
+            let artifact: Record<string, unknown> = {};
+
+            try {
+                const cliWrapperPath = writeTokenlessStableCliWrapper(cliInvocationLogPath);
+                const relativeAppHostPath = path.relative(getWorkspaceRoot(), fixture.appHostPath).split(path.sep).join('/');
+                artifact = {
+                    status: 'created',
+                    ...fixture,
+                    relativeAppHostPath,
+                    launchJsonPath,
+                    launchConfigurationName,
+                    appHostArguments,
+                    argvEvidencePath,
+                    cliInvocationLogPath,
+                    cli: {
+                        wrapperPath: cliWrapperPath,
+                        realPath: getCliPath(),
+                        wrapperVersion: '13.2.0',
+                        realVersion: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
+                        repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
+                    },
+                };
+                writeLinkedWorktreeArtifact('f5', artifact);
+
+                await writeWorkspaceCliPath(cliWrapperPath);
+                await setE2eCliPathForE2E(cliWrapperPath);
+
+                writeLaunchJson(launchJsonPath, {
+                    version: '0.2.0',
+                    configurations: [{
+                        type: 'aspire',
+                        request: 'launch',
+                        name: launchConfigurationName,
+                        program: fixture.appHostPath,
+                        command: 'run',
+                        args: ['--', ...appHostArguments],
+                        env: {
+                            [appHostArgvEvidenceEnvironmentVariable]: argvEvidencePath,
+                        },
+                    }],
+                });
+
+                const passes: Record<string, unknown>[] = [];
+                for (let pass = 1; pass <= 2; pass++) {
+                    fs.rmSync(argvEvidencePath, { force: true });
+                    const invocationCountBeforeLaunch = getCliWrapperInvocations(cliInvocationLogPath).length;
+                    const debugLaunchesBefore = getDebugLaunchCount();
+                    const startStatus = await executeE2eControlCommand({
+                        name: 'startDebugging',
+                        configurationName: launchConfigurationName,
+                    }, { timeoutMs: 600000 });
+                    assert.strictEqual(startStatus.result, true, `Expected VS Code to start launch.json configuration '${launchConfigurationName}' on pass ${pass}.`);
+
+                    await waitForDebugSessionStartup(fixture.appHostPath, 600000);
+                    const debugLaunchCountDelta = getDebugLaunchCount() - debugLaunchesBefore;
+
+                    const processInfoStatus = await executeE2eControlCommand({ name: 'getDebugSessionProcessInfo', appHostPath: fixture.appHostPath });
+                    const processInfo = processInfoStatus.result as { appHostPath?: string; cliPid?: number; appHostPid?: number };
+                    assert.strictEqual(processInfo.appHostPath, fixture.appHostPath);
+                    assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process on pass ${pass}: ${JSON.stringify(processInfoStatus)}`);
+
+                    const cliProcess = await waitForExactLinkedAppHostCliProcess(fixture.appHostPath, appHostArguments, 180000);
+                    const cliInvocations = waitForCliFallbackAndLaunchInvocations(
+                        cliInvocationLogPath,
+                        invocationCountBeforeLaunch,
+                        fixture.appHostPath,
+                        appHostArguments);
+                    const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
+                    const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
+                    assert.deepStrictEqual(appHostArgv, appHostArguments);
+
+                    const retainedArgvEvidencePath = path.join(diagnosticsDirectory, `apphost-f5-argv-pass-${pass}.json`);
+                    fs.copyFileSync(argvEvidencePath, retainedArgvEvidencePath);
+                    const runningState = readStateFile();
+                    const activeDebugSession = runningState.state.debugSessions.find(session =>
+                        session.appHostPath === fixture?.appHostPath && session.startupCompleted);
+                    assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath} on pass ${pass}.`);
+
+                    passes.push({
+                        pass,
+                        startResult: startStatus.result,
+                        debugLaunchCountDelta,
+                        processInfo,
+                        cliProcess,
+                        cliInvocations,
+                        extensionLog,
+                        appHostArgv,
+                        retainedArgvEvidencePath,
+                        activeDebugSession,
+                    });
+                    Object.assign(artifact, {
+                        status: `pass-${pass}-running`,
+                        passes,
+                        workspaceAppHostPath: runningState.state.workspaceAppHostPath,
+                    });
+                    writeLinkedWorktreeArtifact('f5', artifact);
+
+                    await executeE2eControlCommand({ name: 'stopDebugging' });
+                    await waitForNoDebugSessions(180000);
+                    await waitForNoRunningAppHost(180000, fixture.appHostPath);
+                }
+
+                Object.assign(artifact, {
+                    status: 'passed',
+                    passes,
+                });
+                writeLinkedWorktreeArtifact('f5', artifact);
+            }
+            catch (error) {
+                Object.assign(artifact, {
+                    status: 'failed',
+                    error: error instanceof Error ? `${error.name}: ${error.message.split(/\r?\n/, 1)[0]}` : String(error),
+                });
+                writeLinkedWorktreeArtifact('f5', artifact);
+                throw error;
+            }
+        });
     });
 });
 
@@ -385,6 +537,14 @@ async function createLinkedWorktreeAppHostFixture(): Promise<LinkedWorktreeAppHo
 `);
         fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Text.Json;
+
+var argvEvidencePath = Environment.GetEnvironmentVariable("${appHostArgvEvidenceEnvironmentVariable}");
+if (!string.IsNullOrEmpty(argvEvidencePath))
+{
+    File.WriteAllText(argvEvidencePath, JsonSerializer.Serialize(Environment.GetCommandLineArgs().Skip(1)));
+}
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -431,14 +591,31 @@ builder.Build().Run();
     }
 }
 
-async function cleanupLinkedWorktreeAppHostFixture(fixture: LinkedWorktreeAppHostFixture): Promise<void> {
+async function cleanupLinkedWorktreeAppHostFixture(
+    fixture: LinkedWorktreeAppHostFixture,
+    launchJsonPath: string,
+    originalLaunchJson: string | undefined
+): Promise<void> {
+    await runE2eTeardown([
+        () => resetLinkedWorktreeAppHostFixture(fixture, launchJsonPath, originalLaunchJson),
+        () => removeLinkedWorktreePaths(fixture.seedRepositoryPath, fixture.linkedWorktreePath),
+    ], 'Linked-worktree AppHost fixture cleanup failed.');
+}
+
+async function resetLinkedWorktreeAppHostFixture(
+    fixture: LinkedWorktreeAppHostFixture,
+    launchJsonPath: string,
+    originalLaunchJson: string | undefined
+): Promise<void> {
     await runE2eTeardown([
         () => executeE2eControlCommand({ name: 'stopDebugging' }),
         () => stopAppHostIfRunning(fixture.appHostPath),
         () => waitForNoDebugSessions(180000),
         () => waitForNoRunningAppHost(180000, fixture.appHostPath),
+        () => restoreE2eCliPathForE2E(),
+        () => restoreWorkspaceCliPath(),
+        () => restoreLaunchJson(launchJsonPath, originalLaunchJson),
         () => restorePrimaryWorkspaceAppHostSelection(),
-        () => removeLinkedWorktreePaths(fixture.seedRepositoryPath, fixture.linkedWorktreePath),
     ], 'Linked-worktree AppHost lifecycle E2E cleanup failed.');
 }
 
@@ -502,6 +679,20 @@ function resolveGitMetadataPath(baseDirectory: string, value: string): string {
     return path.resolve(baseDirectory, value);
 }
 
+function writeLaunchJson(launchJsonPath: string, value: unknown): void {
+    fs.mkdirSync(path.dirname(launchJsonPath), { recursive: true });
+    fs.writeFileSync(launchJsonPath, JSON.stringify(value, undefined, 2));
+}
+
+function restoreLaunchJson(launchJsonPath: string, originalLaunchJson: string | undefined): void {
+    if (originalLaunchJson === undefined) {
+        fs.rmSync(launchJsonPath, { force: true });
+        return;
+    }
+
+    fs.writeFileSync(launchJsonPath, originalLaunchJson);
+}
+
 async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: string, timeoutMs: number): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -517,6 +708,80 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
     throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire CLI process ${cliPid} to launch ${appHostPath}.`);
 }
 
+async function waitForExactLinkedAppHostCliProcess(
+    appHostPath: string,
+    appHostArguments: readonly string[],
+    timeoutMs: number
+): Promise<ProcessEntry> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const cliProcess = (await listProcessEntries(appHostPath)).find(processEntry =>
+            processEntry.arguments.length > 0 &&
+            commandLineArgumentEquals(processEntry.arguments[0], getCliPath()) &&
+            processEntry.arguments.includes('--start-debug-session'));
+        if (cliProcess) {
+            assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath(), appHostArguments);
+            return cliProcess;
+        }
+
+        await delay(250);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for the exact Aspire CLI child argv that launches ${appHostPath}.`);
+}
+
+function waitForCliFallbackAndLaunchInvocations(
+    invocationLogPath: string,
+    invocationCountBeforeLaunch: number,
+    appHostPath: string,
+    appHostArguments: readonly string[]
+): string[][] {
+    const invocations = getCliWrapperInvocations(invocationLogPath).slice(invocationCountBeforeLaunch);
+    const expectedRunInvocation = [
+        'run',
+        '--isolated',
+        '--start-debug-session',
+        '--nologo',
+        '--apphost',
+        appHostPath,
+        '--',
+        ...appHostArguments,
+    ];
+    const runInvocations = invocations.filter(invocation => invocation[0] === 'run');
+    assert.deepStrictEqual(runInvocations, [expectedRunInvocation]);
+
+    const configInfoIndex = invocations.findIndex(invocation =>
+        JSON.stringify(invocation) === JSON.stringify(['config', 'info', '--json', '--nologo']));
+    assert.ok(configInfoIndex >= 0, `Expected tokenless capability negotiation before launch: ${JSON.stringify(invocations)}.`);
+    const versionFallbackIndex = invocations.findIndex(
+        (invocation, index) => index > configInfoIndex && JSON.stringify(invocation) === JSON.stringify(['--version']));
+    assert.ok(versionFallbackIndex > configInfoIndex, `Expected stable 13.2 version fallback after tokenless config info: ${JSON.stringify(invocations)}.`);
+
+    return invocations;
+}
+
+async function waitForAppHostArgvEvidence(evidencePath: string, timeoutMs: number): Promise<string[]> {
+    const started = Date.now();
+    let lastError: unknown;
+    while (Date.now() - started < timeoutMs) {
+        try {
+            const value = JSON.parse(fs.readFileSync(evidencePath, 'utf8')) as unknown;
+            if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+                return value;
+            }
+
+            lastError = new Error(`Expected a JSON string array, got ${JSON.stringify(value)}.`);
+        }
+        catch (error) {
+            lastError = error;
+        }
+
+        await delay(250);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for exact AppHost argv evidence at ${evidencePath}. Last error: ${String(lastError)}`);
+}
+
 async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: number): Promise<ExtensionSpawnLog> {
     const runRoot = getRunRoot();
     assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to inspect Aspire Extension.log.');
@@ -528,7 +793,8 @@ async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: numb
             const line = [...lines].reverse().find(candidate =>
                 candidate.includes('Spawning Aspire CLI process:') &&
                 candidate.includes('--start-debug-session') &&
-                candidate.includes(`--apphost ${appHostPath}; cwd=`));
+                candidate.includes(`--apphost ${appHostPath}`) &&
+                candidate.includes('; cwd='));
             if (line) {
                 return { path: logPath, line };
             }
@@ -555,8 +821,8 @@ function findFilesNamed(rootPath: string, fileName: string): string[] {
     });
 }
 
-function writeLinkedWorktreeArtifact(artifact: Record<string, unknown>): void {
-    const artifactPath = path.join(ensureDiagnosticsDir(), 'apphost-lifecycle-linked-worktree.json');
+function writeLinkedWorktreeArtifact(scenario: 'lm' | 'f5', artifact: Record<string, unknown>): void {
+    const artifactPath = path.join(ensureDiagnosticsDir(), `apphost-lifecycle-linked-worktree-${scenario}.json`);
     fs.writeFileSync(artifactPath, JSON.stringify(artifact, undefined, 2));
 }
 

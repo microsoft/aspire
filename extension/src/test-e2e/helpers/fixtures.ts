@@ -228,6 +228,15 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     });
 }
 
+export function writeTokenlessStableCliWrapper(invocationLogPath: string): string {
+    removePath(invocationLogPath, { force: true });
+    return writeCliWrapper('aspire-tokenless-stable-13-2', {
+        configInfoJson: createConfigInfo(),
+        invocationLogPath,
+        versionOutput: '13.2.0',
+    });
+}
+
 export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
     return writeCliWrapper('aspire-streaming-discovery', {
         configInfoJson: createConfigInfo([lsJsonStreamCapability]),
@@ -799,6 +808,7 @@ function writeCliWrapper(
         psSnapshotReleaseFilePath?: string;
         psSnapshotAppHostPath?: string;
         psSnapshotAppHostPid?: number;
+        versionOutput?: string;
     },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
@@ -824,6 +834,14 @@ function waitForReleaseFile(filePath, description) {
   }
 }
 
+${options.versionOutput === undefined
+        ? ''
+        : `if (args.length === 1 && args[0] === '--version') {
+  console.log(${JSON.stringify(options.versionOutput)});
+  process.exit(0);
+}
+
+`}
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);

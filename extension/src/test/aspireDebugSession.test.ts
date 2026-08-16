@@ -3503,6 +3503,9 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 reservedPaths.push(appHostPath);
                 return 'restart-reservation';
             },
+            validateOrReacquireExternalLaunchReservation: () => {
+                throw new Error('The restart should acquire a fresh reservation.');
+            },
             replaceExternalLaunchReservation: () => {
                 throw new Error('The restart should acquire a fresh reservation.');
             },

@@ -680,6 +680,73 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.tryReserveExternalLaunch(projectPath), false);
     });
 
+    test('a repeated external reservation refreshes its pending expiry', () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+            const projectPath = path.join(directory, 'AppHost.csproj');
+            const reservationId = service.tryReserveExternalLaunch(projectPath);
+            assert.strictEqual(typeof reservationId, 'string');
+            clock.tick(externalLaunchReservationTimeoutMs - 1);
+
+            const refreshedReservationId = service.validateOrReacquireExternalLaunchReservation(projectPath, reservationId || '');
+
+            assert.strictEqual(refreshedReservationId, reservationId);
+            clock.tick(2);
+            assert.strictEqual(service.isLaunching(projectPath), true);
+            clock.tick(externalLaunchReservationTimeoutMs);
+            assert.strictEqual(service.isLaunching(projectPath), false);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('an expired repeated external reservation reacquires a fresh launch generation', () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+            const projectPath = path.join(directory, 'AppHost.csproj');
+            const expiredReservationId = service.tryReserveExternalLaunch(projectPath);
+            assert.strictEqual(typeof expiredReservationId, 'string');
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+            assert.strictEqual(service.isLaunching(projectPath), false);
+
+            const reacquiredReservationId = service.validateOrReacquireExternalLaunchReservation(projectPath, expiredReservationId || '');
+
+            assert.strictEqual(typeof reacquiredReservationId, 'string');
+            assert.notStrictEqual(reacquiredReservationId, expiredReservationId);
+            assert.strictEqual(service.isLaunching(projectPath), true);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('a stale repeated external reservation does not replace a newer claimant', () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+            const projectPath = path.join(directory, 'AppHost.csproj');
+            const staleReservationId = service.tryReserveExternalLaunch(projectPath);
+            assert.strictEqual(typeof staleReservationId, 'string');
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+            const currentReservationId = service.tryReserveExternalLaunch(projectPath);
+            assert.strictEqual(typeof currentReservationId, 'string');
+
+            const repeatedReservationId = service.validateOrReacquireExternalLaunchReservation(projectPath, staleReservationId || '');
+
+            assert.strictEqual(repeatedReservationId, false);
+            service.releaseExternalLaunchReservation(projectPath, staleReservationId || '');
+            assert.strictEqual(service.isLaunching(projectPath), true);
+            service.releaseExternalLaunchReservation(projectPath, currentReservationId || '');
+            assert.strictEqual(service.isLaunching(projectPath), false);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
     test('an unresolved workspace launch blocks lifecycle operations for AppHosts inside it', async () => {
         const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
         const projectPath = path.join(directory, 'AppHost.csproj');

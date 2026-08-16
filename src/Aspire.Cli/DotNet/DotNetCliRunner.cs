@@ -915,16 +915,19 @@ internal sealed class DotNetCliRunner(
         // Add --verbose flag when using watch and debug is enabled
         var verboseSwitch = watch && options.Debug ? "--verbose" : string.Empty;
 
-        string[] cliArgs = isSingleFile switch
+        string[] cliOptions = isSingleFile switch
         {
-            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
+            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName],
             // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
             // for single-file AppHosts so the suppression property is applied before launch
             // and a CLI-launched AppHost cannot recursively enter the run hook.
-            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName, "--", .. args]
+            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName]
         };
 
-        cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
+        // Empty extension-owned entries represent omitted optional switches, while empty or
+        // whitespace-only entries after "--" are valid AppHost arguments. Filter only the
+        // option prefix so application argument boundaries survive CLI-to-extension delegation.
+        string[] cliArgs = [.. cliOptions.Where(arg => !string.IsNullOrWhiteSpace(arg)), "--", .. args];
 
         var finalEnv = CreateRunEnvironment(
             env,

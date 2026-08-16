@@ -19,6 +19,11 @@ export { stripAspireDebugConfigurationProviderInternalProperties } from './Aspir
 export interface ExternalLaunchReservation {
     /** Returns the reservation ID, or `false` when another launch or run session already owns this AppHost. */
     tryReserveExternalLaunch(appHostPath: string, isDirectoryScope?: boolean): string | false;
+    /**
+     * Validates and refreshes this launch's reservation, reacquiring it with a new ID when
+     * it expired, or returns `false` when another launch now owns the AppHost.
+     */
+    validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope?: boolean): string | false;
     /** Replaces this resolver's previous reservation, or returns `false` when the new AppHost is already owned. */
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
     /** Releases the reservation only when the path and reservation ID still identify the same launch. */
@@ -219,7 +224,10 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 }
                 else if (existingExternalReservation.isDirectoryScope === isDirectoryScope &&
                     compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
-                    reservationId = existingExternalReservation.reservationId;
+                    reservationId = this._launchReservation.validateOrReacquireExternalLaunchReservation(
+                        existingExternalReservation.appHostPath,
+                        existingExternalReservation.reservationId,
+                        isDirectoryScope);
                     // Keep the path where the reservation was actually stored. The identity
                     // can become ambiguous on a later resolver pass if sibling files appear.
                     reservationPath = existingExternalReservation.appHostPath;

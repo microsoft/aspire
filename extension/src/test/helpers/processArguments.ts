@@ -37,3 +37,32 @@ export function assertLinkedAppHostCliLaunch(
         commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),
         `Expected exact --apphost path '${appHostPath}' immediately after '--apphost' in: ${formattedArguments}`);
 }
+
+export function assertExactLinkedAppHostCliLaunch(
+    argumentsList: readonly string[],
+    appHostPath: string,
+    cliPath: string,
+    appHostArguments: readonly string[],
+    platform = process.platform
+): void {
+    const expectedArguments = [
+        cliPath,
+        'run',
+        '--isolated',
+        '--start-debug-session',
+        '--nologo',
+        '--apphost',
+        appHostPath,
+        '--',
+        ...appHostArguments,
+    ];
+    const pathsMatch = argumentsList.length === expectedArguments.length &&
+        commandLineArgumentEquals(argumentsList[0], expectedArguments[0], platform) &&
+        commandLineArgumentEquals(argumentsList[6], expectedArguments[6], platform);
+    const nonPathArgumentsMatch = pathsMatch && argumentsList.every((argument, index) =>
+        index === 0 || index === 6 || argument === expectedArguments[index]);
+
+    assert.ok(
+        nonPathArgumentsMatch,
+        `Expected exact Aspire CLI argv ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(argumentsList)}.`);
+}

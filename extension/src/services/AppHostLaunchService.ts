@@ -507,6 +507,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         return this._reservations.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
     }
 
+    validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope = false): string | false {
+        return this._reservations.validateOrReacquireExternalLaunchReservation(appHostPath, reservationId, isDirectoryScope);
+    }
+
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope = false): string | false {
         return this._reservations.replaceExternalLaunchReservation(previousAppHostPath, previousReservationId, appHostPath, isDirectoryScope);
     }
