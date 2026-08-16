@@ -5,6 +5,7 @@ import * as path from 'path';
 import { findRunningAppHost, getCommandInvocationCount, getDebugLaunchCount, isSamePath, readStateFile, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { runProcess, terminateProcessTree } from './helpers/process';
+import { commandLineArgumentEquals, getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
 
@@ -48,11 +49,6 @@ interface LinkedWorktreeAppHostFixture {
     adminBackpointerContents: string;
 }
 
-interface ProcessEntry {
-    pid: number;
-    commandLine: string;
-}
-
 interface ExtensionSpawnLog {
     path: string;
     line: string;
@@ -61,13 +57,72 @@ interface ExtensionSpawnLog {
 const startToolName = 'aspire_apphost_start';
 const stopToolName = 'aspire_apphost_stop';
 
-test('matches Windows AppHost process paths case-insensitively', () => {
-    assert.strictEqual(
-        commandLineContainsAppHostPath(
-            'aspire.exe run --start-debug-session --apphost c:\\Users\\runner\\workspace\\AppHost.csproj',
-            'C:\\Users\\runner\\workspace\\AppHost.csproj',
-            'win32'),
-        true);
+test('accepts exact Windows launch arguments and compares paths case-insensitively', () => {
+    assert.doesNotThrow(() => assertLinkedAppHostCliLaunch(
+        ['C:\\Tools\\aspire.exe', 'run', '--isolated', '--start-debug-session', '--apphost', 'c:\\Users\\runner\\workspace with spaces\\AppHost.csproj'],
+        'C:\\Users\\runner\\workspace with spaces\\AppHost.csproj',
+        'C:\\Tools\\ASPIRE.EXE',
+        'win32'));
+});
+
+test('rejects --isolated=false as evidence of inferred isolation', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated=false', '--start-debug-session', '--apphost', appHostPath],
+            appHostPath),
+        /Expected exact '--isolated'/);
+});
+
+test('rejects false immediately after --isolated', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated', 'false', '--start-debug-session', '--apphost', appHostPath],
+            appHostPath),
+        /Expected inferred isolation to use only the true-form --isolated switch/);
+});
+
+test('rejects --start-debug-session embedded in another argument', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated', '--prefix--start-debug-session', '--apphost', appHostPath],
+            appHostPath),
+        /Expected exact '--start-debug-session'/);
+});
+
+test('rejects --apphost embedded in another argument', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--prefix--apphost', appHostPath],
+            appHostPath),
+        /Expected exact '--apphost'/);
+});
+
+test('rejects an AppHost path embedded in another argument', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--apphost', `${appHostPath}.backup`],
+            appHostPath),
+        /Expected exact --apphost path/);
+});
+
+test('requires the AppHost path immediately after --apphost', () => {
+    const appHostPath = path.join(getWorkspaceRoot(), 'Linked Worktree', 'LinkedAppHost.csproj');
+
+    assert.throws(
+        () => assertLinkedAppHostCliLaunch(
+            [getCliPath(), 'run', '--isolated', '--start-debug-session', '--apphost', '--other', appHostPath],
+            appHostPath),
+        /Expected exact --apphost path/);
 });
 
 suite('Aspire AppHost lifecycle language model tools E2E', function () {
@@ -255,20 +310,24 @@ suite('Aspire AppHost lifecycle language model tools E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const fixture = await createLinkedWorktreeAppHostFixture();
-        const relativeAppHostPath = path.relative(getWorkspaceRoot(), fixture.appHostPath).split(path.sep).join('/');
-        const artifact: Record<string, unknown> = {
-            status: 'created',
-            ...fixture,
-            relativeAppHostPath,
-            cli: {
-                path: getCliPath(),
-                version: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
-                repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
-            },
-        };
-        writeLinkedWorktreeArtifact(artifact);
+        let artifact: Record<string, unknown> = {};
 
         try {
+            const relativeAppHostPath = path.relative(getWorkspaceRoot(), fixture.appHostPath).split(path.sep).join('/');
+            artifact = {
+                status: 'created',
+                ...fixture,
+                relativeAppHostPath,
+            };
+            Object.assign(artifact, {
+                cli: {
+                    path: getCliPath(),
+                    version: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
+                    repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
+                },
+            });
+            writeLinkedWorktreeArtifact(artifact);
+
             writeWorkspaceAppHostConfigForPath(fixture.appHostPath);
             const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
             await executeE2eControlCommand({ name: 'refreshAppHosts' });
@@ -309,7 +368,7 @@ suite('Aspire AppHost lifecycle language model tools E2E', function () {
             assert.ok(cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process: ${JSON.stringify(processInfoStatus)}`);
 
             const cliProcess = await waitForLinkedAppHostCliProcess(cliPid, fixture.appHostPath, 180000);
-            assertLinkedAppHostCliLaunch(cliProcess.commandLine, fixture.appHostPath);
+            assertLinkedAppHostCliLaunch(cliProcess.arguments, fixture.appHostPath);
             const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
 
             const runningState = readStateFile();
@@ -367,8 +426,8 @@ async function createLinkedWorktreeAppHostFixture(): Promise<LinkedWorktreeAppHo
     const runRoot = getRunRoot();
     assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to create a linked-worktree AppHost fixture.');
 
-    const seedRepositoryPath = path.join(runRoot, 'apphost-lifecycle-linked-worktree-seed');
-    const linkedWorktreePath = path.join(getWorkspaceRoot(), 'AspireE2E.LinkedWorktree');
+    const seedRepositoryPath = path.join(runRoot, 'apphost lifecycle linked worktree seed');
+    const linkedWorktreePath = path.join(getWorkspaceRoot(), 'AspireE2E Linked Worktree');
     await removeLinkedWorktreePaths(seedRepositoryPath, linkedWorktreePath);
     fs.mkdirSync(seedRepositoryPath, { recursive: true });
 
@@ -513,46 +572,49 @@ function resolveGitMetadataPath(baseDirectory: string, value: string): string {
 
 async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: string, timeoutMs: number): Promise<ProcessEntry> {
     const started = Date.now();
-    let lastCommandLine: string | undefined;
     while (Date.now() - started < timeoutMs) {
-        const processes = process.platform === 'win32'
-            ? await listWindowsProcesses()
-            : await listPosixProcesses();
-        const cliProcess = processes.find(entry => entry.pid === cliPid);
-        lastCommandLine = cliProcess?.commandLine;
-        if (cliProcess &&
-            cliProcess.commandLine.includes('--start-debug-session') &&
-            commandLineContainsAppHostPath(cliProcess.commandLine, appHostPath)) {
+        const cliProcess = await getProcessEntry(cliPid);
+        if (cliProcess) {
+            assertLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath);
             return cliProcess;
         }
 
         await delay(250);
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire CLI process ${cliPid} to launch ${appHostPath}. Last command line: ${lastCommandLine ?? '<not found>'}`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire CLI process ${cliPid} to launch ${appHostPath}.`);
 }
 
-function assertLinkedAppHostCliLaunch(commandLine: string, appHostPath: string): void {
-    const normalizedCommandLine = normalizeCommandLine(commandLine);
-    const normalizedCliPath = normalizeCommandLine(getCliPath());
-    const normalizedAppHostPath = normalizeCommandLine(appHostPath);
-    const cliPathIndex = normalizedCommandLine.indexOf(normalizedCliPath);
-    assert.ok(cliPathIndex >= 0, `Expected the current E2E CLI '${getCliPath()}' in: ${commandLine}`);
+function assertLinkedAppHostCliLaunch(
+    argumentsList: readonly string[],
+    appHostPath: string,
+    cliPath = getCliPath(),
+    platform = process.platform
+): void {
+    const formattedArguments = JSON.stringify(argumentsList);
+    assert.ok(
+        argumentsList.length > 0 && commandLineArgumentEquals(argumentsList[0], cliPath, platform),
+        `Expected the current E2E CLI '${cliPath}' as argv[0] in: ${formattedArguments}`);
 
-    let cursor = cliPathIndex + normalizedCliPath.length;
-    for (const argument of ['run', '--isolated', '--start-debug-session', '--apphost']) {
-        const argumentIndex = normalizedCommandLine.indexOf(argument, cursor);
-        assert.ok(argumentIndex >= cursor, `Expected '${argument}' after the previous launch argument in: ${commandLine}`);
-        cursor = argumentIndex + argument.length;
-    }
+    const runIndex = argumentsList.indexOf('run', 1);
+    assert.ok(runIndex > 0, `Expected exact 'run' after the CLI path in: ${formattedArguments}`);
 
-    const appHostPathIndex = normalizedCommandLine.indexOf(normalizedAppHostPath, cursor);
-    assert.ok(appHostPathIndex >= cursor, `Expected exact --apphost path '${appHostPath}' in: ${commandLine}`);
-    assert.strictEqual(/--isolated\s+false(?:\s|$)/i.test(commandLine), false, `Expected inferred isolation to use the true-form --isolated switch: ${commandLine}`);
-}
+    const isolatedIndex = argumentsList.indexOf('--isolated', runIndex + 1);
+    assert.ok(isolatedIndex > runIndex, `Expected exact '--isolated' after 'run' in: ${formattedArguments}`);
+    assert.strictEqual(
+        argumentsList.some(argument => argument === '--isolated=false') || argumentsList[isolatedIndex + 1]?.toLowerCase() === 'false',
+        false,
+        `Expected inferred isolation to use only the true-form --isolated switch: ${formattedArguments}`);
 
-function normalizeCommandLine(value: string): string {
-    return process.platform === 'win32' ? value.toLowerCase() : value;
+    const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session', isolatedIndex + 1);
+    assert.ok(startDebugSessionIndex > isolatedIndex, `Expected exact '--start-debug-session' after '--isolated' in: ${formattedArguments}`);
+
+    const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
+    assert.ok(appHostIndex > startDebugSessionIndex, `Expected exact '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
+    assert.ok(
+        appHostIndex + 1 < argumentsList.length &&
+        commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),
+        `Expected exact --apphost path '${appHostPath}' immediately after '--apphost' in: ${formattedArguments}`);
 }
 
 async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: number): Promise<ExtensionSpawnLog> {
@@ -566,9 +628,8 @@ async function waitForLinkedAppHostSpawnLog(appHostPath: string, timeoutMs: numb
             const line = [...lines].reverse().find(candidate =>
                 candidate.includes('Spawning Aspire CLI process:') &&
                 candidate.includes('--start-debug-session') &&
-                commandLineContainsAppHostPath(candidate, appHostPath));
+                candidate.includes(`--apphost ${appHostPath}; cwd=`));
             if (line) {
-                assertLinkedAppHostCliLaunch(line, appHostPath);
                 return { path: logPath, line };
             }
         }
@@ -796,53 +857,21 @@ async function waitForAppHostProcessCount(appHostPath: string, expectedCount: nu
  * polled tree model, which is not an authoritative statement about running processes.
  */
 async function findAppHostProcessIds(appHostPath: string): Promise<number[]> {
-    const processes = process.platform === 'win32'
-        ? await listWindowsProcesses()
-        : await listPosixProcesses();
+    const processes = await listProcessEntries('--start-debug-session');
 
     return processes
-        .filter(entry => entry.commandLine.includes('--start-debug-session') &&
-            commandLineContainsAppHostPath(entry.commandLine, appHostPath))
+        .filter(entry => commandLineHasExactAppHost(entry.arguments, appHostPath))
         .map(entry => entry.pid)
         .sort((left, right) => left - right);
 }
 
-function commandLineContainsAppHostPath(commandLine: string, appHostPath: string, platform = process.platform): boolean {
-    if (platform === 'win32') {
-        return commandLine.toLowerCase().includes(appHostPath.toLowerCase());
-    }
-
-    return commandLine.includes(appHostPath);
-}
-
-async function listPosixProcesses(): Promise<{ pid: number; commandLine: string }[]> {
-    // `ps -A -w -w -o pid=,args=` prints one process per line with no header, for example:
-    //   " 51234 /path/to/aspire run --start-debug-session --nologo --apphost /path/App.csproj"
-    // The repeated `-w` disables the default command-line truncation, which would otherwise
-    // cut off the `--apphost` argument this match depends on.
-    const result = await runProcess('/bin/ps', ['-A', '-w', '-w', '-o', 'pid=,args='], { timeoutMs: 30000 });
-    return result.stdout
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
-            const separatorIndex = line.indexOf(' ');
-            return { pid: Number.parseInt(line.slice(0, separatorIndex), 10), commandLine: line.slice(separatorIndex + 1) };
-        })
-        .filter(entry => Number.isInteger(entry.pid));
-}
-
-async function listWindowsProcesses(): Promise<{ pid: number; commandLine: string }[]> {
-    const result = await runProcess('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        'Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress',
-    ], { timeoutMs: 60000 });
-
-    const parsed = JSON.parse(result.stdout) as { ProcessId: number; CommandLine: string | null }[] | { ProcessId: number; CommandLine: string | null };
-    const entries = Array.isArray(parsed) ? parsed : [parsed];
-    return entries.map(entry => ({ pid: entry.ProcessId, commandLine: entry.CommandLine ?? '' }));
+function commandLineHasExactAppHost(argumentsList: readonly string[], appHostPath: string, platform = process.platform): boolean {
+    const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session');
+    const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
+    return startDebugSessionIndex >= 0 &&
+        appHostIndex > startDebugSessionIndex &&
+        appHostIndex + 1 < argumentsList.length &&
+        commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform);
 }
 
 function writeLifecycleToolArtifact(artifact: Record<string, unknown>): void {

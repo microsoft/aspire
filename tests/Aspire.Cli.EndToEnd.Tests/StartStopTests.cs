@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
@@ -99,7 +100,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var projectSuffix = Guid.NewGuid().ToString("N")[..6];
         var projectName = $"WorktreeIsolation_{projectSuffix}";
-        var linkedWorktreeName = $"{projectName}-linked";
+        var linkedWorktreeName = $"{projectName} linked";
         var linkedWorktreeRelativePath = $".worktrees/{linkedWorktreeName}";
 
         var workspace = TemporaryWorkspace.Create(output);
@@ -135,6 +136,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
             "git commit -m 'Initial AppHost'",
             counter);
 
+        Exception? primaryFailure = null;
         try
         {
             // Both starts intentionally omit --isolated. The linked checkout must infer it, while
@@ -185,19 +187,31 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
             Assert.Empty(ReadRunningAppHosts(stoppedInstancesPath));
         }
-        finally
+        catch (Exception exception)
         {
-            // Keep cleanup best-effort so a proof assertion remains the primary failure while
-            // still removing either detached process if the scenario exits early.
-            try
+            primaryFailure = exception;
+        }
+
+        try
+        {
+            await CleanupLinkedWorktreeAppHostsAsync(auto, counter, projectName);
+        }
+        catch (Exception cleanupFailure)
+        {
+            if (primaryFailure is null)
             {
-                await auto.TypeAsync("aspire stop --all 2>/dev/null || true");
-                await auto.EnterAsync();
-                await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(1));
+                throw;
             }
-            catch
-            {
-            }
+
+            // Keep the proof assertion as the test failure while making a teardown problem visible
+            // in both xUnit output and the exception data captured in diagnostics.
+            output.WriteLine($"Linked-worktree cleanup also failed: {cleanupFailure}");
+            primaryFailure.Data["LinkedWorktreeCleanupFailure"] = cleanupFailure.ToString();
+        }
+
+        if (primaryFailure is not null)
+        {
+            ExceptionDispatchInfo.Capture(primaryFailure).Throw();
         }
     }
 
@@ -403,6 +417,41 @@ print("{{assertionSuccessMarker}}")
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
+    }
+
+    private static async Task CleanupLinkedWorktreeAppHostsAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string projectName)
+    {
+        // A detached CLI can still be finishing startup when an earlier proof assertion fails.
+        // Retry the supported stop path, then independently prove that the CLI registry and Docker
+        // network no longer contain anything from this AppHost before allowing teardown to pass.
+        await auto.RunCommandAsync(
+            "stopped=0; " +
+            "for attempt in 1 2 3; do " +
+            "if aspire stop --all; then stopped=1; break; " +
+            "else echo \"aspire stop --all attempt $attempt failed\" >&2; sleep 2; fi; " +
+            "done; " +
+            "[ \"$stopped\" -eq 1 ]",
+            counter,
+            TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync(
+            "stopped=0; " +
+            "for attempt in $(seq 1 24); do " +
+            "if aspire ps --format json | tr -d '[:space:]' | grep -qx '\\[\\]'; then stopped=1; break; fi; " +
+            "sleep 5; " +
+            "done; " +
+            "if [ \"$stopped\" -eq 1 ]; then true; else aspire ps --format json; false; fi",
+            counter,
+            TimeSpan.FromMinutes(3));
+
+        // Docker network deletion is asynchronous after the last DCP process exits.
+        await auto.ExecuteCommandUntilOutputAsync(
+            counter,
+            $"docker network ls --format '{{{{.Name}}}}' | grep -i -F -- {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} | wc -l",
+            "0",
+            timeout: TimeSpan.FromMinutes(5));
     }
 
     private static IReadOnlyList<RunningAppHostInfo> ReadRunningAppHosts(string path)
