@@ -184,18 +184,22 @@ public static class KubernetesEnvironmentExtensions
             return;
         }
 
-        var matchingMounts = resource.Annotations
-            .OfType<ContainerMountAnnotation>()
-            .Where(mount => mount.Type == ContainerMountType.Volume &&
-                string.Equals(mount.Source, binding.Volume.Name, StringComparison.Ordinal))
-            .ToArray();
-
         // Resolve after the model is complete so WithPersistentVolume and WithVolume remain
         // order-independent while publish mode can continue matching the original claim name.
-        foreach (var mount in matchingMounts)
+        //
+        // Replace each mount in place rather than Remove-then-Add. ContainerMountAnnotation is a
+        // record, so Remove matches by value and a Remove/Add pair would both relocate the mount to
+        // the end of the annotation collection and risk removing a value-identical sibling.
+        // Assigning through the indexer preserves position and swaps atomically.
+        var annotations = resource.Annotations;
+
+        for (var i = 0; i < annotations.Count; i++)
         {
-            resource.Annotations.Remove(mount);
-            resource.Annotations.Add(new ContainerMountAnnotation(localVolumeName, mount.Target, mount.Type, mount.IsReadOnly));
+            if (annotations[i] is ContainerMountAnnotation { Type: ContainerMountType.Volume } mount &&
+                string.Equals(mount.Source, binding.Volume.Name, StringComparison.Ordinal))
+            {
+                annotations[i] = new ContainerMountAnnotation(localVolumeName, mount.Target, mount.Type, mount.IsReadOnly);
+            }
         }
     }
 
