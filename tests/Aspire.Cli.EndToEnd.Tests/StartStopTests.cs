@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.TestUtilities;
@@ -88,6 +89,116 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task LinkedWorktreeInfersIsolationAndPrimaryStopLeavesItRunning()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"WorktreeIsolation_{projectSuffix}";
+        var linkedWorktreeName = $"{projectName}-linked";
+        var linkedWorktreeRelativePath = $".worktrees/{linkedWorktreeName}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+        var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
+        var primaryCheckout = $"{containerWorkspace}/{projectName}";
+        var linkedCheckout = $"{primaryCheckout}/{linkedWorktreeRelativePath}";
+
+        var bothInstancesPath = Path.Combine(workspace.WorkspaceRoot.FullName, "both-instances.json");
+        var remainingInstancePath = Path.Combine(workspace.WorkspaceRoot.FullName, "remaining-instance.json");
+        var stoppedInstancesPath = Path.Combine(workspace.WorkspaceRoot.FullName, "stopped-instances.json");
+        var bothInstancesContainerPath = CliE2ETestHelpers.ToContainerPath(bothInstancesPath, workspace);
+        var remainingInstanceContainerPath = CliE2ETestHelpers.ToContainerPath(remainingInstancePath, workspace);
+        var stoppedInstancesContainerPath = CliE2ETestHelpers.ToContainerPath(stoppedInstancesPath, workspace);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        // Create both checkouts through git inside the container. A host-created worktree would
+        // write absolute .git admin paths in the host namespace, which are invalid in this mount.
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+        await auto.RunCommandAsync(
+            "git init -b main && " +
+            "git config user.name 'Aspire CLI E2E' && " +
+            "git config user.email 'aspire-cli-e2e@example.invalid' && " +
+            "git add . && " +
+            "git commit -m 'Initial AppHost'",
+            counter);
+
+        try
+        {
+            // Both starts intentionally omit --isolated. The linked checkout must infer it, while
+            // this single container keeps ~/.aspire/backchannels shared for structured discovery.
+            await auto.AspireStartAsync(counter);
+            await auto.RunCommandAsync(
+                $"git worktree add {AspireCliShellCommandHelpers.QuoteBashArg(linkedWorktreeRelativePath)} -b linked-worktree",
+                counter);
+            await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(linkedCheckout)}", counter);
+            await auto.AspireStartAsync(counter);
+
+            await auto.RunCommandAsync(
+                $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(bothInstancesContainerPath)}",
+                counter,
+                TimeSpan.FromMinutes(1));
+
+            var bothInstances = ReadRunningAppHosts(bothInstancesPath);
+            Assert.Equal(2, bothInstances.Count);
+
+            var primaryInstance = Assert.Single(bothInstances, instance =>
+                string.Equals(Path.GetDirectoryName(instance.AppHostPath), primaryCheckout, StringComparison.Ordinal));
+            var linkedInstance = Assert.Single(bothInstances, instance =>
+                string.Equals(Path.GetDirectoryName(instance.AppHostPath), linkedCheckout, StringComparison.Ordinal));
+
+            Assert.NotEqual(primaryInstance.AppHostPid, linkedInstance.AppHostPid);
+            Assert.NotEqual(primaryInstance.DashboardUri.Port, linkedInstance.DashboardUri.Port);
+
+            // The linked checkout is nested beneath the primary workspace, so path containment
+            // alone would stop both. Worktree-aware scoping must select only the primary instance.
+            await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(primaryCheckout)}", counter);
+            await auto.AspireStopAsync(counter);
+            await auto.RunCommandAsync(
+                $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(remainingInstanceContainerPath)}",
+                counter,
+                TimeSpan.FromMinutes(1));
+
+            var remainingInstance = Assert.Single(ReadRunningAppHosts(remainingInstancePath));
+            Assert.Equal(linkedInstance.AppHostPath, remainingInstance.AppHostPath);
+            Assert.Equal(linkedInstance.AppHostPid, remainingInstance.AppHostPid);
+            Assert.Equal(linkedInstance.DashboardUri, remainingInstance.DashboardUri);
+
+            await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(linkedCheckout)}", counter);
+            await auto.AspireStopAsync(counter);
+            await auto.RunCommandAsync(
+                $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(stoppedInstancesContainerPath)}",
+                counter,
+                TimeSpan.FromMinutes(1));
+
+            Assert.Empty(ReadRunningAppHosts(stoppedInstancesPath));
+        }
+        finally
+        {
+            // Keep cleanup best-effort so a proof assertion remains the primary failure while
+            // still removing either detached process if the scenario exits early.
+            try
+            {
+                await auto.TypeAsync("aspire stop --all 2>/dev/null || true");
+                await auto.EnterAsync();
+                await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(1));
+            }
+            catch
+            {
+            }
+        }
     }
 
     [Fact]
@@ -293,4 +404,35 @@ print("{{assertionSuccessMarker}}")
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
+
+    private static IReadOnlyList<RunningAppHostInfo> ReadRunningAppHosts(string path)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+
+        var instances = new List<RunningAppHostInfo>();
+        foreach (var element in document.RootElement.EnumerateArray())
+        {
+            // `aspire ps --format json` emits entries shaped like:
+            // { "appHostPath": "/workspace/app/app.csproj", "appHostPid": 123,
+            //   "status": "running", "dashboardUrl": "https://localhost:17234/login?t=..." }
+            var appHostPath = element.GetProperty("appHostPath").GetString();
+            var appHostPid = element.GetProperty("appHostPid").GetInt32();
+            var status = element.GetProperty("status").GetString();
+            var dashboardUrl = element.GetProperty("dashboardUrl").GetString();
+
+            Assert.False(string.IsNullOrWhiteSpace(appHostPath));
+            Assert.True(appHostPid > 0);
+            Assert.Equal("running", status);
+            Assert.True(
+                Uri.TryCreate(dashboardUrl, UriKind.Absolute, out var dashboardUri) && dashboardUri.Port > 0,
+                $"Expected a dashboard URL with an explicit port, got '{dashboardUrl}'.");
+
+            instances.Add(new RunningAppHostInfo(appHostPath, appHostPid, dashboardUri!));
+        }
+
+        return instances;
+    }
+
+    private sealed record RunningAppHostInfo(string AppHostPath, int AppHostPid, Uri DashboardUri);
 }
