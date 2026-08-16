@@ -10,12 +10,17 @@ namespace Aspire.Hosting.Azure.ServiceBus;
 /// </summary>
 internal sealed class SqlServerConnectionAnnotation : IResourceAnnotation
 {
-    public SqlServerConnectionAnnotation(SqlServerServerResource sqlServer)
+    public SqlServerConnectionAnnotation(SqlServerServerResource sqlServer, IReadOnlyList<IResourceAnnotation> waitAnnotations)
     {
         SqlServer = sqlServer ?? throw new ArgumentNullException(nameof(sqlServer));
+        WaitAnnotations = waitAnnotations ?? throw new ArgumentNullException(nameof(waitAnnotations));
     }
 
     public SqlServerServerResource SqlServer { get; }
+
+    // Track only waits added by WithSqlServer so replacing the connection does not remove waits
+    // the user independently added for the previous SQL Server resource.
+    public IReadOnlyList<IResourceAnnotation> WaitAnnotations { get; }
 
     public EndpointReference Endpoint => SqlServer.PrimaryEndpoint;
 
