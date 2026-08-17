@@ -39,11 +39,6 @@ export async function stopExternalAppHost(
                 return;
             }
 
-            if (cliProcess.exitCode !== null || cliProcess.signalCode !== null) {
-                settleCancellation();
-                return;
-            }
-
             termination ??= terminateCliProcess(cliProcess, 'aspire stop');
             void termination.then(
                 settleCancellation,
@@ -70,7 +65,7 @@ export async function stopExternalAppHost(
                 },
                 exitCallback: code => {
                     if (cancellationRequested) {
-                        settleCancellation();
+                        terminateForCancellation();
                         return;
                     }
 
@@ -87,7 +82,7 @@ export async function stopExternalAppHost(
                 },
                 errorCallback: error => {
                     if (cancellationRequested) {
-                        settleCancellation();
+                        terminateForCancellation();
                     } else {
                         settle(() => reject(error));
                     }

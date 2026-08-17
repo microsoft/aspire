@@ -9,6 +9,9 @@ import { EnvironmentVariables } from "../../utils/environment";
 
 const processShutdownGracePeriodMs = 5_000;
 const processShutdownConfirmationIntervalMs = 50;
+const windowsForcedTaskkillCloseReserveMs = 250;
+const windowsForcedTaskkillTotalReserveMs = 1_250;
+const windowsTaskkillProcessNotFoundExitCode = 128;
 const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
 
 export interface SpawnProcessOptions {
@@ -348,44 +351,107 @@ async function terminateWindowsCliProcess(
     }
 
     const childClose = observeChildProcessClose(childProcess);
+    const deadline = Date.now() + processShutdownGracePeriodMs;
+    const remainingTime = () => Math.max(0, deadline - Date.now());
+    const waitForClose = () => childClose.wait(remainingTime());
+    const killLeaderAsFallback = async (taskkillError: unknown): Promise<void> => {
+        if (childClose.hasClosed() || childProcess.exitCode !== null || childProcess.signalCode !== null) {
+            return;
+        }
+
+        extensionLogOutputChannel.warn(
+            `Failed to terminate ${description} with taskkill; falling back to the CLI leader process: ${String(taskkillError)}`);
+        if (!childProcess.kill('SIGKILL')) {
+            throw taskkillError;
+        }
+        if (remainingTime() === 0) {
+            throw taskkillError;
+        }
+        if (!await waitForClose()) {
+            throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after taskkill failed and the leader was killed.`);
+        }
+        // TerminateProcess only confirms the leader exited. Descendants may still be orphaned, so
+        // preserve the taskkill failure instead of reporting successful process-tree cleanup.
+        throw taskkillError;
+    };
     try {
         if (childProcess.pid === undefined) {
             if (!childProcess.kill(options?.force ? 'SIGKILL' : undefined)) {
                 throw new Error(`Could not terminate ${description} because no process identifier was available.`);
             }
-            if (!await childClose.wait(processShutdownGracePeriodMs)) {
+            if (!await waitForClose()) {
                 throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after termination.`);
             }
             return;
         }
 
-        const runAndValidateTaskkill = async (force: boolean) => {
-            const exitCode = await runTaskkill(childProcess, description, force, processShutdownGracePeriodMs);
-            if (exitCode !== 0 &&
-                childProcess.exitCode === null &&
-                childProcess.signalCode === null &&
-                !childClose.hasClosed()) {
-                throw new Error(`taskkill for ${description} exited with code ${exitCode} while PID ${childProcess.pid} remained live.`);
+        const runTaskkillWithinDeadline = async (force: boolean): Promise<number | null> => {
+            try {
+                const closeReserveMs = force ? windowsForcedTaskkillCloseReserveMs : 0;
+                return await runTaskkill(
+                    childProcess,
+                    description,
+                    force,
+                    Math.max(0, remainingTime() - closeReserveMs));
+            }
+            catch (error) {
+                await killLeaderAsFallback(error);
+                throw error;
             }
         };
 
-        await runAndValidateTaskkill(options?.force === true);
-        if (await childClose.wait(processShutdownGracePeriodMs)) {
+        const forceRequested = options?.force === true;
+        const firstExitCode = await runTaskkillWithinDeadline(forceRequested);
+        if (childClose.hasClosed()) {
             return;
         }
 
-        if (!options?.force) {
+        if (firstExitCode === windowsTaskkillProcessNotFoundExitCode) {
+            if (!await waitForClose()) {
+                throw new Error(`taskkill could not find ${description} PID ${childProcess.pid}, but the process did not report exit within ${processShutdownGracePeriodMs}ms.`);
+            }
+            return;
+        }
+
+        if (!forceRequested) {
+            // A nonzero graceful result means the tree was not terminated. Escalate immediately
+            // instead of rejecting before `/f` gets a chance to clean up descendants.
+            if (firstExitCode === 0) {
+                const forcedTaskkillReserveMs = Math.min(windowsForcedTaskkillTotalReserveMs, remainingTime());
+                if (await childClose.wait(Math.max(0, remainingTime() - forcedTaskkillReserveMs))) {
+                    return;
+                }
+            }
+
             if (!options?.suppressTimeoutWarning) {
                 extensionLogOutputChannel.warn(`${description} did not exit within ${processShutdownGracePeriodMs}ms; forcing termination.`);
             }
 
-            await runAndValidateTaskkill(true);
-            if (await childClose.wait(processShutdownGracePeriodMs)) {
+            const forcedExitCode = await runTaskkillWithinDeadline(true);
+            if (childClose.hasClosed()) {
+                return;
+            }
+            if (forcedExitCode === windowsTaskkillProcessNotFoundExitCode) {
+                if (!await waitForClose()) {
+                    throw new Error(`taskkill could not find ${description} PID ${childProcess.pid}, but the process did not report exit within ${processShutdownGracePeriodMs}ms.`);
+                }
+                return;
+            }
+            if (forcedExitCode !== 0) {
+                await killLeaderAsFallback(new Error(
+                    `taskkill for ${description} exited with code ${forcedExitCode} while PID ${childProcess.pid} remained live.`));
                 return;
             }
         }
+        else if (firstExitCode !== 0) {
+            await killLeaderAsFallback(new Error(
+                `taskkill for ${description} exited with code ${firstExitCode} while PID ${childProcess.pid} remained live.`));
+            return;
+        }
 
-        throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after taskkill succeeded.`);
+        if (!await waitForClose()) {
+            throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after taskkill succeeded.`);
+        }
     }
     finally {
         childClose.dispose();

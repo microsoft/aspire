@@ -1,4 +1,4 @@
-import { terminalCommandArgumentControlCharacters } from '../loc/strings';
+import { cmdShimPercentArgument, terminalCommandArgumentControlCharacters } from '../loc/strings';
 import { getCmdShimSpawnCommand as buildCmdShimSpawnCommand, getCmdShimCommandInterpreter, quoteCmdArgument } from './cmdShimCommand';
 import type { CmdShimSpawnCommand } from './cmdShimCommand';
 export { isCommandShimPath, quoteCmdArgument, shouldWrapWithCmd } from './cmdShimCommand';
@@ -15,9 +15,15 @@ export function assertNoTerminalControlCharacters(value: string): void {
     }
 }
 
-function assertNoCmdWrapperControlCharacters(values: readonly string[]): void {
+function assertCmdWrapperValues(values: readonly string[]): void {
     for (const value of values) {
         assertNoTerminalControlCharacters(value);
+    }
+
+    // cmd.exe expands `%NAME%` before the batch shim receives `%*`. A single unmatched percent is
+    // literal, but a pair can span quoted argv tokens because cmd.exe parses the full command.
+    if (/%[^%]*%/.test(values.join(' '))) {
+        throw new Error(cmdShimPercentArgument);
     }
 }
 
@@ -32,15 +38,18 @@ function assertNoCmdWrapperControlCharacters(values: readonly string[]): void {
  * directory such as `C:\tools\a^b`. Verified on Windows CI across `&`, `^`, `()` and
  * space directories.
  *
- * Quoting makes `&`, `^`, `|`, `<`, `>` and parentheses literal. Percent expansion is
- * an unavoidable limitation of routing a batch shim through a `cmd /c` command string.
+ * Quoting makes `&`, `^`, `|`, `<`, `>` and parentheses literal. Percent-delimited values are
+ * rejected because cmd.exe expands them before the shim receives its arguments.
  */
 export function getCmdShimSpawnCommand(command: string, args: readonly string[]): CmdShimSpawnCommand {
     const commandArgs = [...args];
     // cmd.exe receives this path as one `/c` command string, not an argv array.
     // Reject terminal controls before quoting so CR/LF and ETX cannot split the wrapper
     // invocation or cancel the command before cmd parsing reaches the quotes.
-    assertNoCmdWrapperControlCharacters([command, ...commandArgs]);
+    // Percent expansion in the command path remains intentional so settings such as
+    // `%ASPIRE_HOME%\aspire.cmd` keep working; only forwarded argv must remain byte-for-byte exact.
+    assertNoTerminalControlCharacters(command);
+    assertCmdWrapperValues(commandArgs);
 
     return buildCmdShimSpawnCommand(command, commandArgs);
 }
@@ -53,12 +62,13 @@ export function getCmdShimSpawnCommand(command: string, args: readonly string[])
  *
  * The argv shape survives libuv's quoting pass by caret-escaping both whitespace
  * and metacharacters. The caret forces cmd.exe's quote-stripping branch, then makes
- * the resulting unquoted token parse as one literal value. Percent expansion remains
- * an unavoidable limitation of routing a batch shim through a cmd.exe command string.
+ * the resulting unquoted token parse as one literal value. Percent-delimited values are rejected
+ * because cmd.exe expands them before the shim receives its arguments.
  */
 export function getCmdShimSpawnCommandWithoutVerbatimArguments(command: string, args: readonly string[]): CmdShimSpawnCommand {
     const commandArgs = [...args];
-    assertNoCmdWrapperControlCharacters([command, ...commandArgs]);
+    assertNoTerminalControlCharacters(command);
+    assertCmdWrapperValues(commandArgs);
     if (commandArgs.some(argument => argument.length === 0 || /[ \t"]/.test(argument))) {
         throw new Error('The non-verbatim cmd.exe wrapper cannot safely quote arguments containing whitespace or quotes.');
     }

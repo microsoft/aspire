@@ -70,7 +70,14 @@ function isAbsoluteCliPath(cliPath: string): boolean {
 }
 
 function isRelativePathLikeCliPath(cliPath: string): boolean {
-    return !isAbsoluteCliPath(cliPath) && (cliPath.includes('/') || cliPath.includes('\\'));
+    if (isAbsoluteCliPath(cliPath)) {
+        return false;
+    }
+
+    // `C:aspire.exe` is relative to the current directory on drive C:, even without a separator.
+    // Probe and launch can use different working directories, so it has the same ambiguity as
+    // `C:tools\aspire.exe`.
+    return /^[A-Za-z]:/.test(cliPath) || cliPath.includes('/') || cliPath.includes('\\');
 }
 
 function containsCliPath(paths: readonly string[], candidate: string): boolean {

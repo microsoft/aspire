@@ -230,7 +230,7 @@ suite('AspireDebugSession tests', () => {
             'Starting AppHost for project: /workspace/AppHost.csproj with argument count: 2');
     });
 
-    test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
+    test('terminateCliProcessTree signals a running CLI process and still collects an exited one', async () => {
         // `terminateCliProcess` is stubbed rather than executed: on Windows it shells out to
         // `taskkill /pid <pid> /t` instead of calling `child.kill`, so running it for real would
         // both fail this assertion on the Windows CI agents and signal whatever process happens to
@@ -240,7 +240,7 @@ suite('AspireDebugSession tests', () => {
         const aspireDebugSession = createSessionForSpawn();
         (aspireDebugSession as any)._cliProcess = running;
 
-        aspireDebugSession.terminateCliProcessTree();
+        await aspireDebugSession.terminateCliProcessTree();
 
         // The cooperative `stopCli` RPC cannot terminate the process, so the signal is what
         // actually ends the CLI and the resource tree beneath it.
@@ -251,7 +251,7 @@ suite('AspireDebugSession tests', () => {
         const exitedAspireDebugSession = createSessionForSpawn();
         (exitedAspireDebugSession as any)._cliProcess = exited;
 
-        exitedAspireDebugSession.terminateCliProcessTree();
+        await exitedAspireDebugSession.terminateCliProcessTree();
 
         // An exited leader is still forwarded: `terminateCliProcess` reaps the surviving members of
         // its managed process group, which is the only path that collects an AppHost and resource
@@ -260,18 +260,41 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(terminateStub.secondCall.args[0], exited);
     });
 
-    test('terminateCliProcessTree is idempotent after signalling a CLI process', () => {
+    test('terminateCliProcessTree is idempotent after signalling a CLI process', async () => {
         const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const cliProcess = createFakeCliProcess(4324);
         const aspireDebugSession = createSessionForSpawn();
         (aspireDebugSession as any)._cliProcess = cliProcess;
 
-        aspireDebugSession.terminateCliProcessTree({ force: true });
-        aspireDebugSession.terminateCliProcessTree();
+        await Promise.all([
+            aspireDebugSession.terminateCliProcessTree({ force: true }),
+            aspireDebugSession.terminateCliProcessTree(),
+        ]);
 
         sinon.assert.calledOnce(terminateStub);
         assert.strictEqual(terminateStub.firstCall.args[0], cliProcess);
         assert.deepStrictEqual(terminateStub.firstCall.args[2], { force: true });
+    });
+
+    test('a disposed session remains owned until CLI process-tree termination settles', async () => {
+        const termination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').returns(termination.promise);
+        const removeAspireDebugSession = sinon.stub();
+        const aspireDebugSession = createSessionForSpawn(
+            async () => '/usr/local/bin/aspire',
+            removeAspireDebugSession);
+        (aspireDebugSession as any)._cliProcess = createFakeCliProcess(4330);
+
+        const terminating = aspireDebugSession.terminateCliProcessTree({ force: true });
+        aspireDebugSession.finalizeForExtensionShutdown();
+
+        sinon.assert.notCalled(removeAspireDebugSession);
+
+        termination.resolve();
+        await terminating;
+
+        sinon.assert.calledOnceWithExactly(removeAspireDebugSession, aspireDebugSession);
+        sinon.assert.calledOnce(terminateStub);
     });
 
     test('a POSIX CLI process that exits on its own still has its process group collected', async () => {
@@ -396,7 +419,7 @@ suite('AspireDebugSession tests', () => {
 
         await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
 
-        aspireDebugSession.terminateCliProcessTree({ force: true });
+        await aspireDebugSession.terminateCliProcessTree({ force: true });
         spawnStub.firstCall.args[3]?.exitCallback?.(0);
 
         sinon.assert.calledOnceWithExactly(

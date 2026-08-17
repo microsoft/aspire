@@ -408,7 +408,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     input: { appHostPath: relativeAppHostPath, mode: 'debug' },
                 });
                 assert.strictEqual(preparedStart.confirmationTitle, 'Start Aspire AppHost');
-                assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
+                assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode?`);
 
                 const startInvocation = await invokeLifecycleTool({
                     name: 'invokeLanguageModelTool',
@@ -416,7 +416,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     input: { appHostPath: relativeAppHostPath, mode: 'debug' },
                 }, 600000, 1, 'apphost-lifecycle-linked-worktree-start-confirmation');
                 assert.strictEqual(startInvocation.dialogs[0].message, 'Start Aspire AppHost');
-                assert.strictEqual(startInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`);
+                assert.strictEqual(startInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode?`);
                 assert.deepStrictEqual(startInvocation.results, [{
                     tool: startToolName,
                     outcome: 'started',

@@ -782,6 +782,26 @@ suite('utils/cliPath tests', () => {
             assert.ok(isConfiguredCliPathRejectedForForwarding(driveRelativeConfiguredPath));
         });
 
+        test('rejects a separator-free Windows drive-relative executable and falls through without probing it', async () => {
+            const driveRelativeConfiguredPath = 'C:aspire.exe';
+            const discoveredCliPath = 'C:\\Users\\me\\.aspire\\bin\\aspire.exe';
+            const tryExecute = sinon.stub().resolves(true);
+
+            const result = await resolveCliPath(createMockDeps({
+                getConfiguredPath: () => driveRelativeConfiguredPath,
+                findAtDefaultPath: async () => discoveredCliPath,
+                tryExecute,
+            }));
+
+            assert.deepStrictEqual(result, {
+                cliPath: discoveredCliPath,
+                available: true,
+                source: 'default-install',
+            });
+            assert.ok(tryExecute.notCalled);
+            assert.ok(isConfiguredCliPathRejectedForForwarding(driveRelativeConfiguredPath));
+        });
+
         test('does not suppress forwarding when the configured path executes successfully', async () => {
             const deps = createMockDeps({
                 getConfiguredPath: () => configuredPath,

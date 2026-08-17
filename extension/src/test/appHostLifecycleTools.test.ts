@@ -522,9 +522,12 @@ suite('AppHost lifecycle language model tools', () => {
 
     suite('selector resolution', () => {
         test('rejects a missing appHostPath without launching', async () => {
-            const result = await service.start({ mode: 'run' } as never, new vscode.CancellationTokenSource().token);
+            const result = await service.start(
+                { mode: 'run', isolated: true } as never,
+                new vscode.CancellationTokenSource().token);
 
             assert.strictEqual(result.outcome, 'invalidInput');
+            assertResultOmitsIsolated(result);
             assert.strictEqual(launchService.launchCalls.length, 0);
         });
 
@@ -911,7 +914,11 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(
                 prepared.confirmationMessages?.message,
-                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode with isolation?');
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode?');
+            assert.strictEqual(
+                launchService.resolveLaunchIsolationCalls,
+                1,
+                'Only the actual launch may negotiate effective isolation.');
             assert.strictEqual(result.isolated, true);
             assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
             assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: true, isolated: true }]);
@@ -941,6 +948,20 @@ suite('AppHost lifecycle language model tools', () => {
                 noDebug: true,
                 isolated: undefined,
             }]);
+        });
+
+        test('prepares confirmation without probing the selected CLI isolation capability', async () => {
+            launchService.resolveLaunchIsolationError = new Error('capability probe failed');
+            const tool = new AppHostStartLanguageModelTool(service);
+
+            const prepared = await tool.prepareInvocation(
+                { input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: true } },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(
+                prepared.confirmationMessages?.message,
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode with isolation?');
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
         });
 
         test('preserves explicit false through the authoritative launch probe', async () => {

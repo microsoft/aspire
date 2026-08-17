@@ -163,6 +163,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private _cliProcess: ChildProcessWithoutNullStreams | undefined;
   private _cliTerminationTimer: ReturnType<typeof setTimeout> | undefined;
   private _cliProcessTreeTerminationAttempted = false;
+  private _cliProcessTreeTerminationPromise: Promise<void> | undefined;
   private _extensionShutdownRequested = false;
   // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
   // time we observe a `launch` request so it covers the actual user-visible session
@@ -593,30 +594,52 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
    * signalled directly whenever the cooperative path did not finish the job. The leader may already
    * have exited by then, but that does not prove its descendants exited too.
    */
-  terminateCliProcessTree(options?: { force?: boolean }): void {
+  terminateCliProcessTree(options?: { force?: boolean }): Promise<void> {
     this.cancelScheduledCliProcessTermination();
     const cliProcess = this._cliProcess;
     if (!cliProcess) {
-      return;
+      return Promise.resolve();
     }
 
     // A force sweep can run after the CLI leader has exited. Never aim another signal at that
     // recorded PID afterward: on Windows the PID may already have been recycled, and `taskkill /t`
     // would then target an unrelated process tree.
     if (this._cliProcessTreeTerminationAttempted) {
-      return;
+      return this._cliProcessTreeTerminationPromise ?? Promise.resolve();
     }
 
     // Deliberately not skipped once the leader has exited. `terminateCliProcess` reaps the surviving
     // members of a managed process group in that case, and that is the only path that collects
     // AppHost and resource processes which outlived the CLI that owned them.
     this._cliProcessTreeTerminationAttempted = true;
-    void terminateCliProcess(cliProcess, `Aspire CLI for debug session ${this.debugSessionId}`, options).catch(error => {
-      extensionLogOutputChannel.error(`Failed to terminate Aspire CLI for debug session ${this.debugSessionId}: ${String(error)}`);
-    });
-    if (this._disposed) {
-      this.releaseExtensionContextOwnership();
-    }
+    const termination = terminateCliProcess(
+      cliProcess,
+      `Aspire CLI for debug session ${this.debugSessionId}`,
+      options);
+    let trackedTermination!: Promise<void>;
+    trackedTermination = (async () => {
+      try {
+        await termination;
+      }
+      catch (error) {
+        extensionLogOutputChannel.error(`Failed to terminate Aspire CLI for debug session ${this.debugSessionId}: ${String(error)}`);
+        throw error;
+      }
+      finally {
+        if (this._cliProcessTreeTerminationPromise === trackedTermination) {
+          this._cliProcessTreeTerminationPromise = undefined;
+        }
+        if (this._disposed) {
+          this.releaseExtensionContextOwnership();
+        }
+      }
+    })();
+    this._cliProcessTreeTerminationPromise = trackedTermination;
+    // Exit callbacks and timers cannot await this method. Observe failures here while returning
+    // the same promise to lifecycle owners that can include it in bounded shutdown.
+    void this._cliProcessTreeTerminationPromise.catch(() => { });
+
+    return this._cliProcessTreeTerminationPromise;
   }
 
   private scheduleCliProcessTermination(): void {
@@ -629,8 +652,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     // context, so use the hard-kill path rather than scheduling another unref'd escalation.
     this._cliTerminationTimer = setTimeout(() => {
       this._cliTerminationTimer = undefined;
-      this.terminateCliProcessTree({ force: true });
-      this.releaseExtensionContextOwnership();
+      void this.terminateCliProcessTree({ force: true });
     }, AspireDebugSession._cliCooperativeStopGraceMs);
     this._cliTerminationTimer.unref?.();
   }
@@ -664,7 +686,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 
   private releaseExtensionContextOwnership(): void {
-    if (this._removedFromExtensionContext) {
+    if (this._removedFromExtensionContext ||
+      this._cliTerminationTimer ||
+      this._cliProcessTreeTerminationPromise) {
       return;
     }
 
@@ -1635,9 +1659,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._onDidSendDebugConsoleOutput.dispose();
     // Keep this disposed session tracked while its delayed CLI termination is pending, so
     // extension deactivation can still force-drain the process tree before VS Code exits.
-    if (!this._cliTerminationTimer) {
-      this.releaseExtensionContextOwnership();
-    }
+    this.releaseExtensionContextOwnership();
 
     // Telemetry: emit `debug/apphost/end` after a short grace window so any
     // pending `sessionTerminated` notifications kicked off by the child-stop

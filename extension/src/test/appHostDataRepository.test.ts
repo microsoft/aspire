@@ -5801,7 +5801,9 @@ suite('AppHostDataRepository', () => {
             taskkillProcesses[0].emit('close', 0);
             await waitForMicrotasks();
 
-            await clock.tickAsync(5000);
+            // The graceful and forced attempts share one five-second deadline. Escalation begins
+            // after four seconds, reserving the final second for forced taskkill.
+            await clock.tickAsync(4000);
 
             assert.deepStrictEqual(taskkillCalls, [
                 {

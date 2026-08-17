@@ -139,11 +139,20 @@ suite('AppHostStopper', () => {
     });
 
     test('cancels and terminates an in-flight aspire stop process', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const childState = createTestChildProcess();
         const child = childState as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(child);
-        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        let processGroupAlive = true;
+        const noSuchProcess = Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        const processKillStub = sinon.stub(process, 'kill').callsFake((_pid, signal) => {
+            if (signal === 0 && !processGroupAlive) {
+                throw noSuchProcess;
+            }
+
+            return true;
+        });
         const cancellationSource = new vscode.CancellationTokenSource();
         let settled = false;
 
@@ -152,15 +161,23 @@ suite('AppHostStopper', () => {
                 createTerminalProvider(),
                 '/repo/AppHost/AppHost.csproj',
                 cancellationSource.token).finally(() => { settled = true; });
-            await new Promise(resolve => setImmediate(resolve));
+            await clock.tickAsync(0);
 
             cancellationSource.cancel();
-            await new Promise(resolve => setImmediate(resolve));
+            await clock.tickAsync(0);
 
             assert.deepStrictEqual(processKillStub.firstCall.args, [-1234, 'SIGTERM']);
             assert.strictEqual(settled, false);
+            child.emit('error', new Error('process transport closed during cancellation'));
+            await clock.tickAsync(0);
+            assert.strictEqual(settled, false, 'Process errors must not bypass termination confirmation after cancellation.');
             childState.signalCode = 'SIGTERM';
             child.emit('close', null);
+            await clock.tickAsync(0);
+            assert.strictEqual(settled, false, 'Cancellation must wait until descendant cleanup is confirmed.');
+
+            processGroupAlive = false;
+            await clock.tickAsync(50);
             await assert.rejects(stopping, error => error instanceof vscode.CancellationError);
             assert.strictEqual(settled, true);
         }
@@ -169,6 +186,7 @@ suite('AppHostStopper', () => {
             processKillStub.restore();
             spawnStub.restore();
             platformStub.restore();
+            clock.restore();
         }
     });
 

@@ -759,9 +759,7 @@ async function executeE2eControlCommand(
         Promise.allSettled(debugSessions.map(session => session.requestCliStopForExtensionShutdown())),
         delay(5000),
       ]);
-      for (const session of debugSessions) {
-        session.terminateCliProcessTree({ force: true });
-      }
+      await Promise.allSettled(debugSessions.map(session => session.terminateCliProcessTree({ force: true })));
 
       return undefined;
     }

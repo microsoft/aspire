@@ -145,20 +145,14 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
         }
 
-        const requestedIsolation = typeof input?.isolated === 'boolean' ? input.isolated : undefined;
-        const isolation = await this._dependencies.launchService.resolveLaunchIsolation(
-            resolution.target.absolutePath,
-            requestedIsolation,
-            token);
-        return { displayPath: resolution.target.displayPath, isolated: isolation.effective };
+        // Confirmation describes only the explicit request. Effective isolation is negotiated
+        // during the actual launch, after idempotent checks can return without probing the CLI.
+        return { displayPath: resolution.target.displayPath, isolated: input?.isolated === true };
     }
 
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
         if (!isValidStartInput(input)) {
-            const isolated = typeof (input as { isolated?: unknown } | undefined)?.isolated === 'boolean'
-                ? (input as { isolated: boolean }).isolated
-                : undefined;
-            return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined, undefined, isolated);
+            return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined);
         }
 
         const requestedMode = input.mode;
