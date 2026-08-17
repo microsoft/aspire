@@ -97,6 +97,7 @@ export interface AspireExtensionApiV2 extends AspireExtensionApiBase {
 export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
+    extensionHostSessionId: string;
     updatedAt: string;
     state: AspireExtensionStateSnapshot;
     dashboardUrl?: string;
@@ -222,7 +223,6 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
     | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
-    | { name: 'reloadWindow' }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }

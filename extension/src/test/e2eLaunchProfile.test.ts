@@ -319,17 +319,29 @@ suite('E2E launch profile', () => {
         assert.ok(openFolderIndex > clearControlFileIndex);
     });
 
-    test('uses a dedicated E2E command to reload the extension host', () => {
+    test('reloads outside the extension host and waits for the fresh workbench', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
-        const reloadWindowCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'reloadWindow'"), e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"));
-        const clearControlFileIndex = reloadWindowCase.indexOf('clearPendingE2eControlFile();');
-        const reloadWindowIndex = reloadWindowCase.indexOf("vscode.commands.executeCommand('workbench.action.reloadWindow')");
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const previousSessionIndex = fixtures.indexOf('const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;');
+        const clearControlFileIndex = fixtures.indexOf('fs.rmSync(controlFilePath, { force: true });');
+        const reloadWindowIndex = fixtures.indexOf('await reloadWindow();');
+        const waitForSessionIndex = fixtures.indexOf('file => file.extensionHostSessionId !== previousExtensionHostSessionId');
+        const waitForWorkbenchIndex = fixtures.indexOf('VSBrowser.instance.waitForWorkbench');
 
-        assert.ok(apiTypes.includes("{ name: 'reloadWindow' }"));
-        assert.ok(clearControlFileIndex >= 0);
+        assert.ok(apiTypes.includes('extensionHostSessionId: string;'));
+        assert.strictEqual(apiTypes.includes("{ name: 'reloadWindow' }"), false);
+        assert.ok(e2eStateFileBridge.includes('const extensionHostSessionId = randomUUID();'));
+        assert.ok(e2eStateFileBridge.includes('extensionHostSessionId,'));
+        assert.strictEqual(e2eStateFileBridge.includes("case 'reloadWindow'"), false);
+        assert.ok(vscodeHelpers.includes("new Workbench().executeCommand('Developer: Reload Window')"));
+        assert.ok(previousSessionIndex >= 0);
+        assert.ok(clearControlFileIndex > previousSessionIndex);
         assert.ok(reloadWindowIndex > clearControlFileIndex);
+        assert.ok(waitForSessionIndex > reloadWindowIndex);
+        assert.ok(waitForWorkbenchIndex > waitForSessionIndex);
     });
 
     test('validates explicit workspace folder before reporting bridge command start', () => {

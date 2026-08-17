@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -38,6 +39,7 @@ export function createE2eStateFileBridge(
     return new vscode.Disposable(() => undefined);
   }
 
+  const extensionHostSessionId = randomUUID();
   const commandInvocations: AspireExtensionE2ECommandInvocation[] = [];
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
@@ -67,6 +69,7 @@ export function createE2eStateFileBridge(
     recordStoppingPathEvents(state.stoppingPaths);
 
     writeJsonFileAtomic(stateFile, {
+      extensionHostSessionId,
       updatedAt: new Date().toISOString(),
       state,
       dashboardUrl: getSensitiveDashboardUrl(dataRepository),
@@ -731,12 +734,6 @@ async function executeE2eControlCommand(
       const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
       await vscode.window.showTextDocument(document, { preview: false });
       return getActiveEditorInfo();
-    }
-    case 'reloadWindow': {
-      markStarted();
-      clearPendingE2eControlFile();
-      await vscode.commands.executeCommand('workbench.action.reloadWindow');
-      return undefined;
     }
     case 'openWorkspaceFolder': {
       const folderPath = getE2eWorkspaceFolderPath(command.folderPath);

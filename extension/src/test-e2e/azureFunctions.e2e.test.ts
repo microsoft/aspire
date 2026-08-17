@@ -30,7 +30,7 @@ suite('Aspire Azure Functions E2E', function () {
         await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
-        // Opening the generated workspace reloads the extension host and returns VS Code to Explorer.
+        // Reloading the window restarts the extension host and returns VS Code to Explorer.
         // Reopen the Aspire view so its visibility-driven runtime state polling observes the AppHost.
         await openAspireView();
 
