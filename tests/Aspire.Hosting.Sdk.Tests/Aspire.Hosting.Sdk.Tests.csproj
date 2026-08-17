@@ -26,7 +26,6 @@
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
-    <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Sdk.Tests.FakeCommand\Aspire.Hosting.Sdk.Tests.FakeCommand.csproj"
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
@@ -49,7 +48,6 @@
 
   <ItemGroup>
     <PackageReference Include="NuGet.ProjectModel" />
-    <None Include="$(MSBuildBinPath)\Microsoft.Build.Framework.dll" Link="Microsoft.Build.Framework.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

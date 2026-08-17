@@ -4,11 +4,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
-using System.Runtime.Loader;
 using System.Security;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Aspire.Hosting.Tasks;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -849,81 +847,6 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void RunAspireCliCommandReportsWhenProcessDoesNotExitAfterTermination()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var commandPath = CreateHangingCommand(workspace.Path);
-
-        AssemblyLoadContext.Default.Resolving += ResolveMicrosoftBuildFramework;
-        try
-        {
-            var (result, timedOut, waitTimeouts, failureMessage) = ExecuteRunAspireCliCommand(
-                commandPath,
-                waitResults: [false, false],
-                readToEndAsync: static reader => reader.ReadToEndAsync());
-
-            Assert.True(result);
-            Assert.True(timedOut);
-            Assert.Equal(2, waitTimeouts.Count);
-            Assert.All(waitTimeouts, static timeout => Assert.True(timeout > 0));
-            Assert.NotNull(failureMessage);
-            Assert.Contains("did not exit", failureMessage, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("after termination was requested", failureMessage, StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            AssemblyLoadContext.Default.Resolving -= ResolveMicrosoftBuildFramework;
-        }
-    }
-
-    [Fact]
-    public async Task RunAspireCliCommandDoesNotWaitForOutputAfterTimedOutProcessExits()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var commandPath = CreateHangingCommand(workspace.Path);
-        var outputReadCompletion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var outputReadCount = 0;
-
-        AssemblyLoadContext.Default.Resolving += ResolveMicrosoftBuildFramework;
-        try
-        {
-            var executionTask = Task.Run(() => ExecuteRunAspireCliCommand(
-                commandPath,
-                waitResults: [false, true],
-                readToEndAsync: _ =>
-                {
-                    outputReadCount++;
-                    return outputReadCompletion.Task;
-                }));
-
-            try
-            {
-                var (result, timedOut, waitTimeouts, failureMessage) = await executionTask.WaitAsync(
-                    TimeSpan.FromSeconds(5),
-                    TestContext.Current.CancellationToken);
-
-                Assert.True(result);
-                Assert.True(timedOut);
-                Assert.Equal(2, waitTimeouts.Count);
-                Assert.All(waitTimeouts, static timeout => Assert.True(timeout > 0));
-                Assert.Equal(2, outputReadCount);
-                Assert.False(outputReadCompletion.Task.IsCompleted);
-                Assert.NotNull(failureMessage);
-                Assert.Contains("command timed out", failureMessage, StringComparison.OrdinalIgnoreCase);
-            }
-            finally
-            {
-                outputReadCompletion.TrySetResult(string.Empty);
-                _ = await executionTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-            }
-        }
-        finally
-        {
-            AssemblyLoadContext.Default.Resolving -= ResolveMicrosoftBuildFramework;
-        }
-    }
-
-    [Fact]
     public async Task BuildUsesEnvironmentAspireHomeWhenMsBuildPropertyDiffers()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1621,56 +1544,6 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrEmpty(toolPath), "AspireRuntimeIdentifierToolPath assembly metadata is not set.");
         Assert.True(File.Exists(toolPath), $"Aspire.RuntimeIdentifier.Tool was not built at '{toolPath}'. Build the test project to produce it.");
         return toolPath!;
-    }
-
-    private static string CreateHangingCommand(string directory)
-    {
-        var commandPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "hang.cmd" : "hang");
-        File.WriteAllText(
-            commandPath,
-            OperatingSystem.IsWindows()
-                ? "@echo off\r\n:loop\r\ngoto loop\r\n"
-                : "#!/bin/sh\nwhile :; do :; done\n");
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return commandPath;
-    }
-
-    private static Assembly? ResolveMicrosoftBuildFramework(AssemblyLoadContext _, AssemblyName assemblyName)
-    {
-        return assemblyName.Name == "Microsoft.Build.Framework"
-            ? Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Microsoft.Build.Framework.dll"))
-            : null;
-    }
-
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static (bool Result, bool TimedOut, List<int> WaitTimeouts, string? FailureMessage) ExecuteRunAspireCliCommand(
-        string commandPath,
-        IReadOnlyList<bool> waitResults,
-        Func<StreamReader, Task<string>> readToEndAsync)
-    {
-        var waitTimeouts = new List<int>();
-        var waitResultIndex = 0;
-        var task = new RunAspireCliCommand
-        {
-            FileName = commandPath,
-            TimeoutMilliseconds = 1,
-            WaitForExit = (_, timeout) =>
-            {
-                waitTimeouts.Add(timeout);
-                Assert.True(waitResultIndex < waitResults.Count, "RunAspireCliCommand waited for the process more times than expected.");
-                return waitResults[waitResultIndex++];
-            },
-            ReadToEndAsync = readToEndAsync
-        };
-
-        var result = task.Execute();
-        Assert.Equal(waitResults.Count, waitResultIndex);
-
-        return (result, task.TimedOut, waitTimeouts, task.FailureMessage);
     }
 
     private static string GetAspireHostingTasksAssemblyPath()

@@ -57,9 +57,6 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     [Output]
     public string? FailureMessage { get; set; }
 
-    internal Func<Process, int, bool> WaitForExit { get; set; } = static (process, milliseconds) => process.WaitForExit(milliseconds);
-    internal Func<StreamReader, Task<string>> ReadToEndAsync { get; set; } = static reader => reader.ReadToEndAsync();
-
     public override bool Execute()
     {
         if (string.IsNullOrWhiteSpace(FileName))
@@ -95,21 +92,30 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         }
 
         // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var standardOutputTask = ReadToEndAsync(process.StandardOutput);
-        var standardErrorTask = ReadToEndAsync(process.StandardError);
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
 
-        if (!WaitForExit(process, TimeoutMilliseconds))
+        if (!process.WaitForExit(TimeoutMilliseconds))
         {
             TimedOut = true;
-            if (TerminateProcess(process) &&
-                !WaitForExit(process, ProcessTerminationTimeoutMilliseconds))
+            var processExited = false;
+            if (TerminateProcess(process))
             {
-                FailureMessage ??= $"The timed-out command '{FileName}' did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
+                processExited = process.WaitForExit(ProcessTerminationTimeoutMilliseconds);
+                if (!processExited)
+                {
+                    FailureMessage ??= $"The command '{FileName}' timed out after {TimeoutMilliseconds} milliseconds and did not exit within {ProcessTerminationTimeoutMilliseconds} milliseconds after termination was requested.";
+                }
+            }
+
+            if (processExited)
+            {
+                WaitForProcessOutput(standardOutputTask, standardErrorTask);
             }
 
             // WaitForExit reports only the root process's exit after Kill(entireProcessTree: true).
             // A surviving descendant can retain inherited pipe handles, so timeout cleanup must
-            // never wait for the redirected readers to reach EOF.
+            // never wait indefinitely for the redirected readers to reach EOF.
             // See https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks.
             LogProcessOutputIfCompleted(standardOutputTask);
             LogProcessOutputIfCompleted(standardErrorTask);
@@ -276,6 +282,18 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         }
     }
 
+    private static void WaitForProcessOutput(Task<string> standardOutputTask, Task<string> standardErrorTask)
+    {
+        try
+        {
+            _ = Task.WaitAll([standardOutputTask, standardErrorTask], ProcessTerminationTimeoutMilliseconds);
+        }
+        catch
+        {
+            // Draining outputs is best-effort and a failure to do so (including a timeout) should not interrupt the caller.
+        }
+    }
+
     private void LogProcessOutputIfCompleted(Task<string> outputTask)
     {
         if (outputTask.Status == TaskStatus.RanToCompletion)
@@ -289,6 +307,8 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
             return;
         }
 
+        // "Observe" task exceptions (for tasks that exceed the wait timeout and eventually fail) so that
+        // UnobservedTaskException (if enabled) does not bring down the process.
         _ = outputTask.ContinueWith(
             static completedTask => _ = completedTask.Exception,
             CancellationToken.None,
