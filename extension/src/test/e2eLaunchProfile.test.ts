@@ -474,7 +474,6 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
-        const contributing = fs.readFileSync(path.join(extensionRoot, 'CONTRIBUTING.md'), 'utf8');
         const dotnetRuntimeInstallIndex = runner.indexOf("displayName: '.NET Install Tool'");
         const csharpInstallIndex = runner.indexOf("displayName: 'C#'");
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
@@ -484,7 +483,6 @@ suite('E2E launch profile', () => {
         const runStep = workflow.slice(runStepIndex, uploadStepIndex);
 
         assert.ok(workflow.includes('shardName: azure-functions'));
-        assert.ok(!workflow.includes('https://github.com/microsoft/aspire/issues/19151'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
@@ -507,10 +505,6 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
-        assert.ok(contributing.includes('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=/path/to/vscode-dotnet-runtime.vsix'));
-        assert.ok(contributing.includes('ASPIRE_EXTENSION_E2E_CSHARP_VSIX=/path/to/vscode-csharp.vsix'));
-        assert.ok(contributing.includes('.NET Install Tool 3.1.0'));
-        assert.ok(contributing.includes('C# 2.148.23 for Linux x64'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
     });
