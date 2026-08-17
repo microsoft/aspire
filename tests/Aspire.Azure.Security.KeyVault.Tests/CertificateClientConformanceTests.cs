@@ -22,7 +22,7 @@ public class CertificateClientConformanceTests : ConformanceTests<CertificateCli
 
     protected override string ActivitySourceName => "Azure.Security.KeyVault.Certificates.CertificateClient";
 
-    protected override string[] RequiredLogCategories => new string[] { "Azure.Core" };
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Core")];
 
     protected override bool SupportsKeyedRegistrations => true;
 

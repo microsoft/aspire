@@ -1133,6 +1133,41 @@ function Get-AspireCliUrl {
     }
 }
 
+function Invoke-AspireCliBundleSetup {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliPath,
+        [Parameter(Mandatory = $true)]
+        [string]$TargetOS,
+        [Parameter(Mandatory = $true)]
+        [string]$TargetArchitecture
+    )
+
+    try {
+        $hostOS = Get-OperatingSystem
+        $hostArch = Get-CLIArchitectureFromArchitecture "<auto>"
+    }
+    catch {
+        Write-Message "Skipping Aspire CLI bundle setup because the current platform could not be detected: $($_.Exception.Message)" -Level Warning
+        return
+    }
+
+    if ($TargetOS -ne $hostOS -or $TargetArchitecture -ne $hostArch) {
+        Write-Message "Skipping Aspire CLI bundle setup for $TargetOS-$TargetArchitecture on $hostOS-$hostArch." -Level Info
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($CliPath, "Set up Aspire CLI bundle")) {
+        # Keep native stdout visible without adding it to Install-AspireCli's success output,
+        # whose sole return value is the target OS consumed by PATH configuration.
+        & $CliPath setup | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Aspire CLI bundle setup failed with exit code $LASTEXITCODE."
+        }
+    }
+}
+
 # Function to download and install the Aspire CLI
 function Install-AspireCli {
     [CmdletBinding(SupportsShouldProcess)]
@@ -1252,6 +1287,8 @@ function Install-AspireCli {
                 Write-Message "Please ensure VS Code is installed and available in PATH" -Level Info
             }
         }
+
+        Invoke-AspireCliBundleSetup -CliPath $cliPath -TargetOS $targetOS -TargetArchitecture $targetArch
 
         # Return the target OS for the caller to use
         return $targetOS

@@ -3,7 +3,15 @@
 @inherits FluentComponentBase
 
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
-<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@CalculatedVerticalThreshold" HorizontalThreshold="200">
+<FluentMenu Class="aspire-menu-container"
+            @ref="_menu"
+            Anchor="@Anchor"
+            Anchored="@Anchored"
+            Open="@Open"
+            OpenChanged="OnOpenChanged"
+            Style="@Style"
+            VerticalThreshold="@CalculatedVerticalThreshold"
+            HorizontalThreshold="200">
     @foreach (var item in Items)
     {
         @RenderMenuItem(item)
@@ -24,7 +32,7 @@
                 { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
             };
 
-            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
+            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" Role="@item.Role" Checked="@item.Checked" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
                 @if (item.Icon != null)
                 {
                     <span slot="start">

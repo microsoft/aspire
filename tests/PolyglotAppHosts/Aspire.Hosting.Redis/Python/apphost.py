@@ -1,7 +1,7 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import RedisModules, create_builder
 
 
 with create_builder() as builder:
@@ -15,6 +15,9 @@ with create_builder() as builder:
     cache.with_persistence()
     # withDataBindMount on RedisResource
     cache2.with_data_bind_mount()
+    # withModule on RedisResource - well-known and custom module paths
+    cache.with_module(RedisModules.Json)
+    cache.with_module("/opt/redis/custom-module.so")
     # withHostPort on RedisResource
     cache.with_host_port()
     # withPassword on RedisResource

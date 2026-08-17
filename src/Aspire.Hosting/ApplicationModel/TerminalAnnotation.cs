@@ -1,0 +1,147 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+
+namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIRETERMINAL001 // Internal annotation backing the experimental terminal configuration API.
+
+/// <summary>
+/// Tracks terminal configuration and per-replica terminal hosts for a resource.
+/// </summary>
+[DebuggerDisplay("Type = {GetType().Name,nq}, IsInitialized = {IsInitialized}, ReplicaCount = {TerminalHosts.Count}")]
+internal sealed class TerminalAnnotation : IResourceAnnotation
+{
+    // Starts as Array.Empty<TerminalHostResource>() (the default for [] in C#) so the
+    // TerminalHosts collection is always non-null and safely enumerable, even before
+    // BeforeStartEvent has had a chance to materialize the per-replica hosts. Consumers
+    // (DCP creators, dashboard data, backchannel) must guard with a Count check or an
+    // index-bounds check; all of them already do.
+    private IReadOnlyList<TerminalHostResource> _terminalHosts = [];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TerminalAnnotation"/> class. The
+    /// per-replica <see cref="TerminalHostResource"/>s are filled in later via
+    /// <see cref="Initialize"/> from a <see cref="BeforeStartEvent"/> handler so the
+    /// final <see cref="ReplicaAnnotation"/> count is always honoured.
+    /// </summary>
+    /// <param name="options">The terminal options for this annotation.</param>
+    public TerminalAnnotation(TerminalOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        Options = options;
+    }
+
+    /// <summary>
+    /// Gets the terminal options for this annotation.
+    /// </summary>
+    public TerminalOptions Options { get; }
+
+    /// <summary>
+    /// Gets the hidden per-replica terminal host resources that bridge PTY traffic for
+    /// the annotated resource. Indexed by parent replica index (0..N-1 where N is the
+    /// parent's replica count at <see cref="BeforeStartEvent"/> time). Empty until
+    /// <see cref="Initialize"/> has been called.
+    /// </summary>
+    public IReadOnlyList<TerminalHostResource> TerminalHosts => _terminalHosts;
+
+    /// <summary>
+    /// Gets a value indicating whether <see cref="Initialize"/> has been called yet.
+    /// Production code initializes during <see cref="BeforeStartEvent"/>; tests that
+    /// inspect <see cref="TerminalHosts"/> need to publish that event manually first.
+    /// </summary>
+    public bool IsInitialized { get; private set; }
+
+    /// <summary>
+    /// Populates <see cref="TerminalHosts"/> exactly once. Called by the
+    /// <see cref="BeforeStartEvent"/> subscriber installed by
+    /// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when called more than once.</exception>
+    internal void Initialize(IReadOnlyList<TerminalHostResource> terminalHosts)
+    {
+        ArgumentNullException.ThrowIfNull(terminalHosts);
+
+        if (IsInitialized)
+        {
+            throw new InvalidOperationException("TerminalAnnotation has already been initialized.");
+        }
+
+        if (terminalHosts.Count == 0)
+        {
+            throw new ArgumentException("At least one terminal host is required.", nameof(terminalHosts));
+        }
+
+        for (var i = 0; i < terminalHosts.Count; i++)
+        {
+            if (terminalHosts[i] is null)
+            {
+                throw new ArgumentException($"Terminal host at index {i} is null.", nameof(terminalHosts));
+            }
+        }
+
+        _terminalHosts = terminalHosts;
+        IsInitialized = true;
+    }
+}
+
+#pragma warning restore ASPIRETERMINAL001
+
+/// <summary>
+/// Options for configuring a terminal session.
+/// </summary>
+[Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class TerminalOptions
+{
+    private int _columns = 120;
+    private int _rows = 30;
+
+    /// <summary>
+    /// Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 120.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
+    public int Columns
+    {
+        get => _columns;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _columns = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 30.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
+    public int Rows
+    {
+        get => _rows;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _rows = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the per-replica terminal host resources
+    /// (named <c>{parent}-terminalhost-{index}</c>) should appear in the resource list.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <c>false</c>: terminal host resources are hidden from the dashboard
+    /// and CLI resource list because they are an implementation detail of the
+    /// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>
+    /// feature, not something the user explicitly added to their app model.
+    /// <para>
+    /// Set to <c>true</c> when diagnosing terminal-host startup / connectivity issues so
+    /// the host's state, exit code, logs, and (eventually) telemetry are visible alongside
+    /// the parent resource. This is useful when investigating cases like "DCP never dialed
+    /// the producer UDS" or "the host crashed during recycle".
+    /// </para>
+    /// </remarks>
+    public bool ShowTerminalHost { get; set; }
+}

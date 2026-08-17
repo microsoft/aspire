@@ -1,15 +1,22 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { findResource, getCommandInvocationCount, getTerminalCommandCount, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { assertClipboardMatchesLastExpectationForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForEditorTitle, waitForTreeItem } from './helpers/vscode';
+import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+
+interface ActiveEditorInfo {
+    uri?: string;
+    fileName?: string;
+    text?: string;
+}
 
 suite('Aspire tree action command E2E', function () {
     this.timeout(300000);
 
     teardown(async () => {
         await runE2eTeardown([
+            () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
@@ -74,8 +81,9 @@ suite('Aspire tree action command E2E', function () {
         await noCommandsResource.expand();
         assert.strictEqual(await noCommandsResource.findChildItem('Commands'), undefined);
 
-        const copiedAppHost = await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
-        assert.ok(isSamePath(String(copiedAppHost.result), appHostPath));
+        await snapshotClipboardForE2E();
+        await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
+        await assertClipboardMatchesLastExpectationForE2E();
 
         const openedSource = await executeE2eControlCommand({ name: 'openAppHostSource', appHostPath });
         assert.ok(String((openedSource.result as { fileName?: string }).fileName).endsWith(path.join('AspireE2E.AppHost', 'AppHost.cs')));
@@ -83,25 +91,30 @@ suite('Aspire tree action command E2E', function () {
         const viewedSource = await executeE2eControlCommand({ name: 'viewAppHostSource', appHostPath });
         assert.ok(String((viewedSource.result as { uri?: string }).uri).startsWith('aspire-source:'));
 
-        const copiedResourceName = await executeE2eControlCommand({ name: 'copyResourceName', appHostPath, resourceName: 'e2e-worker' });
-        assert.strictEqual(copiedResourceName.result, 'e2e-worker');
+        await executeE2eControlCommand({ name: 'copyResourceName', appHostPath, resourceName: 'e2e-worker' });
+        await assertClipboardMatchesLastExpectationForE2E();
 
-        const copiedEndpointUrl = await executeE2eControlCommand({ name: 'copyEndpointUrl', appHostPath, resourceName: 'e2e-worker' });
-        const endpointUrl = String(copiedEndpointUrl.result);
+        const endpointUrl = workerResource.urls?.find(url => !url.isInternal)?.url ?? workerResource.urls?.[0]?.url;
+        assert.ok(endpointUrl, 'Expected e2e-worker to expose an endpoint URL.');
         assert.ok(endpointUrl.startsWith('http'));
+        await executeE2eControlCommand({ name: 'copyEndpointUrl', appHostPath, resourceName: 'e2e-worker' });
+        await assertClipboardMatchesLastExpectationForE2E();
 
         before = getCommandInvocationCount('aspire-vscode.openInIntegratedBrowser');
-        await executeE2eControlCommand({ name: 'openInIntegratedBrowser', appHostPath, resourceName: 'e2e-worker' });
+        const openedEndpoint = await executeE2eControlCommand({ name: 'openInIntegratedBrowser', appHostPath, resourceName: 'e2e-worker' });
         await waitForCommandOutcome('aspire-vscode.openInIntegratedBrowser', 'success', 60000, before);
-        assert.ok((await waitForEditorTitle(new URL(endpointUrl).host, 120000, { matchCase: false })).toLowerCase().includes(new URL(endpointUrl).host.toLowerCase()));
+        assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);
+        await waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host);
         assert.strictEqual(await waitForHttpText(endpointUrl, 'ok'), 'ok');
 
         const viewedLog = await executeE2eControlCommand({ name: 'viewAppHostLogFile', appHostPath });
         const viewedLogFileName = (viewedLog.result as { fileName?: string }).fileName;
         assert.ok(viewedLogFileName && path.isAbsolute(viewedLogFileName));
 
-        const copiedLogPath = await executeE2eControlCommand({ name: 'copyLogFilePath', appHostPath });
-        assert.ok(path.isAbsolute(String(copiedLogPath.result)));
+        await executeE2eControlCommand({ name: 'copyLogFilePath', appHostPath });
+        await assertClipboardMatchesLastExpectationForE2E();
+
+        let terminalBefore: number;
 
         await setTerminalCommandExecutionSuppressedForE2E(true);
         before = getCommandInvocationCount('aspire-vscode.viewResourceLogs');
@@ -112,28 +125,78 @@ suite('Aspire tree action command E2E', function () {
         await waitForResource('e2e-worker');
         await waitForResourceState('e2e-worker', ['Running'], 90000);
 
+        await setTerminalCommandExecutionSuppressedForE2E(true);
+        try {
+            before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
+            terminalBefore = getTerminalCommandCount();
+            await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: workerResourceName });
+            await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
+            await waitForTerminalCommand(
+                event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(workerResourceName)}`) && event.executionSuppressed,
+                'open resource terminal command',
+                60000,
+                terminalBefore);
+
+            // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
+            // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
+            // must therefore append --replica derived from that metadata, unlike e2e-worker above
+            // which has no terminal annotation and emits no --replica. This proves the terminal
+            // properties flow end-to-end through a real CLI process and drive the Open terminal action.
+            const terminalResourceState = await waitForResourceState('e2e-terminal', ['Running'], 180000);
+            const terminalResource = findResource(terminalResourceState.state, 'e2e-terminal');
+            assert.ok(terminalResource, 'Expected e2e-terminal to be present after AppHost startup.');
+            const terminalResourceName = terminalResource.name;
+            terminalBefore = getTerminalCommandCount();
+            before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
+            await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: terminalResourceName });
+            await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
+            await waitForTerminalCommand(
+                event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(terminalResourceName)}`)
+                    && event.subcommand.includes('--replica')
+                    && event.executionSuppressed,
+                'open terminal-enabled resource terminal command',
+                60000,
+                terminalBefore);
+        } finally {
+            await setTerminalCommandExecutionSuppressedForE2E(false);
+        }
+
+        await waitForResource('e2e-worker');
+        await waitForResourceState('e2e-worker', ['Running'], 90000);
+
+        // Resource lifecycle commands now execute over the hidden CLI backchannel instead of being
+        // typed into the visible Aspire terminal, so there is no terminal command to observe or to
+        // suppress. Drive the real command and assert on the instrumented command outcome, the lack of
+        // a visible terminal command, and the resulting resource state transitions.
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.stopResource');
-        let terminalBefore = getTerminalCommandCount();
         await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'stop', terminalBefore);
-        await waitForResourceState(workerResourceName, ['Stopped', 'Finished', 'Exited'], 90000);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceState(workerResourceName, ['Exited', 'Finished', 'Stopped'], 90000);
 
-        before = getCommandInvocationCount('aspire-vscode.startResource');
         terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.startResource');
         await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'start', terminalBefore);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceState(workerResourceName, ['Running'], 90000);
 
-        before = getCommandInvocationCount('aspire-vscode.restartResource');
         terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.restartResource');
         await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'restart', terminalBefore);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceState(workerResourceName, ['Running'], 90000);
 
-        await setTerminalCommandExecutionSuppressedForE2E(true);
-        before = getCommandInvocationCount('aspire-vscode.executeResourceCommandItem');
+        // The echo-arguments command returns a value, which the extension now renders in a read-only
+        // editor rather than streaming raw stdout to a shared terminal. Prompted secret arguments are
+        // passed to the hidden CLI process (not echoed to a terminal others can scroll); redaction of
+        // those arguments in spawn diagnostics is covered by the cliSpawn unit tests. Here we drive
+        // the interactive argument prompts and assert the real Extension Host opens the aspire-source
+        // output editor without creating any new terminal command events.
         terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.executeResourceCommandItem');
         assert.ok(enabledCommandItem, 'Expected enabled command tree item.');
         await executeE2eControlCommand({ name: 'executeResourceCommandItem', appHostPath, resourceName: workerResourceName, commandName: 'echo-arguments' }, { waitFor: 'started' });
         await chooseActiveQuickPick('Continue');
@@ -143,17 +206,11 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('10', 'Threshold');
         await answerActiveInput('secret-from-command-item', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommandItem', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        const commandItemEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from command item');
 
-        const commandItemTerminalCommand = await waitForTerminalCommand(
-            event => event.subcommand.includes(`resource ${quoteExpectedShellArg(workerResourceName)}`) && event.subcommand.includes(quoteExpectedShellArg('echo-arguments')) && event.executionSuppressed,
-            'resource command item with prompted arguments',
-            60000,
-            terminalBefore);
-        assert.ok(commandItemTerminalCommand.containsRedactedArgs);
-        assert.ok(!commandItemTerminalCommand.commandLine.includes('secret-from-command-item'));
-
-        before = getCommandInvocationCount('aspire-vscode.executeResourceCommand');
         terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.executeResourceCommand');
         await executeE2eControlCommand({ name: 'executeResourceCommand', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         const quickPickLabels = await getActiveQuickPickLabels();
         assert.ok(quickPickLabels.includes('echo-arguments'));
@@ -169,25 +226,48 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('42.5', 'Threshold');
         await answerActiveInput('secret-from-e2e', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommand', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        const commandPaletteEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from e2e');
+        assert.notStrictEqual(commandPaletteEditor.text, commandItemEditor.text);
 
-        const resourceCommand = await waitForTerminalCommand(
-            event => event.subcommand.includes('resource ') && event.subcommand.includes(quoteExpectedShellArg('echo-arguments')) && event.executionSuppressed,
-            'resource command with prompted arguments',
-            60000,
-            terminalBefore);
-        assert.ok(resourceCommand.containsRedactedArgs);
-        assert.strictEqual(resourceCommand.additionalArgs, undefined);
-        assert.ok(resourceCommand.commandLine.includes('[redacted command arguments]'));
-        assert.ok(!resourceCommand.commandLine.includes('secret-from-e2e'));
+        terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.codeLensResourceAction');
+        await executeE2eControlCommand({
+            name: 'executeCodeLensResourceAction',
+            resourceName: workerResourceName,
+            commandName: 'echo-arguments',
+            appHostPath,
+        }, { waitFor: 'started' });
+        await chooseActiveQuickPick('Continue');
+        await answerActiveInput('hello from codelens', 'Message');
+        await chooseActiveQuickPick('Alpha');
+        await chooseActiveQuickPick('No');
+        await answerActiveInput('7', 'Threshold');
+        await answerActiveInput('secret-from-codelens', 'Token');
+        await waitForCommandOutcome('aspire-vscode.codeLensResourceAction', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        const codeLensEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from codelens');
+        assert.notStrictEqual(codeLensEditor.text, commandPaletteEditor.text);
     });
 });
 
-async function waitForResourceTerminalCommand(resourceName: string, command: string, afterCommandSequence: number): Promise<void> {
-    await waitForTerminalCommand(
-        event => event.subcommand.includes(`resource ${quoteExpectedShellArg(resourceName)}`) && event.subcommand.includes(` ${quoteExpectedShellArg(command)}`),
-        `${command} terminal command for ${resourceName}`,
-        60000,
-        afterCommandSequence);
+async function waitForResourceCommandOutputEditor(resourceName: string, commandName: string, expectedText: string, timeoutMs = 60000): Promise<ActiveEditorInfo> {
+    const started = Date.now();
+    let lastEditor: ActiveEditorInfo | undefined;
+    const resourceCommandOutputName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+
+    while (Date.now() - started < timeoutMs) {
+        const result = (await executeE2eControlCommand({ name: 'getActiveEditor' })).result as ActiveEditorInfo;
+        lastEditor = result;
+        const uri = result.uri ?? '';
+        if (uri.startsWith('aspire-source:') && uri.includes(`${resourceCommandOutputName}-output.txt`) && result.text?.includes(expectedText)) {
+            return result;
+        }
+
+        await delay(200);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for resource command output editor '${resourceName}/${commandName}' containing '${expectedText}'. Last active editor: ${JSON.stringify(lastEditor)}`);
 }
 
 function quoteExpectedShellArg(arg: string): string {
@@ -196,4 +276,8 @@ function quoteExpectedShellArg(arg: string): string {
     }
 
     return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

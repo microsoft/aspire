@@ -1178,6 +1178,10 @@ public sealed class TelemetryExportServiceTests
             resourceType: "Container",
             state: KnownResourceState.Running);
 
+        var connectionProperties = new Struct();
+        connectionProperties.Fields["Host"] = Value.ForString("localhost");
+        connectionProperties.Fields["DatabaseName"] = Value.ForString("catalogdb");
+
         var resource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
             displayName: "Test Resource",
@@ -1192,7 +1196,17 @@ public sealed class TelemetryExportServiceTests
                     Value.ForList(Value.ForString("dependency-resource")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
+                [KnownProperties.Resource.ConnectionProperties] = new(
+                    KnownProperties.Resource.ConnectionProperties,
+                    new Value { StructValue = connectionProperties },
+                    isValueSensitive: true,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             },
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
@@ -1214,6 +1228,9 @@ public sealed class TelemetryExportServiceTests
         var waitingForProperty = Assert.IsType<JsonArray>(deserialized.Properties[KnownProperties.Resource.WaitingFor]);
         var waitingForPropertyValue = Assert.Single(waitingForProperty);
         Assert.Equal("dependency-resource", waitingForPropertyValue?.GetValue<string>());
+        var connectionPropertiesObject = Assert.IsType<JsonObject>(deserialized.Properties[KnownProperties.Resource.ConnectionProperties]);
+        Assert.Equal("localhost", connectionPropertiesObject["Host"]?.GetValue<string>());
+        Assert.Equal("catalogdb", connectionPropertiesObject["DatabaseName"]?.GetValue<string>());
 
         Assert.NotNull(deserialized.Urls);
         Assert.Single(deserialized.Urls);
@@ -1312,19 +1329,25 @@ public sealed class TelemetryExportServiceTests
                     Value.ForList(Value.ForNumber(6379), Value.ForNumber(6380)),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0),
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
                 ["resource.exitCode"] = new(
                     "resource.exitCode",
                     Value.ForNumber(0),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0),
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
                 ["resource.enabled"] = new(
                     "resource.enabled",
                     Value.ForBool(true),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         // Act

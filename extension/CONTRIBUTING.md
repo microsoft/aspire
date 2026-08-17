@@ -2,11 +2,11 @@
 
 How to set up your machine, the code layout, and the fastest inner-loop for changes.
 
-Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
+Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-vscode-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-vscode-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
 
 ## Install prerequisites
 
-- Node.js (LTS version) — `npm` must be on the PATH (it ships with Node.js). The
+- Node.js 22 or later (LTS recommended) — `npm` must be on the PATH (it ships with Node.js). The
   build scripts (`build.sh` / `build.ps1`) install a pinned [Corepack](https://github.com/nodejs/corepack)
   via `npm install -g corepack@<version>` from the configured registry and seed
   Corepack's cache with the Yarn release pinned by the `packageManager` field in
@@ -59,11 +59,17 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 
 ### Optional: set the CLI path
 
-If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, you must set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
+If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The raw local build output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`. Pointing at the raw build output makes the extension invoke your dev CLI, but that raw path is intentionally not forwarded as `AspireCliPath` (see Dogfooding below). To also dogfood bundle metadata, use an installed/bundled CLI layout instead.
 
 You may also want to use the `Run Extension (cli stop on entry)` launch configuration, as `Run Extension` does not prevent the Aspire CLI from executing immediately.
 
 You can use the `Aspire: Extension settings` command to open VS Code settings directly to the Aspire extension category.
+
+#### Dogfooding a CLI build alongside the extension
+
+When `Aspire Cli Executable Path` points at an existing **absolute** path that is not a raw framework-dependent local CLI build output, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to every terminal, task, and debug process it creates. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
+
+A relative value (for example the bare `aspire` literal) or an absolute path that no longer exists is intentionally not forwarded because `ResolveAspireCliBundle` stops with a warning for invalid explicit `AspireCliPath` values instead of probing `PATH`. A raw framework-dependent local build output such as `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire` is also not forwarded because it can make `ResolveAspireCliBundle` fall back to unrelated `ASPIRE_HOME` metadata. Symlinks to that raw local build output are filtered the same way. To dogfood bundle metadata end-to-end, point the setting at an installed/bundled CLI layout with a sidecar or adjacent bundle assets. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
 
 ## Running tests
 
@@ -95,7 +101,11 @@ Run the full local E2E suite from `extension/`:
 ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
-On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.122.1 and the ExTester version pinned in `package.json` and `yarn.lock`; override with `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` when you need to investigate VS Code-specific behavior. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
+On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.130.0 while ExTester 8.23.0 remains the newest version anonymously available from `dotnet-public-npm`. That is the current macOS ceiling for this dependency pair: VS Code 1.130.0 contains `Contents/MacOS/Code` plus an `Electron -> Code` compatibility symlink, but VS Code 1.131.0 removes that legacy path and ExTester 8.23.0 only launches it. Override `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` with another concrete version, or with ExTester's `min`/`max`, when you need to investigate package-supported behavior. On macOS, concrete versions at or above 1.131.0 are rejected until ExTester is upgraded; Linux and Windows use compatible executable paths. `latest` is rejected because it moves independently of the pinned dependency, so a cache key built from that literal would keep serving the first release downloaded after the alias changed. `min` and `max` are deterministic because the cache key also includes the pinned ExTester version whose support metadata resolves them. The runner also pins `CODE_VERSION` and `CODE_TYPE` for the ExTester child process, so an ambient value cannot make it download a version or a release stream the cache key does not describe. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
+
+VS Code and its matching ChromeDriver are cached under `<git-common-dir>/aspire-extension-e2e-cache`, so the main checkout and every linked worktree reuse the same immutable downloads instead of re-acquiring them on each run. Settings, installed extensions, workspaces, screenshots, diagnostics, and `ASPIRE_HOME` stay isolated under the per-run temporary root, so concurrent runs cannot interfere with each other or mutate the shared cache. Cache entries are partitioned by OS, architecture, VS Code version, and ExTester version, so switching any of those acquires a separate entry rather than invalidating the existing one. Set `ASPIRE_EXTENSION_E2E_CACHE_ROOT` to override the cache location, or delete the cache directory to force a clean acquisition. A checkout under an awkward path works on every platform: ExTester interpolates the storage path into unquoted shell commands - `unzip -qo <archive>` when unpacking on macOS and Linux, and `<chromedriver> -v` when checking an already downloaded driver everywhere, Windows included - so any cache path containing something the command interpreter would act on is staged through an inert link under the per-run temporary root instead of being handed over verbatim. On macOS and Linux that means a space, `(`, `&`, `$`, `;` or a quote; on Windows it means a space, `&`, `%`, `^`, `!` or any of the `,`, `;` and `=` that end a `cmd.exe` command token, and the link is a junction so no elevation is needed. Because the tools are already present, the test run itself passes `--offline` to ExTester.
+
+The runner retries external VS Code and ChromeDriver downloads five times by default; override `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS`, `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS`, or `ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS` when diagnosing acquisition issues. A download that hits its timeout is not just signalled: ExTester shells out to `unzip` on macOS and Linux, so any process still writing under the staging path is found in `ps` output and killed, and the partly unpacked `vscode-temp-*` directory it abandoned is deleted before the retry starts. If those processes cannot be enumerated or confirmed dead, the run fails instead of retrying, because wiping and republishing a directory something may still be writing into is the corruption that cleanup exists to prevent. Downloads deliberately stay in the terminal's foreground process group so Ctrl-C still reaches them. Concurrent runs each populate a private candidate directory and publish it as the next numbered generation (`entry-000001`, `entry-000002`, ...) inside the entry's directory, so nothing on the hot path deletes or overwrites shared state and there is no lock to wait on. Readers pick the newest generation that validates, so a half-written or corrupt entry is stepped over rather than wedging the cache. Published generations are never deleted - an entry is not written to after it is published, so its timestamp cannot distinguish a warm entry from abandoned debris, and a concurrent run may be executing VS Code straight out of it. That also rules out any automatic repair for a group whose highest generation cannot be advanced, so publishing a name later runs could not read back is refused outright rather than done silently. Only leftover candidates are reclaimed, and only once the process that created one has exited (or a week has passed, since process ids get recycled) and it has been untouched for six hours - a candidate's timestamp stops moving while an extraction works deep inside a subdirectory, so age alone cannot tell an in-flight download from debris. The `.zip`/`.tar.gz` archives ExTester downloads are deleted once they have been unpacked, which keeps roughly 350 MB per entry off disk; ExTester only reads an archive when it is about to download, and it skips the download entirely once the unpacked binaries report a matching version.
 
 Some extension E2E tests intentionally cover bugs fixed by the current repo-built CLI. When running the extension suite against an older published CLI to check backward compatibility, set `ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` so those current-CLI-only regressions are skipped instead of failing on the older CLI bug.
 
@@ -111,7 +121,10 @@ ASPIRE_EXTENSION_E2E_SHARD=debug-dashboard ASPIRE_EXTENSION_E2E_SPEC=out/test-e2
 ASPIRE_EXTENSION_E2E_SHARD=zero-to-running ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/zeroToRunning.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ASPIRE_EXTENSION_E2E_SHARD=package-surface ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/packageSurface.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ASPIRE_EXTENSION_E2E_SHARD=edge-cases ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/edgeCases.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
+ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=/path/to/vscode-azureresourcegroups.vsix ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=/path/to/vscode-azurefunctions.vsix ASPIRE_EXTENSION_E2E_SHARD=azure-functions ASPIRE_EXTENSION_E2E_SPEC=out/test-e2e/test-e2e/azureFunctions.e2e.test.js ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
+
+The Azure Functions shard also requires Azure Functions Core Tools v4 (`func`) on `PATH`. It installs the real Azure Resource Groups and Azure Functions extensions into the isolated VS Code instance, generates a dedicated HTTPS certificate, starts the generated .NET isolated Functions resource through the Functions extension's `startFuncProcess` API, probes its HTTPS endpoint, and verifies that stopping the Aspire resource ends the same VS Code task. CI runs this shard on Linux with pinned, checksum-verified copies of Core Tools 4.12.1, Azure Resource Groups 0.12.7, and Azure Functions 1.22.0.
 
 `ASPIRE_EXTENSION_E2E_SPEC` accepts either one compiled spec path or a glob, so local runs can target one spec or a small subset without editing the test runner:
 
@@ -122,7 +135,7 @@ ASPIRE_EXTENSION_E2E_SHARD=fast-subset ASPIRE_EXTENSION_E2E_SPEC='out/test-e2e/t
 ASPIRE_EXTENSION_E2E_SHARD=tree-subset ASPIRE_EXTENSION_E2E_SPEC='out/test-e2e/test-e2e/*Tree.e2e.test.js' ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 ```
 
-The current shards cover command palette and terminal routing, settings-file creation/opening with an isolated Aspire home, workspace AppHost discovery/configuration changes, AppHost run/stop/resource rendering, tree action commands for copy/open/log/resource operations, debug/dashboard lifecycle, a zero-to-running flow that routes the Aspire new/add terminal commands, creates a C# AppHost through the CLI, adds an integration package, registers a source breakpoint, and debugs the generated AppHost, the `package.json` contribution surface including exact activation events, command registration, menu/view/settings inventory, JSON validation, walkthrough command registration, CodeLens routing, and debug launch command routing, plus negative-path edge cases for invalid control payloads, missing tree targets, CLI-independent settings commands, and launch-state cleanup.
+The current shards cover command palette and terminal routing, settings-file creation/opening with an isolated Aspire home, workspace AppHost discovery/configuration changes, AppHost run/stop/resource rendering, tree action commands for copy/open/log/resource operations, debug/dashboard lifecycle, Azure Functions HTTPS startup and termination through the real Functions extension, a zero-to-running flow that routes the Aspire new/add terminal commands, creates a C# AppHost through the CLI, adds an integration package, registers a source breakpoint, and debugs the generated AppHost, the `package.json` contribution surface including exact activation events, command registration, menu/view/settings inventory, JSON validation, walkthrough command registration, CodeLens routing, and debug launch command routing, plus negative-path edge cases for invalid control payloads, missing tree targets, CLI-independent settings commands, and launch-state cleanup.
 
 Diagnostics are left under `extension/.test-results`, `extension/.test-storage`, and `extension/.test-workspaces`, with shard-specific subdirectories when `ASPIRE_EXTENSION_E2E_SHARD` is set. The runner also sets `ASPIRE_HOME` to an isolated per-run directory and copies it into diagnostics before cleanup so settings-file failures do not touch or depend on the real user profile. These folders are ignored by git and are uploaded by CI when the E2E job runs.
 
@@ -150,6 +163,27 @@ corepack yarn install
 ```
 
 The build rejects public registry URLs in `yarn.lock`; ensure regenerated entries resolve through the `dotnet-public-npm` feed (public, so no credentials are needed to consume it).
+
+> **Check feed availability before pinning a just-published version.** `dotnet-public-npm` mirrors npmjs on a lag, and package metadata can appear before its tarball is anonymously available. CI then fails at `yarn install --frozen-lockfile`; for example:
+>
+> ```text
+> error Error: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/vscode-extension-tester/-/vscode-extension-tester-8.24.0.tgz: Request failed "401 Unauthorized"
+> ```
+>
+> This is easy to miss locally, because a global `.npmrc` pointing at another registry lets `yarn install` succeed on your machine while the rewritten `yarn.lock` URL remains unavailable to anonymous CI. The options are to wait or to pin a version the approved feed already serves anonymously. Check the whole set of new `resolved` URLs, since a bump also drags in transitive dependencies published at the same time:
+>
+> ```bash
+> git diff origin/main -- yarn.lock | grep '^+.*resolved "' | sed 's/^+ *resolved "//; s/".*$//' | sort -u \
+>   | while read -r url; do echo "$(curl -s -o /dev/null -w '%{http_code}' "$url")  $url"; done
+> ```
+>
+> Only `303` confirms that the tarball is anonymously available and safe to pin. `401` means it is unavailable to anonymous consumers; treat any other status as inconclusive rather than assuming the package is ready.
+>
+> Pinning back to the previous release is not automatically a neutral fallback for `vscode-extension-tester`, because consecutive releases can declare disjoint VS Code ranges. Compare the `supportedVersions` field of both candidates before downgrading — 8.23.0 declares `1.109.5`–`1.111.0` while 8.24.0 declares `1.129.1`–`1.131.0`, so reverting the pin while using `min`/`max` would move the alias backwards. If the approved feed does not anonymously serve the newer package yet, keep the available dependency and use a concrete VS Code default until the package can be safely updated:
+>
+> ```bash
+> npm view vscode-extension-tester@8.24.0 supportedVersions
+> ```
 
 ## Updating the Yarn version
 

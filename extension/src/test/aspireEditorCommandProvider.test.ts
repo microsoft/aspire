@@ -9,13 +9,14 @@ import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import * as cliPathModule from '../utils/cliPath';
 
 function createEditor(filePath: string): vscode.TextEditor {
     return {
         document: {
             uri: vscode.Uri.file(filePath),
             fileName: filePath,
-            languageId: filePath.endsWith('.ts') ? 'typescript' : 'csharp'
+            languageId: filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'csharp'
         } as vscode.TextDocument
     } as vscode.TextEditor;
 }
@@ -31,6 +32,7 @@ suite('AspireEditorCommandProvider', () => {
     let executeCommandStub: sinon.SinonStub;
     let startDebuggingStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
+    let resolveCliPathStub: sinon.SinonStub;
 
     setup(() => {
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-editor-command-provider-'));
@@ -50,9 +52,15 @@ suite('AspireEditorCommandProvider', () => {
         executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
         showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        // AppHostLaunchService.launch gates on CLI availability before starting the debug
+        // session, so stub resolution to "available" here. Otherwise the gate resolves to
+        // not-found on hosts without the Aspire CLI and the launch path throws a
+        // CancellationError before vscode.debug.startDebugging is ever called.
+        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
     });
 
     teardown(() => {
+        resolveCliPathStub.restore();
         showErrorMessageStub.restore();
         startDebuggingStub.restore();
         executeCommandStub.restore();
@@ -103,6 +111,20 @@ suite('AspireEditorCommandProvider', () => {
         activeEditor = createEditor(appHostPath);
 
         const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
+        try {
+            assert.strictEqual(await provider.getAppHostPath(), appHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('returns source file when active editor is Rust apphost.rs', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.rs');
+        fs.writeFileSync(appHostPath, 'fn main() {}');
+        activeEditor = createEditor(appHostPath);
+
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }

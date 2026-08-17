@@ -1,5 +1,6 @@
-import { readdirSync } from 'node:fs';
-import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
 /**
  * Coarse AppHost language classification used for telemetry. We deliberately
@@ -10,13 +11,31 @@ import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
  *
  *  - `csharp`     : every detected AppHost reports a C# variant.
  *  - `typescript` : every detected AppHost reports a TypeScript / Node variant.
- *  - `polyglot`   : at least one AppHost of each language family is present,
+ *  - `rust`       : every detected AppHost reports Rust.
+ *  - `polyglot`   : more than one language family is present,
  *                   or an unknown language is mixed with a known one. This is
  *                   the headline signal Damian asked us to capture.
  *  - `unknown`    : we found AppHosts but couldn't classify any of them.
  *  - `none`       : no AppHosts were detected at all.
  */
-export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unknown' | 'none';
+export type AppHostLanguage = 'csharp' | 'typescript' | 'rust' | 'unknown';
+export type AppHostLanguageSummary = Exclude<AppHostLanguage, 'unknown'> | 'polyglot' | 'unknown' | 'none';
+
+export function formatAppHostLanguage(language: string): string | undefined {
+    if (!language) {
+        return undefined;
+    }
+
+    switch (language.toLowerCase()) {
+        case 'csharp':
+            return 'C#';
+        case 'typescript':
+        case 'typescript/nodejs':
+            return 'TypeScript';
+        default:
+            return language.charAt(0).toUpperCase() + language.slice(1);
+    }
+}
 
 /**
  * Normalizes a language string from `aspire ls --format json` to a coarse
@@ -24,16 +43,19 @@ export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unk
  * the summary. Anything we don't recognize is grouped as `'other'` so that a
  * mixed workspace still reports `polyglot` rather than hiding the diversity.
  */
-function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' | undefined {
+function languageFamily(raw: string | null | undefined): AppHostLanguage | 'other' {
     if (!raw) {
-        return undefined;
+        return 'other';
     }
     const value = raw.toLowerCase();
-    if (value === 'csharp' || value === 'c#') {
+    if (value === 'csharp' || value === 'c#' || value === 'fsharp' || value === 'f#' || value === 'visualbasic' || value === 'visual basic' || value === 'vb') {
         return 'csharp';
     }
     if (value === 'typescript' || value.startsWith('typescript/') || value === 'javascript' || value.startsWith('javascript/')) {
         return 'typescript';
+    }
+    if (value === 'rust' || value.startsWith('rust/')) {
+        return 'rust';
     }
     return 'other';
 }
@@ -45,31 +67,26 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
 
     let sawCsharp = false;
     let sawTypescript = false;
+    let sawRust = false;
     let sawOther = false;
-    let sawAny = false;
 
     for (const candidate of candidates) {
         const family = languageFamily(candidate.language);
-        if (family === undefined) {
-            continue;
-        }
-        sawAny = true;
         if (family === 'csharp') {
             sawCsharp = true;
         }
         else if (family === 'typescript') {
             sawTypescript = true;
         }
+        else if (family === 'rust') {
+            sawRust = true;
+        }
         else {
             sawOther = true;
         }
     }
 
-    if (!sawAny) {
-        return 'unknown';
-    }
-
-    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawOther);
+    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawRust) + Number(sawOther);
     if (distinctFamilies > 1) {
         return 'polyglot';
     }
@@ -78,6 +95,9 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
     }
     if (sawTypescript) {
         return 'typescript';
+    }
+    if (sawRust) {
+        return 'rust';
     }
     return 'unknown';
 }
@@ -92,17 +112,20 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
  * use {@link classifyAppHostDirectory} which peeks for marker files. This entry
  * point only looks at the file extension.
  */
-export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' | 'typescript' | 'unknown' {
+export function classifyAppHostPath(appHostPath: string | undefined): AppHostLanguage {
     if (!appHostPath) {
         return 'unknown';
     }
     const lower = appHostPath.toLowerCase();
-    if (lower.endsWith('.csproj') || lower.endsWith('.cs')) {
+    if (lower.endsWith('.csproj') || lower.endsWith('.fsproj') || lower.endsWith('.vbproj') || lower.endsWith('.cs')) {
         return 'csharp';
     }
     if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts') ||
         lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) {
         return 'typescript';
+    }
+    if (lower.endsWith('.rs')) {
+        return 'rust';
     }
     return 'unknown';
 }
@@ -112,35 +135,35 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
  * launches AppHosts as a directory (e.g. `aspire run` without `--apphost`)
  * because the entry file lives next to `package.json` / `*.csproj` and is
  * discovered at runtime. Looking only at the directory name itself loses the
- * language signal entirely, so we synchronously enumerate the directory and
- * match well-known AppHost file names.
+ * language signal entirely, so we enumerate the directory and match well-known
+ * AppHost file names.
  *
- * Used at telemetry-emit time only — the function is intentionally synchronous
- * to keep the launch-telemetry call path simple and to avoid plumbing async
- * through {@link AspireDebugSession.handleMessage}. Directory reads are
- * O(entries), small for typical AppHost roots; any failure (permissions,
- * missing directory) returns `'unknown'` rather than throwing.
+ * Directory reads are O(entries), small for typical AppHost roots; any failure
+ * (permissions, missing directory) returns `'unknown'` rather than throwing.
  */
-export function classifyAppHostDirectory(directoryPath: string | undefined): 'csharp' | 'typescript' | 'unknown' {
+export async function classifyAppHostDirectory(directoryPath: string | undefined): Promise<AppHostLanguage> {
     if (!directoryPath) {
         return 'unknown';
     }
     let entries: string[];
     try {
-        entries = readdirSync(directoryPath);
+        entries = await fs.readdir(directoryPath);
     }
     catch {
         return 'unknown';
     }
     let sawCsharp = false;
     let sawTypescript = false;
+    let sawRust = false;
     for (const entry of entries) {
-        const family = classifyAppHostPath(entry);
-        if (family === 'csharp') {
+        if (await isCsharpAppHostMarker(directoryPath, entry)) {
             sawCsharp = true;
         }
-        else if (family === 'typescript') {
+        else if (isTypescriptAppHostMarker(entry)) {
             sawTypescript = true;
+        }
+        else if (entry.toLowerCase() === 'apphost.rs') {
+            sawRust = true;
         }
     }
     if (sawCsharp && sawTypescript) {
@@ -155,5 +178,80 @@ export function classifyAppHostDirectory(directoryPath: string | undefined): 'cs
     if (sawTypescript) {
         return 'typescript';
     }
+    if (sawRust) {
+        return 'rust';
+    }
     return 'unknown';
+}
+
+async function isCsharpAppHostMarker(directoryPath: string, entry: string): Promise<boolean> {
+    const lower = entry.toLowerCase();
+    if (lower === 'apphost.cs') {
+        return true;
+    }
+
+    if (!lower.endsWith('.csproj') && !lower.endsWith('.fsproj') && !lower.endsWith('.vbproj')) {
+        return false;
+    }
+
+    if (projectFileNameLooksLikeAppHost(lower)) {
+        return true;
+    }
+
+    return await projectFileReferencesAspireAppHost(directoryPath, entry);
+}
+
+function projectFileNameLooksLikeAppHost(fileName: string): boolean {
+    const nameWithoutExtension = fileName.replace(/\.[^.]+$/, '');
+    return nameWithoutExtension === 'apphost'
+        || nameWithoutExtension.endsWith('.apphost');
+}
+
+async function projectFileReferencesAspireAppHost(directoryPath: string, entry: string): Promise<boolean> {
+    let contents: string;
+    try {
+        contents = await fs.readFile(join(directoryPath, entry), 'utf8');
+    }
+    catch {
+        return false;
+    }
+
+    return projectContentsReferencesAspireAppHost(contents);
+}
+
+export function projectContentsReferencesAspireAppHost(contents: string): boolean {
+    const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
+    // C# AppHost project files can advertise Aspire through SDK, package, or evaluated properties:
+    //   <Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+    //   <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
+    //   <PackageReference Include="Aspire.Hosting.AppHost" />
+    //   <IsAspireHost>true</IsAspireHost>
+    // Classification also accepts plain Aspire.Hosting references because projects
+    // can still be AppHosts without using the AppHost-specific package shape.
+    return projectContentsReferencesRunnableAspireAppHost(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting["'])[^>]*>/is.test(uncommentedContents);
+}
+
+export function projectContentsReferencesRunnableAspireAppHost(contents: string): boolean {
+    const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
+    return projectSdkReferencesAspireAppHost(uncommentedContents)
+        || /<Sdk\b(?=[^>]*\bName\s*=\s*(["'])Aspire\.AppHost\.Sdk\1)[^>]*>/is.test(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting\.AppHost["'])[^>]*>/is.test(uncommentedContents)
+        || /<IsAspireHost>\s*true\s*<\/IsAspireHost>/i.test(uncommentedContents);
+}
+
+function projectSdkReferencesAspireAppHost(contents: string): boolean {
+    const projectSdkMatch = /<Project\b[^>]*\bSdk\s*=\s*(["'])(?<sdks>.*?)\1/is.exec(contents);
+    const sdkAttribute = projectSdkMatch?.groups?.sdks;
+    if (!sdkAttribute) {
+        return false;
+    }
+
+    return sdkAttribute.split(';').some(sdk => /^Aspire\.AppHost\.Sdk(?:\/|$)/i.test(sdk.trim()));
+}
+
+function isTypescriptAppHostMarker(entry: string): boolean {
+    const lower = entry.toLowerCase();
+    return lower === 'apphost.ts' || lower === 'apphost.mts' || lower === 'apphost.cts' ||
+        lower === 'apphost.js' || lower === 'apphost.mjs' || lower === 'apphost.cjs';
 }

@@ -60,6 +60,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private readonly CliExecutionContext _executionContext;
     private readonly IInteractionService _interactionService;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IEnvironment _environment;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
     private readonly ILogger<CliTemplateFactory> _logger;
 
@@ -71,6 +72,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         ICliHostEnvironment hostEnvironment,
+        IEnvironment environment,
         TemplateNuGetConfigService templateNuGetConfigService,
         ILogger<CliTemplateFactory> logger)
     {
@@ -81,6 +83,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         _executionContext = executionContext;
         _interactionService = interactionService;
         _hostEnvironment = hostEnvironment;
+        _environment = environment;
         _templateNuGetConfigService = templateNuGetConfigService;
         _logger = logger;
     }
@@ -245,7 +248,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             {
                 var defaultOutputPath = pathDeriver(_executionContext, projectName);
                 var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
-                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken, outputPathResolver);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, outputPathResolver, cancellationToken);
             },
             _interactionService);
     }
@@ -335,7 +338,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         var currentDir = _executionContext.WorkingDirectory.FullName;
         var relativePath = Path.GetRelativePath(currentDir, outputPath);
 
-        var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var pathComparison = _environment.IsWindows() || _environment.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 

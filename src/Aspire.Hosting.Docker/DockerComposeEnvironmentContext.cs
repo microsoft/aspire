@@ -154,7 +154,7 @@ internal sealed class DockerComposeEnvironmentContext(DockerComposeEnvironmentRe
     private static void RemoveHttpsServiceDiscoveryVariables(Dictionary<string, object> environmentVariables)
     {
         var keysToRemove = environmentVariables
-            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__"))
+            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__", StringComparison.Ordinal))
             .Select(kvp => kvp.Key)
             .ToList();
 

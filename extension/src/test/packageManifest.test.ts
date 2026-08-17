@@ -16,6 +16,8 @@ type ManifestCommand = {
 type DebuggerProperty = {
     type?: string | string[];
     description?: string;
+    enum?: string[];
+    enumDescriptions?: string[];
     additionalProperties?: { type?: string };
     items?: { type?: string };
     default?: unknown;
@@ -37,6 +39,7 @@ type ExtensionManifest = {
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             commandPalette?: ManifestMenuItem[];
+            'editor/title/run'?: ManifestMenuItem[];
             'explorer/context'?: ManifestMenuItem[];
             'view/title'?: ManifestMenuItem[];
             'view/item/context'?: ManifestMenuItem[];
@@ -61,9 +64,13 @@ suite('extension/package.json', () => {
 
         const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.welcome%');
         const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.globalWelcome%');
+        const compatibilityErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.errorWelcome%');
+        const genericErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.genericErrorWelcome%');
 
         assertContains(workspaceWelcome?.when, "aspire.viewMode != 'global'");
         assertContains(globalWelcome?.when, "aspire.viewMode == 'global'");
+        assertContains(compatibilityErrorWelcome?.when, 'aspire.fetchAppHostsCompatibilityError');
+        assertContains(genericErrorWelcome?.when, '!aspire.fetchAppHostsCompatibilityError');
     });
 
     test('running apphosts title actions use string view and view mode checks', () => {
@@ -99,9 +106,12 @@ suite('extension/package.json', () => {
         const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
 
         const executeResourceCommandItem = contextMenus.find(item => item.command === 'aspire-vscode.executeResourceCommandItem');
+        const openResourceTerminal = contextMenus.find(item => item.command === 'aspire-vscode.openResourceTerminal');
 
         assertContains(executeResourceCommandItem?.when, 'view == aspire-vscode.appHosts');
         assertContains(executeResourceCommandItem?.when, 'viewItem == resourceCommand:enabled');
+        assertContains(openResourceTerminal?.when, 'view == aspire-vscode.appHosts');
+        assertContains(openResourceTerminal?.when, 'viewItem =~ /^resource.*:canOpenTerminal/');
     });
 
     test('running apphost context actions only target running apphost contexts', () => {
@@ -145,6 +155,17 @@ suite('extension/package.json', () => {
         assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
     });
 
+    test('active AppHost Run action does not require a language debugger', () => {
+        const manifest = readManifest();
+        const editorRunMenus = manifest.contributes.menus?.['editor/title/run'] ?? [];
+
+        const runAppHost = editorRunMenus.find(item => item.command === 'aspire-vscode.runAppHostCommand');
+        const debugAppHost = editorRunMenus.find(item => item.command === 'aspire-vscode.debugAppHostCommand');
+
+        assert.strictEqual(runAppHost?.when, 'aspire.fileIsAppHost || (aspire.workspaceHasAppHost && aspire.editorSupportsRunDebug)');
+        assert.strictEqual(debugAppHost?.when, '(aspire.fileIsAppHost || aspire.workspaceHasAppHost) && aspire.editorSupportsRunDebug');
+    });
+
     test('Node module AppHost files activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];
@@ -157,10 +178,25 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.cjs'));
     });
 
-    test('Explorer AppHost commands include Node module filenames', () => {
+    test('Rust AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.rs'));
+    });
+
+    test('FSharp and Visual Basic AppHost projects activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/*.fsproj'));
+        assert.ok(activationEvents.includes('workspaceContains:**/*.vbproj'));
+    });
+
+    test('Explorer AppHost commands include guest AppHost filenames', () => {
         const manifest = readManifest();
         const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];
-        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs'];
+        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs', 'apphost.rs'];
 
         for (const commandName of ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']) {
             const menuItem = explorerMenus.find(item => item.command === commandName);
@@ -200,5 +236,55 @@ suite('extension/package.json', () => {
         assert.strictEqual(argsProperty.type, 'array');
         assert.strictEqual(argsProperty.items?.type, 'string');
         assert.strictEqual(argsProperty.description, '%extension.debug.args%');
+    });
+
+    test('CodeLens commands are contributed and hidden from the command palette', () => {
+        // CodeLens commands are invoked from lenses, never typed by the user, so each registration
+        // needs a contributes.commands entry (otherwise the title is unlocalized/undeclared) plus a
+        // commandPalette "when": "false" entry so it does not leak into the palette.
+        const manifest = readManifest();
+        const registrationSource = fs.readFileSync(path.resolve(__dirname, '../../src/activation/registerCodeLensCommands.ts'), 'utf8');
+        const registeredCodeLensCommands = [...registrationSource.matchAll(/registerInstrumentedCommand\('(aspire-vscode\.codeLens[A-Za-z0-9]*)'/g)]
+            .map(match => match[1]);
+
+        assert.ok(registeredCodeLensCommands.includes('aspire-vscode.codeLensRevealAppHost'), 'Expected codeLensRevealAppHost to be registered.');
+
+        const contributedCommands = new Set((manifest.contributes.commands ?? []).map(item => item.command));
+        const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command));
+
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !contributedCommands.has(command)), []);
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !hiddenFromPalette.has(command)), []);
+    });
+
+    test('aspire launch configuration declares dashboard browser choices', () => {
+        const manifest = readManifest();
+        const aspireDebugger = manifest.contributes.debuggers?.find(d => d.type === 'aspire');
+        const properties = aspireDebugger?.configurationAttributes?.launch?.properties;
+
+        assert.ok(properties, 'Expected aspire debugger to declare launch configuration properties');
+        const dashboardBrowserProperty = properties.dashboardBrowser;
+        assert.ok(dashboardBrowserProperty, 'Expected aspire launch configuration to declare a dashboardBrowser property');
+        assert.strictEqual(dashboardBrowserProperty.type, 'string');
+        assert.strictEqual(dashboardBrowserProperty.description, '%extension.debug.dashboardBrowser%');
+        assert.deepStrictEqual(dashboardBrowserProperty.enum, [
+            'none',
+            'notification',
+            'openExternalBrowser',
+            'integratedBrowser',
+            'debugChrome',
+            'debugEdge',
+            'debugFirefox',
+        ]);
+        assert.deepStrictEqual(dashboardBrowserProperty.enumDescriptions, [
+            '%configuration.aspire.dashboardBrowser.none%',
+            '%configuration.aspire.dashboardBrowser.notification%',
+            '%configuration.aspire.dashboardBrowser.openExternalBrowser%',
+            '%configuration.aspire.dashboardBrowser.integratedBrowser%',
+            '%configuration.aspire.dashboardBrowser.debugChrome%',
+            '%configuration.aspire.dashboardBrowser.debugEdge%',
+            '%configuration.aspire.dashboardBrowser.debugFirefox%',
+        ]);
     });
 });

@@ -360,6 +360,7 @@ internal sealed class AzureAppServiceWebsiteContext(
     /// <param name="isSlot">Indicates whether this is a deployment slot.</param>
     /// <param name="parentWebSite">The parent website when creating a slot.</param>
     /// <param name="deploymentSlot">The deployment slot name. When not null and isSlot is false, adds @onlyIfNotExists() decorator to the main site.</param>
+    /// <param name="virtualNetworkSubnetId">The optional subnet ID for regional virtual network integration.</param>
     /// <returns>A dynamic object representing either a WebSite or WebSiteSlot.</returns>
     private object CreateAndConfigureWebSite(
     AzureResourceInfrastructure infra,
@@ -371,7 +372,8 @@ internal sealed class AzureAppServiceWebsiteContext(
     HashSet<string> slotConfigNames,
     bool isSlot = false,
     WebSite? parentWebSite = null,
-    BicepValue<string>? deploymentSlot = null)
+    BicepValue<string>? deploymentSlot = null,
+    BicepValue<ResourceIdentifier>? virtualNetworkSubnetId = null)
     {
         object webSite;
         object mainContainer;
@@ -454,6 +456,18 @@ internal sealed class AzureAppServiceWebsiteContext(
 
             webSite = site;
             mainContainer = siteContainer;
+        }
+
+        if (virtualNetworkSubnetId is { } subnetId)
+        {
+            if (webSite is WebSite site)
+            {
+                site.VirtualNetworkSubnetId = subnetId;
+            }
+            else if (webSite is WebSiteSlot slot)
+            {
+                slot.VirtualNetworkSubnetId = subnetId;
+            }
         }
 
         // There should be a single valid target port
@@ -694,6 +708,7 @@ internal sealed class AzureAppServiceWebsiteContext(
         var acrMidParameter = environmentContext.Environment.ContainerRegistryManagedIdentityId.AsProvisioningParameter(infra);
         var acrClientIdParameter = environmentContext.Environment.ContainerRegistryClientId.AsProvisioningParameter(infra);
         var containerImage = AllocateParameter(new ContainerImageReference(Resource));
+        var virtualNetworkSubnetId = environmentContext.Environment.GetDelegatedSubnetId(infra);
 
         // Create parent WebSite from existing
         WebSite? parentWebSite = null;
@@ -716,7 +731,8 @@ internal sealed class AzureAppServiceWebsiteContext(
             stickyConfigNames,
             isSlot: deploymentSlot is not null,
             parentWebSite: parentWebSite,
-            deploymentSlot: deploymentSlot);
+            deploymentSlot: deploymentSlot,
+            virtualNetworkSubnetId: virtualNetworkSubnetId);
 
         // Allow users to customize the web app here
         if (deploymentSlot is not null)
@@ -761,6 +777,7 @@ internal sealed class AzureAppServiceWebsiteContext(
         var acrMidParameter = environmentContext.Environment.ContainerRegistryManagedIdentityId.AsProvisioningParameter(infra);
         var acrClientIdParameter = environmentContext.Environment.ContainerRegistryClientId.AsProvisioningParameter(infra);
         var containerImage = AllocateParameter(new ContainerImageReference(Resource));
+        var virtualNetworkSubnetId = environmentContext.Environment.GetDelegatedSubnetId(infra);
         HashSet<string> stickyConfigNames = new();
 
         // Main site - @onlyIfNotExists() is automatically added because deploymentSlot is not null and isSlot is false
@@ -773,7 +790,8 @@ internal sealed class AzureAppServiceWebsiteContext(
             containerImage,
             stickyConfigNames,
             isSlot: false,
-            deploymentSlot: deploymentSlot);
+            deploymentSlot: deploymentSlot,
+            virtualNetworkSubnetId: virtualNetworkSubnetId);
 
         // Slot - no @onlyIfNotExists() needed, slot is always deployed to
         var webSiteSlot = (WebSiteSlot)CreateAndConfigureWebSite(
@@ -786,7 +804,8 @@ internal sealed class AzureAppServiceWebsiteContext(
             stickyConfigNames,
             isSlot: true,
             parentWebSite: (WebSite)webSite,
-            deploymentSlot: deploymentSlot);
+            deploymentSlot: deploymentSlot,
+            virtualNetworkSubnetId: virtualNetworkSubnetId);
 
         // Allow users to customize the website
         if (resource.TryGetAnnotationsOfType<AzureAppServiceWebsiteCustomizationAnnotation>(out var customizeWebSiteAnnotations))
@@ -806,7 +825,39 @@ internal sealed class AzureAppServiceWebsiteContext(
             }
         }
 
+        AddWebSiteNetworkConfig(infra, webSite);
         AddStickySlotSettings(webSite, stickyConfigNames);
+    }
+
+    private static void AddWebSiteNetworkConfig(AzureResourceInfrastructure infra, WebSite webSite)
+    {
+        if (webSite.VirtualNetworkSubnetId.IsEmpty)
+        {
+            return;
+        }
+
+        // App Service supports regional VNet integration through both the site's
+        // properties.virtualNetworkSubnetId property and the singleton
+        // Microsoft.Web/sites/networkConfig child named "virtualNetwork":
+        // https://learn.microsoft.com/azure/templates/microsoft.web/sites/networkconfig
+        //
+        // The site property is sufficient when provisioning a new site, and it is also applied to the
+        // slot. The production site requires the child resource as well when a deployment slot exists.
+        // In that path, the production site is emitted with @onlyIfNotExists() so that deploying a slot
+        // cannot reset production configuration. That intentionally prevents changes to the parent,
+        // including a newly configured virtualNetworkSubnetId, from updating an existing production site.
+        //
+        // The networkConfig child remains updateable independently of its parent, so it safely applies
+        // VNet integration during that upgrade without weakening the production-site safeguard. Create
+        // it after customization callbacks so an explicit user-provided VirtualNetworkSubnetId remains
+        // authoritative for both representations. AspireSiteNetworkConfig exists because the current
+        // Azure.Provisioning SiteNetworkConfig generator omits the required fixed child name; it restores
+        // name: 'virtualNetwork' while retaining the generated resource's type and decorators.
+        infra.Add(new AspireSiteNetworkConfig("webappNetworkConfig")
+        {
+            Parent = webSite,
+            SubnetResourceId = webSite.VirtualNetworkSubnetId
+        });
     }
 
     private BicepValue<string> GetEndpointValue(EndpointMapping mapping, EndpointProperty property)

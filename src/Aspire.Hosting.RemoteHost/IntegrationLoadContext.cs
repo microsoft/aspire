@@ -49,6 +49,12 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
             // contexts, so shared contracts (ICodeGenerator, ILanguageSupport,
             // AtsContext, etc.) work across the ALC boundary without requiring
             // reflection or marshalling.
+            //
+            // Binding to the bundled (CLI) copy is safe because Aspire.TypeSystem freezes its
+            // strong-name AssemblyVersion at a fixed constant so the bundled copy satisfies the
+            // strong-named reference of any stable SDK codegen assembly (#18110, #17910). See
+            // src/Aspire.TypeSystem/Aspire.TypeSystem.csproj for the full rationale and the one
+            // residual "update your CLI" case routed to the #18125 diagnostics.
             return null;
         }
 

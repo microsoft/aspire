@@ -1,0 +1,11 @@
+.progress-content {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.progress-content ::deep fluent-progress-ring {
+    flex-shrink: 0;
+}
+

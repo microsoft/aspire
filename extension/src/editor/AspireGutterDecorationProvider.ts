@@ -3,8 +3,9 @@ import { getParserForDocument } from './parsers/AppHostResourceParser';
 // Trigger parser self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
+import './parsers/rustAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { AppHostDisplayInfo } from '../data/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, StateStyle, HealthStatus } from './resourceConstants';
 
@@ -71,7 +72,7 @@ const decorationTypes = Object.fromEntries(
     })])
 ) as Record<GutterCategory, vscode.TextEditorDecorationType>;
 
-function classifyState(state: string, stateStyle: string, healthStatus: string, exitCode?: number | null): GutterCategory {
+export function classifyState(state: string, stateStyle: string, healthStatus: string, exitCode?: number | null): GutterCategory {
     switch (state) {
         case ResourceState.Running:
         case ResourceState.Active:
@@ -83,8 +84,9 @@ function classifyState(state: string, stateStyle: string, healthStatus: string, 
             }
             return 'running';
         case ResourceState.FailedToStart:
+            return exitCode != null && exitCode !== 0 ? 'error' : 'warning';
         case ResourceState.RuntimeUnhealthy:
-            return 'error';
+            return 'warning';
         case ResourceState.Starting:
         case ResourceState.Stopping:
         case ResourceState.Building:

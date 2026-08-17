@@ -18,7 +18,7 @@ public sealed class MongoDbContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             // testcontainers uses mongo:mongo by default,
             // resetting that for tests

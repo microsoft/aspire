@@ -5,6 +5,19 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const {
+  ensureDownloadCache,
+  projectDownloadCache,
+  removePathWithoutFollowingLinks,
+  resolveDownloadCacheRoot,
+} = require('./e2e-download-cache');
+const {
+  markErrorNonRetryable,
+  runWithRetries,
+  terminateOrphanedDescendants,
+} = require('./e2e-download-retry');
+const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');
+const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -16,6 +29,26 @@ const resultsDir = path.join(extensionRoot, '.test-results', 'e2e', shardName);
 const runId = `${process.pid}-${Date.now()}`;
 const diagnosticsStorageRoot = path.join(extensionRoot, '.test-storage');
 const requestedTempRoot = verifyExtesterFeedOnly ? '' : process.env.ASPIRE_EXTENSION_E2E_TEMP_ROOT || os.tmpdir();
+// Everything below that can reject the environment runs before the per-run root exists, and
+// nothing after `mkdtempSync` does more than join strings. Module scope is outside the cleanup
+// `finally` that `main()` installs, so a throw once the root exists leaves an `aev-*` directory
+// behind with nothing alive to remove it; work that can fail belongs in `main()` instead, which is
+// why `prepareRunDirectories` is a function rather than a module-scope block.
+const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';
+const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);
+const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
+if (!extesterVersion) {
+  throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
+}
+// The feed preflight must not touch the shared cache: it runs before any download and only
+// verifies package availability, so resolving the cache root there would be wasted Git discovery.
+const downloadCacheRoot = verifyExtesterFeedOnly ? '' : resolveDownloadCacheRoot(repoRoot);
+// Keep this below VS Code 1.131.0 while ExTester is pinned to 8.23.0. VS Code 1.130.0 contains
+// Contents/MacOS/Code plus an Electron -> Code compatibility symlink, but VS Code 1.131.0 removes
+// that legacy path and ExTester 8.23.0 only launches it. ExTester 8.24.0 adds the fallback, but its
+// tarball is not anonymously available from dotnet-public-npm yet.
+const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.130.0');
+assertVsCodeVersionCompatibleWithExtester(vscodeVersion, extesterVersion);
 if (!verifyExtesterFeedOnly) {
   fs.mkdirSync(requestedTempRoot, { recursive: true });
 }
@@ -34,25 +67,49 @@ const recordingsDir = path.join(extensionRoot, '.test-recordings', shardName);
 const defaultVsixPath = path.join(artifactsDir, 'aspire-extension-e2e.vsix');
 const stateFile = path.join(resultsDir, 'extension-state.json');
 const controlFile = path.join(resultsDir, 'extension-control.json');
-const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';
-const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);
-const vscodeVersion = process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.122.1';
-const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
-if (!extesterVersion) {
-  throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
-}
 const extesterNodeModules = path.join(extensionRoot, 'node_modules');
 const extesterModule = path.join(extesterNodeModules, 'vscode-extension-tester');
 const extesterCli = path.join(extesterModule, 'out', 'cli.js');
+// ExTester unpacks VS Code into `<storage>/vscode-temp-<random>` and removes it in a `finally`
+// that a killed process never reaches. See node_modules/vscode-extension-tester/out/util/codeUtil.js.
+const EXTESTER_UNPACK_DIRECTORY_PREFIX = 'vscode-temp-';
+// `/bin/sh` leaves a word alone only when every character in it is inert: no whitespace to split
+// on, no `$` or backtick to expand, no `;`, `&`, `|`, `(`, `)`, `<`, `>` or newline to end the
+// command, no `*`, `?` or `[` to glob, and no quote or backslash to change the parse. This is an
+// allowlist rather than a metacharacter blocklist so a character whose meaning depends on position
+// (`~`, `#`, `!`) forces a projection instead of having to be reasoned about.
+const POSIX_SHELL_INERT_PATH_PATTERN = /^[A-Za-z0-9._/+,=:@%-]+$/;
+// Windows needs the same allowlist over a different alphabet, because `cmd.exe /d /s /c` strips
+// the quotes Node wraps the command in and parses whatever is left. `\` and `:` are ordinary path
+// characters rather than escapes there, and `~` has to stay legal: the 8.3 short names Windows
+// hands out (`C:\Users\RUNNER~1\AppData\Local\Temp` on hosted runners) would otherwise be unable
+// to host the projection that stands in for a rejected path. Excluded are `%` and `!` (variable
+// and delayed expansion), `^` (escape), `&`, `|`, `<`, `>`, `(`, `)` and quotes (command syntax),
+// and space, `,`, `;` and `=`, every one of which terminates the command token.
+const WINDOWS_COMMAND_INERT_PATH_PATTERN = /^[A-Za-z0-9._\\/:+@~-]+$/;
+const isWindows = process.platform === 'win32';
+const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
+const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
+const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
+const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
 let cliPathForCleanup;
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 `;
 
-if (!verifyExtesterFeedOnly) {
+/**
+ * Clears the previous run's results and creates the directories this run writes into.
+ *
+ * This is deliberately not module scope even though everything it needs is: it removes and creates
+ * directories, and every one of those calls can fail on a stale Windows file lock or a read-only
+ * mount. Module scope is outside the cleanup `finally` that `main()` installs, so a throw there
+ * would strand the `aev-*` root that `mkdtempSync` had already created.
+ */
+function prepareRunDirectories() {
   removePath(resultsDir, { recursive: true, force: true });
   removePath(recordingsDir, { recursive: true, force: true });
   for (const directory of [artifactsDir, resultsDir, diagnosticsStorageRoot, isolatedAspireHome, storageDir, extensionsDir]) {
@@ -60,86 +117,75 @@ if (!verifyExtesterFeedOnly) {
   }
 }
 
-function runWithProcessTreeTimeout(command, args, extraEnv, timeout) {
-  return new Promise((resolve, reject) => {
-    const useShell = shouldUseShellForCommand(command);
-    const child = useShell
-      ? spawn([command, ...args].map(quoteWindowsShellArgument).join(' '), [], {
-        cwd: extensionRoot,
-        env: { ...process.env, ...extraEnv },
-        shell: true,
-        stdio: 'inherit',
-        detached: process.platform !== 'win32',
-      })
-      : spawn(command, args, {
-        cwd: extensionRoot,
-        env: { ...process.env, ...extraEnv },
-        shell: false,
-        stdio: 'inherit',
-        detached: process.platform !== 'win32',
-      })
-
-    let timedOut = false;
-    let settled = false;
-    let forceTimeout;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      terminateProcessTree(child.pid, 'SIGTERM');
-      forceTimeout = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-
-        terminateProcessTree(child.pid, 'SIGKILL');
-        child.removeAllListeners();
-        child.unref();
-        settle();
-        reject(new Error(`${command} ${args.join(' ')} timed out after ${timeout}ms and did not exit after process-tree termination. Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`));
-      }, 15000);
-    }, timeout);
-
-    child.on('error', error => {
-      if (settled) {
-        return;
-      }
-
-      settle();
-      reject(error);
-    })
-
-    child.on('close', (exitCode, signal) => {
-      if (settled) {
-        return;
-      }
-
-      settle();
-      if (timedOut) {
-        reject(new Error(`${command} ${args.join(' ')} timed out after ${timeout}ms. Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`));
-        return;
-      }
-
-      if (exitCode !== 0) {
-        reject(new Error(`${command} ${args.join(' ')} exited with code ${exitCode ?? `signal ${signal ?? 'unknown'}`}. Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`));
-        return;
-      }
-
-      resolve();
-    });
-
-    function settle() {
-      settled = true;
-      clearTimeout(timer);
-      if (forceTimeout) {
-        clearTimeout(forceTimeout);
-      }
-    }
-  });
-}
-
 function getRunTestsTimeoutMs() {
   const configured = Number(process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS || 2400000);
   if (!Number.isFinite(configured) || configured <= 0) {
     throw new Error(`ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS must be a positive number. Got '${process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS}'.`);
+  }
+
+  return configured;
+}
+
+/**
+ * Returns a path ExTester can be given for its storage folder that the platform's command
+ * interpreter will not reinterpret.
+ *
+ * ExTester builds shell command strings out of this path and interpolates it unquoted into
+ * each of them:
+ *
+ * - `exec(`unzip -qo ${input}`, { cwd: target })` unpacks `.zip` archives on macOS and Linux --
+ *   see `node_modules/vscode-extension-tester/out/util/unpack.js`.
+ * - `exec(`${this.getChromeDriverBinaryPath(version)} -v`)` reads the version of an already
+ *   downloaded ChromeDriver on every platform, Windows included -- see
+ *   `node_modules/vscode-extension-tester/out/util/driverUtil.js`.
+ *
+ * `exec` hands its string to `/bin/sh -c` or `cmd.exe /d /s /c`, so every construct in the path is
+ * live: a space splits it into two arguments, `repo(1)` is a syntax error under `sh`, and
+ * `repo&whoami` runs a second command under `cmd`. That path is now the download cache, which
+ * lives inside the repository, so it is wherever the developer cloned rather than something this
+ * runner chooses.
+ *
+ * The ChromeDriver check is why this has to happen on Windows even though Windows unpacks
+ * in-process with `unzipper`. `downloadChromeDriver` runs it whenever the binary already exists,
+ * which is exactly the warm hit this cache is built to produce, and it swallows the failure and
+ * downloads again. A checkout under `C:\src\my repo` would therefore never get a warm ChromeDriver
+ * and would never say why.
+ *
+ * Standing a link from the run's own temporary root in front of the cache keeps the command a
+ * single inert word. Windows gets a junction rather than a symlink because junctions need neither
+ * elevation nor Developer Mode.
+ */
+function projectCommandSafeStagingDirectory(stagingDirectory) {
+  if (COMMAND_INERT_PATH_PATTERN.test(stagingDirectory)) {
+    return stagingDirectory;
+  }
+
+  const linkPath = path.join(shortRunRoot, 'cache-staging');
+  if (!COMMAND_INERT_PATH_PATTERN.test(linkPath)) {
+    throw new Error(`The download cache path '${stagingDirectory}' contains characters '${COMMAND_INTERPRETER_NAME}' would reinterpret, which ExTester cannot be pointed at, and the per-run temporary root '${shortRunRoot}' cannot stand in for it because it has the same problem. Point ASPIRE_EXTENSION_E2E_TEMP_ROOT or ASPIRE_EXTENSION_E2E_CACHE_ROOT at a path built only from letters, digits and '${COMMAND_INERT_PATH_ALPHABET}'.`);
+  }
+
+  removePathWithoutFollowingLinks(linkPath);
+  fs.symlinkSync(stagingDirectory, linkPath, isWindows ? 'junction' : 'dir');
+  return linkPath;
+}
+
+function getSetupDownloadRetryOptions(stagingDirectory, downloadDirectory) {
+  return {
+    attempts: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5),
+    retryDelayMs: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000),
+    beforeRetry: () => cleanPartialExtesterDownloads(stagingDirectory),
+    timeout: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000),
+    // Orphans are matched by the path ExTester was actually given, which is the projection rather
+    // than the candidate whenever the cache path is not inert to the command interpreter.
+    terminateOrphansUnder: downloadDirectory,
+  };
+}
+
+function getPositiveIntegerEnvironmentVariable(name, defaultValue) {
+  const configured = Number(process.env[name] || defaultValue);
+  if (!Number.isInteger(configured) || configured <= 0) {
+    throw new Error(`${name} must be a positive integer. Got '${process.env[name]}'.`);
   }
 
   return configured;
@@ -226,7 +272,9 @@ function logE2eConfiguration() {
   console.log(`  matched specs: ${matchedTestSpecs.map(file => path.relative(extensionRoot, file)).join(', ')}`);
   console.log(`  VS Code: ${vscodeVersion}`);
   console.log(`  ExTester: ${extesterVersion}`);
+  console.log(`  download cache: ${downloadCacheRoot}`);
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
+  console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
   console.log(`  storage diagnostics: ${path.relative(extensionRoot, storageDiagnosticsDir)}`);
   console.log(`  workspace diagnostics: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
@@ -487,7 +535,7 @@ function waitForProcessClose(closed, timeoutMs) {
 async function main() {
   let recording;
   let testFailure;
-  let completedTests = false;
+  let cleanupFailed = false;
   try {
     if (verifyExtesterFeedOnly) {
       verifyExtesterFeed();
@@ -495,6 +543,7 @@ async function main() {
     }
 
     assertSpecMatches(testSpec);
+    prepareRunDirectories();
     logE2eConfiguration();
 
     const cliPath = isolateCliPath(resolveCliPath());
@@ -511,6 +560,10 @@ async function main() {
       throw new Error(`VSIX not found at ${vsixPath}`);
     }
     validateVsix(vsixPath);
+    const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+    if (enableAzureFunctionsE2E) {
+      validateAzureFunctionsCoreTools();
+    }
 
     ensureExtester();
     patchExtesterLaunchLocale();
@@ -530,28 +583,72 @@ async function main() {
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
+      ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
       NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
+      // ExTester's loadCodeVersion prefers CODE_VERSION over the --code_version argument, so an
+      // ambient value would make it download a version the cache key does not describe and leave
+      // a later run reusing the wrong install offline. Pinning it here makes the argument and the
+      // key authoritative. See node_modules/vscode-extension-tester/out/extester.js.
+      CODE_VERSION: vscodeVersion,
+      // The cache discovers stable install layouts (`VSCode-linux-x64`, `Visual Studio Code.app`)
+      // and the stream is not part of its key, so an ambient CODE_TYPE=insider would download an
+      // Insiders build that artifact discovery then cannot find. Nothing here asks for Insiders.
+      CODE_TYPE: 'stable',
     });
+    if (process.env.ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT === 'true') {
+      extestEnv.ASPIRE_CLI_START_TIMEOUT = undefined;
+    }
 
-    logStep('Downloading VS Code');
-    runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
-    logStep('Downloading ChromeDriver');
-    runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
+    const downloadCache = ensureDownloadCache({
+      cacheRoot: downloadCacheRoot,
+      vscodeVersion,
+      extesterVersion,
+      platform: process.platform,
+      architecture: process.arch,
+      populate(stagingDirectory) {
+        const downloadDirectory = projectCommandSafeStagingDirectory(stagingDirectory);
+        const setupDownloadRetryOptions = getSetupDownloadRetryOptions(stagingDirectory, downloadDirectory);
+        logStep('Downloading VS Code');
+        runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', downloadDirectory, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
+        logStep('Downloading ChromeDriver');
+        runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', downloadDirectory, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
+      },
+    });
+    console.log(`Extension E2E download cache ${downloadCache.cacheHit ? 'hit' : 'populated'}: ${downloadCache.cacheDirectory}`);
+    projectDownloadCache(downloadCache, storageDir);
+
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
+    for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
+      logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+    }
 
     recording = startRecording();
     try {
       logStep('Running VS Code extension E2E tests');
-      await runWithProcessTreeTimeout(process.execPath, [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', path.join(extensionRoot, 'test-e2e', 'settings.json'), '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js')], extestEnv, getRunTestsTimeoutMs());
+      const runTestsArgs = [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', path.join(extensionRoot, 'test-e2e', 'settings.json'), '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js'), '--offline'];
+      await runWithProcessTreeTimeout(process.execPath, runTestsArgs, {
+        diagnosticsSuffix: ` Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`,
+        quoteShellArgument: quoteWindowsShellArgument,
+        spawn,
+        spawnOptions: {
+          cwd: extensionRoot,
+          env: { ...process.env, ...extestEnv },
+          stdio: 'inherit',
+          detached: process.platform !== 'win32',
+        },
+        terminateProcessTree,
+        timeout: getRunTestsTimeoutMs(),
+        useShell: shouldUseShellForCommand(process.execPath),
+      });
     }
     catch (error) {
       testFailure = error;
     }
-    completedTests = true;
   }
   finally {
     const cleanupErrors = [];
@@ -564,6 +661,7 @@ async function main() {
     await runCleanupStep('cleanup temporary run root', cleanupTemporaryRunRoot, cleanupErrors);
 
     if (cleanupErrors.length > 0) {
+      cleanupFailed = true;
       const cleanupFailure = new AggregateError(cleanupErrors, 'One or more E2E cleanup steps failed.');
       if (testFailure) {
         console.error(cleanupFailure);
@@ -576,12 +674,17 @@ async function main() {
 
   if (testFailure) {
     printFailureDiagnosticsSummary();
+    // Only completed test failures become advisory. Structured setup, spawn, signal, timeout, and
+    // cleanup failures keep the shard blocking even when mocha.json recorded completed test cases.
+    if (advisoryIssue && shouldAllowAdvisoryTestFailure(testFailure, readMochaResults(), cleanupFailed)) {
+      console.warn(`::warning title=VS Code extension E2E test failure advisory::${shardName} has completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.`);
+      return;
+    }
+
     throw testFailure;
   }
 
-  if (completedTests) {
-    printSuccessDiagnosticsSummary();
-  }
+  printSuccessDiagnosticsSummary();
 }
 
 async function runCleanupStep(name, action, cleanupErrors) {
@@ -664,8 +767,61 @@ function validateCliPath(resolvedCliPath) {
   }
 }
 
+function resolveAzureFunctionsVsixPaths() {
+  if (!enableAzureFunctionsE2E) {
+    return [];
+  }
+
+  // The Functions extension activates the Azure Resource Groups extension directly.
+  // Install both VSIXes explicitly because the E2E VS Code instance runs offline.
+  return [
+    {
+      displayName: 'Azure Resource Groups',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
+    },
+    {
+      displayName: 'Azure Functions',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX'),
+    },
+  ];
+}
+
+function resolveRequiredVsixPath(environmentVariable) {
+  const configuredPath = process.env[environmentVariable];
+  if (!configuredPath) {
+    throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
+  }
+
+  const resolvedPath = path.resolve(configuredPath);
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`${environmentVariable} points to a missing file: ${resolvedPath}`);
+  }
+
+  validateVsix(resolvedPath);
+  return resolvedPath;
+}
+
+function validateAzureFunctionsCoreTools() {
+  const executable = process.platform === 'win32' ? 'func.cmd' : 'func';
+  const result = spawnSync(executable, ['--version'], {
+    cwd: extensionRoot,
+    env: getAspireCliEnvironment(),
+    shell: false,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+
+  if (result.error) {
+    throw new Error(`Unable to execute Azure Functions Core Tools (${executable}): ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Azure Functions Core Tools failed --version with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
 function packageVsix() {
-  run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], {}, { timeout: 300000 });
+  run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], { ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true' }, { timeout: 300000 });
   return defaultVsixPath;
 }
 
@@ -708,7 +864,7 @@ function verifyExtesterFeed() {
   ensureExtester();
 }
 
-// ExTester 8.23.0 does not expose a supported way to open VS Code with a workspace
+// ExTester does not expose a supported way to open VS Code with a workspace
 // folder. Starting with the workspace already open avoids a slower control-bridge
 // reload path and removes a startup race where discovery begins in an empty window.
 // Remove this patch when ExTester exposes a stable launch option for a folder/workspace.
@@ -732,7 +888,7 @@ function patchExtesterLaunchLocale() {
   const target = targets.find(candidate => source.includes(candidate));
   const argsDeclarationPattern = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/;
   if (target) {
-    console.log('Patching ExTester VS Code launch arguments by exact 8.23.0 argument match.');
+    console.log('Patching ExTester VS Code launch arguments by exact argument match.');
     fs.writeFileSync(browserPath, source.replace(target, () => replacement));
   } else if (argsDeclarationPattern.test(source)) {
     console.log('Patching ExTester VS Code launch arguments by fallback argument-line match.');
@@ -748,7 +904,10 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.mkdirSync(workspaceRoot, { recursive: true });
   fs.writeFileSync(workspaceMarkerFile, `${runId}\n`);
   writeWorkerProject('AspireE2E.Worker');
-  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion);
+  if (enableAzureFunctionsE2E) {
+    writeAzureFunctionsProject('AspireE2E.Functions');
+  }
+  writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -756,8 +915,6 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.writeFileSync(path.join(vscodeDirectory, 'settings.json'), JSON.stringify({
     'aspire.aspireCliExecutablePath': resolvedCliPath,
     'aspire.closeDashboardOnDebugEnd': true,
-    'aspire.dashboardBrowser': 'integratedBrowser',
-    'aspire.enableAspireDashboardAutoLaunch': 'launch',
     'aspire.enableAutoRestore': false,
     'aspire.enableSettingsFileCreationPromptOnStartup': false,
     'aspire.appHostDiscoveryTimeoutMs': 120000,
@@ -798,9 +955,12 @@ function restoreWorkspaceFixture() {
   }
 }
 
-function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
+function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  const azureFunctionsPackageReference = includeAzureFunctions
+    ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
 
   <PropertyGroup>
@@ -812,13 +972,17 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 
   <ItemGroup>
     <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
-  </ItemGroup>
+${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
 
+  const azureFunctionsResource = includeAzureFunctions
+    ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-
+#pragma warning disable ASPIRETERMINAL001
+// The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
@@ -826,7 +990,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
     .WithCommand(
         "echo-arguments",
         "echo-arguments",
-        static _ => Task.FromResult(CommandResults.Success()),
+        static context => Task.FromResult(CommandResults.Success("Echo arguments completed.", context.Arguments.GetString("message")!)),
         new CommandOptions
         {
             Arguments =
@@ -887,10 +1051,92 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 
+// e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
+// terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
+// those properties, so this resource exercises that metadata flowing through a real CLI process.
+builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
+    .WithHttpEndpoint(name: "http")
+    .WithTerminal();
+${azureFunctionsResource}
+
 builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
+}
+
+function writeAzureFunctionsProject(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  const propertiesDirectory = path.join(projectDirectory, 'Properties');
+  const certificatePath = path.join(projectDirectory, 'https-e2e.pfx');
+  const certificatePassword = 'AspireE2E';
+  fs.mkdirSync(propertiesDirectory, { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'Program.cs'), `${csharpFileHeader}using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.Hosting;
+
+var builder = FunctionsApplication.CreateBuilder(args);
+builder.ConfigureFunctionsWebApplication();
+builder.Build().Run();
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'HttpsFunction.cs'), `${csharpFileHeader}using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+
+public sealed class HttpsFunction
+{
+    [Function("HttpsFunction")]
+    public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "https-proof")] HttpRequest request)
+    {
+        return new OkObjectResult("Aspire HTTPS Functions E2E");
+    }
+}
+`);
+
+  fs.writeFileSync(path.join(projectDirectory, 'host.json'), JSON.stringify({
+    version: '2.0',
+  }, undefined, 2));
+
+  fs.writeFileSync(path.join(propertiesDirectory, 'launchSettings.json'), JSON.stringify({
+    profiles: {
+      [projectName]: {
+        commandName: 'Project',
+        commandLineArgs: `--useHttps --cert ${certificatePath} --password ${certificatePassword}`,
+        launchBrowser: false,
+      },
+    },
+  }, undefined, 2));
+
+  // Core Tools otherwise depends on ambient development-certificate state, which
+  // is intentionally absent on clean hosted runners.
+  run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--password', certificatePassword], {}, { timeout: 120000 });
 }
 
 function writeWorkerProject(projectName) {
@@ -953,6 +1199,51 @@ function resolveAppHostSdkVersion(resolvedCliPath) {
   return `${major}.${minor}.${patch}-${prerelease}`;
 }
 
+/**
+ * Pins the VS Code version the cached runner keys on.
+ *
+ * ExTester accepts `latest`, which resolves to whatever Microsoft is shipping the moment it asks.
+ * Keying on that literal would freeze the first release ever downloaded into `vscode-latest` and
+ * quietly serve it forever, which is the opposite of what somebody asking for `latest` wants.
+ * `min` and `max` are safe to key literally because ExTester resolves them from the version pinned
+ * in package.json, and that version is already part of the cache key.
+ */
+function resolveCachedVsCodeVersion(requestedVersion) {
+  const normalizedVersion = requestedVersion.trim().toLowerCase();
+  if (normalizedVersion === 'min' || normalizedVersion === 'max' || /^\d+\.\d+(\.\d+)?$/.test(normalizedVersion)) {
+    return normalizedVersion;
+  }
+
+  throw new Error(`ASPIRE_EXTENSION_E2E_VSCODE_VERSION must be a concrete version such as '1.130.0', or 'min'/'max', but was '${requestedVersion}'. Moving aliases cannot be cached because the cache key would never change when the alias does.`);
+}
+
+function assertVsCodeVersionCompatibleWithExtester(vscodeVersion, extesterVersion) {
+  if (vscodeVersion === 'min' || vscodeVersion === 'max') {
+    return;
+  }
+
+  // On macOS, ExTester 8.23 always launches Contents/MacOS/Electron, which VS Code removed in
+  // 1.131. Reject the pair before creating a run root or publishing a cache entry. Linux and
+  // Windows use different executable paths and remain compatible with the same concrete override.
+  if (process.platform === 'darwin' && compareConcreteVersions(vscodeVersion, '1.131.0') >= 0 && compareConcreteVersions(extesterVersion, '8.24.0') < 0) {
+    throw new Error(`VS Code ${vscodeVersion} cannot be used with ExTester ${extesterVersion} on macOS: this ExTester version launches only Contents/MacOS/Electron, which VS Code 1.131.0 and newer no longer provide.`);
+  }
+}
+
+function compareConcreteVersions(left, right) {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
+}
+
 function getAspireCliEnvironment(extraEnv = {}) {
   return {
     ...process.env,
@@ -960,6 +1251,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300',
     ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
     ASPIRE_VERSION_CHECK_DISABLED: 'true',
+    DOTNET_CLI_UI_LANGUAGE: 'en',
     DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1',
     DOTNET_NOLOGO: '1',
@@ -1133,6 +1425,18 @@ function run(command, args, extraEnv = {}, options = {}) {
     shell: false,
   });
 
+  if (result.error?.code === 'ETIMEDOUT' && options.terminateOrphansUnder) {
+    try {
+      terminateOrphanedDescendants(options.terminateOrphansUnder);
+    } catch (cleanupError) {
+      // Falling through to a retry here would let `beforeRetry` delete, and a later attempt
+      // validate and publish, a directory an unpack process may still be writing into -- exactly
+      // the corruption this cleanup exists to prevent. Nothing is known about the directory once
+      // the orphans cannot be accounted for, so abandon the candidate instead of reusing it.
+      throw markErrorNonRetryable(new Error(`${command} ${args.join(' ')} timed out and the unpack processes it left behind under ${options.terminateOrphansUnder} could not be confirmed dead: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`));
+    }
+  }
+
   if (result.error) {
     throw result.error;
   }
@@ -1151,25 +1455,12 @@ function quoteWindowsShellArgument(value) {
 }
 
 function runWithRetry(command, args, extraEnv = {}, options) {
-  let lastError;
-  for (let attempt = 1; attempt <= options.attempts; attempt++) {
-    try {
-      run(command, args, extraEnv, options);
-      return;
-    }
-    catch (error) {
-      lastError = error;
-      if (attempt === options.attempts) {
-        break;
-      }
-
-      console.warn(`${command} ${args.join(' ')} failed on attempt ${attempt}/${options.attempts}: ${error instanceof Error ? error.message : String(error)}`);
-      options.beforeRetry?.();
-      sleepSynchronously(options.retryDelayMs);
-    }
-  }
-
-  throw lastError;
+  runWithRetries(() => run(command, args, extraEnv, options), {
+    attempts: options.attempts,
+    retryDelayMs: options.retryDelayMs,
+    beforeRetry: options.beforeRetry,
+    description: `${command} ${args.join(' ')}`,
+  });
 }
 
 function assertWorkspaceRootSafeForDeletion() {
@@ -1241,17 +1532,55 @@ function terminateProcessTree(pid, signal) {
   }
 }
 
-function cleanPartialExtesterDownloads() {
-  for (const file of getFilesRecursive(storageDir)) {
-    if (file.endsWith('.zip') || file.endsWith('.tar.gz') || file.endsWith('.tgz') || file.endsWith('.gz')) {
-      fs.rmSync(file, { force: true });
+/**
+ * Deletes what a failed ExTester download left behind, so the retry starts clean.
+ *
+ * Two kinds of debris land directly in the storage root. The first is the downloaded archive.
+ * The second is `vscode-temp-<random>`, which ExTester unpacks VS Code into before moving it into
+ * place and removes in a `finally` -- a `finally` that never runs when the process is killed for
+ * exceeding its timeout, leaving a full unpacked copy behind. Nothing rejects that copy later, so
+ * a retry that succeeds would publish several hundred extra megabytes per timed-out attempt into
+ * an entry that is supposed to have been pruned.
+ *
+ * Only ordinary files and these known directories at the top level are touched. Archives nested
+ * deeper belong to an application that has already been unpacked -- VS Code ships some of its own
+ * -- and deleting those would publish a permanently damaged entry to the shared cache, because a
+ * ChromeDriver retry runs after VS Code has been unpacked into the same directory. This mirrors
+ * `pruneDownloadArchives` in the cache module for the same reason.
+ */
+function cleanPartialExtesterDownloads(storageDirectory) {
+  let entries;
+  try {
+    entries = fs.readdirSync(storageDirectory, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return;
+    }
+
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const entryPath = path.join(storageDirectory, entry.name);
+    if (entry.isFile() && isPartialDownloadArchiveName(entry.name)) {
+      fs.rmSync(entryPath, { force: true });
+      continue;
+    }
+
+    if (entry.isDirectory() && entry.name.startsWith(EXTESTER_UNPACK_DIRECTORY_PREFIX)) {
+      // Never recursive: an abandoned extraction holds the VS Code bundle's internal links, and
+      // the shared cache sits on the other end of the projections in this tree.
+      removePathWithoutFollowingLinks(entryPath);
     }
   }
 }
 
-function sleepSynchronously(milliseconds) {
-  const buffer = new SharedArrayBuffer(4);
-  Atomics.wait(new Int32Array(buffer), 0, 0, milliseconds);
+function isPartialDownloadArchiveName(name) {
+  const lowerCaseName = name.toLowerCase();
+  return lowerCaseName.endsWith('.zip')
+    || lowerCaseName.endsWith('.tar.gz')
+    || lowerCaseName.endsWith('.tgz')
+    || lowerCaseName.endsWith('.gz');
 }
 
 function copyStorageDiagnostics() {
@@ -1444,7 +1773,24 @@ function cleanupTemporaryRunRoot() {
     return;
   }
 
-  removePath(shortRunRoot, { recursive: true, force: true, warnOnWindowsLock: true });
+  // The storage directory under this root holds the projected VS Code and ChromeDriver artifacts,
+  // which are junctions on Windows, and recursive removal descends junctions there. Tearing this
+  // tree down recursively would delete the shared download cache every other run depends on, so
+  // remove it link by link and detach those projections instead of following them.
+  try {
+    removePathWithoutFollowingLinks(shortRunRoot, {
+      maxRetries: process.platform === 'win32' ? 20 : 0,
+      retryDelay: 250,
+    });
+  }
+  catch (error) {
+    if (process.platform === 'win32' && isRetryableWindowsFileLock(error)) {
+      console.warn(`Warning: unable to remove locked E2E path '${shortRunRoot}': ${error.message}`);
+      return;
+    }
+
+    throw error;
+  }
 }
 
 function sanitizePathSegment(value) {
@@ -1452,22 +1798,11 @@ function sanitizePathSegment(value) {
 }
 
 function removePath(targetPath, options = {}) {
-  const { warnOnWindowsLock, ...rmOptions } = options;
-  try {
-    fs.rmSync(targetPath, {
-      maxRetries: process.platform === 'win32' ? 20 : 0,
-      retryDelay: 250,
-      ...rmOptions,
-    });
-  }
-  catch (error) {
-    if (warnOnWindowsLock && process.platform === 'win32' && isRetryableWindowsFileLock(error)) {
-      console.warn(`Warning: unable to remove locked E2E path '${targetPath}': ${error.message}`);
-      return;
-    }
-
-    throw error;
-  }
+  fs.rmSync(targetPath, {
+    maxRetries: process.platform === 'win32' ? 20 : 0,
+    retryDelay: 250,
+    ...options,
+  });
 }
 
 function isRetryableWindowsFileLock(error) {

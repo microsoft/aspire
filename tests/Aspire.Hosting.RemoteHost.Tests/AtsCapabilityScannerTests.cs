@@ -165,6 +165,21 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testUnionEnumParameter", StringComparison.Ordinal));
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(AtsTypeCategory.Union, parameter.Type?.Category);
+        Assert.Contains(parameter.Type!.UnionTypes!, type => type.ClrType == typeof(TestUnionEnum));
+        Assert.Contains(parameter.Type.UnionTypes!, type => type.TypeId == AtsConstants.String);
+        Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
+    }
+
     #endregion
 
     #region DeriveMethodName Tests
@@ -580,6 +595,35 @@ public class AtsCapabilityScannerTests
         Assert.True(capability.RunSyncOnBackgroundThread);
     }
 
+    [Fact]
+    public void ScanAssembly_HostingAssembly_CallbackBearingInteractionPrompts_UseBackgroundThreadOptIn()
+    {
+        // These prompts accept option/handle types that carry user callbacks (progress work, dynamic input
+        // loading, validation). The callbacks re-enter the remote host over the same JSON-RPC connection, so the
+        // synchronous invocation path has to run on a background thread or the RPC loop deadlocks waiting on itself.
+        // AspireExportAnalyzer only detects delegates passed *directly* as parameters, so it cannot enforce the
+        // opt-in when the delegate is reached through an options object or builder handle. This test is the guard.
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        string[] expectedCapabilityIds =
+        [
+            "Aspire.Hosting/promptProgress",
+            "Aspire.Hosting/promptInput",
+            "Aspire.Hosting/promptInputs"
+        ];
+
+        foreach (var expectedCapabilityId in expectedCapabilityIds)
+        {
+            var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == expectedCapabilityId);
+
+            Assert.True(
+                capability.RunSyncOnBackgroundThread,
+                $"'{expectedCapabilityId}' invokes polyglot callbacks and must set RunSyncOnBackgroundThread = true.");
+        }
+    }
+
     #endregion
 
     #region Exported Value Tests
@@ -723,6 +767,12 @@ public class AtsCapabilityScannerTests
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
+    private enum TestUnionEnum
+    {
+        First,
+        Second
+    }
+
     [AspireDto]
     private sealed class NullableScalarDto
     {
@@ -784,6 +834,13 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        [AspireExport]
+        public static void TestUnionEnumParameter(IDistributedApplicationBuilder builder, [AspireUnion(typeof(TestUnionEnum), typeof(string))] object value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         /// <param name="value">The fallback value.</param>

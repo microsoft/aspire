@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 /// Provides helper methods for looking up executables on the system PATH.
@@ -10,7 +11,7 @@ using System.Diagnostics;
 internal static class PathLookupHelper
 {
     /// <summary>
-    /// Resolves an executable path or command name to a full path by searching the system PATH.
+    /// Resolves an executable path or command name by returning explicit paths as-is or by searching the system PATH.
     /// </summary>
     /// <param name="executablePath">The executable path or command name to resolve.</param>
     /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
@@ -42,6 +43,30 @@ internal static class PathLookupHelper
         // See https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
         return FindFullPathFromPath(executablePath, path, Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions)
             ?? throw new FileNotFoundException($"Executable '{executablePath}' was not found on PATH.", executablePath);
+    }
+
+    /// <summary>
+    /// Tries to resolve an executable path or command name by returning explicit paths as-is or by searching the system PATH.
+    /// </summary>
+    /// <param name="executablePath">The executable path or command name to resolve.</param>
+    /// <param name="resolvedExecutablePath">The resolved command path, or the original value when <paramref name="executablePath"/> is explicit.</param>
+    /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
+    /// <returns><see langword="true"/> when the executable path is explicit or the command name was resolved; otherwise, <see langword="false"/>.</returns>
+    public static bool TryResolveExecutablePath(
+        string executablePath,
+        [NotNullWhen(true)] out string? resolvedExecutablePath,
+        IDictionary<string, string>? environmentVariables = null)
+    {
+        try
+        {
+            resolvedExecutablePath = ResolveExecutablePath(executablePath, environmentVariables);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            resolvedExecutablePath = null;
+            return false;
+        }
     }
 
     /// <summary>

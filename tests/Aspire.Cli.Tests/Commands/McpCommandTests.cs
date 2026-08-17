@@ -13,7 +13,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -28,7 +28,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -42,7 +42,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpStartCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -56,7 +56,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpCommandExistsInRootCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -70,7 +70,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpCommandHasStartSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -86,7 +86,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpCommandIsVisible()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -100,7 +100,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -115,7 +115,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -129,7 +129,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentMcpCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -143,7 +143,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentInitCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -157,7 +157,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentCommandExistsInRootCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -172,7 +172,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentCommandHasMcpSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -188,7 +188,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentCommandHasInitSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 

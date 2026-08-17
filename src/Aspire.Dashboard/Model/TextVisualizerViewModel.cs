@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -28,7 +29,7 @@ public class TextVisualizerViewModel
 
         if (knownFormat != null)
         {
-            ChangeFormattedText(knownFormat, Text);
+            ChangeFormattedText(knownFormat, indentText ? FormatKnownText(Text, knownFormat) : Text);
         }
         else if (TryFormatJson(Text, out var formattedJson))
         {
@@ -42,6 +43,21 @@ public class TextVisualizerViewModel
         {
             ChangeFormattedText(fallbackFormat ?? DashboardUIHelpers.PlaintextFormat, Text);
         }
+    }
+
+    private static string FormatKnownText(string text, string knownFormat)
+    {
+        if (knownFormat == DashboardUIHelpers.JsonFormat && TryFormatJson(text, out var formattedJson))
+        {
+            return formattedJson;
+        }
+
+        if (knownFormat == DashboardUIHelpers.XmlFormat && TryFormatXml(text, out var formattedXml))
+        {
+            return formattedXml;
+        }
+
+        return text;
     }
 
     private static bool TryFormatXml(string text, [NotNullWhen(true)] out string? formattedText)
@@ -155,14 +171,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    if (reader.TryGetInt32(out var intValue))
-                    {
-                        writer.WriteNumberValue(intValue);
-                    }
-                    else if (reader.TryGetDouble(out var doubleValue))
-                    {
-                        writer.WriteNumberValue(doubleValue);
-                    }
+                    WriteNumberValue(writer, reader);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
@@ -183,6 +192,34 @@ public class TextVisualizerViewModel
         var formattedJson = Encoding.UTF8.GetString(stream.ToArray());
 
         return formattedJson;
+    }
+
+    private static void WriteNumberValue(Utf8JsonWriter writer, Utf8JsonReader reader)
+    {
+        if (reader.TryGetInt64(out var longValue))
+        {
+            writer.WriteNumberValue(longValue);
+            return;
+        }
+
+        if (reader.TryGetDecimal(out var decimalValue) &&
+            DecimalPreservesRawText(decimalValue, reader.ValueSpan))
+        {
+            writer.WriteNumberValue(decimalValue);
+            return;
+        }
+
+        // Preserve the validated token text so large exponents and high precision decimals
+        // that don't fit in .NET numeric types still survive dashboard reformatting.
+        writer.WriteRawValue(reader.ValueSpan);
+    }
+
+    private static bool DecimalPreservesRawText(decimal value, ReadOnlySpan<byte> rawNumber)
+    {
+        Span<byte> buffer = stackalloc byte[64];
+
+        return Utf8Formatter.TryFormat(value, buffer, out var bytesWritten) &&
+            buffer[..bytesWritten].SequenceEqual(rawNumber);
     }
 
     public static bool CouldBeJson(string? input)

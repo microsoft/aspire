@@ -10,6 +10,9 @@ import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClie
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
+import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
+import { AspireExtensionContext } from '../../AspireExtensionContext';
+import { debugSessionStopTimedOut } from '../../loc/strings';
 
 suite('InteractionService endpoints', () => {
 	let statusBarItem: vscode.StatusBarItem;
@@ -152,6 +155,32 @@ suite('InteractionService endpoints', () => {
 		showQuickPickStub.restore();
 	});
 
+	test('startDebugSession forwards CLI environment to the debug configuration', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				'/workspace/apphost.cs',
+				true,
+				{
+					command: 'deploy',
+					env: {
+						ASPIRE_HOME: '/isolated/aspire-home',
+					},
+				});
+
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.deepStrictEqual(debugConfiguration.env, {
+				ASPIRE_HOME: '/isolated/aspire-home',
+			});
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
 	test('displayError endpoint', async () => {
 		const testInfo = await createTestRpcServer();
 		const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
@@ -220,6 +249,26 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	test("showStatus reports CLI status as dismissible window progress", async () => {
+		const testInfo = await createTestRpcServer();
+		const withProgressSpy = sinon.spy(vscode.window, 'withProgress');
+
+		try {
+			testInfo.interactionService.showStatus('Building...');
+
+			sinon.assert.calledOnce(withProgressSpy);
+			// A progress notification cannot be dismissed while the operation runs, so it covers the
+			// editor for the whole CLI run (https://github.com/microsoft/aspire/issues/19036).
+			const options = withProgressSpy.firstCall.args[0] as vscode.ProgressOptions;
+			assert.strictEqual(options.location, vscode.ProgressLocation.Window);
+			assert.strictEqual(options.cancellable, undefined);
+		}
+		finally {
+			testInfo.interactionService.clearProgressNotification();
+			withProgressSpy.restore();
+		}
+	});
+
 	test("RPC close clears active progress notification", async () => {
 		let closeHandler: (() => void) | undefined;
 		const messageConnection = {
@@ -227,10 +276,12 @@ suite('InteractionService endpoints', () => {
 				closeHandler = handler;
 				return { dispose: () => { } };
 			},
-			sendRequest: sinon.stub()
+			sendRequest: sinon.stub(),
+			end: sinon.stub(),
+			dispose: sinon.stub()
 		} as any;
 
-		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+		const rpcClient = new RpcClient(messageConnection, null, () => null);
 
 		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
 		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
@@ -238,6 +289,39 @@ suite('InteractionService endpoints', () => {
 		closeHandler!();
 
 		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+	});
+
+	test("RPC client disposal closes the transport and prevents late status resurrection", () => {
+		const end = sinon.stub();
+		const dispose = sinon.stub();
+		const messageConnection = {
+			onClose: () => ({ dispose: () => { } }),
+			sendRequest: sinon.stub(),
+			end,
+			dispose
+		} as any;
+		const rpcClient = new RpcClient(messageConnection, null, () => null);
+
+		rpcClient.interactionService.showStatus('Connecting to AppHost...');
+		rpcClient.dispose();
+		rpcClient.interactionService.showStatus('Starting Dashboard...');
+		rpcClient.dispose();
+
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+		sinon.assert.calledOnce(end);
+		sinon.assert.calledOnce(dispose);
+	});
+
+	test("RPC server disposal clears CLI status when the connection never closes", async () => {
+		const testInfo = await createTestRpcServer();
+		testInfo.rpcServer.addConnection(testInfo.rpcClient);
+
+		testInfo.interactionService.showStatus('Building AppHost...');
+		assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, true);
+
+		testInfo.rpcServer.dispose();
+
+		assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, false);
 	});
 
 	test("displaySubtleMessage endpoint", async () => {
@@ -366,9 +450,10 @@ suite('InteractionService endpoints', () => {
 		try {
 			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
-			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
-				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
-			} as any);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				enableAspireDashboardAutoLaunch: 'notification'
+			}));
 			const testInfo = await createTestRpcServer();
 
 			const baseUrl = 'http://localhost/login?t=base-secret';
@@ -388,21 +473,21 @@ suite('InteractionService endpoints', () => {
 			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
 			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
 			assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
+			assert.ok(executeCommandStub.calledWith('aspire-vscode.refreshAppHostRuntimeState'), 'Should refresh live AppHost state without full AppHost rediscovery');
+			assert.ok(executeCommandStub.neverCalledWith('aspire-vscode.refreshAppHosts'), 'Should not trigger full workspace AppHost rediscovery');
 		}
 		finally {
 			sandbox.restore();
 		}
 	});
 
-	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch is launch", async () => {
+	test("displayDashboardUrls writes URLs but does not show info message or open browser by default", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
 			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
-			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
-				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
-			} as any);
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
 			const testInfo = await createTestRpcServer();
 
 			const baseUrl = 'http://localhost/login?t=base-secret';
@@ -419,7 +504,305 @@ suite('InteractionService endpoints', () => {
 			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
 			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
 			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
-			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
+			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message by default');
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls shows default changed notification once for unconfigured users", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, undefined, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), true);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls opens the configured dashboard browser", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret',
+				CodespacesUrlWithLoginToken: 'http://codespaces/login?t=codespaces-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls shows notification when dashboardBrowser is notification", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'notification'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls uses debug configuration dashboard browser before global setting", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'integratedBrowser'
+				},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps explicit legacy launch setting compatible", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				enableAspireDashboardAutoLaunch: 'launch'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls lets the configured dashboard browser override legacy launch setting", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'none',
+				enableAspireDashboardAutoLaunch: 'launch'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls opens launch configuration when notification comes from debug configuration", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').callsFake(async (_message: string, ...args: unknown[]) => {
+				return args.find((arg): arg is vscode.MessageItem => typeof arg === 'object' && arg !== null && 'title' in arg && arg.title === 'Settings');
+			});
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand');
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'notification'
+				},
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+			assert.ok(executeCommandStub.calledWith('workbench.action.debug.configure'));
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls does not show default changed notification when launch configuration opts out", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'none'
+				},
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps legacy notification setting when a browser preference is configured", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'integratedBrowser',
+				enableAspireDashboardAutoLaunch: 'notification'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps legacy off setting when a browser preference is configured", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'integratedBrowser',
+				enableAspireDashboardAutoLaunch: 'off'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
 		}
 		finally {
 			sandbox.restore();
@@ -455,32 +838,311 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
-	test("displayLines without debug session falls back to Aspire terminal", async () => {
+	test("displayLines without debug session writes to output channel", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
-			sandbox.stub(extensionLogOutputChannel, 'info');
-			const sentTexts: string[] = [];
-			const mockTerminal = {
-				terminal: {
-					sendText: (text: string, addNewLine: boolean) => {
-						sentTexts.push(text);
-					}
-				},
-				dispose: () => {}
-			};
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
 			const testInfo = await createTestRpcServer(null, () => null);
-			// Inject a mock terminal provider via the InteractionService constructor
-			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
 			testInfo.interactionService.displayLines([
 				{ Stream: 'stdout', Line: 'line1' },
 				{ Stream: 'stderr', Line: 'line2' }
 			]);
 
-			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-			assert.strictEqual(sentTexts[0], 'line1');
-			assert.strictEqual(sentTexts[1], 'line2');
+			assert.deepStrictEqual(infoStub.args.map(args => args[0]).slice(-2), ['line1', 'line2']);
+			assert.strictEqual(showStub.calledOnce, true);
+			assert.deepStrictEqual(showStub.firstCall.args, [true]);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayLines without debug session does not show output channel for empty lines", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
+			const testInfo = await createTestRpcServer(null, () => null);
+			const infoCallCount = infoStub.callCount;
+
+			testInfo.interactionService.displayLines([]);
+
+			assert.strictEqual(infoStub.callCount, infoCallCount);
+			assert.strictEqual(showStub.called, false);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	// The CLI's `stopDebugging` RPC endpoint resolves its session through AspireExtensionContext on
+	// every request. A failed stop must keep that session registered, or the retry sees no session
+	// and falsely reports success without asking the failed adapters again.
+	test("stopDebugging keeps a failed debug session reachable until a retry succeeds", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			const appHostDebugSession = { id: 'apphost-session', type: 'coreclr', name: 'AppHost' };
+			const resourceDebugSession = { id: 'resource-session', type: 'pwa-node', name: 'Node.js: server.js' };
+			const resourceStopFailure = new Error('Resource stop failed');
+			const appHostStopFailure = new Error('AppHost stop failed');
+			let resourceStopAttempts = 0;
+			let appHostStopAttempts = 0;
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging')
+				.callsFake(async session => {
+					if (session === resourceDebugSession as unknown as vscode.DebugSession) {
+						resourceStopAttempts++;
+						if (resourceStopAttempts === 1) {
+							throw resourceStopFailure;
+						}
+					}
+
+					if (session === appHostDebugSession as unknown as vscode.DebugSession) {
+						appHostStopAttempts++;
+						if (appHostStopAttempts === 1) {
+							throw appHostStopFailure;
+						}
+					}
+				});
+			const terminalProvider = { isCliDebugLoggingEnabled: () => false };
+			const context = new AspireExtensionContext();
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				terminalProvider as any,
+				context.removeAspireDebugSession.bind(context),
+				() => { },
+				'debug-session');
+			(aspireDebugSession as any)._appHostDebugSession = {
+				id: appHostDebugSession.id,
+				session: appHostDebugSession as unknown as vscode.DebugSession,
+				stopSession: () => vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession),
+			};
+			(aspireDebugSession as any)._resourceDebugSessions = [
+				{
+					id: resourceDebugSession.id,
+					session: resourceDebugSession as unknown as vscode.DebugSession,
+					stopSession: () => vscode.debug.stopDebugging(resourceDebugSession as unknown as vscode.DebugSession),
+				},
+			];
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+
+			await assert.rejects(
+				() => testInfo.interactionService.stopDebugging(),
+				(error: unknown) => {
+					assert.ok(error instanceof AggregateError, `Expected an AggregateError but got ${error}`);
+					assert.deepStrictEqual((error as AggregateError).errors, [resourceStopFailure, appHostStopFailure]);
+					return true;
+				});
+
+			assert.deepStrictEqual(
+				stopDebuggingStub.getCalls().map(call => call.args[0]),
+				[
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+					parentDebugSession as unknown as vscode.DebugSession,
+				]);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), aspireDebugSession);
+			assert.strictEqual((aspireDebugSession as any)._disposed, false);
+
+			await testInfo.interactionService.stopDebugging();
+
+			assert.deepStrictEqual(
+				stopDebuggingStub.getCalls().map(call => call.args[0]),
+				[
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+					parentDebugSession as unknown as vscode.DebugSession,
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+				]);
+			assert.strictEqual(resourceStopAttempts, 2);
+			assert.strictEqual(appHostStopAttempts, 2);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+			assert.strictEqual((aspireDebugSession as any)._disposed, true);
+
+			await testInfo.interactionService.stopDebugging();
+			assert.strictEqual(stopDebuggingStub.callCount, 5, 'A successful retry must remove the session exactly once');
+
+			await context.dispose();
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("stopDebugging retries a timed-out parent stop and waits for confirmed termination", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			let completeFirstStop: (() => void) | undefined;
+			const firstStop = new Promise<void>(resolve => {
+				completeFirstStop = resolve;
+			});
+			let completeRetryStop: (() => void) | undefined;
+			const retryStop = new Promise<void>(resolve => {
+				completeRetryStop = resolve;
+			});
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging');
+			stopDebuggingStub.onFirstCall().returns(firstStop);
+			stopDebuggingStub.onSecondCall().returns(retryStop);
+			const context = new AspireExtensionContext();
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				{ isCliDebugLoggingEnabled: () => false } as any,
+				context.removeAspireDebugSession.bind(context),
+				() => { },
+				'debug-session');
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+			const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+
+			const initialStop = testInfo.interactionService.stopDebugging();
+			await clock.tickAsync(10_001);
+
+			await assert.rejects(initialStop, (error: Error) => {
+				assert.strictEqual(error.message, debugSessionStopTimedOut(parentDebugSession.name, 10));
+				return true;
+			});
+
+			const retry = testInfo.interactionService.stopDebugging();
+			let retrySettled = false;
+			void retry.then(() => {
+				retrySettled = true;
+			});
+			await clock.tickAsync(0);
+
+			const stopCallsBeforeConfirmation = stopDebuggingStub.callCount;
+			const settledBeforeConfirmation = retrySettled;
+
+			completeRetryStop?.();
+			await retry;
+			completeFirstStop?.();
+			await Promise.resolve();
+			await context.dispose();
+
+			assert.strictEqual(stopCallsBeforeConfirmation, 2, 'The retry must issue a fresh parent stop request');
+			assert.strictEqual(settledBeforeConfirmation, false, 'The retry must wait for the fresh stop request to complete');
+			assert.strictEqual(stopDebuggingStub.callCount, 2);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("stopDebugging disposes a timed-out session when its parent stop completes before retry", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			let completeFirstStop: (() => void) | undefined;
+			const firstStop = new Promise<void>(resolve => {
+				completeFirstStop = resolve;
+			});
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging').returns(firstStop);
+			const context = new AspireExtensionContext();
+			let removalCalls = 0;
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				{ isCliDebugLoggingEnabled: () => false } as any,
+				session => {
+					removalCalls++;
+					context.removeAspireDebugSession(session);
+				},
+				() => { },
+				'debug-session');
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+			const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+
+			const initialStop = testInfo.interactionService.stopDebugging();
+			await clock.tickAsync(10_001);
+
+			await assert.rejects(initialStop, (error: Error) => {
+				assert.strictEqual(error.message, debugSessionStopTimedOut(parentDebugSession.name, 10));
+				return true;
+			});
+
+			completeFirstStop?.();
+			await Promise.resolve();
+
+			assert.strictEqual((aspireDebugSession as any)._parentStopped, true);
+			assert.strictEqual((aspireDebugSession as any)._disposed, false);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), aspireDebugSession);
+
+			await testInfo.interactionService.stopDebugging();
+
+			assert.strictEqual(stopDebuggingStub.callCount, 1, 'A confirmed parent stop must not be issued again');
+			assert.strictEqual(removalCalls, 1, 'The no-work retry must run lifecycle cleanup exactly once');
+			assert.strictEqual((aspireDebugSession as any)._disposed, true);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+
+			await testInfo.interactionService.stopDebugging();
+			assert.strictEqual(stopDebuggingStub.callCount, 1);
+			assert.strictEqual(removalCalls, 1);
+
+			await context.dispose();
 		}
 		finally {
 			sandbox.restore();
@@ -490,6 +1152,7 @@ suite('InteractionService endpoints', () => {
 
 type RpcServerTestInfo = {
 	rpcServerInfo: RpcServerConnectionInfo;
+	rpcServer: AspireRpcServer;
 	rpcClient: ICliRpcClient;
 	interactionService: IInteractionService;
 };
@@ -502,6 +1165,36 @@ function normalizePathForComparison(value: string) {
 	const normalized = path.normalize(value);
 
 	return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function createAspireConfiguration(values: Record<string, unknown> = {}): vscode.WorkspaceConfiguration {
+	return {
+		get: (key: string, defaultValue?: unknown) => key in values ? values[key] : defaultValue,
+		inspect: (key: string) => ({
+			key: `aspire.${key}`,
+			defaultValue: undefined,
+			globalValue: key in values ? values[key] : undefined,
+			workspaceValue: undefined,
+			workspaceFolderValue: undefined,
+		}),
+	} as vscode.WorkspaceConfiguration;
+}
+
+function createTestMemento(): vscode.Memento {
+	const values = new Map<string, unknown>();
+
+	return {
+		keys: () => [...values.keys()],
+		get: <T>(key: string, defaultValue?: T) => values.has(key) ? values.get(key) as T : defaultValue as T,
+		update: async (key: string, value: unknown) => {
+			if (value === undefined) {
+				values.delete(key);
+				return;
+			}
+
+			values.set(key, value);
+		},
+	} as vscode.Memento;
 }
 
 function restoreEnvironmentVariable(name: string, value: string | undefined): void {
@@ -517,10 +1210,14 @@ class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;
     interactionService: IInteractionService;
 
-    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null) {
+    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, globalState);
     }
+
+	dispose(): void {
+		this.interactionService.dispose();
+	}
 
 	stopCli(): Promise<void> {
 		return Promise.resolve();
@@ -547,12 +1244,12 @@ class TestCliRpcClient implements ICliRpcClient {
 	}
 }
 
-async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null): Promise<RpcServerTestInfo> {
+async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null, globalState?: vscode.Memento): Promise<RpcServerTestInfo> {
     getAspireDebugSession ??= () => {
         return null;
     };
 
-	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession);
+	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState);
 
 	const rpcServer = await AspireRpcServer.create(() => rpcClient);
 
@@ -562,6 +1259,7 @@ async function createTestRpcServer(debugSessionId?: string | null, getAspireDebu
 
 	return {
 		rpcServerInfo: rpcServer.connectionInfo,
+		rpcServer: rpcServer,
 		rpcClient: rpcClient,
 		interactionService: rpcClient.interactionService
 	};

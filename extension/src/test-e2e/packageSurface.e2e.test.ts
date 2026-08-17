@@ -11,6 +11,27 @@ interface PackageJson {
     icon?: string;
     activationEvents?: string[];
     contributes?: {
+        languageModelTools?: Array<{
+            name?: string;
+            toolReferenceName?: string;
+            displayName?: string;
+            modelDescription?: string;
+            userDescription?: string;
+            icon?: string;
+            canBeReferencedInPrompt?: boolean;
+            when?: string;
+            tags?: string[];
+            inputSchema?: {
+                type?: string;
+                properties?: Record<string, {
+                    type?: string;
+                    description?: string;
+                    enum?: string[];
+                }>;
+                required?: string[];
+                additionalProperties?: boolean;
+            };
+        }>;
         commands?: Array<{ command: string; title: string }>;
         menus?: Record<string, Array<{ command?: string; when?: string; group?: string }>>;
         configuration?: { properties?: Record<string, unknown> };
@@ -62,6 +83,8 @@ suite('Aspire package contribution surface E2E', function () {
         const sourceCommandIds = getPackageCommandIds(sourcePackage);
         const installedCommandIds = getPackageCommandIds(installedPackage);
         assert.deepStrictEqual(sourcePackage.activationEvents, expectedActivationEvents);
+        assert.deepStrictEqual(getLanguageModelTools(sourcePackage), expectedSourceLanguageModelTools);
+        assert.deepStrictEqual(getLanguageModelTools(installedPackage), expectedInstalledLanguageModelTools);
         assert.deepStrictEqual(getConfigurationKeys(sourcePackage), expectedConfigurationKeys);
         assert.deepStrictEqual(sourceCommandIds, expectedCommandIds);
         assert.deepStrictEqual(installedCommandIds, sourceCommandIds);
@@ -77,12 +100,11 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(getAspireDebugger(sourcePackage).configurationAttributes?.launch?.required, ['program']);
         assert.ok(installedPackage.contributes?.jsonValidation?.some(validation => getFileMatches(validation.fileMatch).includes('aspire.config.json')));
         assert.ok(installedPackage.contributes?.configuration?.properties?.['aspire.aspireCliExecutablePath']);
-        assert.ok(sourceCommandIds.includes('aspire-vscode.installCliStable'));
-        assert.ok(sourceCommandIds.includes('aspire-vscode.installCliDaily'));
+        assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.installCli'));
+        assert.ok(sourceCommandIds.includes('aspire-vscode.installCli'));
+        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCli'));
         assert.ok(sourceCommandIds.includes('aspire-vscode.verifyCliInstalled'));
-        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCliStable'));
         assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.verifyCliInstalled'));
-        assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.verifyCliInstalled'));
     });
 
     test('keeps hidden menus, debugger schema, welcome states, colors, and packaged assets intact', async () => {
@@ -96,8 +118,10 @@ suite('Aspire package contribution surface E2E', function () {
             'aspire-vscode.debugAppHost',
             'aspire-vscode.refreshAppHosts',
             'aspire-vscode.codeLensRevealResource',
+            'aspire-vscode.codeLensRevealAppHost',
             'aspire-vscode.openInIntegratedBrowser',
             'aspire-vscode.copyEndpointUrl',
+            'aspire-vscode.openResourceTerminal',
         ]) {
             assert.ok(hiddenPaletteCommands.includes(commandId), `${commandId} should stay hidden from the command palette.`);
         }
@@ -204,7 +228,6 @@ suite('Aspire package contribution surface E2E', function () {
             { commandId: 'aspire-vscode.updateSelf', expectedSubcommand: 'update --self' },
             { commandId: 'aspire-vscode.codeLensViewLogs', args: ['e2e-worker', appHostPath], expectedSubcommand: `logs ${quoteExpectedShellArg('e2e-worker')}` },
             { commandId: 'aspire-vscode.codeLensViewAppHostLogs', args: [appHostPath], expectedSubcommand: 'logs' },
-            { commandId: 'aspire-vscode.codeLensResourceAction', args: ['e2e-worker', 'restart', appHostPath], expectedSubcommand: `resource ${quoteExpectedShellArg('e2e-worker')} ${quoteExpectedShellArg('restart')}` },
         ];
 
         for (const item of cases) {
@@ -358,14 +381,12 @@ function getConfigurationKeys(packageJson: PackageJson): string[] {
     return Object.keys(packageJson.contributes?.configuration?.properties ?? {}).sort();
 }
 
-function getFileMatches(fileMatch: string | string[] | undefined): string[] {
-    return typeof fileMatch === 'string' ? [fileMatch] : fileMatch ?? [];
+function getLanguageModelTools(packageJson: PackageJson): NonNullable<NonNullable<PackageJson['contributes']>['languageModelTools']> {
+    return packageJson.contributes?.languageModelTools ?? [];
 }
 
-function getWalkthroughCompletionEvents(packageJson: PackageJson): string[] {
-    return (packageJson.contributes?.walkthroughs ?? [])
-        .flatMap(walkthrough => walkthrough.steps ?? [])
-        .flatMap(step => step.completionEvents ?? []);
+function getFileMatches(fileMatch: string | string[] | undefined): string[] {
+    return typeof fileMatch === 'string' ? [fileMatch] : fileMatch ?? [];
 }
 
 function getWalkthroughMarkdownFiles(packageJson: PackageJson): string[] {
@@ -373,6 +394,12 @@ function getWalkthroughMarkdownFiles(packageJson: PackageJson): string[] {
         .flatMap(walkthrough => walkthrough.steps ?? [])
         .map(step => step.media?.markdown)
         .filter((markdown): markdown is string => typeof markdown === 'string');
+}
+
+function getWalkthroughCompletionEvents(packageJson: PackageJson): string[] {
+    return (packageJson.contributes?.walkthroughs ?? [])
+        .flatMap(walkthrough => walkthrough.steps ?? [])
+        .flatMap(step => step.completionEvents ?? []);
 }
 
 function getHiddenCommandPaletteCommands(packageJson: PackageJson): string[] {
@@ -427,6 +454,8 @@ const expectedActivationEvents = [
     'onDebugInitialConfigurations:aspire',
     'onDebugDynamicConfigurations:aspire',
     'workspaceContains:**/*.csproj',
+    'workspaceContains:**/*.fsproj',
+    'workspaceContains:**/*.vbproj',
     'workspaceContains:**/aspire.config.json',
     'workspaceContains:**/.aspire/**',
     'onView:workbench.view.debug',
@@ -437,16 +466,98 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.js',
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
-    'onCommand:aspire-vscode.installCliStable',
-    'onCommand:aspire-vscode.installCliDaily',
+    'workspaceContains:**/apphost.rs',
+    'onCommand:aspire-vscode.installCli',
     'onCommand:aspire-vscode.verifyCliInstalled',
+    'onLanguageModelTool:aspire_apphost_start',
+    'onLanguageModelTool:aspire_apphost_stop',
 ];
+
+const expectedSourceLanguageModelTools = createExpectedLanguageModelTools({
+    startDisplayName: '%languageModelTool.aspireAppHostStart.displayName%',
+    startModelDescription: '%languageModelTool.aspireAppHostStart.modelDescription%',
+    startUserDescription: '%languageModelTool.aspireAppHostStart.userDescription%',
+    startModeDescription: '%languageModelTool.aspireAppHostStart.mode.description%',
+    stopDisplayName: '%languageModelTool.aspireAppHostStop.displayName%',
+    stopModelDescription: '%languageModelTool.aspireAppHostStop.modelDescription%',
+    stopUserDescription: '%languageModelTool.aspireAppHostStop.userDescription%',
+    appHostPathDescription: '%languageModelTool.aspireAppHost.appHostPath.description%',
+});
+
+const expectedInstalledLanguageModelTools = createExpectedLanguageModelTools({
+    startDisplayName: 'Start Aspire AppHost',
+    startModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor\'s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in \'run\' mode (no debugger attached) or \'debug\' mode (debugger attached). Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started.',
+    startUserDescription: 'Start an Aspire AppHost from this workspace in run or debug mode.',
+    startModeDescription: 'How to start the AppHost: \'run\' starts it without attaching the debugger, \'debug\' starts it with the debugger attached.',
+    stopDisplayName: 'Stop Aspire AppHost',
+    stopModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through \'aspire stop --apphost\' for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.',
+    stopUserDescription: 'Stop a running Aspire AppHost from this workspace.',
+    appHostPathDescription: 'Workspace-relative path of an AppHost that Aspire has already discovered in this workspace, for example \'AppHost/AppHost.csproj\' or \'apphost.cs\'. The value must match one of the discovered AppHosts exactly; arbitrary paths, absolute paths, and files Aspire did not discover are rejected. In a multi-root workspace, always prefix the path with the workspace folder name (for example \'backend/AppHost/AppHost.csproj\').',
+});
+
+function createExpectedLanguageModelTools(strings: {
+    startDisplayName: string;
+    startModelDescription: string;
+    startUserDescription: string;
+    startModeDescription: string;
+    stopDisplayName: string;
+    stopModelDescription: string;
+    stopUserDescription: string;
+    appHostPathDescription: string;
+}) {
+    return [
+        {
+            name: 'aspire_apphost_start',
+            toolReferenceName: 'aspireStartAppHost',
+            displayName: strings.startDisplayName,
+            modelDescription: strings.startModelDescription,
+            userDescription: strings.startUserDescription,
+            icon: '$(debug-start)',
+            canBeReferencedInPrompt: true,
+            when: 'isWorkspaceTrusted',
+            tags: ['aspire', 'apphost'],
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    appHostPath: { type: 'string', description: strings.appHostPathDescription },
+                    mode: {
+                        type: 'string',
+                        enum: ['run', 'debug'],
+                        description: strings.startModeDescription,
+                    },
+                },
+                required: ['appHostPath', 'mode'],
+                additionalProperties: false,
+            },
+        },
+        {
+            name: 'aspire_apphost_stop',
+            toolReferenceName: 'aspireStopAppHost',
+            displayName: strings.stopDisplayName,
+            modelDescription: strings.stopModelDescription,
+            userDescription: strings.stopUserDescription,
+            icon: '$(debug-stop)',
+            canBeReferencedInPrompt: true,
+            when: 'isWorkspaceTrusted',
+            tags: ['aspire', 'apphost'],
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    appHostPath: { type: 'string', description: strings.appHostPathDescription },
+                },
+                required: ['appHostPath'],
+                additionalProperties: false,
+            },
+        },
+    ];
+}
 
 const expectedCommandIds = [
     'aspire-vscode.add',
     'aspire-vscode.codeLensDebugPipelineStep',
     'aspire-vscode.codeLensOpenDashboard',
     'aspire-vscode.codeLensResourceAction',
+    'aspire-vscode.codeLensRevealAppHost',
     'aspire-vscode.codeLensRevealResource',
     'aspire-vscode.codeLensViewAppHostLogs',
     'aspire-vscode.codeLensViewLogs',
@@ -464,8 +575,7 @@ const expectedCommandIds = [
     'aspire-vscode.expandAll',
     'aspire-vscode.globalRefreshAppHosts',
     'aspire-vscode.init',
-    'aspire-vscode.installCliDaily',
-    'aspire-vscode.installCliStable',
+    'aspire-vscode.installCli',
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
@@ -474,6 +584,7 @@ const expectedCommandIds = [
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
     'aspire-vscode.openLocalSettings',
+    'aspire-vscode.openResourceTerminal',
     'aspire-vscode.openTerminal',
     'aspire-vscode.publish',
     'aspire-vscode.refreshAppHosts',
@@ -489,14 +600,15 @@ const expectedCommandIds = [
     'aspire-vscode.switchToWorkspaceView',
     'aspire-vscode.update',
     'aspire-vscode.updateSelf',
-    'aspire-vscode.verifyCliInstalled',
     'aspire-vscode.viewAppHostLogFile',
     'aspire-vscode.viewAppHostSource',
     'aspire-vscode.viewResourceLogs',
+    'aspire-vscode.verifyCliInstalled',
 ].sort();
 
 const expectedConfigurationKeys = [
     'aspire.appHostDiscoveryTimeoutMs',
+    'aspire.appHostsPollingInterval',
     'aspire.aspireCliExecutablePath',
     'aspire.closeDashboardOnDebugEnd',
     'aspire.dashboardBrowser',
@@ -535,6 +647,7 @@ const expectedViewItemContextCommands = [
     'aspire-vscode.executeResourceCommand',
     'aspire-vscode.executeResourceCommandItem',
     'aspire-vscode.viewResourceLogs',
+    'aspire-vscode.openResourceTerminal',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
     'aspire-vscode.copyEndpointUrl',
@@ -548,5 +661,6 @@ const expectedWelcomeWhenClauses = [
     'aspire.loading',
     'aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != \'global\'',
     'aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == \'global\'',
-    'aspire.fetchAppHostsError && !aspire.loading',
+    'aspire.fetchAppHostsError && aspire.fetchAppHostsCompatibilityError && !aspire.loading',
+    'aspire.fetchAppHostsError && !aspire.fetchAppHostsCompatibilityError && !aspire.loading',
 ];

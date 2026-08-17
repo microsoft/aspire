@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -358,15 +357,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             # Aspire Orchestration
             SKILL
 
-            aspire_skill_hash="$(sha256sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"
-            aspire_commands_hash="$(sha256sum "$cache/skills/aspire/references/app-commands.md" | awk '{print $1}')"
-            aspire_evals_hash="$(sha256sum "$cache/skills/aspire/evals/evals.json" | awk '{print $1}')"
-            aspireify_skill_hash="$(sha256sum "$cache/skills/aspireify/SKILL.md" | awk '{print $1}')"
-            deployment_skill_hash="$(sha256sum "$cache/skills/aspire-deployment/SKILL.md" | awk '{print $1}')"
-            deployment_preflight_hash="$(sha256sum "$cache/skills/aspire-deployment/references/preflight.md" | awk '{print $1}')"
-            init_skill_hash="$(sha256sum "$cache/skills/aspire-init/SKILL.md" | awk '{print $1}')"
-            monitoring_skill_hash="$(sha256sum "$cache/skills/aspire-monitoring/SKILL.md" | awk '{print $1}')"
-            orchestration_skill_hash="$(sha256sum "$cache/skills/aspire-orchestration/SKILL.md" | awk '{print $1}')"
+            aspire_skill_hash="$(sha512sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"
+            aspire_commands_hash="$(sha512sum "$cache/skills/aspire/references/app-commands.md" | awk '{print $1}')"
+            aspire_evals_hash="$(sha512sum "$cache/skills/aspire/evals/evals.json" | awk '{print $1}')"
+            aspireify_skill_hash="$(sha512sum "$cache/skills/aspireify/SKILL.md" | awk '{print $1}')"
+            deployment_skill_hash="$(sha512sum "$cache/skills/aspire-deployment/SKILL.md" | awk '{print $1}')"
+            deployment_preflight_hash="$(sha512sum "$cache/skills/aspire-deployment/references/preflight.md" | awk '{print $1}')"
+            init_skill_hash="$(sha512sum "$cache/skills/aspire-init/SKILL.md" | awk '{print $1}')"
+            monitoring_skill_hash="$(sha512sum "$cache/skills/aspire-monitoring/SKILL.md" | awk '{print $1}')"
+            orchestration_skill_hash="$(sha512sum "$cache/skills/aspire-orchestration/SKILL.md" | awk '{print $1}')"
 
             cat > "$cache/skill-manifest.json" <<JSON
             {
@@ -381,45 +380,45 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                   "description": "Aspire CLI commands and workflows for distributed apps",
                   "installExcludedRelativePaths": ["evals"],
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$aspire_skill_hash" },
-                    { "relativePath": "references/app-commands.md", "sha256": "$aspire_commands_hash" },
-                    { "relativePath": "evals/evals.json", "sha256": "$aspire_evals_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$aspire_skill_hash" },
+                    { "relativePath": "references/app-commands.md", "sha512": "$aspire_commands_hash" },
+                    { "relativePath": "evals/evals.json", "sha512": "$aspire_evals_hash" }
                   ]
                 },
                 {
                   "name": "aspireify",
                   "description": "One-time setup: wire up AppHost with discovered projects",
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$aspireify_skill_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$aspireify_skill_hash" }
                   ]
                 },
                 {
                   "name": "aspire-deployment",
                   "description": "Aspire deployment target selection, preflight, publish, and deploy workflows",
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$deployment_skill_hash" },
-                    { "relativePath": "references/preflight.md", "sha256": "$deployment_preflight_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$deployment_skill_hash" },
+                    { "relativePath": "references/preflight.md", "sha512": "$deployment_preflight_hash" }
                   ]
                 },
                 {
                   "name": "aspire-init",
                   "description": "First-run flow for adding Aspire to a repo",
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$init_skill_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$init_skill_hash" }
                   ]
                 },
                 {
                   "name": "aspire-monitoring",
                   "description": "Observe Aspire apps with logs, traces, metrics, and resource state",
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$monitoring_skill_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$monitoring_skill_hash" }
                   ]
                 },
                 {
                   "name": "aspire-orchestration",
                   "description": "Manage Aspire AppHost lifecycle and resource commands",
                   "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$orchestration_skill_hash" }
+                    { "relativePath": "SKILL.md", "sha512": "$orchestration_skill_hash" }
                   ]
                 }
               ]

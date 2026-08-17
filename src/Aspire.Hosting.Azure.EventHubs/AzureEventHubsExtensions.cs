@@ -127,6 +127,7 @@ public static class AzureEventHubsExtensions
 
         var resource = new AzureEventHubsResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("MailMultiple")
             .WithDefaultRoleAssignments(EventHubsBuiltInRole.GetBuiltInRoleName,
                 EventHubsBuiltInRole.AzureEventHubsDataOwner);
     }
@@ -168,7 +169,8 @@ public static class AzureEventHubsExtensions
         var hub = new AzureEventHubResource(name, hubName, builder.Resource);
         builder.Resource.Hubs.Add(hub);
 
-        return builder.ApplicationBuilder.AddResource(hub);
+        return builder.ApplicationBuilder.AddResource(hub)
+            .WithIconName("Mail");
     }
 
     /// <summary>
@@ -212,7 +214,8 @@ public static class AzureEventHubsExtensions
         var consumerGroup = new AzureEventHubConsumerGroupResource(name, groupName, builder.Resource);
         builder.Resource.ConsumerGroups.Add(consumerGroup);
 
-        return builder.ApplicationBuilder.AddResource(consumerGroup);
+        return builder.ApplicationBuilder.AddResource(consumerGroup)
+            .WithIconName("Mail");
     }
 
     /// <summary>

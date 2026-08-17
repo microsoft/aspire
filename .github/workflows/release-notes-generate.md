@@ -7,6 +7,8 @@ description: |
   generated notes match the tone, section layout, headings, and emoji usage
   of recent stable releases — this workflow does not invent a new format.
 
+max-daily-ai-credits: -1
+
 on:
   # Trigger on draft-release creation, not on publish. The release flow
   # creates the GitHub release as a draft (gh release create --draft) so we
@@ -54,6 +56,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  copilot-requests: write
 
 network:
   allowed:
@@ -69,6 +72,9 @@ safe-outputs:
     max: 1
 
 tools:
+  # Shell access is explicit because the unfiltered GitHub integrity setting
+  # requires an intentional allowlist.
+  bash: ["cat", "ls", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes get_release_by_tag / list_releases and commit-comparison
     # APIs. `pull_requests` and `search` are used to enrich commits with PR

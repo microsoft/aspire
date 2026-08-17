@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
@@ -892,7 +893,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 ReferenceExpression,
                 refExpr,
                 AspireDict,
-                AspireList
+                AspireList,
+                InteractionInputCollectionPromiseImpl
             } from './base.mjs';
 
             export {
@@ -902,13 +904,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             export type {
                 InteractionInput,
-                InteractionInputOption
+                InteractionInputOption,
+                InteractionInputCollectionPromise
             } from './base.mjs';
 
             import type {
                 Awaitable,
                 InteractionInput,
                 InteractionInputCollection,
+                InteractionInputCollectionPromise,
                 InputType
             } from './base.mjs';
             """);
@@ -1008,6 +1012,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 _typesWithPromiseWrappers.Add(typeClass.TypeId);
             }
         }
+
+        // InteractionInputCollection is a hand-written base.mts type: its by-name accessors
+        // (value/get/required/requiredValue) are client-side conveniences, not ATS capabilities, so
+        // it is never registered as a generated type class. Register it as a promise-wrapper type so
+        // collection-returning getters (result.inputs(), validationContext.inputs(), command
+        // arguments()) emit the fluent InteractionInputCollectionPromise thenable instead of a bare
+        // Promise<InteractionInputCollection>. That lets callers chain `await x.inputs().value("c")`
+        // without an intermediate await, matching the C#/Go/Java/Python surfaces. The wrapper
+        // (InteractionInputCollectionPromise / InteractionInputCollectionPromiseImpl) is hand-written
+        // in base.mts; it is intentionally absent from _wrapperClassNames so the getter impl keeps
+        // using the marshaller-based collection construction rather than a handle+Impl wrapper.
+        _typesWithPromiseWrappers.Add(InteractionInputCollectionTypeId);
         // Note: ReferenceExpression is intentionally NOT added to _wrapperClassNames.
         // It is a value type defined in base.mts with a private constructor and static factory,
         // not a handle-based wrapper. It is handled via MapTypeRefToTypeScript instead.
@@ -1413,25 +1429,28 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     private static bool TryGetDirectOptionsParameter(List<AtsParameterInfo> optionalParams, out AtsParameterInfo? directOptionsParam)
+        // A trailing cancellation token is rendered as its own parameter (see
+        // GetTrailingCancellationTokenParameter), so it is ignored when deciding whether the lone
+        // "options" DTO can be threaded directly instead of wrapped in a generated options object.
+        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
+            optionalParams,
+            p => IsCancellationTokenType(p.Type),
+            cancellationTokenIsSeparateParameter: true,
+            out directOptionsParam);
+
+    /// <summary>
+    /// When the options DTO is threaded directly (see <see cref="TryGetDirectOptionsParameter"/>),
+    /// returns the trailing cancellation token optional parameter (if any) so it can be appended to
+    /// the generated method as its own argument rather than being folded into a generated options bag.
+    /// </summary>
+    private static AtsParameterInfo? GetTrailingCancellationTokenParameter(List<AtsParameterInfo> optionalParams)
     {
-        directOptionsParam = null;
-
-        // When ATS already exposes a single DTO parameter named "options", reuse that DTO type
-        // directly so the generated TypeScript API stays flat instead of wrapping it in another
-        // generated options object.
-        if (optionalParams.Count != 1)
+        if (!TryGetDirectOptionsParameter(optionalParams, out _))
         {
-            return false;
+            return null;
         }
 
-        var candidate = optionalParams[0];
-        if (!string.Equals(candidate.Name, "options", StringComparison.Ordinal) || candidate.Type?.Category != AtsTypeCategory.Dto)
-        {
-            return false;
-        }
-
-        directOptionsParam = candidate;
-        return true;
+        return optionalParams.FirstOrDefault(p => IsCancellationTokenType(p.Type));
     }
 
     /// <summary>
@@ -1616,7 +1635,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         List<AtsParameterInfo> requiredParams,
         bool hasOptionals,
         string optionsInterfaceName,
-        string optionsParameterName = "options")
+        string optionsParameterName = "options",
+        AtsParameterInfo? trailingCancellationToken = null)
     {
         var publicParamDefs = new List<string>();
         foreach (var param in requiredParams)
@@ -1627,6 +1647,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (hasOptionals)
         {
             publicParamDefs.Add($"{optionsParameterName}?: {optionsInterfaceName}");
+        }
+        if (trailingCancellationToken is not null)
+        {
+            publicParamDefs.Add($"{trailingCancellationToken.Name}?: {MapParameterToTypeScript(trailingCancellationToken)}");
         }
 
         return string.Join(", ", publicParamDefs);
@@ -1815,7 +1839,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
-            var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+            var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, trailingCancellationToken: GetTrailingCancellationTokenParameter(optionalParams));
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
             WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
@@ -1875,7 +1899,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
-            var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+            var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, trailingCancellationToken: GetTrailingCancellationTokenParameter(optionalParams));
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
             WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
@@ -1912,7 +1936,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var hasOptionals = optionalParams.Count > 0;
         var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
         var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
-        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
+        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, trailingCancellationToken: GetTrailingCancellationTokenParameter(optionalParams));
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
         WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
@@ -2084,7 +2108,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var publicOptionsParamName = GetPublicOptionsParameterName(userParams, hasOptionals, hasDirectOptionsParameter);
 
         // Build parameter list for public method
-        var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsTypeName, publicOptionsParamName);
+        var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsTypeName, publicOptionsParamName, GetTrailingCancellationTokenParameter(optionalParams));
 
         // Build parameter list for internal method (all params positional for callback registration)
         var internalParamDefs = new List<string>();
@@ -2661,6 +2685,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsTypeName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
+            var trailingCancellationToken = GetTrailingCancellationTokenParameter(optionalParams);
 
             // Build parameter list using options pattern
             var publicParamDefs = new List<string>();
@@ -2673,6 +2698,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 publicParamDefs.Add($"options?: {optionsTypeName}");
             }
+            if (trailingCancellationToken is not null)
+            {
+                publicParamDefs.Add($"{trailingCancellationToken.Name}?: {MapParameterToTypeScript(trailingCancellationToken)}");
+            }
             var paramsString = string.Join(", ", publicParamDefs);
 
             // Forward args to underlying object's method (which handles options extraction)
@@ -2684,6 +2713,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             if (hasOptionals)
             {
                 forwardArgs.Add("options");
+            }
+            if (trailingCancellationToken is not null)
+            {
+                forwardArgs.Add(trailingCancellationToken.Name);
             }
             var argsString = string.Join(", ", forwardArgs);
 
@@ -3476,6 +3509,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return;
         }
 
+        // Promise-wrapper types that are NOT registered as generated wrapper classes (currently only
+        // InteractionInputCollection, a hand-written base.mts type) wrap the marshalled collection
+        // promise in their hand-written ...Promise thenable so by-name accessors chain without an
+        // intermediate await. Awaiting the wrapper still resolves to the plain collection, preserving
+        // the existing `await (await x.inputs()).value(...)` form.
+        if (TryGetPromiseWrapperType(getter.ReturnType, out var promiseInterfaceName, out var promiseImplementationClassName))
+        {
+            var collectionType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
+            WriteLine($"    {propertyName}(): {promiseInterfaceName} {{");
+            WriteLine($"        return new {promiseImplementationClassName}(this._client.invokeCapability<{collectionType}>(");
+            WriteLine($"            '{getter.CapabilityId}',");
+            WriteLine("            { context: this._handle }");
+            WriteLine("        ), this._client, false);");
+            WriteLine("    }");
+            WriteLine();
+            return;
+        }
+
         var returnType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
 
         WriteLine($"    async {propertyName}(): Promise<{returnType}> {{");
@@ -3784,7 +3835,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var publicOptionsParamName = GetPublicOptionsParameterName(userParams, hasOptionals, hasDirectOptionsParameter);
 
         // Build parameter list using options pattern
-        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName);
+        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName, GetTrailingCancellationTokenParameter(optionalParams));
 
         // Determine return type
         var returnType = GetReturnTypeId(method) != null
@@ -3899,7 +3950,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var publicOptionsParamName = GetPublicOptionsParameterName(userParams, hasOptionals, hasDirectOptionsParameter);
 
         // Build parameter list using options pattern
-        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName);
+        var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName, GetTrailingCancellationTokenParameter(optionalParams));
 
         // Determine return type
         var returnType = MapTypeRefToTypeScript(capability.ReturnType);
@@ -4017,7 +4068,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var publicOptionsParamName = GetPublicOptionsParameterName(userParams, hasOptionals, hasDirectOptionsParameter);
 
         // Build parameter list for public method
-        var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName);
+        var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName, publicOptionsParamName, GetTrailingCancellationTokenParameter(optionalParams));
 
         // Build parameter list for internal method (all params positional)
         var internalParamDefs = new List<string>();
@@ -4135,7 +4186,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"): {promiseClass} {{");
 
             // Extract optional params and forward
-            foreach (var param in optionalParams)
+            foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
             {
                 var localParameterName = GetLocalParameterName(param);
                 WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
@@ -4155,7 +4206,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"): Promise<{returnType}> {{");
 
             // Extract optional params from options object
-            foreach (var param in optionalParams)
+            foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
             {
                 var localParameterName = GetLocalParameterName(param);
                 WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
@@ -4277,6 +4328,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
+            var trailingCancellationToken = GetTrailingCancellationTokenParameter(optionalParams);
 
             // Build parameter list using options pattern
             var publicParamDefs = new List<string>();
@@ -4289,6 +4341,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 publicParamDefs.Add($"options?: {optionsInterfaceName}");
             }
+            if (trailingCancellationToken is not null)
+            {
+                publicParamDefs.Add($"{trailingCancellationToken.Name}?: {MapParameterToTypeScript(trailingCancellationToken)}");
+            }
             var paramsString = string.Join(", ", publicParamDefs);
 
             // Forward args to underlying object's public method
@@ -4300,6 +4356,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             if (hasOptionals)
             {
                 forwardArgs.Add("options");
+            }
+            if (trailingCancellationToken is not null)
+            {
+                forwardArgs.Add(trailingCancellationToken.Name);
             }
             var argsString = string.Join(", ", forwardArgs);
 

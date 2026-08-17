@@ -17,7 +17,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
-using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -35,6 +34,8 @@ internal sealed class InitCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     protected override bool UpdateNotificationsEnabled => true;
+
+    internal override bool PrefetchesTemplatePackageMetadata => true;
 
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
@@ -104,6 +105,8 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
+        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(AgentInitCommand.s_skillsOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -163,6 +166,8 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
+        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
+        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill).
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
@@ -170,6 +175,9 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
+            skillLocationsBinding,
+            skillsBinding,
+            null,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
@@ -274,9 +282,14 @@ internal sealed class InitCommand : BaseCommand
         // Drop bare single-file apphost. Pin the SDK version so later operations
         // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
         // can locate and update the directive — they expect the @<version> form.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
+        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
+        // version never carries a +<sha> suffix. This also matches the empty-apphost
+        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+            #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -426,6 +439,7 @@ internal sealed class InitCommand : BaseCommand
         // (or after a CLI update) the template will be missing. Install first.
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
+            sourceOverride: null,
             _runner,
             InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,
@@ -800,8 +814,8 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownAspNetCoreConfigNames.Environment] = "Development",
+                        [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                         [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{ports.OtlpHttpsPort}",
                         [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
                     }
@@ -814,8 +828,8 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownAspNetCoreConfigNames.Environment] = "Development",
+                        [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                         [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{ports.OtlpHttpPort}",
                         [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{ports.ResourceServiceHttpPort}",
                         [KnownConfigNames.AllowUnsecuredTransport] = "true"

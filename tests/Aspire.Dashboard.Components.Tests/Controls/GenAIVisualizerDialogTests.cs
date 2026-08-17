@@ -10,10 +10,13 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Resources;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -113,6 +116,60 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
 
         Assert.Equal(5, instance.Content.Items.Count);
+    }
+
+    [Fact]
+    public async Task Render_HasGenAIMessages_CopyButtonHasAccessibleName()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+
+        var trace = new OtlpTrace(new byte[] { (byte)'t', (byte)'r', (byte)'a', (byte)'c', (byte)'e' }, DateTime.MinValue);
+        var scope = CreateOtlpScope(context);
+        var span = CreateOtlpSpan(resource, trace, scope, spanId: GetHexId("abc"), parentSpanId: null, startDate: s_testTime);
+
+        var cut = SetUpDialog(out var dialogService);
+        var repository = Services.GetRequiredService<TelemetryRepository>();
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app", instanceId: "instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(
+                                message: """{"content":"User!"}""",
+                                traceId: "trace",
+                                spanId: "abc",
+                                eventName: "gen_ai.user.message")
+                        }
+                    }
+                }
+            }
+        });
+        var selectedLogEntryId = repository.GetLogsForSpan(trace.TraceId, span.SpanId).Single().InternalId;
+
+        await GenAIVisualizerDialog.OpenDialogAsync(
+            dialogService: dialogService,
+            span: span,
+            selectedLogEntryId: selectedLogEntryId,
+            telemetryRepository: repository,
+            errorRecorder: new TestTelemetryErrorRecorder(),
+            resources: [],
+            getContextGenAISpans: () => []
+            );
+
+        var copyButton = cut.Find("fluent-button.message-copy-button");
+        var copyButtonLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
+            [nameof(ControlsStrings.GridValueCopyToClipboard)].Value;
+
+        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("aria-label"));
+        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("title"));
     }
 
     [Fact]

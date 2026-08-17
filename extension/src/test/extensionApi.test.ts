@@ -7,7 +7,7 @@ suite('extension exports', () => {
         const extension = await getAndActivateExtension();
         const api = extension.exports as AspireExtensionApi;
 
-        assert.strictEqual(api.apiVersion, 1);
+        assert.strictEqual(api.apiVersion, 2);
         assert.ok(api.rpcServerInfo.address);
         assert.ok(api.dcpServerInfo.address);
         assert.strictEqual('token' in api.rpcServerInfo, false);

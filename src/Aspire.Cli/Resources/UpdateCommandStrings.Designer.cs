@@ -111,6 +111,7 @@ namespace Aspire.Cli.Resources {
     internal static string QualityOptionDescriptionWithStaging => ResourceManager.GetString("QualityOptionDescriptionWithStaging", resourceCulture);
     internal static string DotNetToolSelfUpdateMessage => ResourceManager.GetString("DotNetToolSelfUpdateMessage", resourceCulture);
     internal static string NpmSelfUpdateMessage => ResourceManager.GetString("NpmSelfUpdateMessage", resourceCulture);
+    internal static string NixSelfUpdateMessage => ResourceManager.GetString("NixSelfUpdateMessage", resourceCulture);
     internal static string ProjectUpdateSkippedAfterCliUpdateMessage => ResourceManager.GetString("ProjectUpdateSkippedAfterCliUpdateMessage", resourceCulture);
     internal static string MigratedToNewSdkFormat => ResourceManager.GetString("MigratedToNewSdkFormat", resourceCulture);
     internal static string RemovedObsoleteAppHostPackage => ResourceManager.GetString("RemovedObsoleteAppHostPackage", resourceCulture);
@@ -127,5 +128,9 @@ namespace Aspire.Cli.Resources {
     internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
     internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
     internal static string NoChannelFoundMatching => ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
+    internal static string PendingMigrationsHeader => ResourceManager.GetString("PendingMigrationsHeader", resourceCulture);
+    internal static string PendingMigrationsHint => ResourceManager.GetString("PendingMigrationsHint", resourceCulture);
+    internal static string MigrateOptionDescription => ResourceManager.GetString("MigrateOptionDescription", resourceCulture);
+    internal static string MigrationApplyFailedWarning => ResourceManager.GetString("MigrationApplyFailedWarning", resourceCulture);
     }
 }

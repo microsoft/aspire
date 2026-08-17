@@ -42,7 +42,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithSimpleNuGetConfig_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
@@ -91,7 +91,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithBrokenSdkState_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
@@ -153,7 +153,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithDailyFeedWithExtraMappingsIsPreserved_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
@@ -214,7 +214,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithExtraInternalFeedIncorrectlyMapped_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
@@ -273,7 +273,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)

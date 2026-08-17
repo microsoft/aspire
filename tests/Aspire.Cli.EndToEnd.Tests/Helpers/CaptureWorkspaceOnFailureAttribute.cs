@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using System.Reflection;
 using Xunit;
 using Xunit.v3;
@@ -19,7 +18,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// <item><c>"CapturePath:{label}"</c> — additional directories to capture under the given label</item>
 /// <item><c>"CaptureFile:{fileName}"</c> — additional files to capture under the given destination name</item>
 /// </list>
-/// Workspace capture is automatic when using <see cref="Aspire.Cli.Tests.Utils.TemporaryWorkspace.Create"/>.
+/// Workspace capture is automatic when using <see cref="TemporaryWorkspace.Create"/>.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
