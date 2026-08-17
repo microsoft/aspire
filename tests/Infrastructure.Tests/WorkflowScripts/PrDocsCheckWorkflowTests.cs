@@ -26,6 +26,8 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
         Assert.Contains("len(create_items) != 1", customSteps, StringComparison.Ordinal);
         Assert.Contains("has_base = \"base\" in create_item", customSteps, StringComparison.Ordinal);
         Assert.Contains("has_base_branch = \"base_branch\" in create_item", customSteps, StringComparison.Ordinal);
+        Assert.Contains("base = create_item.get(\"base\")", customSteps, StringComparison.Ordinal);
+        Assert.Contains("base_branch = create_item.get(\"base_branch\")", customSteps, StringComparison.Ordinal);
         Assert.Contains("if has_base and has_base_branch and base != base_branch:", customSteps, StringComparison.Ordinal);
         Assert.Contains("target_branch = base if has_base else base_branch", customSteps, StringComparison.Ordinal);
         Assert.Contains(
@@ -60,6 +62,9 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             safeOutputs,
             StringComparison.Ordinal);
         Assert.Contains("/tmp/gh-aw/agent_output.json", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("base = create_item.get(\"base\")", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("base_branch = create_item.get(\"base_branch\")", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("if has_base and has_base_branch and base != base_branch:", safeOutputs, StringComparison.Ordinal);
         Assert.Contains(
             "\\\"base_branch\\\":\\\"${{ steps.resolve-target.outputs.branch || 'main' }}\\\"",
             safeOutputs,
@@ -68,6 +73,18 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             Regex.Matches(safeOutputs, "uses: actions/checkout@", RegexOptions.CultureInvariant).Cast<Match>(),
             _ => { },
             _ => { });
+    }
+
+    [Fact]
+    public void OutcomeValidatorReadsCurrentAndLegacyCanonicalBase()
+    {
+        var validator = File.ReadAllText(
+            Path.Combine(RepoRoot.Path, ".github", "workflows", "pr-docs-check", "validate_outcome.py"));
+
+        Assert.Contains("create_pull_request.get(\"base\")", validator, StringComparison.Ordinal);
+        Assert.Contains("create_pull_request.get(\"base_branch\")", validator, StringComparison.Ordinal);
+        Assert.Contains("if base != base_branch:", validator, StringComparison.Ordinal);
+        Assert.Contains("_get_create_pull_request_target(payload)", validator, StringComparison.Ordinal);
     }
 
     [Fact]

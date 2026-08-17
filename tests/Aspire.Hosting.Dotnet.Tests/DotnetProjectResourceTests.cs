@@ -13,6 +13,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -912,17 +913,19 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             fragment => Assert.Contains(fragment, exception.Message));
     }
 
-    private static Task ExecutePipelineAsync(DistributedApplication app)
+    private static async Task ExecutePipelineAsync(DistributedApplication app)
     {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cts.CancelAfter(TestConstants.LongTimeoutTimeSpan);
         var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
         var context = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             app.Services,
             app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>(),
-            CancellationToken.None);
+            cts.Token);
 
-        return pipeline.ExecuteAsync(context);
+        await pipeline.ExecuteAsync(context).WaitAsync(cts.Token);
     }
 
     private static string CreateProjectDirectory(string workspacePath)

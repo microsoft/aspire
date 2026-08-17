@@ -126,6 +126,14 @@ class ValidateOutcomeTests(unittest.TestCase):
             "current base wrong type": {"base": 13.5},
             "invalid legacy base": {"base_branch": "release/latest"},
             "legacy base wrong type": {"base_branch": 13.5},
+            "invalid current base with valid legacy base": {
+                "base": "release/latest",
+                "base_branch": "release/13.5",
+            },
+            "valid current base with invalid legacy base": {
+                "base": "release/13.5",
+                "base_branch": "release/latest",
+            },
         }
         for name, target_fields in cases.items():
             with self.subTest(name=name):
