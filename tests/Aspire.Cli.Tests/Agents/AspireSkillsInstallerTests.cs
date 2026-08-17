@@ -1097,6 +1097,62 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_WhenGitHubRequestTimesOut_UsesEmbeddedBundle()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var handler = new MockHttpMessageHandler(
+                new TaskCanceledException("The request timed out.", new TimeoutException()));
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenGitHubRequestIsCanceledByCaller_ThrowsCancellation()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            var requestObserved = false;
+            var handler = new MockHttpMessageHandler(_ =>
+            {
+                requestObserved = true;
+                cancellationTokenSource.Cancel();
+                throw new OperationCanceledException(cancellationTokenSource.Token);
+            });
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var installer = CreateInstaller(executionContext, httpMessageHandler: handler);
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => installer.InstallAsync(cancellationTokenSource.Token));
+            Assert.True(requestObserved);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenGitHubIsUnavailable_UsesVerifiedGitHubCache()
     {
         var rootDirectory = CreateTempDirectory();

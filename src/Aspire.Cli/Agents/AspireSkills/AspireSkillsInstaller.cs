@@ -264,6 +264,13 @@ internal sealed class AspireSkillsInstaller(
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }
+        // HttpClient.Timeout uses an internal cancellation token, so distinguish it from caller
+        // cancellation before treating the remote source as unavailable.
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug(ex, "Aspire skills GitHub release acquisition timed out for version {Version}.", version);
+            return AcquisitionResult.Unavailable(knownGitHubArchiveSha256);
+        }
         // A truncated response body throws HttpIOException rather than HttpRequestException.
         // Catch it explicitly so local cache and archive I/O failures still propagate.
         catch (Exception ex) when (ex is HttpRequestException or HttpIOException or JsonException)
