@@ -70,7 +70,7 @@ export interface AppHostLifecycleToolResult {
     appHostPath: string;
     requestedMode?: AppHostLifecycleMode;
     effectiveMode?: AppHostLifecycleMode;
-    /** Present on start results. The effective isolation after inference and overrides. */
+    /** Present on start results only when a known effective isolation value exists. */
     isolated?: boolean;
     controller: AppHostLifecycleController;
     /**
@@ -184,8 +184,8 @@ export function createResult(
         result.knownAppHosts = knownAppHosts;
     }
 
-    if (tool === aspireAppHostStartToolName) {
-        result.isolated = isolated ?? false;
+    if (tool === aspireAppHostStartToolName && isolated !== undefined) {
+        result.isolated = isolated;
     }
 
     return result;

@@ -54,6 +54,7 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
     onRunningAppHostsRequested: (() => void) | undefined;
     supportsIsolatedLaunch = true;
     resolveLaunchIsolationCalls = 0;
+    resolveLaunchIsolationError: Error | undefined;
     private readonly lifecycleLocks = new Map<string, Promise<unknown>>();
 
     get pendingLifecycleLockCount(): number {
@@ -148,6 +149,10 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
         this.resolveLaunchIsolationCalls++;
         if (token.isCancellationRequested) {
             throw new vscode.CancellationError();
+        }
+
+        if (this.resolveLaunchIsolationError) {
+            throw this.resolveLaunchIsolationError;
         }
 
         const effective = resolveIsolated(isolated, appHostPath);
@@ -328,6 +333,11 @@ function readToolResultPayload(result: vscode.LanguageModelToolResult): AppHostL
     const value = parts[0]?.value;
     assert.strictEqual(typeof value, 'string');
     return JSON.parse(value as string) as AppHostLifecycleToolResult;
+}
+
+function assertResultOmitsIsolated(result: AppHostLifecycleToolResult): void {
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'isolated'), false);
+    assert.strictEqual(result.isolated, undefined);
 }
 
 suite('AppHost lifecycle language model tools', () => {
@@ -977,7 +987,7 @@ suite('AppHost lifecycle language model tools', () => {
             }]);
         });
 
-        test('re-resolves inferred isolation after acquiring the lifecycle lock', async () => {
+        test('uses only the launch-owned isolation probe after acquiring the lifecycle lock', async () => {
             fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
             writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
             launchService.onLifecycleLockHeld = () => {
@@ -990,7 +1000,7 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'started');
             assert.strictEqual(result.isolated, false);
-            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 2);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 1);
             assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
             assert.deepStrictEqual(launchService.launchCalls, [{
                 appHostPath: appHostProjectPath,
@@ -1002,22 +1012,28 @@ suite('AppHost lifecycle language model tools', () => {
 
         test('returns alreadyStarting without launching a second process', async () => {
             launchService.launchingPaths.add(path.resolve(appHostProjectPath));
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
 
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, new vscode.CancellationTokenSource().token);
 
             assert.strictEqual(result.outcome, 'alreadyStarting');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('returns alreadyStarting while the editor-owned session is still starting up', async () => {
             const session = new FakeEditorSession(appHostProjectPath, { noDebug: false });
             session.startupCompleted = false;
             editorSessions.push(session);
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
 
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, new vscode.CancellationTokenSource().token);
 
             assert.strictEqual(result.outcome, 'alreadyStarting');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         // The launching flag is cleared by `aspire ps` reconciliation, which can lag well
@@ -1038,6 +1054,7 @@ suite('AppHost lifecycle language model tools', () => {
 
         test('returns alreadyRunning with the effective mode of the editor-owned session', async () => {
             editorSessions.push(new FakeEditorSession(appHostProjectPath, { noDebug: true }));
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
 
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, new vscode.CancellationTokenSource().token);
 
@@ -1045,6 +1062,8 @@ suite('AppHost lifecycle language model tools', () => {
                 { outcome: result.outcome, requestedMode: result.requestedMode, effectiveMode: result.effectiveMode, controller: result.controller },
                 { outcome: 'alreadyRunning', requestedMode: 'debug', effectiveMode: 'run', controller: 'editor' });
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('refuses to start over an externally owned AppHost that is already running', async () => {
@@ -1150,6 +1169,7 @@ suite('AppHost lifecycle language model tools', () => {
             const serialized = JSON.stringify(result);
 
             assert.strictEqual(result.outcome, 'failed');
+            assertResultOmitsIsolated(result);
             assert.strictEqual(serialized.includes('super-secret-value'), false);
             assert.strictEqual(serialized.includes('/Users/private'), false);
         });
@@ -1194,6 +1214,7 @@ suite('AppHost lifecycle language model tools', () => {
             // probe never runs while the lock is held and the user's own Run/Debug keeps
             // its full 10s wait budget.
             launchService.runningAppHosts = [{ appHostPath: appHostProjectPath }];
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
             let lockTaken = false;
             launchService.onLifecycleLockHeld = () => { lockTaken = true; };
 
@@ -1203,6 +1224,8 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(result.controller, 'external');
             assert.strictEqual(lockTaken, false, 'Expected the external-controller fast path to answer before the lifecycle lock was taken.');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('revalidates the external controller after waiting for the lifecycle lock', async () => {
@@ -1210,6 +1233,7 @@ suite('AppHost lifecycle language model tools', () => {
             // can take up to 10s, and an AppHost started from a terminal during that wait
             // leaves no editor session and no launching flag, so a cached negative result
             // would let the tool start a second process against the same project.
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
             launchService.onLifecycleLockHeld = () => {
                 launchService.runningAppHosts = [{ appHostPath: appHostProjectPath }];
             };
@@ -1219,6 +1243,8 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(result.outcome, 'alreadyRunning');
             assert.strictEqual(result.controller, 'external');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('refuses to start when a session cannot be told apart from the requested AppHost', async () => {
@@ -1233,11 +1259,14 @@ suite('AppHost lifecycle language model tools', () => {
             fs.writeFileSync(path.join(directory, 'Program.cs'), singleFileAppHostContents);
             discoveryService.registeredPaths.push(path.join(directory, 'First.csproj'), path.join(directory, 'Second.csproj'));
             editorSessions.push(new FakeEditorSession(path.join(directory, 'Program.cs'), { noDebug: false }));
+            launchService.resolveLaunchIsolationError = new Error('The requested isolation mode cannot be verified.');
 
             const result = await service.start({ appHostPath: 'Ambiguous/First.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
 
             assert.strictEqual(result.outcome, 'ambiguousSession');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('claims the launching slot before launching so a concurrent editor launch cannot duplicate it', async () => {
