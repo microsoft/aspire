@@ -7,7 +7,11 @@ using Aspire.Azure.Storage.Queues;
 using Azure.Storage.Queues;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues", typeof(AzureStorageQueuesSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues", typeof(AzureStorageQueueSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues:ClientOptions", typeof(QueueClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues:*", typeof(AzureStorageQueuesSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues:*", typeof(AzureStorageQueueSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Queues:*:ClientOptions", typeof(QueueClientOptions), exclusionPaths: ["Default"])]
 
 [assembly: LoggingCategories(
     "Azure",

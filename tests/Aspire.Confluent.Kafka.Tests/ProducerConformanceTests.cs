@@ -66,7 +66,12 @@ public class ProducerConformanceTests : ConformanceTests<IProducer<string, strin
                                 "Producer": {
                                     "ConnectionString": "localhost:9092",
                                     "DisableHealthChecks": false,
-                                    "DisableMetrics": false
+                                    "DisableMetrics": false,
+                                    "orders": {
+                                        "ConnectionString": "localhost:9093",
+                                        "DisableHealthChecks": true,
+                                        "DisableMetrics": true
+                                    }
                                 }
                             }
                         }
@@ -76,7 +81,8 @@ public class ProducerConformanceTests : ConformanceTests<IProducer<string, strin
     protected override (string json, string error)[] InvalidJsonToErrorMessage => new[]
         {
             ("""{"Aspire": { "Confluent":{ "Kafka": { "Producer": { "DisableMetrics": 0}}}}}""", "Value is \"integer\" but should be \"boolean\""),
-            ("""{"Aspire": { "Confluent":{ "Kafka": { "Producer": { "DisableHealthChecks": 0}}}}}""", "Value is \"integer\" but should be \"boolean\"")
+            ("""{"Aspire": { "Confluent":{ "Kafka": { "Producer": { "DisableHealthChecks": 0}}}}}""", "Value is \"integer\" but should be \"boolean\""),
+            ("""{"Aspire": { "Confluent":{ "Kafka": { "Producer": { "orders": { "DisableMetrics": 0}}}}}}""", "Value is \"integer\" but should be \"boolean\"")
         };
 
     [Fact]

@@ -5,6 +5,7 @@ using Aspire.Oracle.EntityFrameworkCore;
 using Aspire;
 
 [assembly: ConfigurationSchema("Aspire:Oracle:EntityFrameworkCore", typeof(OracleEntityFrameworkCoreSettings))]
+[assembly: ConfigurationSchema("Aspire:Oracle:EntityFrameworkCore:*", typeof(OracleEntityFrameworkCoreSettings))]
 
 [assembly: LoggingCategories(
     "Microsoft.EntityFrameworkCore",

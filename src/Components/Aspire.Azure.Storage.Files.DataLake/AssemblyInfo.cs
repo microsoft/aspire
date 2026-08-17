@@ -6,9 +6,17 @@ using Aspire.Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Storage:Files:DataLake", typeof(AzureDataLakeSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Files:DataLake", typeof(AzureDataLakeFileSystemSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Files:DataLake:*", typeof(AzureDataLakeSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Storage:Files:DataLake:*", typeof(AzureDataLakeFileSystemSettings))]
 [assembly:
     ConfigurationSchema(
         "Aspire:Azure:Storage:Files:DataLake:ClientOptions",
+        typeof(DataLakeClientOptions),
+        exclusionPaths: ["Default"])]
+[assembly:
+    ConfigurationSchema(
+        "Aspire:Azure:Storage:Files:DataLake:*:ClientOptions",
         typeof(DataLakeClientOptions),
         exclusionPaths: ["Default"])]
 

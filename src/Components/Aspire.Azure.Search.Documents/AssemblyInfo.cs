@@ -7,6 +7,8 @@ using Azure.Search.Documents;
 
 [assembly: ConfigurationSchema("Aspire:Azure:Search:Documents", typeof(AzureSearchSettings))]
 [assembly: ConfigurationSchema("Aspire:Azure:Search:Documents:ClientOptions", typeof(SearchClientOptions), exclusionPaths: ["Default"])]
+[assembly: ConfigurationSchema("Aspire:Azure:Search:Documents:*", typeof(AzureSearchSettings))]
+[assembly: ConfigurationSchema("Aspire:Azure:Search:Documents:*:ClientOptions", typeof(SearchClientOptions), exclusionPaths: ["Default"])]
 
 [assembly: LoggingCategories(
     "Azure",

@@ -72,6 +72,39 @@ public class SeqTests
     }
 
     [Fact]
+    public void NamedConfigurationUsesIntegrationSection()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("Aspire:Seq:DisableHealthChecks", "true"),
+            new KeyValuePair<string, string?>("Aspire:Seq:ApiKey", "shared"),
+            new KeyValuePair<string, string?>("seq:ApiKey", "legacy"),
+            new KeyValuePair<string, string?>("Aspire:Seq:seq:ApiKey", "named")
+        ]);
+
+        SeqSettings settings = new();
+        builder.AddSeqEndpoint("seq", configuredSettings => settings = configuredSettings);
+
+        Assert.Equal("named", settings.ApiKey);
+    }
+
+    [Fact]
+    public void LegacyRootNamedConfigurationIsStillSupported()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("Aspire:Seq:DisableHealthChecks", "true"),
+            new KeyValuePair<string, string?>("Aspire:Seq:ApiKey", "shared"),
+            new KeyValuePair<string, string?>("seq:ApiKey", "legacy")
+        ]);
+
+        SeqSettings settings = new();
+        builder.AddSeqEndpoint("seq", configuredSettings => settings = configuredSettings);
+
+        Assert.Equal("legacy", settings.ApiKey);
+    }
+
+    [Fact]
     public async Task HealthCheckDescriptionDoesNotExposeCredentialsFromServerUrl()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);

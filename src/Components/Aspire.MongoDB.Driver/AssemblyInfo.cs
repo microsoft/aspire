@@ -5,6 +5,7 @@ using Aspire;
 using Aspire.MongoDB.Driver;
 
 [assembly: ConfigurationSchema("Aspire:MongoDB:Driver", typeof(MongoDBSettings))]
+[assembly: ConfigurationSchema("Aspire:MongoDB:Driver:*", typeof(MongoDBSettings))]
 
 [assembly: LoggingCategories(
     "MongoDB",
