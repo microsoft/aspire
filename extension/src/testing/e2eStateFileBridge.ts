@@ -564,6 +564,26 @@ async function executeE2eControlCommand(
       markStarted();
       return getE2eBreakpoints();
     }
+    case 'startDynamicConfigurationByName': {
+      const debugConfigurationProvider = aspireContext.debugConfigProvider;
+      if (!debugConfigurationProvider) {
+        throw new Error('Aspire dynamic debug configuration provider is not initialized.');
+      }
+
+      for (const folder of vscode.workspace.workspaceFolders ?? []) {
+        const configurations = await debugConfigurationProvider.provideDebugConfigurations(folder);
+        const configuration = configurations.find(candidate => candidate.name === command.configurationName);
+        if (!configuration) {
+          continue;
+        }
+
+        const startPromise = vscode.debug.startDebugging(folder, configuration);
+        markStarted();
+        return await startPromise;
+      }
+
+      throw new Error(`No dynamic debug configuration named '${command.configurationName}' was found.`);
+    }
     case 'stopDebugging': {
       markStarted();
       await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);

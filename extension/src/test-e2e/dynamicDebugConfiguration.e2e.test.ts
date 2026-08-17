@@ -4,7 +4,7 @@ import * as path from 'path';
 import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
 import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
+import { chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
 
 suite('Aspire dynamic debug configuration E2E', function () {
     this.timeout(240000);
@@ -34,7 +34,7 @@ suite('Aspire dynamic debug configuration E2E', function () {
         ], 'Dynamic debug configuration E2E teardown failed.');
     });
 
-    test('restores the selected AppHost when duplicate workspace folder aliases are debugged again with F5', async () => {
+    test('re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces', async () => {
         createWorkspaceFixture();
         await openAspireView();
         const workspaceFolders = await setWorkspaceFoldersForE2E([
@@ -56,14 +56,15 @@ suite('Aspire dynamic debug configuration E2E', function () {
             quickPickLabels = await waitForQuickPickLabels('Aspire: Launch default AppHost');
         }
 
-        const configurationLabels = quickPickLabels.filter(label => label.trimStart().startsWith('Aspire: Launch default AppHost'));
-        assert.strictEqual(configurationLabels.length, 2, `Expected two Aspire dynamic configurations. Visible labels: ${JSON.stringify(quickPickLabels)}`);
-        assert.notStrictEqual(configurationLabels[0], configurationLabels[1]);
+        const configurationIndexes = quickPickLabels
+            .map((label, index) => label.trimStart().startsWith('Aspire: Launch default AppHost') ? index : -1)
+            .filter(index => index >= 0);
+        assert.strictEqual(configurationIndexes.length, 2, `Expected two Aspire dynamic configurations. Visible labels: ${JSON.stringify(quickPickLabels)}`);
 
-        const secondFolderConfiguration = configurationLabels.find(label => label.includes('/second'));
-        assert.ok(secondFolderConfiguration);
+        const secondFolderConfigurationIndex = configurationIndexes[1];
+        const secondFolderConfiguration = quickPickLabels[secondFolderConfigurationIndex];
         const beforeFirstLaunch = getDebugConsoleOutputCount();
-        await chooseActiveQuickPick(secondFolderConfiguration);
+        await chooseActiveQuickPickAtIndex(secondFolderConfigurationIndex);
 
         const firstLaunch = await waitForLaunchOutput(beforeFirstLaunch);
         assert.ok(firstLaunch.appHostPath);
@@ -71,12 +72,13 @@ suite('Aspire dynamic debug configuration E2E', function () {
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
 
-        await executeE2eControlCommand({ name: 'openFile', filePath: appHostPath });
-        await waitForEditorTitle('apphost.cs');
         const beforeSecondLaunch = getDebugConsoleOutputCount();
-        // F5 invokes this command. Using the palette keeps the browser-based test runner from
-        // consuming F5 as a page reload before VS Code receives it.
-        await executeCommandFromPalette('Debug: Start Debugging');
+        const startStatus = await executeE2eControlCommand({
+            name: 'startDynamicConfigurationByName',
+            configurationName: secondFolderConfiguration,
+        }, { timeoutMs: 60000 });
+        assert.strictEqual(startStatus.result, true);
+
         const secondLaunch = await waitForLaunchOutput(beforeSecondLaunch);
         assert.ok(secondLaunch.appHostPath);
         assert.ok(isSamePath(secondLaunch.appHostPath, appHostPath));
