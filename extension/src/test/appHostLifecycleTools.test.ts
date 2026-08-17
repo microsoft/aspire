@@ -1279,6 +1279,7 @@ suite('AppHost lifecycle language model tools', () => {
             // by the in-lock `isLaunching` check instead. Reserve during the second probe,
             // the authoritative one that runs inside the lock immediately before the launch,
             // so only the synchronous claim is left to notice.
+            launchService.resolveLaunchIsolationError = new Error('capability probe failed');
             launchService.onRunningAppHostsRequested = () => {
                 if (launchService.runningAppHostRequests === 2) {
                     launchService.launchingPaths.add(path.resolve(appHostProjectPath));
@@ -1290,6 +1291,8 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(result.outcome, 'alreadyStarting');
             assert.strictEqual(result.controller, 'editor');
             assert.strictEqual(launchService.launchCalls.length, 0);
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+            assertResultOmitsIsolated(result);
         });
 
         test('releases the launching claim when the launch itself fails', async () => {
