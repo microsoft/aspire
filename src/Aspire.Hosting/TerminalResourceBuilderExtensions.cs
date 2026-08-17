@@ -5,9 +5,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Lifecycle;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -93,6 +95,8 @@ public static class TerminalResourceBuilderExtensions
 
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
+        appBuilder.Services.TryAddSingleton<TerminalHostOrphanCleanupService>();
+        appBuilder.Services.TryAddEventingSubscriber<TerminalHostOrphanCleanupEventingSubscriber>();
 
         // Subscribe directly on the IDistributedApplicationEventing rather than registering an
         // IDistributedApplicationEventingSubscriber: subscriptions registered during the builder
@@ -101,11 +105,8 @@ public static class TerminalResourceBuilderExtensions
         // important — TerminalHostEventingSubscriber resolves each host's binary path by
         // iterating model.Resources.OfType<TerminalHostResource>(), so the hosts MUST already
         // be in the model by the time it runs.
-        appBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
-        {
-            MaterializeTerminalHosts(@event, parent, annotation, options);
-            return Task.CompletedTask;
-        });
+        appBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, cancellationToken) =>
+            MaterializeTerminalHostsAsync(@event, parent, annotation, options, cancellationToken));
 
         return builder;
     }
@@ -133,13 +134,20 @@ public static class TerminalResourceBuilderExtensions
     /// <see cref="BeforeStartEvent"/> (e.g. from a test) is a no-op once the
     /// <paramref name="annotation"/> is initialized.
     /// </summary>
-    private static void MaterializeTerminalHosts(
+    private static async Task MaterializeTerminalHostsAsync(
         BeforeStartEvent @event,
         IResource parent,
         TerminalAnnotation annotation,
-        TerminalOptions options)
+        TerminalOptions options,
+        CancellationToken cancellationToken)
     {
         if (annotation.IsInitialized)
+        {
+            return;
+        }
+
+        var executionContext = @event.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        if (!executionContext.IsRunMode)
         {
             return;
         }
@@ -154,16 +162,14 @@ public static class TerminalResourceBuilderExtensions
         }
 
         // All per-replica terminal-host files live flat under ~/.aspire/trmnl/, with
-        // a per-replica id derived from (normalized AppHost path, parent resource name,
-        // replica index). This:
+        // a random per-run replica id. This:
         //  - matches the repo's convention for per-user runtime state (cf. ~/.aspire/cli/bch,
         //    ~/.aspire/dev-certs, ~/.aspire/deployments)
         //  - avoids dropping UDS sockets in the global /tmp on Linux where different distros
         //    treat /tmp permissions differently
         //  - keeps absolute paths short enough to fit sun_path (104 bytes on macOS)
-        //  - is stable across AppHost restarts so external tools can enumerate by listing
-        //    {trmnlDir}/{id}.metadata.json. The listener side MUST pre-delete stale .sock
-        //    files at the same path before binding.
+        //  - lets external tools enumerate by listing {trmnlDir}/{id}.metadata.json
+        //  - prevents an old child or AppHost cleanup from touching a replacement run's sockets.
         var configuration = @event.Services.GetRequiredService<IConfiguration>();
         var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
         if (string.IsNullOrEmpty(appHostPath))
@@ -172,8 +178,12 @@ public static class TerminalResourceBuilderExtensions
                 "Cannot materialize terminal hosts: AppHost:FilePath / AppHost:Path is not set in configuration.");
         }
 
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        var trmnlDirectory = configuration[TerminalHostPaths.DirectoryOverrideConfigName];
+        if (string.IsNullOrEmpty(trmnlDirectory))
+        {
+            var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+        }
 
         // 0700 on Unix so other local users cannot enumerate which terminals exist on
         // this machine. On Windows the user-profile ACLs (per-user by default) make this
@@ -199,15 +209,23 @@ public static class TerminalResourceBuilderExtensions
         var replicaIds = new string[replicaCount];
         var metadataLogger = @event.Services.GetService<ILoggerFactory>()?.CreateLogger("Aspire.Hosting.WithTerminal");
         var appHostPid = Environment.ProcessId;
+        var appHostProcessIdentity = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds();
+        var appHostProcessScopeId = TerminalHostOrphanCleanupService.GetCurrentProcessScopeId();
+        var appHostBootId = TerminalHostOrphanCleanupService.GetCurrentBootId();
         var createdAtUtc = DateTime.UtcNow;
+
         for (var i = 0; i < replicaCount; i++)
         {
-            var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, parent.Name, i);
-            var layout = CreateTerminalHostLayout(homeDirectory, replicaId, i);
+            var replicaId = TerminalHostPaths.CreateReplicaId();
+            var layout = CreateTerminalHostLayout(trmnlDirectory, replicaId, i);
             var terminalHostName = $"{parent.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
             var terminalHost = new TerminalHostResource(terminalHostName, parent, layout);
 
-            ConfigureTerminalHostAnnotations(terminalHost, options);
+            ConfigureTerminalHostAnnotations(
+                terminalHost,
+                options,
+                appHostPid,
+                appHostProcessIdentity);
 
             // Wire OTLP env vars onto each terminal host so it can ship logs/traces/metrics to
             // the dashboard. Without this, terminal host failures (DCP never dials, control
@@ -246,7 +264,7 @@ public static class TerminalResourceBuilderExtensions
             // begins spawning hosts — without waiting for the host to come up and bind its
             // control socket. The host process never reads its own sidecar; the AppHost is
             // the sole writer.
-            WriteMetadataSidecar(
+            await WriteMetadataSidecarAsync(
                 layout.MetadataPath,
                 new TerminalHostMetadata
                 {
@@ -255,43 +273,27 @@ public static class TerminalResourceBuilderExtensions
                     ReplicaIndex = i,
                     AppHostPath = appHostPath,
                     AppHostPid = appHostPid,
+                    AppHostProcessIdentity = appHostProcessIdentity,
+                    AppHostProcessScopeId = appHostProcessScopeId,
+                    AppHostBootId = appHostBootId,
                     CreatedAtUtc = createdAtUtc,
                     Columns = options.Columns,
                     Rows = options.Rows,
                     ControlSocketPath = layout.ControlUdsPath,
                     ConsumerSocketPath = layout.ConsumerUdsPath,
                 },
-                metadataLogger);
+                metadataLogger,
+                cancellationToken).ConfigureAwait(false);
 
             terminalHosts[i] = terminalHost;
             replicaIds[i] = replicaId;
         }
 
-        // Best-effort cleanup callback on ApplicationStopped so stale files for this run
-        // are removed even if the host children crash mid-run.
-        //
-        // Why ApplicationStopped (not ApplicationStopping): the terminal-host child
-        // processes also unlink their own UDS endpoints on graceful shutdown. Deleting
-        // after the children have fully exited avoids racing the children mid-drain.
-        //
-        // Why we delete by replica-id prefix instead of `rm -r trmnlDirectory`: the
-        // directory is now shared across every AppHost on the machine. We only own files
-        // whose name starts with one of OUR replica ids.
-        var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
-        var loggerFactory = @event.Services.GetService<ILoggerFactory>();
-        if (lifetime is not null)
-        {
-            var capturedReplicaIds = replicaIds;
-            var capturedTrmnlDir = trmnlDirectory;
-            var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
-            lifetime.ApplicationStopped.Register(() =>
-            {
-                foreach (var replicaId in capturedReplicaIds)
-                {
-                    DeleteReplicaFiles(capturedTrmnlDir, replicaId, cleanupLogger);
-                }
-            });
-        }
+        // The terminal-host children unlink their sockets on graceful shutdown, while this
+        // app-scoped backstop removes metadata and exact-path artifacts left by abrupt exits.
+        // The singleton applies one bounded ApplicationStopped wait across every terminal resource.
+        @event.Services.GetRequiredService<TerminalHostOrphanCleanupService>()
+            .RegisterReplicaArtifacts(trmnlDirectory, replicaIds);
 
         // The target waits until each host has started so its viewer-facing UDS listener
         // is bound before any consumer (Dashboard or CLI) tries to connect. A follow-up
@@ -308,49 +310,66 @@ public static class TerminalResourceBuilderExtensions
         annotation.Initialize(terminalHosts);
     }
 
-    private static void WriteMetadataSidecar(string metadataPath, TerminalHostMetadata metadata, ILogger? logger)
+    private static async Task WriteMetadataSidecarAsync(
+        string metadataPath,
+        TerminalHostMetadata metadata,
+        ILogger? logger,
+        CancellationToken cancellationToken)
     {
+        var temporaryMetadataPath = TerminalHostPaths.GetMetadataTemporaryPath(metadataPath);
         try
         {
             // Indented for human inspection: the file is small (<1 KiB) and is expected to
             // be `cat`-ed by users debugging terminal-host issues. Performance is irrelevant.
             var json = JsonSerializer.Serialize(metadata, s_metadataSerializerOptions);
 
-            // Two-step write: create the file (so we have a path to chmod) THEN apply
-            // perms BEFORE writing the actual bytes. This shrinks the window where another
-            // local user could see file existence (though the parent dir is already 0700
-            // so the contents are not readable). On Windows the user-profile ACL handles
-            // this and File.SetUnixFileMode is a no-op.
+            // Write and chmod a sibling temporary file before atomically replacing the sidecar.
+            // A crash during serialization can then leave only an undiscoverable .tmp file, never
+            // a truncated metadata document that permanently blocks orphan recovery.
             using (var fs = new FileStream(
-                metadataPath,
+                temporaryMetadataPath,
                 FileMode.Create,
                 FileAccess.Write,
-                FileShare.None))
+                FileShare.None,
+                bufferSize: 4096,
+                useAsync: true))
             {
                 if (!OperatingSystem.IsWindows())
                 {
                     try
                     {
-                        File.SetUnixFileMode(metadataPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                        File.SetUnixFileMode(temporaryMetadataPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                     }
                     catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                     {
                         // Filesystem may not support chmod (e.g. FAT). The parent dir is 0700
                         // so the file is still unreachable by other users.
-                        logger?.LogDebug(ex, "Failed to chmod terminal host metadata file '{Path}'.", metadataPath);
+                        logger?.LogDebug(ex, "Failed to chmod terminal host metadata file '{Path}'.", temporaryMetadataPath);
                     }
                 }
 
                 var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-                fs.Write(bytes, 0, bytes.Length);
+                await fs.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             }
+
+            File.Move(temporaryMetadataPath, metadataPath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Sidecar is best-effort: a missing one only degrades external discovery, it
-            // doesn't break the terminal session itself (the AppHost still passes the UDS
-            // paths to the host process via --producer-uds/--consumer-uds/--control-uds).
+            // Per-run paths cannot collide with another AppHost. A missing sidecar only degrades
+            // external discovery and crash recovery for this terminal.
             logger?.LogDebug(ex, "Failed to write terminal host metadata sidecar '{Path}'.", metadataPath);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporaryMetadataPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger?.LogDebug(ex, "Failed to delete temporary terminal host metadata file '{Path}'.", temporaryMetadataPath);
+            }
         }
     }
 
@@ -359,36 +378,11 @@ public static class TerminalResourceBuilderExtensions
         WriteIndented = true,
     };
 
-    private static void DeleteReplicaFiles(string trmnlDirectory, string replicaId, ILogger? logger)
-    {
-        // All four per-replica files share the same `{replicaId}.` filename prefix
-        // (e.g. `{id}.dcp.sock`, `{id}.host.sock`, `{id}.ctrl.sock`, `{id}.metadata.json`).
-        try
-        {
-            if (!Directory.Exists(trmnlDirectory))
-            {
-                return;
-            }
-
-            foreach (var path in Directory.EnumerateFiles(trmnlDirectory, replicaId + ".*"))
-            {
-                try
-                {
-                    File.Delete(path);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    logger?.LogDebug(ex, "Failed to delete terminal host file '{Path}'.", path);
-                }
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger?.LogDebug(ex, "Failed to enumerate terminal host files for '{ReplicaId}'.", replicaId);
-        }
-    }
-
-    private static void ConfigureTerminalHostAnnotations(TerminalHostResource host, TerminalOptions options)
+    private static void ConfigureTerminalHostAnnotations(
+        TerminalHostResource host,
+        TerminalOptions options,
+        int appHostPid,
+        long appHostProcessIdentity)
     {
         // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
         // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
@@ -408,6 +402,14 @@ public static class TerminalResourceBuilderExtensions
         }));
 
         host.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+
+        host.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessId] =
+                appHostPid.ToString(CultureInfo.InvariantCulture);
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessStartedStable] =
+                appHostProcessIdentity.ToString(CultureInfo.InvariantCulture);
+        }));
 
         host.Annotations.Add(new CommandLineArgsCallbackAnnotation(context =>
         {
@@ -434,19 +436,19 @@ public static class TerminalResourceBuilderExtensions
 
     /// <summary>
     /// Builds the per-replica UDS triple + metadata path for a single terminal host. All
-    /// four files live flat under <c>~/.aspire/trmnl/</c> and share the same
-    /// <paramref name="replicaId"/> filename prefix so cleanup is a directory glob.
+    /// four files live flat under the configured terminal artifact directory and share the same
+    /// <paramref name="replicaId"/> filename prefix.
     /// </summary>
-    private static TerminalHostLayout CreateTerminalHostLayout(string homeDirectory, string replicaId, int replicaIndex)
+    private static TerminalHostLayout CreateTerminalHostLayout(string trmnlDirectory, string replicaId, int replicaIndex)
     {
-        ArgumentException.ThrowIfNullOrEmpty(homeDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
         ArgumentException.ThrowIfNullOrEmpty(replicaId);
         ArgumentOutOfRangeException.ThrowIfNegative(replicaIndex);
 
-        var producerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose);
-        var consumerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose);
-        var controlPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ControlSockPurpose);
-        var metadataPath = TerminalHostPaths.GetMetadataPath(homeDirectory, replicaId);
+        var producerPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose);
+        var consumerPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose);
+        var controlPath = TerminalHostPaths.GetSocketPath(trmnlDirectory, replicaId, TerminalHostPaths.ControlSockPurpose);
+        var metadataPath = TerminalHostPaths.GetMetadataPath(trmnlDirectory, replicaId);
 
         return new TerminalHostLayout(replicaId, replicaIndex, producerPath, consumerPath, controlPath, metadataPath);
     }

@@ -805,7 +805,7 @@ suite('utils/cliPath tests', () => {
 
         test('rejects a configured Windows path whose environment variable cannot be expanded', async () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
-            const configuredPath = '%ASPIRE_UNKNOWN_HOME%\\aspire.cmd';
+            const configuredPath = 'C:\\Tools\\%ASPIRE_UNKNOWN_HOME%\\aspire.cmd';
             const resolvedPath = 'C:\\Other\\aspire.exe';
             const tryExecute = sinon.stub().resolves(true);
             const findOnPath = sinon.stub().resolves(resolvedPath);

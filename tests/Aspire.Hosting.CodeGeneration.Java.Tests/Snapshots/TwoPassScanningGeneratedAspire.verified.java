@@ -15355,10 +15355,9 @@ public class IInteractionService extends HandleWrapperBase {
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
     public BoolInteractionResult promptProgress(String message, PromptProgressOptions optionsBag) {
-        var title = optionsBag == null ? null : optionsBag.getTitle();
         var options = optionsBag == null ? null : optionsBag.getOptions();
         var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
-        return promptProgressImpl(message, title, options, cancellationToken);
+        return promptProgressImpl(message, options, cancellationToken);
     }
 
     public BoolInteractionResult promptProgress(String message) {
@@ -15366,13 +15365,10 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Displays a progress dialog with an indeterminate progress indicator. */
-    private BoolInteractionResult promptProgressImpl(String message, String title, InteractionProgressOptions options, CancellationToken cancellationToken) {
+    private BoolInteractionResult promptProgressImpl(String message, InteractionProgressOptions options, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("message", AspireClient.serializeValue(message));
-        if (title != null) {
-            reqArgs.put("title", AspireClient.serializeValue(title));
-        }
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
@@ -16984,10 +16980,13 @@ import java.util.function.*;
 
 /** InteractionProgressOptions DTO. */
 public class InteractionProgressOptions implements JsonSerializable {
+    private String title;
     private String primaryButtonText;
     private Boolean enableMessageMarkdown;
     private AspireAction1<ProgressContext> work;
 
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
     public String getPrimaryButtonText() { return primaryButtonText; }
     public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
     public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
@@ -16998,6 +16997,8 @@ public class InteractionProgressOptions implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static InteractionProgressOptions fromMap(Map<String, Object> map) {
         var value = new InteractionProgressOptions();
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
         var primaryButtonTextValue = map.get("PrimaryButtonText");
         value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
         var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
@@ -17007,6 +17008,7 @@ public class InteractionProgressOptions implements JsonSerializable {
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
+        map.put("Title", AspireClient.serializeValue(title));
         map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
         map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
         map.put("Work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
@@ -20622,15 +20624,8 @@ import java.util.function.*;
 
 /** Options for PromptProgress. */
 public final class PromptProgressOptions {
-    private String title;
     private InteractionProgressOptions options;
     private CancellationToken cancellationToken;
-
-    public String getTitle() { return title; }
-    public PromptProgressOptions title(String value) {
-        this.title = value;
-        return this;
-    }
 
     public InteractionProgressOptions getOptions() { return options; }
     public PromptProgressOptions options(InteractionProgressOptions value) {

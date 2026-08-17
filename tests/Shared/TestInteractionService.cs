@@ -73,7 +73,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public bool PromptProgressCalled { get; private set; }
 
-    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
         PromptProgressCalled = true;
 
@@ -82,7 +82,7 @@ internal sealed class TestInteractionService : IInteractionService
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var progressContext = new ProgressContext { CancellationToken = cts.Token };
 
-            var data = new InteractionData(InteractionType.Progress, title ?? string.Empty, message, new InteractionInputCollection([]), options, cancellationToken, new TaskCompletionSource<object>());
+            var data = new InteractionData(InteractionType.Progress, options.Title ?? string.Empty, message, new InteractionInputCollection([]), options, cancellationToken, new TaskCompletionSource<object>());
             Interactions.Writer.TryWrite(data);
 
             // Run the work and handle button clicks (CompletionTcs) canceling the work.

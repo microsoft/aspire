@@ -1290,6 +1290,71 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationOverridesDefaultFsGroup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data");
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(data, "/srv/data")
+            .PublishAsKubernetesService(resource =>
+            {
+                var podSpec = resource.Workload?.PodTemplate.Spec
+                    ?? throw new InvalidOperationException("The Kubernetes workload was not generated.");
+                podSpec.SecurityContext ??= new();
+                podSpec.SecurityContext.FsGroup = 3000;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationCanRemoveDefaultSecurityContext()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data");
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(data, "/srv/data")
+            .PublishAsKubernetesService(resource =>
+            {
+                var podSpec = resource.Workload?.PodTemplate.Spec
+                    ?? throw new InvalidOperationException("The Kubernetes workload was not generated.");
+                podSpec.SecurityContext = null;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+
+        var yaml = new YamlStream();
+        using (var reader = new StringReader(content))
+        {
+            yaml.Load(reader);
+        }
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var podSpec = (YamlMappingNode)root["spec"]["template"]["spec"];
+        Assert.False(podSpec.Children.ContainsKey(new YamlScalarNode("securityContext")));
+
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_FallsThroughForUnboundVolumes()
     {
         // A workload may declare both a bound and an unbound volume. The bound one
@@ -1399,6 +1464,10 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         var root = (YamlMappingNode)yaml.Documents[0].RootNode;
         var podSpec = (YamlMappingNode)root["spec"]["template"]["spec"];
+
+        var securityContext = (YamlMappingNode)podSpec["securityContext"];
+        Assert.Equal("2000", ((YamlScalarNode)securityContext["fsGroup"]).Value);
+        Assert.Equal("OnRootMismatch", ((YamlScalarNode)securityContext["fsGroupChangePolicy"]).Value);
 
         // Container mount side: containers[0].volumeMounts[?(@.name == "media")].readOnly == true
         var container = (YamlMappingNode)((YamlSequenceNode)podSpec["containers"])[0];

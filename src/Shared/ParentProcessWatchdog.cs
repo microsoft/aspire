@@ -4,14 +4,12 @@
 using System.Globalization;
 using Aspire.Hosting;
 
-namespace Aspire.Managed;
+namespace Aspire.Shared;
 
 /// <summary>
-/// Watches the launching CLI process and tears this <c>aspire-managed</c> helper down if the parent
-/// disappears. Long-running operations — a NuGet search/restore, or the standalone dashboard started
-/// by <c>aspire dashboard run</c> — would otherwise linger as orphaned processes when the CLI is killed
-/// (for example a test runner timeout sending SIGKILL), which is one of the ways <c>aspire-managed</c>
-/// processes accumulate over time.
+/// Watches a configured parent process and tears the current helper down if that parent disappears.
+/// Used by long-running <c>aspire-managed</c> operations and terminal-host processes that must not
+/// survive their launcher.
 /// </summary>
 internal static class ParentProcessWatchdog
 {
@@ -20,7 +18,7 @@ internal static class ParentProcessWatchdog
     // after a short grace period so it cannot outlive its parent. 124 mirrors the conventional
     // "terminated by timeout" exit code.
     private const int TerminatedExitCode = 124;
-    private static readonly TimeSpan s_forceExitGracePeriod = TimeSpan.FromSeconds(5);
+    internal static TimeSpan ForceExitGracePeriod { get; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Starts monitoring the parent identified by <c>ASPIRE_CLI_PID</c>/<c>ASPIRE_CLI_STARTED</c>.
@@ -28,22 +26,39 @@ internal static class ParentProcessWatchdog
     /// process force-exits as a backstop). Returns a handle that stops the watchdog when disposed, or
     /// <see langword="null"/> when no parent identity is present — either because the helper was invoked
     /// directly, or because the launching CLI deliberately omitted the identity on Windows, where the
-    /// kernel kill-on-close job already terminates this helper and running the cooperative watchdog too
-    /// would race that kill (see <c>LayoutProcessRunner</c>).
+    /// kernel kill-on-close job already terminates ordinary helpers.
     /// </summary>
     public static IAsyncDisposable? Start(CancellationTokenSource operationCts)
+        => Start(
+            operationCts,
+            KnownConfigNames.CliProcessId,
+            KnownConfigNames.CliProcessStartedStable,
+            KnownConfigNames.CliProcessStarted);
+
+    /// <summary>
+    /// Starts monitoring a parent identity supplied through the specified environment variables.
+    /// </summary>
+    public static IAsyncDisposable? Start(
+        CancellationTokenSource operationCts,
+        string processIdVariable,
+        string stableStartVariable,
+        string? legacyStartVariable)
     {
-        if (!int.TryParse(Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessId), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
+        if (!int.TryParse(Environment.GetEnvironmentVariable(processIdVariable), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
         {
             return null;
         }
 
-        var expectedStartTimeUnix = GetExpectedParentStartTimeUnix(Environment.GetEnvironmentVariable, out var useRuntimeStartTime);
+        var expectedStartTimeUnix = GetExpectedParentStartTimeUnix(
+            Environment.GetEnvironmentVariable,
+            stableStartVariable,
+            legacyStartVariable,
+            out var useRuntimeStartTime);
 
         return ParentProcessLivenessMonitor.Start(
             parentPid,
             expectedStartTimeUnix,
-            stopToken => OnParentExitedAsync(operationCts, stopToken, s_forceExitGracePeriod, Environment.Exit),
+            stopToken => CancelAndForceExitAsync(operationCts, stopToken, ForceExitGracePeriod, Environment.Exit),
             useRuntimeStartTime: useRuntimeStartTime);
     }
 
@@ -51,24 +66,40 @@ internal static class ParentProcessWatchdog
     // otherwise the legacy value (ASPIRE_CLI_STARTED, whole Unix seconds). The out flag tells the caller
     // which clock domain the returned value is in.
     internal static long? GetExpectedParentStartTimeUnix(Func<string, string?> getEnvironmentVariable, out bool useRuntimeStartTime)
+        => GetExpectedParentStartTimeUnix(
+            getEnvironmentVariable,
+            KnownConfigNames.CliProcessStartedStable,
+            KnownConfigNames.CliProcessStarted,
+            out useRuntimeStartTime);
+
+    private static long? GetExpectedParentStartTimeUnix(
+        Func<string, string?> getEnvironmentVariable,
+        string stableStartVariable,
+        string? legacyStartVariable,
+        out bool useRuntimeStartTime)
     {
-        if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(KnownConfigNames.CliProcessStartedStable)) is { } stableStartTimeUnix)
+        if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(stableStartVariable)) is { } stableStartTimeUnix)
         {
             useRuntimeStartTime = false;
             return stableStartTimeUnix;
         }
 
         useRuntimeStartTime = true;
-        return ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(KnownConfigNames.CliProcessStarted));
+        return legacyStartVariable is null
+            ? null
+            : ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(legacyStartVariable));
     }
 
-    internal static async Task OnParentExitedAsync(
+    internal static async Task CancelAndForceExitAsync(
         CancellationTokenSource operationCts,
         CancellationToken stopToken,
         TimeSpan forceExitGracePeriod,
         Action<int> exit)
     {
-        // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
+        // Cancellation callbacks run synchronously and can themselves stall. Arm the timer
+        // first so the force-exit backstop remains independent of cooperative shutdown.
+        var forceExitTask = ForceExitAfterDelayAsync(stopToken, forceExitGracePeriod, exit);
+
         try
         {
             if (!operationCts.IsCancellationRequested)
@@ -86,6 +117,14 @@ internal static class ParentProcessWatchdog
             // the force-exit backstop because that is what prevents aspire-managed from leaking.
         }
 
+        await forceExitTask.ConfigureAwait(false);
+    }
+
+    private static async Task ForceExitAfterDelayAsync(
+        CancellationToken stopToken,
+        TimeSpan forceExitGracePeriod,
+        Action<int> exit)
+    {
         await Task.Delay(forceExitGracePeriod, stopToken).ConfigureAwait(false);
         exit(TerminatedExitCode);
     }

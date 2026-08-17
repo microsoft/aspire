@@ -45,7 +45,7 @@ static async Task<int> RunDashboard(string[] args)
     // directly (so the embedded/in-process dashboard is unaffected), or on Windows where the CLI relies
     // on the kernel kill-on-close job instead (see LayoutProcessRunner).
     using var shutdownCts = new CancellationTokenSource();
-    var parentWatchdog = Aspire.Managed.ParentProcessWatchdog.Start(shutdownCts);
+    var parentWatchdog = ParentProcessWatchdog.Start(shutdownCts);
     try
     {
         return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
@@ -71,7 +71,7 @@ static async Task<int> RunNuGet(string[] args)
     // orphaned aspire-managed process. No-op when ASPIRE_CLI_PID is not set — either invoked directly, or
     // on Windows where the CLI relies on the kernel kill-on-close job instead (see LayoutProcessRunner).
     using var operationCts = new CancellationTokenSource();
-    var parentWatchdog = Aspire.Managed.ParentProcessWatchdog.Start(operationCts);
+    var parentWatchdog = ParentProcessWatchdog.Start(operationCts);
     try
     {
         var rootCommand = new RootCommand("Aspire NuGet Helper - Package operations for Aspire CLI bundle");
@@ -92,14 +92,7 @@ static async Task<int> RunNuGet(string[] args)
 
 static async Task<int> RunTerminalHost(string[] args)
 {
-    using var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) =>
-    {
-        e.Cancel = true;
-        cts.Cancel();
-    };
-
-    return await TerminalHostApp.RunAsync(args, cts.Token).ConfigureAwait(false);
+    return await TerminalHostProcessRunner.RunAsync(args).ConfigureAwait(false);
 }
 
 static int ShowUsage()

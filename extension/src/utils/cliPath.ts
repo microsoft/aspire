@@ -521,10 +521,12 @@ async function resolveCliPathCore(
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && (!configuredPathIsLegacyDefault || isCommandShimPath(configuredPath))) {
         const expandedConfiguredPath = expandWindowsEnvironmentVariables(configuredPath);
-        if (!isAbsoluteCliPath(expandedConfiguredPath)) {
+        if (!isAbsoluteCliPath(expandedConfiguredPath) || /%[^%]+%/.test(expandedConfiguredPath)) {
             // The setting is an executable pin. Relative paths and bare command names can resolve
             // differently between the extension probe, AppHost launch, and forwarded environment.
-            extensionLogOutputChannel.warn(`Configured CLI path is not absolute and will not be probed: ${configuredPath}`);
+            // Unresolved Windows environment variables are also ambiguous because cmd.exe removes
+            // an unknown %NAME% token before invoking a command shim.
+            extensionLogOutputChannel.warn(`Configured CLI path is not fully resolved and will not be probed: ${configuredPath}`);
             extensionLogOutputChannel.warn('Suppressing AspireCliPath forwarding for the rejected configured CLI path');
             updateRejectedConfiguredCliPath(configuredPath, configuredPath, deps.getConfiguredPath, resolutionGeneration);
         }
