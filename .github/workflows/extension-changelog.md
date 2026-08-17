@@ -118,6 +118,10 @@ safe-outputs:
     repositories: ["aspire"]
 
 tools:
+  # Shell access is explicit because the unfiltered GitHub integrity setting
+  # requires an intentional allowlist. The agent uses local Git for the
+  # authoritative commit range and read-only commands to inspect the changelog.
+  bash: ["cat", "git", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes the commit-comparison and file-content APIs used to gather
     # the extension change set. `pull_requests` and `search` enrich commits with
