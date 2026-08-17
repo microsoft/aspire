@@ -55,8 +55,6 @@ To support this, the release flow now creates the GitHub release as a **draft**:
 4. **The release manager publishes the draft manually as a final step** — see [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 5. Publishing the draft fires `release: [published]` and (for stable, non-prerelease) `release: [released]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs).
 
-
-
 ## Installer channels
 
 Aspire ships through several channels. The release pipeline either submits the bump itself or validates a bump submitted upstream; the per-channel docs describe manifest shape, validation modes, and dogfooding workflows in detail.
