@@ -577,17 +577,18 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'explicit-launch-configuration');
     });
 
-    test('provides dynamic launch config when active file resolves to AppHost candidate', async () => {
+    test('preserves remembered dynamic launch config name when active file resolves in a single-folder workspace', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'AppHost', 'Program.cs');
         const projectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(projectPath), launchReservation);
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([folder]);
         setActiveEditor(programPath, folder);
 
         const configs = await provider.provideDebugConfigurations(folder);
 
         assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].name, defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString()));
+        assert.strictEqual(configs[0].name, defaultConfigurationName);
         assert.strictEqual(configs[0].program, projectPath);
         assert.strictEqual(configs[0][appHostSelectionOriginConfigKey], 'default-discovery');
     });

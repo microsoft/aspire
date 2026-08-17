@@ -221,8 +221,9 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
     private createProvidedConfiguration(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration {
         // VS Code remembers a dynamic configuration by name and later searches all workspace
-        // folders for the first match. Always include the stable URI because mixing alias-only
-        // and alias-plus-URI identities can still produce the same name for different folders.
+        // folders for the first match. Preserve the shipped name when there is no collision so
+        // existing single-root selections keep working. In multi-root windows, include the stable
+        // URI for every folder because mixing alias-only and alias-plus-URI identities can collide.
         const name = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
             ? this.getDynamicConfigurationName(folder)
             : defaultConfigurationName;
@@ -236,7 +237,9 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     }
 
     private getDynamicConfigurationName(folder: vscode.WorkspaceFolder): string {
-        return defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
+        return (vscode.workspace.workspaceFolders?.length ?? 0) <= 1
+            ? defaultConfigurationName
+            : defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
     }
 
     private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
