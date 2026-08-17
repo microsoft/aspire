@@ -202,6 +202,21 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Prepare aspire-managed
 
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              --self-contained
+              /p:PublishAot=true
+              /p:PlatformName=${{ targetRid }}
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishDashboard.binlog
+            displayName: 🟣Prepare Native AOT Dashboard
+
           # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
           # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
           # ad-hoc signature when re-signing with the real certificate. Without this step,
@@ -219,7 +234,7 @@ jobs:
                 $(Build.SourcesDirectory)/$(scriptName)
                 -restore -sign
                 ${{ parameters.extraBuildArgs }}
-                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj;$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
               displayName: 🟣Sign aspire-managed
               env:
@@ -230,9 +245,33 @@ jobs:
           # to the default umask (typically 644). The execute bit must be restored before
           # CreateLayout packs the binary into the bundle archive.
           - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
-            - script: >-
+            - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
-              displayName: 🟣Restore execute permission on aspire-managed
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+              displayName: 🟣Restore execute permissions on managed executables
+
+          # Package the already-published/signed Dashboard without republishing it,
+          # which would replace the signed executable.
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              build
+              $(Build.SourcesDirectory)/eng/dashboardpack/Aspire.Dashboard.Sdk.${{ targetRid }}.csproj
+              -c $(_BuildConfig)
+              /p:SkipDashboardPublish=true
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PackDashboard.binlog
+            displayName: 🟣Pack Native AOT Dashboard
+
+          # The native_archives artifact publishes only artifacts/packages. Stage
+          # the Dashboard runtime zip there so Assemble can recover it alongside
+          # the RID-specific Dashboard nupkg.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $source = "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $destination = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}"
+              New-Item -ItemType Directory -Force -Path $destination | Out-Null
+              Copy-Item -LiteralPath $source -Destination $destination -Force
+            displayName: 🟣Stage Native AOT Dashboard artifact
 
           - task: NodeTool@0
             displayName: 🟣Install node.js

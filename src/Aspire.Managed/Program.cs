@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard;
 using Aspire.Managed.NuGet.Commands;
 using Aspire.TerminalHost;
 using Aspire.Shared;
@@ -22,42 +21,11 @@ using var bundleLease = acquiredBundleLease;
 
 return args switch
 {
-    ["dashboard", .. var rest] => await RunDashboard(rest).ConfigureAwait(false),
     ["server", .. var rest] => await RunServer(rest).ConfigureAwait(false),
     ["nuget", .. var rest] => await RunNuGet(rest).ConfigureAwait(false),
     ["terminalhost", .. var rest] => await RunTerminalHost(rest).ConfigureAwait(false),
     _ => ShowUsage()
 };
-
-static async Task<int> RunDashboard(string[] args)
-{
-    var options = new WebApplicationOptions
-    {
-        Args = args,
-        ContentRootPath = AppContext.BaseDirectory
-    };
-
-    var app = new DashboardWebApplication(options: options);
-
-    // Tear the dashboard down if the launching CLI dies so a hard-killed `aspire dashboard run` (or the
-    // profiling collector, which also launches aspire-managed dashboard) cannot leave an orphaned
-    // dashboard process behind. No-op when ASPIRE_CLI_PID is not set — either the dashboard is launched
-    // directly (so the embedded/in-process dashboard is unaffected), or on Windows where the CLI relies
-    // on the kernel kill-on-close job instead (see LayoutProcessRunner).
-    using var shutdownCts = new CancellationTokenSource();
-    var parentWatchdog = ParentProcessWatchdog.Start(shutdownCts);
-    try
-    {
-        return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
-    }
-    finally
-    {
-        if (parentWatchdog is not null)
-        {
-            await parentWatchdog.DisposeAsync().ConfigureAwait(false);
-        }
-    }
-}
 
 static async Task<int> RunServer(string[] args)
 {
@@ -97,6 +65,6 @@ static async Task<int> RunTerminalHost(string[] args)
 
 static int ShowUsage()
 {
-    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <dashboard|server|nuget|terminalhost> [args...]");
+    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <server|nuget|terminalhost> [args...]");
     return 1;
 }

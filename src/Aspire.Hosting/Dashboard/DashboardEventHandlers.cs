@@ -296,32 +296,21 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 args.Insert(0, "dashboard");
             }));
         }
+        else if (GetManagedDashboardAssemblyPath(fullyQualifiedDashboardPath) is null)
+        {
+            // Native AOT publishes only the platform executable. There is no managed assembly or
+            // runtimeconfig to rewrite, and launching through dotnet would bypass the native image.
+            dashboardResource = new ExecutableResource(
+                KnownResourceNames.AspireDashboard,
+                fullyQualifiedDashboardPath,
+                dashboardWorkingDirectory ?? "");
+        }
         else
         {
             // Non-bundle: run via dotnet exec with custom runtime config
             // Create custom runtime config with AppHost's framework versions
             var customRuntimeConfigPath = CreateCustomRuntimeConfig(fullyQualifiedDashboardPath);
-
-            string dashboardDll;
-            if (string.Equals(".dll", Path.GetExtension(fullyQualifiedDashboardPath), StringComparison.OrdinalIgnoreCase))
-            {
-                dashboardDll = fullyQualifiedDashboardPath;
-            }
-            else
-            {
-                // For executables with separate DLLs
-                var directory = Path.GetDirectoryName(fullyQualifiedDashboardPath)!;
-                var fileName = Path.GetFileName(fullyQualifiedDashboardPath);
-                var baseName = fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                    ? fileName.Substring(0, fileName.Length - 4)
-                    : fileName;
-                dashboardDll = Path.Combine(directory, $"{baseName}.dll");
-            }
-
-            if (!File.Exists(dashboardDll))
-            {
-                distributedApplicationLogger.LogError("Dashboard DLL not found: {Path}", dashboardDll);
-            }
+            var dashboardDll = GetManagedDashboardAssemblyPath(fullyQualifiedDashboardPath)!;
 
             dashboardResource = new ExecutableResource(KnownResourceNames.AspireDashboard, "dotnet", dashboardWorkingDirectory ?? "");
 
@@ -339,6 +328,23 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         ConfigureAspireDashboardResource(dashboardResource);
         // Make the dashboard first in the list so it starts as fast as possible.
         model.Resources.Insert(0, dashboardResource);
+    }
+
+    private static string? GetManagedDashboardAssemblyPath(string dashboardPath)
+    {
+        if (string.Equals(".dll", Path.GetExtension(dashboardPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return dashboardPath;
+        }
+
+        var directory = Path.GetDirectoryName(dashboardPath)!;
+        var fileName = Path.GetFileName(dashboardPath);
+        var baseName = fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^4]
+            : fileName;
+        var assemblyPath = Path.Combine(directory, $"{baseName}.dll");
+
+        return File.Exists(assemblyPath) ? assemblyPath : null;
     }
 
     private void ConfigureAspireDashboardResource(IResource dashboardResource)

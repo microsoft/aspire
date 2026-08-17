@@ -142,7 +142,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     {
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
         AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireDashboardPath = resolution.ManagedPath;
+        AspireDashboardPath = resolution.DashboardPath;
         AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
         AspireTerminalHostPath = resolution.ManagedPath;
         AspireTerminalHostInvocationArgs = "terminalhost";
@@ -230,13 +230,18 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         var dcpPath = Path.Combine(dcpDir, IsWindows() ? "dcp.exe" : "dcp");
         var managedDir = Path.Combine(bundleRoot, "managed");
         var managedPath = Path.Combine(managedDir, IsWindows() ? "aspire-managed.exe" : "aspire-managed");
+        var dashboardPath = Path.Combine(managedDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
 
         if (!File.Exists(dcpPath) || !File.Exists(managedPath))
         {
             return false;
         }
 
-        resolution = new BundleResolution(dcpDir, managedDir, managedPath);
+        resolution = new BundleResolution(
+            dcpDir,
+            managedDir,
+            managedPath,
+            File.Exists(dashboardPath) ? dashboardPath : managedPath);
         return true;
     }
 
@@ -494,12 +499,14 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             or System.Security.SecurityException;
     }
 
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath)
+    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardPath)
     {
         public string DcpDir { get; } = dcpDir;
 
         public string ManagedDir { get; } = managedDir;
 
         public string ManagedPath { get; } = managedPath;
+
+        public string DashboardPath { get; } = dashboardPath;
     }
 }

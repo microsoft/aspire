@@ -148,6 +148,29 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_NativeDashboard_DoesNotUseManagedSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string[]? capturedArgs = null;
+        var (services, dashboardPath, executionFactory) = CreateServicesWithLayout(workspace, useNativeDashboard: true);
+        executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedArgs);
+        Assert.DoesNotContain("dashboard", capturedArgs);
+        Assert.Equal(
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName),
+            Path.GetFileName(dashboardPath));
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_BundleAvailableWithinDelay_DoesNotDisplayBundleStatus()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -597,13 +620,19 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
         TestInteractionService? interactionService = null,
-        TestBundleService? bundleService = null)
+        TestBundleService? bundleService = null,
+        bool useNativeDashboard = false)
     {
         var layoutDir = Path.Combine(workspace.WorkspaceRoot.FullName, "layout");
         var managedDir = Path.Combine(layoutDir, "managed");
         Directory.CreateDirectory(managedDir);
         var managedPath = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName("aspire-managed"));
         File.WriteAllText(managedPath, "fake");
+        var dashboardPath = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        if (useNativeDashboard)
+        {
+            File.WriteAllText(dashboardPath, "fake native dashboard");
+        }
 
         var layout = new LayoutConfiguration
         {
@@ -629,7 +658,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        return (services, managedPath, executionFactory);
+        return (services, useNativeDashboard ? dashboardPath : managedPath, executionFactory);
     }
 
     private static IEnvironment CreateEnvironment(Dictionary<string, string?> envVars)

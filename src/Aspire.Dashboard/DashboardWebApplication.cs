@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization.Metadata;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Authentication.Connection;
@@ -20,6 +21,7 @@ using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
@@ -30,6 +32,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -226,7 +229,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         ConfigureAuthentication(builder, dashboardOptions);
 
         // Add services to the container.
-        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
+        {
+            AddDashboardJsonTypeInfoResolver(options);
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -741,8 +747,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddCertificate(options =>
             {
-                // Bind options to configuration so they can be overridden by environment variables.
-                builder.Configuration.Bind("Dashboard:Otlp:CertificateAuthOptions", options);
+                BindCertificateAuthenticationOptions(
+                    builder.Configuration.GetSection("Dashboard:Otlp:CertificateAuthOptions"),
+                    options);
 
                 options.Events = new CertificateAuthenticationEvents
                 {
@@ -923,6 +930,48 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 FrontendAuthMode.Unsecured => FrontendAuthenticationDefaults.AuthenticationSchemeUnsecured,
                 _ => CookieAuthenticationDefaults.AuthenticationScheme
             };
+        }
+    }
+
+    private static void BindCertificateAuthenticationOptions(
+        IConfigurationSection configuration,
+        CertificateAuthenticationOptions options)
+    {
+        // The configuration binding generator cannot generate bindings for the certificate collection
+        // and TimeProvider exposed by CertificateAuthenticationOptions. Bind only the scalar settings
+        // that the Dashboard supports overriding rather than falling back to reflection under Native AOT.
+        options.AllowedCertificateTypes = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.AllowedCertificateTypes),
+            options.AllowedCertificateTypes);
+        options.ChainTrustValidationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ChainTrustValidationMode),
+            options.ChainTrustValidationMode);
+        options.RevocationFlag = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationFlag),
+            options.RevocationFlag);
+        options.RevocationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationMode),
+            options.RevocationMode);
+        options.ValidateCertificateUse = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateCertificateUse),
+            options.ValidateCertificateUse);
+        options.ValidateValidityPeriod = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
+            options.ValidateValidityPeriod);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075:'this' argument does not satisfy 'DynamicallyAccessedMemberTypes.PublicProperties' in call to target method",
+        Justification = "The .NET 11 resolver property is public and its declaring framework type is statically rooted.")]
+    private static void AddDashboardJsonTypeInfoResolver(CircuitOptions options)
+    {
+        // The resolver API was merged after .NET 11 Preview 7. Keep the Dashboard buildable with
+        // earlier 11.0 targeting packs while using the public API as soon as the matching runtime is present.
+        if (typeof(CircuitOptions).GetProperty("JsonTypeInfoResolvers")?.GetValue(options)
+            is IList<IJsonTypeInfoResolver> resolvers)
+        {
+            resolvers.Add(DashboardJsonSerializerContext.Default);
         }
     }
 

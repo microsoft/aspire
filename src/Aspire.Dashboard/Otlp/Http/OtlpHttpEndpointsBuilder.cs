@@ -125,7 +125,7 @@ public static class OtlpHttpEndpointsBuilder
         return builder;
     }
 
-    private sealed class MessageBindable<TMessage> : IBindableFromHttpContext<MessageBindable<TMessage>> where TMessage : IMessage<TMessage>, new()
+    internal sealed class MessageBindable<TMessage> : IBindableFromHttpContext<MessageBindable<TMessage>> where TMessage : IMessage<TMessage>, new()
     {
         public static readonly MessageBindable<TMessage> Empty = new MessageBindable<TMessage>() { Logger = NullLogger.Instance };
 

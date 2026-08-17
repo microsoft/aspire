@@ -14,7 +14,7 @@ public enum LayoutComponent
     Cli,
     /// <summary>Developer Control Plane.</summary>
     Dcp,
-    /// <summary>Unified managed binary (dashboard, server, nuget).</summary>
+    /// <summary>Unified managed binary (server, NuGet, terminal host).</summary>
     Managed
 }
 
@@ -88,6 +88,25 @@ public sealed class LayoutConfiguration
         }
 
         return Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+    }
+
+    /// <summary>
+    /// Gets the path to the Native AOT Dashboard executable, falling back to the legacy unified binary.
+    /// </summary>
+    /// <returns>The path to the Dashboard executable.</returns>
+    public string? GetDashboardPath()
+    {
+        var managedDir = GetComponentPath(LayoutComponent.Managed);
+        if (managedDir is null)
+        {
+            return null;
+        }
+
+        var dashboardPath = Path.Combine(
+            managedDir,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+
+        return File.Exists(dashboardPath) ? dashboardPath : GetManagedPath();
     }
 }
 

@@ -751,6 +751,38 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Theory]
+    [InlineData("Aspire.Dashboard.exe")]
+    [InlineData("Aspire.Dashboard")]
+    public async Task AddDashboardResource_WithNativeExecutable_RunsDirectly(string executableName)
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var tempDir = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var dashboardExecutable = Path.Combine(tempDir.FullName, executableName);
+            File.WriteAllText(dashboardExecutable, "mock native executable");
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExecutable });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal(dashboardExecutable, executableResource.Command);
+            Assert.Empty(executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
     private static DashboardEventHandlers CreateHook(
         ResourceLoggerService resourceLoggerService,
         ResourceNotificationService resourceNotificationService,

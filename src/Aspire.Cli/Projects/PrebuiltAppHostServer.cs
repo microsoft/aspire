@@ -1492,10 +1492,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         // Set the dashboard path so the AppHost can locate and launch the dashboard binary
-        var managedPath = _layout.GetManagedPath();
-        if (managedPath is not null)
+        var dashboardPath = _layout.GetDashboardPath();
+        if (dashboardPath is not null)
         {
-            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
         }
 
         // Apply environment variables from apphost.run.json

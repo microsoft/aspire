@@ -1,6 +1,6 @@
 {
   "sdk": {
-    "version": "10.0.400",
+    "version": "11.0.100-rc.1.26413.103",
     "rollForward": "major",
     "allowPrerelease": true,
     "paths": [
@@ -10,23 +10,27 @@
     "errorMessage": "The .NET SDK could not be found. Run ./restore.sh (Linux/macOS) or ./restore.cmd (Windows) to install the local SDK."
   },
   "tools": {
-    "dotnet": "10.0.400",
+    "dotnet": "11.0.100-rc.1.26413.103",
     "runtimes": {
       "dotnet/x64": [
         "$(DotNetRuntimePreviousVersionForTesting)",
-        "$(DotNetRuntimeCurrentVersionForTesting)"
+        "$(DotNetRuntimeCurrentVersionForTesting)",
+        "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "dotnet/arm64": [
         "$(DotNetRuntimePreviousVersionForTesting)",
-        "$(DotNetRuntimeCurrentVersionForTesting)"
+        "$(DotNetRuntimeCurrentVersionForTesting)",
+        "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/x64": [
         "$(DotNetRuntimePreviousVersionForTesting)",
-        "$(DotNetRuntimeCurrentVersionForTesting)"
+        "$(DotNetRuntimeCurrentVersionForTesting)",
+        "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/arm64": [
         "$(DotNetRuntimePreviousVersionForTesting)",
-        "$(DotNetRuntimeCurrentVersionForTesting)"
+        "$(DotNetRuntimeCurrentVersionForTesting)",
+        "$(DotNetRuntimeNet10VersionForTesting)"
       ]
     }
   },
