@@ -30,6 +30,7 @@ permissions:
 network: defaults
 
 tools:
+  bash: ["*"]
   github:
     # Data collection runs in pre-agent-steps via `gh api`; the agent
     # does not need to search GitHub itself.

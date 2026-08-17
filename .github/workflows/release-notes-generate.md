@@ -66,6 +66,7 @@ safe-outputs:
     max: 1
 
 tools:
+  bash: ["*"]
   github:
     # `repos` exposes get_release_by_tag / list_releases and commit-comparison
     # APIs. `pull_requests` and `search` are used to enrich commits with PR
