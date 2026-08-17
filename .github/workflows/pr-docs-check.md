@@ -217,13 +217,13 @@ safe-outputs:
                 f"found {len(create_items)}."
             )
 
-        base_branch = create_items[0].get("base_branch")
+        base_branch = create_items[0].get("base")
         if (
             not isinstance(base_branch, str)
             or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
             is None
         ):
-            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+            raise SystemExit("Canonical create_pull_request base is invalid.")
 
         with open(sys.argv[1], "a", encoding="utf-8") as github_output:
             github_output.write(f"branch={base_branch}\n")
