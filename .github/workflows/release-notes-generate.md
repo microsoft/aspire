@@ -10,14 +10,16 @@ description: |
 max-daily-ai-credits: -1
 
 on:
-  # Trigger on draft-release creation, not on publish. The release flow
-  # creates the GitHub release as a draft (gh release create --draft) so we
-  # can rewrite the body before the release manager publishes it. After
-  # publish, assets and tag become immutable per GitHub's immutable-releases
-  # policy, but `release: [created]` fires while the release is still a
-  # draft — which is when we want to overwrite the placeholder body.
-  release:
-    types: [created]
+  # Dispatched explicitly by .github/workflows/release-github-tasks.yml right
+  # after it creates the draft GitHub release. We deliberately do NOT use the
+  # `release: [created]` event: GitHub Actions does not fire release events for
+  # draft releases at all
+  # (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release
+  # — "Workflows are not triggered for the created, edited, or deleted activity
+  # types for draft releases"). The placeholder body has to be rewritten while
+  # the release is still a draft, because immutable releases lock the release
+  # at publish time, so an explicit workflow_dispatch is the only workable
+  # trigger.
   workflow_dispatch:
     inputs:
       tag_name:
@@ -35,18 +37,13 @@ on:
   # other bot-triggered gh-aw workflows in this repo.
   bots: [aspire-repo-bot]
 
-if: >-
-  github.repository == 'microsoft/aspire'
-  && (
-    (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == true)
-    || github.event_name == 'workflow_dispatch'
-  )
+if: github.repository == 'microsoft/aspire'
 
-# Serialize runs for the same tag so that a duplicate release event (or a
-# manual workflow_dispatch rerun on top of an in-flight automatic run) can't
-# race and double-edit the release body.
+# Serialize runs for the same tag so that a manual workflow_dispatch rerun on
+# top of an in-flight automatic dispatch can't race and double-edit the
+# release body.
 concurrency:
-  group: release-notes-generate-${{ github.event.release.tag_name || github.event.inputs.tag_name }}
+  group: release-notes-generate-${{ github.event.inputs.tag_name }}
   cancel-in-progress: false
 
 # Agent runs read-only; the release-body update is performed by a separate,
@@ -124,23 +121,19 @@ maintainer to paste notes" as a fallback; the workflow has no
 ## Context
 
 - **Repository**: `microsoft/aspire`
-- **Trigger event**: `${{ github.event_name }}`
-- **Release tag**: `${{ github.event.release.tag_name || github.event.inputs.tag_name }}`
-- **Release name**: `${{ github.event.release.name }}`
+- **Release tag**: `${{ github.event.inputs.tag_name }}`
 
 ## Step 1: Resolve the release
 
-Determine the tag this run is processing:
-
-- If `github.event_name == 'release'`, the tag is in `${{ github.event.release.tag_name }}`.
-- If `github.event_name == 'workflow_dispatch'`, the tag is in `${{ github.event.inputs.tag_name }}`.
+The tag this run is processing is in `${{ github.event.inputs.tag_name }}`
+(this workflow is always dispatched via `workflow_dispatch` with that input).
 
 Fetch the full release record for `microsoft/aspire` by tag
 (`GET /repos/microsoft/aspire/releases/tags/<tag>`). Capture its `id`,
 `tag_name`, `name`, `body`, `published_at`, `html_url`, `draft`, and
 `prerelease`. The workflow runs with a GitHub App token that can see
-drafts in `microsoft/aspire`, so this call returns the draft record
-when the release-create step has just fired `release: [created]`.
+drafts in `microsoft/aspire`, so this call returns the draft record that
+`release-github-tasks.yml` created just before dispatching this workflow.
 
 **Exit successfully with a diagnostic** if any of these are true (do not
 fail the run — these are expected states the workflow shouldn't act on):

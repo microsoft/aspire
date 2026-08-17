@@ -284,11 +284,13 @@ jobs:
         run: |
           # Write a short placeholder. The real release notes are generated
           # asynchronously by the release-notes-generate agentic workflow,
-          # which fires on the `release: [created]` event once `gh release
-          # create --draft` below creates the draft release, and edits this
-          # body in place while the release is still a draft. The release
-          # manager publishes the draft as a final manual step once both
-          # the notes and the CLI assets are attached.
+          # which we dispatch explicitly (via workflow_dispatch) right after
+          # creating the draft release below. It edits this body in place while
+          # the release is still a draft. (We can't rely on the
+          # `release: [created]` event because GitHub Actions does not fire
+          # release events for draft releases.) The release manager publishes
+          # the draft as a final manual step once both the notes and the CLI
+          # assets are attached.
           cat << EOF > release_notes.md
           *This release is currently a draft. Release notes are being generated automatically and CLI assets are being uploaded — both will appear here within a few minutes. Once everything looks correct, the release manager will publish the draft. If notes or assets are missing after ~30 minutes, ping the Aspire team.*
 
@@ -301,10 +303,11 @@ jobs:
       - name: Create GitHub Release (draft)
         if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         env:
-          # Use the App token here so the `release: created` event is
-          # authored by aspire-repo-bot and downstream workflows
-          # (release-notes-generate.lock.yml) get triggered. Events fired by
-          # GITHUB_TOKEN intentionally do NOT trigger other workflows.
+          # Use the App token so the draft release is authored by
+          # aspire-repo-bot, consistent with the rest of the release flow.
+          # (release-notes-generate is triggered by an explicit
+          # workflow_dispatch in the next step, not by a release event —
+          # draft releases don't fire release events.)
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
@@ -345,6 +348,31 @@ jobs:
             echo "✓ Created DRAFT GitHub Release: $TAG_NAME"
             echo "  Release manager must publish the draft manually after notes + assets are attached."
           fi
+
+      - name: Dispatch release-notes-generate workflow
+        # Draft releases do not fire the `release: [created]` event, so we
+        # explicitly dispatch the release-notes-generate agentic workflow to
+        # rewrite the placeholder body while the release is still a draft. Only
+        # dispatch when a real (non-dry-run) draft was actually created by the
+        # step above: skip on dry runs, when GitHub-release creation is skipped,
+        # and on reruns where the release already existed.
+        if: inputs.skip_github_release != true && inputs.dry_run != true && steps.check-release.outputs.release_exists != 'true'
+        env:
+          # The App token (aspire-repo-bot) is used so the dispatch is authored
+          # by the same identity the gh-aw workflow's `bots:` allow-list and
+          # GitHub App integration expect. Dispatching with GITHUB_TOKEN would
+          # run it as github-actions[bot], which the workflow's activation gate
+          # is not configured for.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          TAG_NAME="v${{ inputs.release_version }}"
+          echo "Dispatching release-notes-generate for $TAG_NAME"
+          # The runnable workflow is the gh-aw-compiled lock file; dispatch it
+          # on the default branch (where workflow_dispatch requires it to live).
+          gh workflow run release-notes-generate.lock.yml \
+            --repo "${{ github.repository }}" \
+            --field tag_name="$TAG_NAME"
+          echo "✓ Dispatched release-notes-generate (tag_name=$TAG_NAME)"
 
   # ----------------------------------------------------------------------------
   # merge-pr: runs in parallel with baseline-pr after the release job. A
