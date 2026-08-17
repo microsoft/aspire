@@ -12,6 +12,8 @@ import { getAspireDebugConfigurationExternalLaunchReservation, isAspireDebugConf
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
+const legacyDynamicConfigurationOwnerWorkspaceStateKey = 'aspire.debugger.legacyDynamicConfigurationOwnerUri';
+
 /**
  * The part of `AppHostLaunchService` this provider needs to make a `launch.json`/F5
  * launch visible to the shared launching reservation.
@@ -24,9 +26,12 @@ export interface ExternalLaunchReservation {
 }
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+    private _legacyDynamicConfigurationOwnerUri: string | undefined;
+
     constructor(
         private readonly _appHostDiscoveryService: AppHostDiscoveryService,
         private readonly _launchReservation: ExternalLaunchReservation,
+        private readonly _workspaceState: vscode.Memento,
         private readonly _triggerKind: vscode.DebugConfigurationProviderTriggerKind = vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
     }
 
@@ -215,17 +220,17 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
     }
 
-    private createDefaultConfigurations(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration[] {
+    private createDefaultConfigurations(folder: vscode.WorkspaceFolder): Promise<vscode.DebugConfiguration[]> {
         return this.createProvidedConfigurations(folder, folder.uri.fsPath);
     }
 
-    private createProvidedConfigurations(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration[] {
+    private async createProvidedConfigurations(folder: vscode.WorkspaceFolder, program: string): Promise<vscode.DebugConfiguration[]> {
         const isDynamic = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic;
         const config: vscode.DebugConfiguration = {
             type: 'aspire',
             request: 'launch',
             name: isDynamic
-                ? defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString())
+                ? await this.getDynamicConfigurationName(folder)
                 : defaultConfigurationName,
             program
         };
@@ -234,16 +239,27 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             return [config];
         }
 
-        const visibleConfig = { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' };
-        // VS Code remembers dynamic selections by name. Keep the shipped single-root name as a
-        // hidden alias so upgrades can replay that selection without exposing a duplicate entry.
-        const legacyConfig = {
-            ...visibleConfig,
-            name: defaultConfigurationName,
-            presentation: { hidden: true },
-        };
+        return [{ ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }];
+    }
 
-        return [visibleConfig, legacyConfig];
+    private async getDynamicConfigurationName(folder: vscode.WorkspaceFolder): Promise<string> {
+        let ownerUri = this._legacyDynamicConfigurationOwnerUri
+            ?? this._workspaceState.get<string>(legacyDynamicConfigurationOwnerWorkspaceStateKey);
+        if (ownerUri === undefined) {
+            // Keep the first folder's shipped configuration name across workspace changes. VS Code
+            // does not hide dynamic configurations through `presentation.hidden`, so ownership must
+            // be persisted instead of returning a compatibility alias that becomes a duplicate.
+            ownerUri = vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? folder.uri.toString();
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+            await this._workspaceState.update(legacyDynamicConfigurationOwnerWorkspaceStateKey, ownerUri);
+        }
+        else {
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+        }
+
+        return ownerUri === folder.uri.toString()
+            ? defaultConfigurationName
+            : defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
     }
 
     private isWorkspaceFolderRoot(program: string, folder: vscode.WorkspaceFolder | undefined): boolean {
