@@ -1,9 +1,14 @@
 import * as assert from 'assert';
-import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch } from './helpers/processArguments';
+import * as sinon from 'sinon';
+import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, getExpectedLinkedAppHostCliProcessArguments } from './helpers/processArguments';
 
 suite('process argument parsing', () => {
     const cliPath = '/tools/aspire';
     const appHostPath = '/workspace/Linked Worktree/LinkedAppHost.csproj';
+
+    teardown(() => {
+        sinon.restore();
+    });
 
     test('accepts exact Windows launch arguments and compares paths case-insensitively', () => {
         assert.doesNotThrow(() => assertLinkedAppHostCliLaunch(
@@ -92,6 +97,42 @@ suite('process argument parsing', () => {
             'C:\\Tools\\ASPIRE.EXE',
             appHostArguments,
             'win32'));
+    });
+
+    test('builds the exact cmd shim process argv for a linked AppHost launch', () => {
+        sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getExpectedLinkedAppHostCliProcessArguments(
+                'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                'C:\\worktrees\\linked apphost\\AppHost.csproj',
+                ['--custom', 'value with spaces', '', 'literal "quote"'],
+            );
+
+            assert.deepStrictEqual(result, [
+                'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                '""C:\\Tools\\Aspire CLI\\aspire.cmd" "run" "--isolated" "--start-debug-session" "--nologo" "--apphost" "C:\\worktrees\\linked apphost\\AppHost.csproj" "--" "--custom" "value with spaces" "" "literal ""quote""""',
+            ]);
+            assert.doesNotThrow(() => assertExactLinkedAppHostCliLaunch(
+                result,
+                'C:\\worktrees\\linked apphost\\AppHost.csproj',
+                'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                ['--custom', 'value with spaces', '', 'literal "quote"']));
+        }
+        finally {
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
     });
 
     test('rejects a repeated resolver result that duplicates the root isolation switch', () => {

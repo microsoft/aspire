@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { EnvironmentVariables } from "../../utils/environment";
 
 const processShutdownGracePeriodMs = 5_000;
+const processShutdownConfirmationIntervalMs = 50;
 const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
 
 export interface SpawnProcessOptions {
@@ -110,14 +111,18 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
 }
 
 export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): Promise<void> {
+    if (process.platform === 'win32') {
+        return terminateWindowsCliProcess(childProcess, description, options);
+    }
+
     return new Promise(resolve => {
-        const isWindows = process.platform === 'win32';
-        const processGroupPid = !isWindows && managedPosixProcessGroups.has(childProcess)
+        const processGroupPid = managedPosixProcessGroups.has(childProcess)
             ? childProcess.pid
             : undefined;
         let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
         let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
         let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
+        let confirmationDeadline: number | undefined;
         let forceSignalSent = false;
         let settled = false;
         const hasLiveProcessGroup = () => processGroupPid !== undefined && isPosixProcessGroupAlive(processGroupPid);
@@ -154,19 +159,64 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 clearTimeout(confirmationTimer);
                 confirmationTimer = undefined;
             }
+            managedPosixProcessGroups.delete(childProcess);
             resolve();
+        };
+        const scheduleProcessGroupConfirmation = () => {
+            if (settled || confirmationTimer) {
+                return;
+            }
+
+            confirmationDeadline ??= Date.now() + processShutdownGracePeriodMs;
+            confirmationTimer = setTimeout(confirmProcessGroupExit, processShutdownConfirmationIntervalMs);
+            confirmationTimer.unref();
+        };
+        const confirmProcessGroupExit = () => {
+            confirmationTimer = undefined;
+            if (settled) {
+                return;
+            }
+
+            if (!hasLiveProcessGroup()) {
+                stopTracking();
+                return;
+            }
+
+            if (confirmationDeadline !== undefined && Date.now() >= confirmationDeadline) {
+                if (!options?.suppressTimeoutWarning) {
+                    extensionLogOutputChannel.warn(`${description} process group remained live after forced termination; stopping process tracking.`);
+                }
+                stopTracking();
+                return;
+            }
+
+            scheduleProcessGroupConfirmation();
         };
         const onExit = () => {
             if (settled) {
                 return;
             }
 
-            if (processGroupPid !== undefined && !forceSignalSent && hasLiveProcessGroup()) {
-                // Once the leader exits, force any remaining descendants immediately. Delaying another
-                // negative-PID signal would allow the operating system to recycle the process-group ID.
-                forceTermination();
+            exited = true;
+            if (forceKillTimer) {
+                clearTimeout(forceKillTimer);
+                forceKillTimer = undefined;
             }
-            managedPosixProcessGroups.delete(childProcess);
+            if (processGroupPid !== undefined) {
+                let processGroupAlive = hasLiveProcessGroup();
+                if (!forceSignalSent && processGroupAlive) {
+                    // Once the leader exits, force any remaining descendants immediately. Delaying another
+                    // negative-PID signal would allow the operating system to recycle the process-group ID.
+                    forceTermination();
+                    processGroupAlive = hasLiveProcessGroup();
+                }
+
+                if (processGroupAlive) {
+                    scheduleProcessGroupConfirmation();
+                    return;
+                }
+            }
+
             stopTracking();
         };
 
@@ -178,7 +228,10 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 if (hasLiveProcessGroup()) {
                     forceTermination();
                 }
-                managedPosixProcessGroups.delete(childProcess);
+                if (hasLiveProcessGroup()) {
+                    scheduleProcessGroupConfirmation();
+                    return;
+                }
             }
             stopTracking();
             return;
@@ -189,16 +242,18 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 stopTracking();
                 return;
             }
-
-            confirmationTimer = setTimeout(() => {
-                confirmationTimer = undefined;
-                if (!options.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
-                }
-                managedPosixProcessGroups.delete(childProcess);
-                stopTracking();
-            }, processShutdownGracePeriodMs);
-            confirmationTimer.unref();
+            if (processGroupPid !== undefined) {
+                scheduleProcessGroupConfirmation();
+            } else {
+                confirmationTimer = setTimeout(() => {
+                    confirmationTimer = undefined;
+                    if (!options.suppressTimeoutWarning) {
+                        extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                    }
+                    stopTracking();
+                }, processShutdownGracePeriodMs);
+                confirmationTimer.unref();
+            }
             return;
         }
 
@@ -240,57 +295,115 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 stopTracking();
                 return;
             }
-
-            confirmationTimer = setTimeout(() => {
-                confirmationTimer = undefined;
-                if (!options?.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
-                }
-                managedPosixProcessGroups.delete(childProcess);
-                stopTracking();
-            }, processShutdownGracePeriodMs);
-            confirmationTimer.unref();
+            if (processGroupPid !== undefined) {
+                scheduleProcessGroupConfirmation();
+            } else {
+                confirmationTimer = setTimeout(() => {
+                    confirmationTimer = undefined;
+                    if (!options?.suppressTimeoutWarning) {
+                        extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+                    }
+                    stopTracking();
+                }, processShutdownGracePeriodMs);
+                confirmationTimer.unref();
+            }
         }, processShutdownGracePeriodMs);
         forceKillTimer.unref();
     });
 }
 
 function terminateCliProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
-    if (process.platform !== 'win32') {
-        if (managedPosixProcessGroups.has(childProcess) && childProcess.pid !== undefined) {
-            try {
-                // A detached POSIX child is a process-group leader. Signaling its negative PID
-                // terminates Aspire and its descendants together.
-                // https://nodejs.org/api/child_process.html#optionsdetached
-                return process.kill(-childProcess.pid, force ? 'SIGKILL' : 'SIGTERM');
-            } catch {
-                // The group may have exited between the liveness check and signal delivery.
+    if (managedPosixProcessGroups.has(childProcess) && childProcess.pid !== undefined) {
+        try {
+            // A detached POSIX child is a process-group leader. Signaling its negative PID
+            // terminates Aspire and its descendants together.
+            // https://nodejs.org/api/child_process.html#optionsdetached
+            return process.kill(-childProcess.pid, force ? 'SIGKILL' : 'SIGTERM');
+        } catch (error) {
+            if (isNoSuchProcessError(error)) {
+                return true;
             }
-        }
 
-        return childProcess.kill(force ? 'SIGKILL' : undefined);
+            throw error;
+        }
+    }
+
+    return childProcess.kill(force ? 'SIGKILL' : undefined);
+}
+
+async function terminateWindowsCliProcess(
+    childProcess: ChildProcessWithoutNullStreams,
+    description: string,
+    options?: { suppressTimeoutWarning?: boolean; force?: boolean }
+): Promise<void> {
+    if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+        return;
     }
 
     if (childProcess.pid === undefined) {
-        return childProcess.kill(force ? 'SIGKILL' : undefined);
+        childProcess.kill(options?.force ? 'SIGKILL' : undefined);
+        await waitForChildProcessExit(childProcess, processShutdownGracePeriodMs);
+        return;
     }
 
-    const args = ['/pid', String(childProcess.pid), '/t'];
-    if (force) {
-        args.push('/f');
+    const childExit = observeChildProcessExit(childProcess);
+    try {
+        await runTaskkill(childProcess, options?.force === true);
+        if (await childExit.wait(processShutdownGracePeriodMs)) {
+            return;
+        }
+
+        if (!options?.force) {
+            if (!options?.suppressTimeoutWarning) {
+                extensionLogOutputChannel.warn(`${description} did not exit within ${processShutdownGracePeriodMs}ms; forcing termination.`);
+            }
+
+            await runTaskkill(childProcess, true);
+            if (await childExit.wait(processShutdownGracePeriodMs)) {
+                return;
+            }
+        }
+
+        if (!options?.suppressTimeoutWarning) {
+            extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
+        }
     }
+    finally {
+        childExit.dispose();
+    }
+}
 
-    const taskkill = spawn('taskkill.exe', args, {
-        stdio: 'ignore',
-        windowsHide: true,
-    });
-    taskkill.on('error', error => {
-        extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
-        childProcess.kill();
-    });
-    taskkill.unref();
+function runTaskkill(childProcess: ChildProcessWithoutNullStreams, force: boolean): Promise<void> {
+    return new Promise(resolve => {
+        const args = ['/pid', String(childProcess.pid), '/t'];
+        if (force) {
+            args.push('/f');
+        }
 
-    return true;
+        const taskkill = spawn('taskkill.exe', args, {
+            stdio: 'ignore',
+            windowsHide: true,
+        });
+        let completed = false;
+        const complete = () => {
+            if (completed) {
+                return;
+            }
+
+            completed = true;
+            taskkill.off('error', onError);
+            taskkill.off('close', complete);
+            resolve();
+        };
+        const onError = (error: Error) => {
+            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
+            childProcess.kill();
+            complete();
+        };
+
+        taskkill.once('error', onError);
+        taskkill.once('close', complete);
+    });
 }
 
 function isPosixProcessGroupAlive(pid: number): boolean {
@@ -298,6 +411,66 @@ function isPosixProcessGroupAlive(pid: number): boolean {
         return process.kill(-pid, 0);
     } catch (error) {
         return error instanceof Error && 'code' in error && error.code === 'EPERM';
+    }
+}
+
+function isNoSuchProcessError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && error.code === 'ESRCH';
+}
+
+function observeChildProcessExit(childProcess: ChildProcessWithoutNullStreams): {
+    wait(timeoutMs: number): Promise<boolean>;
+    dispose(): void;
+} {
+    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+    let resolveExit: (() => void) | undefined;
+    const exitPromise = new Promise<void>(resolve => {
+        resolveExit = resolve;
+    });
+    const onExit = () => {
+        if (exited) {
+            return;
+        }
+
+        exited = true;
+        childProcess.off('close', onExit);
+        childProcess.off('exit', onExit);
+        resolveExit?.();
+    };
+    if (!exited) {
+        childProcess.once('close', onExit);
+        childProcess.once('exit', onExit);
+    }
+
+    return {
+        async wait(timeoutMs: number): Promise<boolean> {
+            if (exited) {
+                return true;
+            }
+
+            return await new Promise(resolve => {
+                const timer = setTimeout(() => resolve(false), timeoutMs);
+                timer.unref();
+                void exitPromise.then(() => {
+                    clearTimeout(timer);
+                    resolve(true);
+                });
+            });
+        },
+        dispose(): void {
+            childProcess.off('close', onExit);
+            childProcess.off('exit', onExit);
+        },
+    };
+}
+
+async function waitForChildProcessExit(childProcess: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+    const childExit = observeChildProcessExit(childProcess);
+    try {
+        return await childExit.wait(timeoutMs);
+    }
+    finally {
+        childExit.dispose();
     }
 }
 

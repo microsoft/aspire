@@ -1,16 +1,8 @@
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
-
-/**
- * Shape describing how to launch a command, mirroring the subset of Node's
- * `child_process` options the extension needs to run Windows command shims.
- */
-export interface CmdShimSpawnCommand {
-    command: string;
-    args: string[];
-    /** Diagnostic-friendly argument list; the wrapped form is hard to read in logs. */
-    diagnosticArgs?: string[];
-    windowsVerbatimArguments?: boolean;
-}
+import { getCmdShimSpawnCommand as buildCmdShimSpawnCommand, getCmdShimCommandInterpreter, quoteCmdArgument } from './cmdShimCommand';
+import type { CmdShimSpawnCommand } from './cmdShimCommand';
+export { isCommandShimPath, quoteCmdArgument, shouldWrapWithCmd } from './cmdShimCommand';
+export type { CmdShimSpawnCommand } from './cmdShimCommand';
 
 export function assertNoTerminalControlCharacters(value: string): void {
     // Shell quoting protects shell metacharacters after the command reaches the
@@ -21,23 +13,6 @@ export function assertNoTerminalControlCharacters(value: string): void {
     if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
         throw new Error(terminalCommandArgumentControlCharacters);
     }
-}
-
-/**
- * Windows `.cmd`/`.bat` shims are batch scripts, not executables. Node refuses to
- * spawn them without a shell since the CVE-2024-27980 fix
- * (https://github.com/nodejs/node/issues/52681), so they must go through cmd.exe.
- */
-export function isCommandShimPath(command: string): boolean {
-    return /\.(?:cmd|bat)$/i.test(command);
-}
-
-export function shouldWrapWithCmd(command: string): boolean {
-    return process.platform === 'win32' && isCommandShimPath(command);
-}
-
-function getComSpec(): string {
-    return process.env.ComSpec ?? 'cmd.exe';
 }
 
 function assertNoCmdWrapperControlCharacters(values: readonly string[]): void {
@@ -67,12 +42,7 @@ export function getCmdShimSpawnCommand(command: string, args: readonly string[])
     // invocation or cancel the command before cmd parsing reaches the quotes.
     assertNoCmdWrapperControlCharacters([command, ...commandArgs]);
 
-    return {
-        command: getComSpec(),
-        args: ['/d', '/v:off', '/s', '/c', buildCmdWrapperCommand(command, commandArgs)],
-        diagnosticArgs: [command, ...commandArgs],
-        windowsVerbatimArguments: true,
-    };
+    return buildCmdShimSpawnCommand(command, commandArgs);
 }
 
 /**
@@ -94,7 +64,7 @@ export function getCmdShimSpawnCommandWithoutVerbatimArguments(command: string, 
     }
 
     return {
-        command: getComSpec(),
+        command: getCmdShimCommandInterpreter(),
         // `/s` is omitted because there is no outer quote pair to strip here. `call`
         // is omitted because its second parse consumes carets and breaks parenthesized paths.
         args: ['/d', '/v:off', '/c', ...[command, ...commandArgs].map(escapeCmdArgumentForLibuvQuoting)],
@@ -110,45 +80,4 @@ function escapeCmdArgumentForLibuvQuoting(value: string): string {
     // paths. Percent is intentionally excluded because caret escaping does not
     // prevent `%NAME%` expansion in a cmd /c command string.
     return value.replace(/[ \t()[\]{}!^`<>&|;,+'=@~]/g, match => `^${match}`);
-}
-
-function buildCmdWrapperCommand(command: string, args: string[]): string {
-    // The outer quote pair is consumed by `/s`, leaving the inner per-argument quoting
-    // intact for cmd.exe. See `cmd /?` for the `/s` first/last quote stripping rule.
-    return `"${[quoteCmdArgument(command), ...args.map(quoteCmdArgument)].join(' ')}"`;
-}
-
-export function quoteCmdArgument(value: string): string {
-    // The wrapper command is executed as:
-    //   cmd.exe /d /v:off /s /c ""aspire.cmd" "<arg>" ..."
-    // Many .cmd shims then forward arguments to a native executable with `%*`, for example:
-    //   "node.exe" "aspire.js" %*
-    // Percent signs cannot be escaped in a `cmd /c` command string. `%%` only collapses
-    // inside a batch file; using it here corrupts the path or argument before the shim runs.
-    // Trailing backslashes must be doubled before our closing quote
-    // (`"--path=C:\temp\\" "next"`), and backslashes before embedded quotes must be doubled
-    // before cmd's doubled-quote escape.
-    let quotedValue = '';
-    let backslashCount = 0;
-
-    for (const character of value) {
-        if (character === '\\') {
-            backslashCount++;
-            continue;
-        }
-
-        if (character === '"') {
-            quotedValue += '\\'.repeat(backslashCount * 2);
-            backslashCount = 0;
-            quotedValue += '""';
-            continue;
-        }
-
-        quotedValue += '\\'.repeat(backslashCount);
-        backslashCount = 0;
-        quotedValue += character;
-    }
-
-    quotedValue += '\\'.repeat(backslashCount * 2);
-    return `"${quotedValue}"`;
 }

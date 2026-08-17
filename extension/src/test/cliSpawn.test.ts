@@ -64,7 +64,15 @@ suite('spawnCliProcess tests', () => {
 
     test('force kills surviving POSIX descendants immediately when their leader exits', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
-        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        let processGroupAlive = true;
+        const noSuchProcess = Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        const processKillStub = sinon.stub(process, 'kill').callsFake((_pid, signal) => {
+            if (signal === 0 && !processGroupAlive) {
+                throw noSuchProcess;
+            }
+
+            return true;
+        });
         const clock = sinon.useFakeTimers();
         const childProcess = createTestChildProcess(4343);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
@@ -72,16 +80,23 @@ suite('spawnCliProcess tests', () => {
 
         try {
             const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['ls'], { createProcessGroup: true });
-            terminateCliProcess(child, 'test Aspire CLI');
+            let settled = false;
+            const termination = terminateCliProcess(child, 'test Aspire CLI').then(() => { settled = true; });
             childProcess.emit('close', null);
+            await clock.tickAsync(0);
 
             assert.deepStrictEqual(processKillStub.args, [
                 [-4343, 'SIGTERM'],
                 [-4343, 0],
                 [-4343, 'SIGKILL'],
+                [-4343, 0],
             ]);
-            await clock.tickAsync(5000);
-            assert.strictEqual(processKillStub.callCount, 3);
+            assert.strictEqual(settled, false, 'Expected termination to wait until the surviving process group exits.');
+
+            processGroupAlive = false;
+            await clock.tickAsync(50);
+            await termination;
+            assert.strictEqual(settled, true);
         }
         finally {
             spawnStub.restore();
@@ -121,24 +136,42 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
-    test('force kills surviving POSIX descendants when termination starts after leader exit', () => {
+    test('force kills surviving POSIX descendants when termination starts after leader exit', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
-        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        let processGroupAlive = true;
+        const noSuchProcess = Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        const processKillStub = sinon.stub(process, 'kill').callsFake((_pid, signal) => {
+            if (signal === 0 && !processGroupAlive) {
+                throw noSuchProcess;
+            }
+
+            return true;
+        });
+        const clock = sinon.useFakeTimers();
         const childProcess = createTestChildProcess(4545, 0);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
 
         try {
             const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['ls'], { createProcessGroup: true });
-            terminateCliProcess(child, 'test Aspire CLI');
+            let settled = false;
+            const termination = terminateCliProcess(child, 'test Aspire CLI').then(() => { settled = true; });
 
             assert.deepStrictEqual(processKillStub.args, [
                 [-4545, 0],
                 [-4545, 'SIGKILL'],
+                [-4545, 0],
             ]);
+            assert.strictEqual(settled, false, 'Expected termination to wait until the surviving process group exits.');
+
+            processGroupAlive = false;
+            await clock.tickAsync(50);
+            await termination;
+            assert.strictEqual(settled, true);
         }
         finally {
             spawnStub.restore();
+            clock.restore();
             processKillStub.restore();
             platformStub.restore();
         }
@@ -474,23 +507,35 @@ suite('spawnCliProcess tests', () => {
             platformStub.restore();
         }
     });
-    test('terminates the process tree with taskkill on Windows rather than signalling the child', () => {
+    test('waits for taskkill and child close when terminating a Windows process tree', async () => {
         // Regression coverage for the Windows CI break: `terminateCliProcess` deliberately never
         // calls `child.kill` on Windows, because killing the leader there orphans its descendants.
         // A test that asserts on `child.kill` therefore passes on POSIX and fails on Windows.
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const spawned: Array<{ command: string; args: readonly string[] }> = [];
+        const taskkillUnref = sinon.stub();
+        const taskkillProcess = Object.assign(new EventEmitter(), { unref: taskkillUnref });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').callsFake(((command: string, args: readonly string[]) => {
             spawned.push({ command, args });
-            return Object.assign(new EventEmitter(), { unref: () => { } }) as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
+            return taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
         }) as unknown as typeof nodeChildProcess.spawn);
         const child = createTestChildProcess(4747);
 
         try {
-            terminateCliProcess(child, 'test Aspire CLI');
+            let settled = false;
+            const termination = terminateCliProcess(child, 'test Aspire CLI').then(() => { settled = true; });
 
             assert.deepStrictEqual(spawned, [{ command: 'taskkill.exe', args: ['/pid', '4747', '/t'] }]);
             assert.strictEqual(child.kill.callCount, 0);
+            sinon.assert.notCalled(taskkillUnref);
+
+            child.emit('close', null);
+            await Promise.resolve();
+            assert.strictEqual(settled, false, 'Expected termination to await taskkill completion after the child closes.');
+
+            taskkillProcess.emit('close', 0);
+            await termination;
+            assert.strictEqual(settled, true);
         }
         finally {
             spawnStub.restore();
@@ -500,7 +545,15 @@ suite('spawnCliProcess tests', () => {
 
     test('force terminates a POSIX process group immediately without waiting for the grace period', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
-        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        let processGroupAlive = true;
+        const noSuchProcess = Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        const processKillStub = sinon.stub(process, 'kill').callsFake((_pid, signal) => {
+            if (signal === 0 && !processGroupAlive) {
+                throw noSuchProcess;
+            }
+
+            return true;
+        });
         const clock = sinon.useFakeTimers();
         const childProcess = createTestChildProcess(4646);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
@@ -508,14 +561,26 @@ suite('spawnCliProcess tests', () => {
 
         try {
             const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['run'], { createProcessGroup: true });
-            terminateCliProcess(child, 'test Aspire CLI', { force: true });
+            let settled = false;
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true }).then(() => { settled = true; });
 
             // No SIGTERM and no escalation timer: a caller that is itself shutting down cannot rely
             // on an `unref`'d timer still being there five seconds later.
-            assert.deepStrictEqual(processKillStub.args, [[-4646, 'SIGKILL']]);
+            assert.deepStrictEqual(processKillStub.args, [
+                [-4646, 'SIGKILL'],
+            ]);
+            await clock.tickAsync(50);
+            assert.strictEqual(settled, false, 'Expected forced termination to confirm that the process group exited.');
 
-            await clock.tickAsync(5000);
-            assert.strictEqual(processKillStub.callCount, 1);
+            processGroupAlive = false;
+            await clock.tickAsync(50);
+            await termination;
+            assert.strictEqual(settled, true);
+            assert.deepStrictEqual(processKillStub.args, [
+                [-4646, 'SIGKILL'],
+                [-4646, 0],
+                [-4646, 0],
+            ]);
         }
         finally {
             spawnStub.restore();

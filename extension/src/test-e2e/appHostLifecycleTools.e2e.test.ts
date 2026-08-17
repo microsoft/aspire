@@ -313,7 +313,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
 
                 descendantPid = await waitForProcessIdFile(wrapper.pidPath, 10000);
                 await assert.rejects(invocation, /timed out after 1000ms/);
-                await waitForProcessExit(descendantPid, 5000);
+                assert.strictEqual(isProcessRunning(descendantPid), false, `Expected descendant process ${descendantPid} to be gone before runAspireCli rejected.`);
             }
             finally {
                 await runE2eTeardown([

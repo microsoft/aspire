@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { getCmdShimSpawnCommand, shouldWrapWithCmd } from '../../utils/cmdShimCommand';
 
 export function commandLineArgumentEquals(actual: string, expected: string, platform = process.platform): boolean {
     return platform === 'win32'
@@ -45,8 +46,27 @@ export function assertExactLinkedAppHostCliLaunch(
     appHostArguments: readonly string[],
     platform = process.platform
 ): void {
-    const expectedArguments = [
-        cliPath,
+    const expectedArguments = getExpectedLinkedAppHostCliProcessArguments(cliPath, appHostPath, appHostArguments);
+    const pathArgumentIndexes = shouldWrapWithCmd(cliPath)
+        ? [0]
+        : [0, 6];
+    const argumentsMatch = argumentsList.length === expectedArguments.length &&
+        argumentsList.every((argument, index) =>
+            pathArgumentIndexes.includes(index)
+                ? commandLineArgumentEquals(argument, expectedArguments[index], platform)
+                : argument === expectedArguments[index]);
+
+    assert.ok(
+        argumentsMatch,
+        `Expected exact Aspire CLI argv ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(argumentsList)}.`);
+}
+
+export function getExpectedLinkedAppHostCliProcessArguments(
+    cliPath: string,
+    appHostPath: string,
+    appHostArguments: readonly string[]
+): string[] {
+    const cliArguments = [
         'run',
         '--isolated',
         '--start-debug-session',
@@ -56,13 +76,11 @@ export function assertExactLinkedAppHostCliLaunch(
         '--',
         ...appHostArguments,
     ];
-    const pathsMatch = argumentsList.length === expectedArguments.length &&
-        commandLineArgumentEquals(argumentsList[0], expectedArguments[0], platform) &&
-        commandLineArgumentEquals(argumentsList[6], expectedArguments[6], platform);
-    const nonPathArgumentsMatch = pathsMatch && argumentsList.every((argument, index) =>
-        index === 0 || index === 6 || argument === expectedArguments[index]);
 
-    assert.ok(
-        nonPathArgumentsMatch,
-        `Expected exact Aspire CLI argv ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(argumentsList)}.`);
+    if (shouldWrapWithCmd(cliPath)) {
+        const spawnCommand = getCmdShimSpawnCommand(cliPath, cliArguments);
+        return [spawnCommand.command, ...spawnCommand.args];
+    }
+
+    return [cliPath, ...cliArguments];
 }
