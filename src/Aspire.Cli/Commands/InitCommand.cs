@@ -439,6 +439,7 @@ internal sealed class InitCommand : BaseCommand
         // (or after a CLI update) the template will be missing. Install first.
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
+            sourceOverride: null,
             _runner,
             InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,

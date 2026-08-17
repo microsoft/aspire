@@ -104,6 +104,21 @@ The dashboard gives you a live view of your running app — all your resources a
 
 ---
 
+## Chat Tools for Agents
+
+The extension contributes two Language Model tools so chat agents start and stop your apphost through the same lifecycle operations as the Aspire view:
+
+When VS Code is active, agents should prefer these editor operations over running Aspire AppHost lifecycle commands in a terminal.
+
+| Tool | Reference in chat | What it does |
+|------|-------------------|--------------|
+| `aspire_apphost_start` | `#aspireStartAppHost` | Starts an apphost Aspire already discovered in your workspace, in `run` (no debugger) or `debug` (debugger attached) mode |
+| `aspire_apphost_stop` | `#aspireStopAppHost` | Stops a running apphost Aspire discovered in this workspace |
+
+Both tools take the workspace-relative path of an apphost Aspire has already discovered — the same list the Aspire view shows — and resolve it against that list rather than against your filesystem. An agent can only name an apphost Aspire found, so it cannot point these tools at an arbitrary file, and the path shown in the confirmation is that discovered apphost's own path rather than anything the agent supplied. Absolute paths are rejected; in a multi-root workspace, always prefix the path with the workspace folder name. Both tools ask a chat agent's user to confirm before doing anything, and only work in a [trusted workspace](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust). They never pick an apphost for you: a path that names no discovered apphost, or more than one, fails and reports back the apphosts you can name. Starting an apphost that is already starting or running does not launch a second one. Stopping an editor-created apphost coordinates its Aspire debug session; stopping an apphost started from a terminal delegates to `aspire stop --apphost` for the same discovered path. The extension does not kill arbitrary processes. If it cannot determine which apphosts exist or whether the selected apphost is running, the call reports a failure rather than claiming nothing is there.
+
+---
+
 ## Language and Debugger Support
 
 The extension figures out what language each resource uses and attaches the right debugger. Some languages need a companion extension:

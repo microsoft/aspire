@@ -29,6 +29,9 @@ export interface AppHostResourceParser {
     /** Parse resource definitions from the document. */
     parseResources(document: vscode.TextDocument): Promise<ParsedResource[]>;
 
+    /** Locates the AppHost entry point for language-specific editor guidance. */
+    findAppHostEntryPointLine?(document: vscode.TextDocument): Promise<number | undefined>;
+
     /**
      * Locates the line containing the builder construction statement
      * (e.g. `var builder = DistributedApplication.CreateBuilder(args);` for C#,
@@ -86,6 +89,7 @@ function extensionToLanguageId(ext: string): string | undefined {
         case '.mjs':
         case '.cjs':
         case '.js': return 'javascript';
+        case '.rs': return 'rust';
         default: return undefined;
     }
 }

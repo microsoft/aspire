@@ -1,7 +1,8 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
+import { initializeTreeSitter, resolveBundledWasmAssetPath } from './treeSitter';
+import { visit } from './treeSitterHelpers';
 
 /**
  * C# AppHost resource parser.
@@ -109,18 +110,9 @@ async function getCSharpLanguage(): Promise<Language> {
 }
 
 async function loadCSharpLanguage(): Promise<Language> {
-    await Parser.init({
-        locateFile: () => getWebTreeSitterWasmPath(),
-    });
+    await initializeTreeSitter();
 
     return await Language.load(getCSharpTreeSitterWasmPath());
-}
-
-function getWebTreeSitterWasmPath(): string {
-    const resolvedPath = require.resolve('web-tree-sitter/web-tree-sitter.wasm');
-    return typeof resolvedPath === 'string'
-        ? resolvedPath
-        : resolveBundledWasmAssetPath(require('web-tree-sitter/web-tree-sitter.wasm'));
 }
 
 function getCSharpTreeSitterWasmPath(): string {
@@ -128,10 +120,6 @@ function getCSharpTreeSitterWasmPath(): string {
     return typeof resolvedPath === 'string'
         ? resolvedPath
         : resolveBundledWasmAssetPath(require('tree-sitter-c-sharp/tree-sitter-c_sharp.wasm'));
-}
-
-function resolveBundledWasmAssetPath(assetPath: string): string {
-    return path.isAbsolute(assetPath) ? assetPath : path.join(__dirname, assetPath);
 }
 
 function hasActiveSdkDirective(text: string, rootNode: TreeSitterNode): boolean {
@@ -171,20 +159,6 @@ function findInvocation(rootNode: TreeSitterNode, predicate: (node: TreeSitterNo
     });
 
     return result;
-}
-
-function visit(node: TreeSitterNode, visitor: (node: TreeSitterNode) => boolean | void): boolean {
-    if (visitor(node) === false) {
-        return false;
-    }
-
-    for (const child of node.namedChildren) {
-        if (!visit(child, visitor)) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 function isInvocationExpression(node: TreeSitterNode): boolean {

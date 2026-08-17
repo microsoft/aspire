@@ -13,7 +13,12 @@ namespace Aspire.Cli;
 /// <param name="Name">The feature flag name (without the "features." prefix).</param>
 /// <param name="Description">A description of what the feature does.</param>
 /// <param name="DefaultValue">The default value if not explicitly configured.</param>
-internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue);
+/// <param name="Hidden">
+/// When <c>true</c>, the feature is omitted from user-facing surfaces (the <c>aspire config</c>
+/// available-features listing and <c>aspire config info</c> / its generated VS Code schemas). The
+/// flag still works if set directly in configuration; hiding only removes it from discovery.
+/// </param>
+internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false);
 
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
@@ -88,7 +93,11 @@ internal static class KnownFeatures
         [AspireSkillsRemoteFetchEnabled] = new(
             AspireSkillsRemoteFetchEnabled,
             "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
-            DefaultValue: false),
+            DefaultValue: false,
+            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
+            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
+            // still honored if set directly in config.
+            Hidden: true),
 
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,

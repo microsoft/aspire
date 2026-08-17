@@ -7,7 +7,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import * as sinon from 'sinon';
-import { terminateCliProcess } from '../debugger/languages/cli';
+import { terminateCliProcess } from '../utils/process/cliProcess';
 
 suite('CLI process termination', () => {
     teardown(() => {
@@ -35,9 +35,75 @@ suite('CLI process termination', () => {
         sinon.assert.notCalled(taskkillUnref);
         sinon.assert.notCalled(childProcess.kill);
     });
+
+    test('forcefully terminates a live process when graceful signaling fails', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(4242, null);
+        childProcess.kill.onFirstCall().returns(false);
+        childProcess.kill.onSecondCall().returns(true);
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+        await clock.tickAsync(5000);
+
+        assert.deepStrictEqual(childProcess.kill.args, [
+            [undefined],
+            ['SIGKILL'],
+        ]);
+        (childProcess as unknown as { signalCode: NodeJS.Signals | null }).signalCode = 'SIGKILL';
+        childProcess.emit('close', null);
+        await termination;
+    });
+
+    test('stops tracking immediately when a PID-less child cannot be signaled', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(undefined, null);
+        childProcess.kill.returns(false);
+        let settled = false;
+
+        void terminateCliProcess(childProcess, 'Aspire CLI').then(() => { settled = true; });
+        await clock.tickAsync(0);
+
+        assert.strictEqual(settled, true);
+        sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+    });
+
+    test('forcefully terminates a live process when graceful signaling throws', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(4242, null);
+        childProcess.kill.onFirstCall().throws(new Error('signal failed'));
+        childProcess.kill.onSecondCall().returns(true);
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+        await clock.tickAsync(5000);
+
+        assert.deepStrictEqual(childProcess.kill.args, [
+            [undefined],
+            ['SIGKILL'],
+        ]);
+        (childProcess as unknown as { signalCode: NodeJS.Signals | null }).signalCode = 'SIGKILL';
+        childProcess.emit('close', null);
+        await termination;
+    });
+
+    test('stops tracking immediately when signaling a PID-less child throws', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(undefined, null);
+        childProcess.kill.throws(new Error('signal failed'));
+        let settled = false;
+
+        void terminateCliProcess(childProcess, 'Aspire CLI').then(() => { settled = true; });
+        await clock.tickAsync(0);
+
+        assert.strictEqual(settled, true);
+        sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+    });
 });
 
-function createFakeCliProcess(pid: number, exitCode: number | null): ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
+function createFakeCliProcess(pid: number | undefined, exitCode: number | null): ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
     const kill = sinon.stub().returns(true);
     return Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),

@@ -1,16 +1,8 @@
 import * as vscode from 'vscode';
 
-import { addCommand } from './commands/add';
 import { RpcClient } from './server/rpcClient';
-import { InteractionService } from './server/interactionService';
-import { newCommand } from './commands/new';
-import { initCommand } from './commands/init';
-import { deployCommand } from './commands/deploy';
-import { publishCommand } from './commands/publish';
-import { doCommand } from './commands/do';
-import { cliNotAvailable, dismissLabel, errorMessage, openCliInstallInstructions } from './loc/strings';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, isCommandCancellation, sendTelemetryEvent, withCommandTelemetry } from './utils/telemetry';
+import { initializeTelemetry, sendTelemetryEvent } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -18,37 +10,31 @@ import { AspireExtensionContext } from './AspireExtensionContext';
 import AspireRpcServer, { RpcServerConnectionInfo } from './server/AspireRpcServer';
 import AspireDcpServer from './dcp/AspireDcpServer';
 import { TestRunSessionManager } from './dcp/TestRunSessionManager';
-import { configureLaunchJsonCommand } from './commands/configureLaunchJson';
-import { AspireTerminalProvider, shellArg } from './utils/AspireTerminalProvider';
+import { AspireTerminalProvider } from './utils/AspireTerminalProvider';
 import { MessageConnection } from 'vscode-jsonrpc';
-import { openTerminalCommand } from './commands/openTerminal';
-import { updateCommand, updateSelfCommand } from './commands/update';
-import { settingsCommand } from './commands/settings';
-import { openLocalSettingsCommand, openGlobalSettingsCommand } from './commands/openSettings';
-import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace } from './utils/workspace';
+import { checkForExistingAppHostPathInWorkspace } from './utils/workspace';
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
-import { installCliCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
-import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository, isMatchingAppHostPath } from './views/AppHostDataRepository';
+import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
+import { AppHostDataRepository } from './data/AppHostDataRepository';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
-import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
 import { AppHostFilePresenceWatcher } from './editor/AppHostFilePresenceWatcher';
-import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 import { readGitCommitSha } from './utils/versionInfo';
-import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
-import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
-import { executeResourceCommand } from './views/resourceCommandExecution';
-import { ResourceCommandJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { ConfigInfoProvider } from './utils/configInfoProvider';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
+import { stopExternalAppHost } from './services/AppHostStopper';
 import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './extensionState';
-import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
+import { createE2eStateFileBridge } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
 import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
+import { registerInstrumentedCommand } from './activation/instrumentedCommand';
+import { registerCliCommands } from './activation/registerCliCommands';
+import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
+import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -118,64 +104,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
-  /**
-   * Adapter around vscode.commands.registerCommand that routes the callback
-   * through {@link withCommandTelemetry} so every command invocation gets
-   * outcome / duration / error_kind telemetry without changing call sites
-   * across the file. Use this for command implementations that bypass
-   * tryExecuteCommand (e.g., tree-view commands, code lens commands,
-   * walkthrough commands) — tryExecuteCommand already wraps its callers.
-   *
-   * `source` distinguishes invocation sites we can statically classify
-   * (`tree`, `codelens`, `walkthrough`); palette is the default and is
-   * already used by tryExecuteCommand-wrapped commands.
-   */
-  function registerInstrumentedCommand(
-    commandName: string,
-    source: 'tree' | 'codelens' | 'walkthrough' | 'editor',
-    // The signature mirrors vscode.commands.registerCommand which accepts
-    // `(...args: any[]) => any`. Using `any` here preserves the inline
-    // lambda parameter inference at the call sites (otherwise a generic
-    // would default to `unknown[]` and force callers to annotate every
-    // parameter just to satisfy the wrapper).
-    fn: (...args: any[]) => any,
-  ): vscode.Disposable {
-    return vscode.commands.registerCommand(commandName, async (...args) => {
-      try {
-        return await withCommandTelemetry(commandName, () => fn(...args), { source });
-      }
-      catch (error) {
-        if (isCommandCancellation(error)) {
-          return undefined;
-        }
-
-        throw error;
-      }
-    });
-  }
-
-  const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp) => addCommand(tp, editorCommandProvider)));
-  const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, newCommand));
-  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', () => tryExecuteCommand('aspire-vscode.init', terminalProvider, initCommand));
-  const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
-  const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
-  const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (tp) => doCommand(tp, editorCommandProvider)));
-  const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp) => updateCommand(tp, editorCommandProvider)));
-  const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', () => tryExecuteCommand('aspire-vscode.updateSelf', terminalProvider, updateSelfCommand));
-  const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, openTerminalCommand));
-  const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand));
-  const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
-  const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, openLocalSettingsCommand));
-  const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
-  const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
-  const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
-
-  // Walkthrough commands (no CLI check - the CLI may not be installed yet).
-  const installCliRegistration = registerInstrumentedCommand('aspire-vscode.installCli', 'walkthrough', installCliCommand);
-  const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
+  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider);
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
+  appHostLaunchService.setRunningAppHostProvider(async token => {
+    const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);
+    return appHosts.map(appHost => ({ appHostPath: appHost.appHostPath }));
+  });
+  appHostLaunchService.setExternalAppHostStopper((appHostPath, token) =>
+    stopExternalAppHost(terminalProvider, appHostPath, token));
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
@@ -190,7 +129,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(event => {
     if (event.shouldRequestStopRefresh) {
-      appHostTreeProvider.notifyAppHostStopping(event.appHostPath);
+      appHostTreeProvider.notifyAppHostStopping(event.appHostPath, event.shouldMarkAppHostStopping);
     }
   });
 
@@ -204,33 +143,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const appHostsViewTelemetry = new AppHostsViewTelemetry(appHostTreeView, dataRepository);
   context.subscriptions.push(appHostsViewTelemetry);
 
-  const globalRefreshAppHostsRegistration = registerInstrumentedCommand('aspire-vscode.globalRefreshAppHosts', 'tree', () => dataRepository.refresh());
-  const refreshAppHostsRegistration = registerInstrumentedCommand('aspire-vscode.refreshAppHosts', 'tree', () => dataRepository.refresh());
-  const refreshAppHostRuntimeStateRegistration = vscode.commands.registerCommand('aspire-vscode.refreshAppHostRuntimeState', () => dataRepository.refreshRuntimeState());
-  const switchToGlobalViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToGlobalView', 'tree', () => dataRepository.setViewMode('global'));
-  const switchToWorkspaceViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToWorkspaceView', 'tree', () => dataRepository.setViewMode('workspace'));
-  const openDashboardRegistration = registerInstrumentedCommand('aspire-vscode.openDashboard', 'tree', (element) => appHostTreeProvider.openDashboard(element));
-  const openDashboardToSideRegistration = registerInstrumentedCommand('aspire-vscode.openDashboardToSide', 'tree', (element) => appHostTreeProvider.openDashboardToSide(element));
-  const openAppHostSourceRegistration = registerInstrumentedCommand('aspire-vscode.openAppHostSource', 'tree', (element) => appHostTreeProvider.openAppHostSource(element));
-  const stopAppHostRegistration = registerInstrumentedCommand('aspire-vscode.stopAppHost', 'tree', (element) => appHostTreeProvider.stopAppHost(element));
-  const runAppHostRegistration = registerInstrumentedCommand('aspire-vscode.runAppHost', 'tree', (element) => appHostTreeProvider.runAppHost(element, true));
-  const debugAppHostRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHost', 'tree', (element) => appHostTreeProvider.runAppHost(element, false));
-  const stopResourceRegistration = registerInstrumentedCommand('aspire-vscode.stopResource', 'tree', (element) => appHostTreeProvider.stopResource(element));
-  const startResourceRegistration = registerInstrumentedCommand('aspire-vscode.startResource', 'tree', (element) => appHostTreeProvider.startResource(element));
-  const restartResourceRegistration = registerInstrumentedCommand('aspire-vscode.restartResource', 'tree', (element) => appHostTreeProvider.restartResource(element));
-  const viewResourceLogsRegistration = registerInstrumentedCommand('aspire-vscode.viewResourceLogs', 'tree', (element) => appHostTreeProvider.viewResourceLogs(element));
-  const openResourceTerminalRegistration = registerInstrumentedCommand('aspire-vscode.openResourceTerminal', 'tree', (element) => appHostTreeProvider.openResourceTerminal(element));
-  const executeResourceCommandRegistration = registerInstrumentedCommand('aspire-vscode.executeResourceCommand', 'tree', (element) => appHostTreeProvider.executeResourceCommand(element));
-  const executeResourceCommandItemRegistration = registerInstrumentedCommand('aspire-vscode.executeResourceCommandItem', 'tree', (element) => appHostTreeProvider.executeResourceCommandItem(element));
-  const copyEndpointUrlRegistration = registerInstrumentedCommand('aspire-vscode.copyEndpointUrl', 'tree', (element) => appHostTreeProvider.copyEndpointUrl(element));
-  const openInExternalBrowserRegistration = registerInstrumentedCommand('aspire-vscode.openInExternalBrowser', 'tree', (element) => appHostTreeProvider.openInExternalBrowser(element));
-  const openInIntegratedBrowserRegistration = registerInstrumentedCommand('aspire-vscode.openInIntegratedBrowser', 'tree', (element) => appHostTreeProvider.openInIntegratedBrowser(element));
-  const copyResourceNameRegistration = registerInstrumentedCommand('aspire-vscode.copyResourceName', 'tree', (element) => appHostTreeProvider.copyResourceName(element));
-  const copyAppHostPathRegistration = registerInstrumentedCommand('aspire-vscode.copyAppHostPath', 'tree', (element) => appHostTreeProvider.copyAppHostPath(element));
-  const viewAppHostSourceRegistration = registerInstrumentedCommand('aspire-vscode.viewAppHostSource', 'tree', (element) => appHostTreeProvider.viewAppHostSource(element));
-  const viewAppHostLogFileRegistration = registerInstrumentedCommand('aspire-vscode.viewAppHostLogFile', 'tree', (element) => appHostTreeProvider.viewAppHostLogFile(element));
-  const copyLogFilePathRegistration = registerInstrumentedCommand('aspire-vscode.copyLogFilePath', 'tree', (element) => appHostTreeProvider.copyLogFilePath(element));
-  const expandAllRegistration = registerInstrumentedCommand('aspire-vscode.expandAll', 'tree', (element) => appHostTreeProvider.expandAll(element));
+  const treeViewCommandRegistrations = registerTreeViewCommands(appHostTreeProvider, dataRepository);
 
   // Set initial context for welcome view
   vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', true);
@@ -242,111 +155,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     appHostTreeView,
-    globalRefreshAppHostsRegistration,
-    refreshAppHostsRegistration,
-    refreshAppHostRuntimeStateRegistration,
-    switchToGlobalViewRegistration,
-    switchToWorkspaceViewRegistration,
-    openDashboardRegistration,
-    openDashboardToSideRegistration,
-    openAppHostSourceRegistration,
-    stopAppHostRegistration,
-    runAppHostRegistration,
-    debugAppHostRegistration,
-    stopResourceRegistration,
-    startResourceRegistration,
-    restartResourceRegistration,
-    viewResourceLogsRegistration,
-    openResourceTerminalRegistration,
-    executeResourceCommandRegistration,
-    executeResourceCommandItemRegistration,
-    copyEndpointUrlRegistration,
-    openInExternalBrowserRegistration,
-    openInIntegratedBrowserRegistration,
-    copyResourceNameRegistration,
-    copyAppHostPathRegistration,
-    viewAppHostSourceRegistration,
-    viewAppHostLogFileRegistration,
-    copyLogFilePathRegistration,
-    expandAllRegistration,
+    ...treeViewCommandRegistrations,
     debugSessionRefreshRegistration,
     { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
-  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository);
-  const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
-  const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
-  const codeLensDebugPipelineStepRegistration = registerInstrumentedCommand('aspire-vscode.codeLensDebugPipelineStep', 'codelens', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
-  const codeLensResourceActionRegistration = registerInstrumentedCommand('aspire-vscode.codeLensResourceAction', 'codelens', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
-    const effectiveResourceCommand = getCurrentResourceCommand(dataRepository, resourceName, action, appHostPath) ?? resourceCommand;
-    if (effectiveResourceCommand !== undefined && !isEnabledCommand(effectiveResourceCommand)) {
-      extensionLogOutputChannel.warn(`Ignoring disabled CodeLens resource command '${action}' for resource '${resourceName}'.`);
-      return;
-    }
-
-    const commandArguments = await collectResourceCommandArguments(action, effectiveResourceCommand, {
-      secretWarningState: context.globalState,
-      loadDynamicArguments: createResourceCommandArgumentLoader({
-        cliExecutionProvider: terminalProvider,
-        resourceName,
-        commandName: action,
-        appHostPath: appHostPath || undefined,
-      }),
-    });
-    if (commandArguments === undefined) {
-      return;
-    }
-
-    // Execute over the hidden CLI backchannel and surface the result inside VS Code, rather than
-    // typing `aspire resource ...` into the visible terminal. Returned values are rendered through
-    // the tree provider's read-only output document.
-    return await executeResourceCommand(
-      dataRepository,
-      (resource, command, content, outputAppHostPath) =>
-        appHostTreeProvider.showResourceCommandOutput(resource, command, content, outputAppHostPath),
-      {
-        resourceName,
-        commandName: action,
-        appHostPath: appHostPath || undefined,
-        additionalArgs: commandArguments.args,
-      });
-  });
-  const codeLensViewLogsRegistration = registerInstrumentedCommand('aspire-vscode.codeLensViewLogs', 'codelens', (resourceName: string, appHostPath: string) => {
-    const command = appHostPath
-      ? ['logs', shellArg(resourceName), '--apphost', shellArg(appHostPath), '--follow']
-      : ['logs', shellArg(resourceName), '--follow'];
-    terminalProvider.sendAspireCommandToAspireTerminal(command);
-  });
-  const codeLensRevealResourceRegistration = registerInstrumentedCommand('aspire-vscode.codeLensRevealResource', 'codelens', (resourceName: string, appHostPath?: string) => {
-    const element = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-    if (element) {
-      appHostTreeView.reveal(element, { select: true, focus: true });
-    }
-  });
-  const codeLensOpenDashboardRegistration = registerInstrumentedCommand('aspire-vscode.codeLensOpenDashboard', 'codelens', (appHostPath?: string) => {
-    const element = appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) : undefined;
-    return appHostTreeProvider.openDashboard(element);
-  });
-  const codeLensViewAppHostLogsRegistration = registerInstrumentedCommand('aspire-vscode.codeLensViewAppHostLogs', 'codelens', (appHostPath?: string) => {
-    const additionalArgs: string[] = [];
-    if (appHostPath) {
-      additionalArgs.push('--apphost', appHostPath);
-    }
-    additionalArgs.push('--follow');
-    terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
-  });
-  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
+  const codeLensRegistrations = registerCodeLensCommands(appHostTreeProvider, appHostTreeView, dataRepository, terminalProvider, editorCommandProvider, context.globalState);
+  context.subscriptions.push(...codeLensRegistrations);
 
   // Gutter decorations — colored dots next to resources showing runtime state
   const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);
   context.subscriptions.push(gutterDecorationProvider);
 
-  context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
-  context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
-  context.subscriptions.push(installCliRegistration, verifyCliInstalledRegistration);
+  context.subscriptions.push(...cliCommandRegistrations);
 
-  const dynamicDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, vscode.DebugConfigurationProviderTriggerKind.Dynamic);
-  const initialDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, vscode.DebugConfigurationProviderTriggerKind.Initial);
+  const dynamicDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, appHostLaunchService, vscode.DebugConfigurationProviderTriggerKind.Dynamic);
+  const initialDebugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService, appHostLaunchService, vscode.DebugConfigurationProviderTriggerKind.Initial);
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider('aspire', dynamicDebugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Dynamic)
   );
@@ -354,7 +178,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.debug.registerDebugConfigurationProvider('aspire', initialDebugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Initial)
   );
 
-  context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('aspire', new AspireDebugAdapterDescriptorFactory(rpcServer, dcpServer, terminalProvider, aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext), aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext))));
+  context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('aspire', new AspireDebugAdapterDescriptorFactory(rpcServer, dcpServer, terminalProvider, aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext), aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext), appHostLaunchService.trackAppHostDebugSession.bind(appHostLaunchService))));
   context.subscriptions.push(testRunSessionManager.listenForLeasedDebugSessions({
     rpcServer,
     dcpServer,
@@ -374,6 +198,16 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(mcpProvider);
     mcpProvider.refresh();
   }
+
+  // Language model tools that let an agent use the same AppHost lifecycle service as the
+  // editor and Aspire tree instead of maintaining a separate start/stop policy.
+  const appHostLifecycleToolService = new AppHostLifecycleToolService({
+    launchService: appHostLaunchService,
+    discoveryService: appHostDiscoveryService,
+  });
+  context.subscriptions.push(appHostLifecycleToolService);
+  const appHostLifecycleToolRegistration = registerAppHostLifecycleTools(appHostLifecycleToolService);
+  context.subscriptions.push(appHostLifecycleToolRegistration);
 
   const getEnableSettingsFileCreationPromptOnStartup = () => vscode.workspace.getConfiguration('aspire').get<boolean>('enableSettingsFileCreationPromptOnStartup', true);
   const setEnableSettingsFileCreationPromptOnStartup = async (value: boolean) => await vscode.workspace.getConfiguration('aspire').update('enableSettingsFileCreationPromptOnStartup', value, vscode.ConfigurationTarget.Workspace);
@@ -415,7 +249,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostLaunchService.onDidChangeLaunchingState(fireStateChanged));
   context.subscriptions.push(appHostTreeProvider.onDidChangeStoppingState(fireStateChanged));
   context.subscriptions.push(aspireExtensionContext.onDidChangeDebugSessions(fireStateChanged));
-  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
+  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event, appHostLifecycleToolRegistration.tools);
   context.subscriptions.push(e2eStateFileBridge);
 
   await cliPathEnvironmentInitialization;
@@ -438,53 +272,6 @@ function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {
       return 'test';
     default:
       return 'unknown';
-  }
-}
-
-function getCurrentResourceCommand(dataRepository: AppHostDataRepository, resourceName: string, commandName: string, appHostPath: string | undefined): ResourceCommandJson | undefined {
-  const resources = dataRepository.viewMode === 'workspace'
-    && (!appHostPath || isMatchingAppHostPath(dataRepository.workspaceAppHostPath, appHostPath))
-    ? dataRepository.workspaceResources
-    : dataRepository.appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))?.resources ?? [];
-  const resource = resources.find(candidate => candidate.name === resourceName || candidate.displayName === resourceName);
-
-  return resource?.commands?.[commandName] ?? undefined;
-}
-
-async function tryExecuteCommand(commandName: string, terminalProvider: AspireTerminalProvider, command: (terminalProvider: AspireTerminalProvider) => Promise<void>): Promise<void> {
-  try {
-    await withCommandTelemetry(commandName, async () => {
-      const cliCheckExcludedCommands: string[] = ["aspire-vscode.settings", "aspire-vscode.configureLaunchJson", "aspire-vscode.updateSelf"];
-      if (!cliCheckExcludedCommands.includes(commandName)) {
-        if (isE2eBridgeEnabled() && process.env.ASPIRE_EXTENSION_E2E_FORCE_CLI_UNAVAILABLE === 'true') {
-          vscode.window.showErrorMessage(
-            cliNotAvailable,
-            openCliInstallInstructions,
-            dismissLabel
-          );
-          throw new vscode.CancellationError();
-        }
-
-        const result = await checkCliAvailableOrRedirect('command_gate');
-        if (!result.available) {
-          // The command body never ran — the user was redirected to install the
-          // CLI. Throwing a cancellation makes withCommandTelemetry record this
-          // as `canceled` rather than a false `success`, and the catch below
-          // suppresses the error toast (the redirect already informed the user).
-          throw new vscode.CancellationError();
-        }
-
-      }
-
-      await command(terminalProvider);
-    }, { source: 'command_palette' });
-  }
-  catch (error) {
-    // Cancellations should not surface as user-visible errors — but they still
-    // bubble through the wrapper so it can classify outcome correctly.
-    if (!isCommandCancellation(error)) {
-      vscode.window.showErrorMessage(errorMessage(error));
-    }
   }
 }
 

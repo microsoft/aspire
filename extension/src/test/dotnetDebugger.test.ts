@@ -153,6 +153,125 @@ suite('Dotnet Debugger Extension Tests', () => {
         outputSubscription.dispose();
     });
 
+    test('AppHost toolbar restart identifies the terminating Aspire session', async () => {
+        const configuration: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.ts',
+        };
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration,
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const trackerStub = sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves({
+            id: 'apphost-session',
+        } as unknown as Awaited<ReturnType<AspireDebugSession['startAndGetDebugSession']>>);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
+        assert.strictEqual(configuration.__aspireAppHostRestartSourceSessionId, parentDebugSession.id);
+
+        aspireDebugSession.dispose();
+
+        assert.strictEqual(configuration.__aspireAppHostRestartSourceSessionId, undefined);
+    });
+
+    test('AppHost toolbar restart preserves the source marker until the parent terminates', async () => {
+        const configuration: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.ts',
+        };
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration,
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        } as unknown as vscode.DebugSession;
+        const appHostDebugSession = {
+            id: 'apphost-session',
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const trackerStub = sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(
+            appHostDebugSession as unknown as Awaited<ReturnType<AspireDebugSession['startAndGetDebugSession']>>);
+        let terminateCallback: ((session: vscode.DebugSession) => Promise<void>) | undefined;
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            terminateCallback = callback as (session: vscode.DebugSession) => Promise<void>;
+            return new vscode.Disposable(() => { });
+        });
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
+        assert.ok(terminateCallback);
+        await terminateCallback(appHostDebugSession);
+
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+        const restartConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(restartConfiguration.__aspireAppHostRestartSourceSessionId, parentDebugSession.id);
+    });
+
+    test('failed AppHost toolbar restart clears the source marker', async () => {
+        const configuration: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.ts',
+        };
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration,
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        } as unknown as vscode.DebugSession;
+        const appHostDebugSession = {
+            id: 'apphost-session',
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const trackerStub = sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(
+            appHostDebugSession as unknown as Awaited<ReturnType<AspireDebugSession['startAndGetDebugSession']>>);
+        let terminateCallback: ((session: vscode.DebugSession) => Promise<void>) | undefined;
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            terminateCallback = callback as (session: vscode.DebugSession) => Promise<void>;
+            return new vscode.Disposable(() => { });
+        });
+        sinon.stub(aspireDebugSession, 'stopDebugging').rejects(new Error('shutdown failed'));
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        const restartHandler = trackerStub.firstCall.args[1] as (debugSessionId: string) => boolean;
+        assert.strictEqual(restartHandler(aspireDebugSession.debugSessionId), true);
+        assert.ok(terminateCallback);
+        await terminateCallback(appHostDebugSession);
+
+        assert.strictEqual(startDebuggingStub.called, false);
+        assert.strictEqual(configuration.__aspireAppHostRestartSourceSessionId, undefined);
+    });
+
     test('filters AppHost debugger noise from Aspire parent debug console', () => {
         const filter = new AppHostParentOutputFilter();
 

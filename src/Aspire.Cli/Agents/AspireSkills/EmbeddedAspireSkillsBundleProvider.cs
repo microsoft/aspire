@@ -55,7 +55,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
         var metadata = Metadata;
-        if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha256))
+        if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
         {
             return null;
         }
@@ -86,7 +86,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         return await _bundleProvider.CreateAsync(
             new FileInfo(archivePath),
             bundleDirectory,
-            metadata.Sha256,
+            metadata.Sha512,
             cancellationToken,
             skipCompatibilityCheck: true).ConfigureAwait(false);
     }

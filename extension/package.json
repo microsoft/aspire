@@ -48,12 +48,80 @@
     "workspaceContains:**/apphost.js",
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
+    "workspaceContains:**/apphost.rs",
     "onCommand:aspire-vscode.installCli",
-    "onCommand:aspire-vscode.verifyCliInstalled"
+    "onCommand:aspire-vscode.verifyCliInstalled",
+    "onLanguageModelTool:aspire_apphost_start",
+    "onLanguageModelTool:aspire_apphost_stop"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "contributes": {
+    "languageModelTools": [
+      {
+        "name": "aspire_apphost_start",
+        "toolReferenceName": "aspireStartAppHost",
+        "displayName": "%languageModelTool.aspireAppHostStart.displayName%",
+        "modelDescription": "%languageModelTool.aspireAppHostStart.modelDescription%",
+        "userDescription": "%languageModelTool.aspireAppHostStart.userDescription%",
+        "icon": "$(debug-start)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "run",
+                "debug"
+              ],
+              "description": "%languageModelTool.aspireAppHostStart.mode.description%"
+            }
+          },
+          "required": [
+            "appHostPath",
+            "mode"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_apphost_stop",
+        "toolReferenceName": "aspireStopAppHost",
+        "displayName": "%languageModelTool.aspireAppHostStop.displayName%",
+        "modelDescription": "%languageModelTool.aspireAppHostStop.modelDescription%",
+        "userDescription": "%languageModelTool.aspireAppHostStop.userDescription%",
+        "icon": "$(debug-stop)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            }
+          },
+          "required": [
+            "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
     "mcpServerDefinitionProviders": [
       {
         "id": "aspire-mcp-server",
@@ -462,6 +530,11 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.codeLensRevealAppHost",
+        "title": "%command.codeLensRevealAppHost%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.codeLensOpenDashboard",
         "title": "%command.codeLensOpenDashboard%",
         "category": "Aspire"
@@ -508,19 +581,19 @@
       "explorer/context": [
         {
           "command": "aspire-vscode.runAppHostCommand",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs)$/i",
           "group": "aspire_actions@1"
         },
         {
           "command": "aspire-vscode.debugAppHostCommand",
-          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs)$/i",
+          "when": "resourceFilename =~ /apphost\\.(cs|ts|mts|cts|js|mjs|cjs|rs)$/i",
           "group": "aspire_actions@2"
         }
       ],
       "editor/title/run": [
         {
           "command": "aspire-vscode.runAppHostCommand",
-          "when": "(aspire.fileIsAppHost || aspire.workspaceHasAppHost) && aspire.editorSupportsRunDebug",
+          "when": "aspire.fileIsAppHost || (aspire.workspaceHasAppHost && aspire.editorSupportsRunDebug)",
           "group": "navigation@-4"
         },
         {
@@ -608,6 +681,10 @@
         },
         {
           "command": "aspire-vscode.codeLensRevealResource",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.codeLensRevealAppHost",
           "when": "false"
         },
         {
@@ -1081,6 +1158,7 @@
     "jsonc-parser": "3.3.1",
     "node-forge": "1.4.0",
     "tree-sitter-c-sharp": "0.23.5",
+    "tree-sitter-rust": "0.24.0",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",
     "ws": "8.21.0"

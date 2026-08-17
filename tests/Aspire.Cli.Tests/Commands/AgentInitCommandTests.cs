@@ -865,7 +865,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                     new SkillBundleFile
                     {
                         RelativePath = "SKILL.md",
-                        Sha256 = ComputeSha256(skillPath)
+                        Sha512 = ComputeSha512(skillPath)
                     }
                 ]
             });
@@ -890,10 +890,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CancellationToken.None);
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
     [Fact]

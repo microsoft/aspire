@@ -40,7 +40,8 @@ internal sealed class AspireSkillsInstaller(
     internal const string MaxCacheAgeKey = "AspireSkillsMaxCacheAgeSeconds";
 
     private const string GitHubApiBaseUrl = "https://api.github.com";
-    internal const string ArchiveSha256FileName = ".archive-sha256";
+    internal const string ArchiveSha512FileName = ".archive-sha512";
+    internal const string GitHubArchiveSha256FileName = ".github-archive-sha256";
     internal const string GitHubAttestationVerifiedFileName = ".github-attestation-verified";
     private const string LastUsedFileName = ".lastused";
 
@@ -79,12 +80,12 @@ internal sealed class AspireSkillsInstaller(
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
         var embeddedMetadata = embeddedBundleProvider.Metadata;
 
-        async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha256)
+        async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha512)
         {
             await CleanupStaleCacheEntriesAsync(
                 cacheRoot,
                 effectiveVersion,
-                archiveSha256,
+                archiveSha512,
                 cancellationToken).ConfigureAwait(false);
             return AspireSkillsInstallResult.Installed(bundle);
         }
@@ -104,7 +105,7 @@ internal sealed class AspireSkillsInstaller(
             githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
             if (githubResult.Status == AcquisitionStatus.Installed)
             {
-                return await CompleteInstallationAsync(githubResult.Bundle!, githubResult.KnownArchiveSha256!).ConfigureAwait(false);
+                return await CompleteInstallationAsync(githubResult.Bundle!, githubResult.ArchiveSha512!).ConfigureAwait(false);
             }
 
             if (githubResult.Status == AcquisitionStatus.Failed)
@@ -120,7 +121,8 @@ internal sealed class AspireSkillsInstaller(
                 var offlineCachedResult = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     effectiveVersion,
-                    githubResult.KnownArchiveSha256,
+                    expectedArchiveSha512: null,
+                    expectedGitHubArchiveSha256: githubResult.KnownGitHubArchiveSha256,
                     requireVerifiedGitHubSource: true,
                     skipCompatibilityCheck: false,
                     activity,
@@ -132,7 +134,7 @@ internal sealed class AspireSkillsInstaller(
                         effectiveVersion);
                     return await CompleteInstallationAsync(
                         offlineCachedResult.Bundle!,
-                        offlineCachedResult.KnownArchiveSha256!).ConfigureAwait(false);
+                        offlineCachedResult.ArchiveSha512!).ConfigureAwait(false);
                 }
             }
         }
@@ -144,7 +146,7 @@ internal sealed class AspireSkillsInstaller(
         var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, embeddedMetadata, activity, cancellationToken).ConfigureAwait(false);
         if (embeddedResult.Status == AcquisitionStatus.Installed)
         {
-            return await CompleteInstallationAsync(embeddedResult.Bundle!, embeddedResult.KnownArchiveSha256!).ConfigureAwait(false);
+            return await CompleteInstallationAsync(embeddedResult.Bundle!, embeddedResult.ArchiveSha512!).ConfigureAwait(false);
         }
 
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
@@ -165,7 +167,7 @@ internal sealed class AspireSkillsInstaller(
         CancellationToken cancellationToken)
     {
         using var tempDirectory = CreateTemporaryCacheDirectory(cacheRoot, "github");
-        string? knownArchiveSha256 = null;
+        string? knownGitHubArchiveSha256 = null;
 
         try
         {
@@ -184,13 +186,14 @@ internal sealed class AspireSkillsInstaller(
                 return AcquisitionResult.Unavailable();
             }
 
-            knownArchiveSha256 = TryNormalizeArchiveSha256(asset.Digest);
-            if (knownArchiveSha256 is not null)
+            knownGitHubArchiveSha256 = TryNormalizeArchiveSha256(asset.Digest);
+            if (knownGitHubArchiveSha256 is not null)
             {
                 var cachedResult = await TryLoadCachedBundleAsync(
                     cacheRoot,
                     version,
-                    knownArchiveSha256,
+                    expectedArchiveSha512: null,
+                    expectedGitHubArchiveSha256: knownGitHubArchiveSha256,
                     requireVerifiedGitHubSource: !validationDisabled,
                     skipCompatibilityCheck: false,
                     activity,
@@ -205,45 +208,54 @@ internal sealed class AspireSkillsInstaller(
             if (!await TryDownloadGitHubAssetAsync(httpClient, asset.DownloadUrl, archivePath, cancellationToken).ConfigureAwait(false))
             {
                 logger.LogDebug("Aspire skills GitHub release asset {AssetName} was unavailable for version {Version}.", asset.Name, version);
-                return AcquisitionResult.Unavailable(knownArchiveSha256);
-            }
-
-            if (!validationDisabled)
-            {
-                var provenanceResult = await githubArtifactAttestationVerifier.VerifyAsync(
-                    GitHubRepository,
-                    archivePath,
-                    ExpectedSourceRepository,
-                    ExpectedWorkflowPath,
-                    ExpectedBuildType,
-                    version,
-                    cancellationToken).ConfigureAwait(false);
-
-                if (!provenanceResult.IsVerified)
-                {
-                    return AcquisitionResult.Failed(string.Format(
-                        CultureInfo.CurrentCulture,
-                        AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed,
-                        $"GitHub release asset '{asset.Name}'",
-                        provenanceResult.Outcome));
-                }
+                return AcquisitionResult.Unavailable(knownGitHubArchiveSha256);
             }
 
             try
             {
-                var archiveSha256 = knownArchiveSha256 is null
-                    ? ComputeArchiveSha256(archivePath)
-                    : AspireSkillsBundleProvider.NormalizeSha256(knownArchiveSha256);
+                var githubArchiveSha256 = ComputeArchiveSha256(archivePath);
+                if (knownGitHubArchiveSha256 is not null &&
+                    !string.Equals(githubArchiveSha256, knownGitHubArchiveSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException(string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Aspire skills GitHub release asset '{0}' failed SHA-256 verification.",
+                        asset.Name));
+                }
+
+                if (!validationDisabled)
+                {
+                    var provenanceResult = await githubArtifactAttestationVerifier.VerifyAsync(
+                        GitHubRepository,
+                        archivePath,
+                        ExpectedSourceRepository,
+                        ExpectedWorkflowPath,
+                        ExpectedBuildType,
+                        version,
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (!provenanceResult.IsVerified)
+                    {
+                        return AcquisitionResult.Failed(string.Format(
+                            CultureInfo.CurrentCulture,
+                            AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed,
+                            $"GitHub release asset '{asset.Name}'",
+                            provenanceResult.Outcome));
+                    }
+                }
+
+                var archiveSha512 = ComputeArchiveSha512(archivePath);
                 var bundle = await CacheArchiveAsync(
                     cacheRoot,
                     archivePath,
                     version,
-                    archiveSha256,
+                    archiveSha512,
+                    githubArchiveSha256,
                     validationDisabled ? BundleArchiveSource.UnverifiedGitHub : BundleArchiveSource.VerifiedGitHub,
                     cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "github");
                 activity?.SetTag("aspire.skills.cache_hit", false);
-                return AcquisitionResult.Installed(bundle, archiveSha256);
+                return AcquisitionResult.Installed(bundle, archiveSha512, githubArchiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
@@ -257,7 +269,7 @@ internal sealed class AspireSkillsInstaller(
         catch (Exception ex) when (ex is HttpRequestException or HttpIOException or JsonException)
         {
             logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}.", version);
-            return AcquisitionResult.Unavailable(knownArchiveSha256);
+            return AcquisitionResult.Unavailable(knownGitHubArchiveSha256);
         }
     }
 
@@ -291,11 +303,12 @@ internal sealed class AspireSkillsInstaller(
             return AcquisitionResult.Unavailable();
         }
 
-        var expectedArchiveSha256 = AspireSkillsBundleProvider.NormalizeSha256(metadata.Sha256!);
+        var expectedArchiveSha512 = AspireSkillsBundleProvider.NormalizeSha512(metadata.Sha512!);
         var cachedResult = await TryLoadCachedBundleAsync(
             cacheRoot,
             version,
-            expectedArchiveSha256,
+            expectedArchiveSha512,
+            expectedGitHubArchiveSha256: null,
             requireVerifiedGitHubSource: false,
             skipCompatibilityCheck: true,
             activity,
@@ -326,13 +339,14 @@ internal sealed class AspireSkillsInstaller(
                 cacheRoot,
                 stageDirectory,
                 bundle,
-                expectedArchiveSha256,
-                version,
-                BundleArchiveSource.Embedded,
-                cancellationToken).ConfigureAwait(false);
+                expectedArchiveSha512,
+                githubArchiveSha256: null,
+                version: version,
+                source: BundleArchiveSource.Embedded,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
             activity?.SetTag("aspire.skills.source", "embedded");
             activity?.SetTag("aspire.skills.cache_hit", false);
-            return AcquisitionResult.Installed(bundle, expectedArchiveSha256);
+            return AcquisitionResult.Installed(bundle, expectedArchiveSha512);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
@@ -367,9 +381,9 @@ internal sealed class AspireSkillsInstaller(
             return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName;
         }
 
-        if (string.IsNullOrWhiteSpace(metadata.Sha256))
+        if (string.IsNullOrWhiteSpace(metadata.Sha512))
         {
-            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha256;
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha512;
         }
 
         return null;
@@ -385,6 +399,19 @@ internal sealed class AspireSkillsInstaller(
         var sha256 = AspireSkillsBundleProvider.NormalizeSha256(digest);
         return sha256.Length == 64 && sha256.All(Uri.IsHexDigit)
             ? sha256.ToLowerInvariant()
+            : null;
+    }
+
+    private static string? TryNormalizeArchiveSha512(string? digest)
+    {
+        if (string.IsNullOrWhiteSpace(digest))
+        {
+            return null;
+        }
+
+        var sha512 = AspireSkillsBundleProvider.NormalizeSha512(digest);
+        return sha512.Length == 128 && sha512.All(Uri.IsHexDigit)
+            ? sha512.ToLowerInvariant()
             : null;
     }
 
@@ -516,14 +543,17 @@ internal sealed class AspireSkillsInstaller(
     private async Task<AcquisitionResult?> TryLoadCachedBundleAsync(
         string cacheRoot,
         string version,
-        string? expectedArchiveSha256,
+        string? expectedArchiveSha512,
+        string? expectedGitHubArchiveSha256,
         bool requireVerifiedGitHubSource,
         bool skipCompatibilityCheck,
         Activity? activity,
         CancellationToken cancellationToken)
     {
         activity?.SetTag("aspire.skills.cache_hit", false);
-        if (expectedArchiveSha256 is null && !requireVerifiedGitHubSource)
+        if (expectedArchiveSha512 is null &&
+            expectedGitHubArchiveSha256 is null &&
+            !requireVerifiedGitHubSource)
         {
             return null;
         }
@@ -532,7 +562,8 @@ internal sealed class AspireSkillsInstaller(
         return await TryLoadCachedBundleCoreAsync(
             cacheRoot,
             version,
-            expectedArchiveSha256,
+            expectedArchiveSha512,
+            expectedGitHubArchiveSha256,
             requireVerifiedGitHubSource,
             skipCompatibilityCheck,
             activity,
@@ -542,7 +573,8 @@ internal sealed class AspireSkillsInstaller(
     private async Task<AcquisitionResult?> TryLoadCachedBundleCoreAsync(
         string cacheRoot,
         string version,
-        string? expectedArchiveSha256,
+        string? expectedArchiveSha512,
+        string? expectedGitHubArchiveSha256,
         bool requireVerifiedGitHubSource,
         bool skipCompatibilityCheck,
         Activity? activity,
@@ -554,31 +586,33 @@ internal sealed class AspireSkillsInstaller(
             return null;
         }
 
-        if (expectedArchiveSha256 is not null)
+        if (expectedArchiveSha512 is not null)
         {
             return await TryLoadCachedBundleDirectoryAsync(
-                GetBundleCacheDirectory(versionCacheDirectory, expectedArchiveSha256),
+                GetBundleCacheDirectory(versionCacheDirectory, expectedArchiveSha512),
                 version,
-                expectedArchiveSha256,
+                expectedArchiveSha512,
+                expectedGitHubArchiveSha256,
                 requireVerifiedGitHubSource,
                 skipCompatibilityCheck,
                 activity,
                 cancellationToken).ConfigureAwait(false);
         }
 
-        // When GitHub release metadata is unavailable, there is no current digest to select.
-        // Prefer the most recently used compatible bundle whose GitHub provenance was previously
-        // verified. A digest learned from metadata never reaches this path, so a known-stale leaf
-        // cannot be reconsidered as an offline fallback.
-        List<(string Directory, string ArchiveSha256, DateTimeOffset LastUsed)> candidates = [];
+        // GitHub release metadata exposes the attestation subject's SHA-256, while cache leaves
+        // are keyed by the bundle-integrity SHA-512. Enumerate SHA-512 leaves so the persisted
+        // GitHub SHA-256 mapping can select the current asset without downloading it again.
+        // When release metadata is unavailable, prefer the most recently used bundle whose
+        // GitHub provenance was previously verified.
+        List<(string Directory, string ArchiveSha512, DateTimeOffset LastUsed)> candidates = [];
         try
         {
             foreach (var directory in Directory.GetDirectories(versionCacheDirectory))
             {
-                var archiveSha256 = TryNormalizeArchiveSha256(Path.GetFileName(directory));
-                if (archiveSha256 is not null)
+                var archiveSha512 = TryNormalizeArchiveSha512(Path.GetFileName(directory));
+                if (archiveSha512 is not null)
                 {
-                    candidates.Add((directory, archiveSha256, GetLastUsed(directory)));
+                    candidates.Add((directory, archiveSha512, GetLastUsed(directory)));
                 }
             }
         }
@@ -593,7 +627,8 @@ internal sealed class AspireSkillsInstaller(
             var cachedResult = await TryLoadCachedBundleDirectoryAsync(
                 candidate.Directory,
                 version,
-                candidate.ArchiveSha256,
+                candidate.ArchiveSha512,
+                expectedGitHubArchiveSha256,
                 requireVerifiedGitHubSource,
                 skipCompatibilityCheck,
                 activity,
@@ -610,7 +645,8 @@ internal sealed class AspireSkillsInstaller(
     private async Task<AcquisitionResult?> TryLoadCachedBundleDirectoryAsync(
         string cacheDirectory,
         string version,
-        string expectedArchiveSha256,
+        string expectedArchiveSha512,
+        string? expectedGitHubArchiveSha256,
         bool requireVerifiedGitHubSource,
         bool skipCompatibilityCheck,
         Activity? activity,
@@ -632,15 +668,28 @@ internal sealed class AspireSkillsInstaller(
 
         try
         {
-            var cachedArchiveSha256Path = Path.Combine(cacheDirectory, ArchiveSha256FileName);
-            var cachedArchiveSha256 = File.Exists(cachedArchiveSha256Path)
-                ? TryNormalizeArchiveSha256(File.ReadAllText(cachedArchiveSha256Path).Trim())
+            var cachedArchiveSha512Path = Path.Combine(cacheDirectory, ArchiveSha512FileName);
+            var cachedArchiveSha512 = File.Exists(cachedArchiveSha512Path)
+                ? TryNormalizeArchiveSha512(File.ReadAllText(cachedArchiveSha512Path).Trim())
                 : null;
-            if (cachedArchiveSha256 is null ||
-                !string.Equals(cachedArchiveSha256, expectedArchiveSha256, StringComparison.OrdinalIgnoreCase))
+            if (cachedArchiveSha512 is null ||
+                !string.Equals(cachedArchiveSha512, expectedArchiveSha512, StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogDebug(
-                    "Ignoring cached Aspire skills bundle at {CacheDirectory} because its archive SHA-256 does not match its cache identity.",
+                    "Ignoring cached Aspire skills bundle at {CacheDirectory} because its archive SHA-512 does not match its cache identity.",
+                    cacheDirectory);
+                return null;
+            }
+
+            var cachedGitHubArchiveSha256Path = Path.Combine(cacheDirectory, GitHubArchiveSha256FileName);
+            var cachedGitHubArchiveSha256 = File.Exists(cachedGitHubArchiveSha256Path)
+                ? TryNormalizeArchiveSha256(File.ReadAllText(cachedGitHubArchiveSha256Path).Trim())
+                : null;
+            if (expectedGitHubArchiveSha256 is not null &&
+                !string.Equals(cachedGitHubArchiveSha256, expectedGitHubArchiveSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogDebug(
+                    "Ignoring cached Aspire skills bundle at {CacheDirectory} because its GitHub archive SHA-256 does not match the current release asset.",
                     cacheDirectory);
                 return null;
             }
@@ -653,7 +702,7 @@ internal sealed class AspireSkillsInstaller(
             TouchLastUsed(cacheDirectory);
             activity?.SetTag("aspire.skills.cache_hit", true);
             logger.LogDebug("Using cached Aspire skills bundle from {CacheDirectory}.", cacheDirectory);
-            return AcquisitionResult.Installed(bundle, cachedArchiveSha256);
+            return AcquisitionResult.Installed(bundle, cachedArchiveSha512, cachedGitHubArchiveSha256);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -666,7 +715,8 @@ internal sealed class AspireSkillsInstaller(
         string cacheRoot,
         string archivePath,
         string version,
-        string archiveSha256,
+        string archiveSha512,
+        string? githubArchiveSha256,
         BundleArchiveSource source,
         CancellationToken cancellationToken)
     {
@@ -675,14 +725,15 @@ internal sealed class AspireSkillsInstaller(
         var stagedBundle = await bundleProvider.CreateAsync(
             new FileInfo(archivePath),
             new DirectoryInfo(stageDirectory.FullName),
-            archiveSha256,
+            archiveSha512,
             cancellationToken).ConfigureAwait(false);
 
         return await CacheStagedBundleAsync(
             cacheRoot,
             stageDirectory,
             stagedBundle,
-            archiveSha256,
+            archiveSha512,
+            githubArchiveSha256,
             version,
             source,
             cancellationToken).ConfigureAwait(false);
@@ -692,7 +743,8 @@ internal sealed class AspireSkillsInstaller(
         string cacheRoot,
         TemporaryCacheDirectory stageDirectory,
         AspireSkillsBundle stagedBundle,
-        string archiveSha256,
+        string archiveSha512,
+        string? githubArchiveSha256,
         string version,
         BundleArchiveSource source,
         CancellationToken cancellationToken)
@@ -702,9 +754,20 @@ internal sealed class AspireSkillsInstaller(
         // The archive is discarded after extraction. Retain its digest so same-version
         // archives can be distinguished without keeping or downloading the archive again.
         await File.WriteAllTextAsync(
-            Path.Combine(stageDirectory.FullName, ArchiveSha256FileName),
-            AspireSkillsBundleProvider.NormalizeSha256(archiveSha256).ToLowerInvariant(),
+            Path.Combine(stageDirectory.FullName, ArchiveSha512FileName),
+            AspireSkillsBundleProvider.NormalizeSha512(archiveSha512).ToLowerInvariant(),
             cancellationToken).ConfigureAwait(false);
+        if (githubArchiveSha256 is not null)
+        {
+            // GitHub release metadata and artifact attestations currently identify subjects by
+            // SHA-256. Persist that secondary identity so the next release lookup can find this
+            // SHA-512-keyed leaf without downloading the archive first.
+            await File.WriteAllTextAsync(
+                Path.Combine(stageDirectory.FullName, GitHubArchiveSha256FileName),
+                AspireSkillsBundleProvider.NormalizeSha256(githubArchiveSha256).ToLowerInvariant(),
+                cancellationToken).ConfigureAwait(false);
+        }
+
         if (source == BundleArchiveSource.VerifiedGitHub)
         {
             await File.WriteAllTextAsync(
@@ -715,11 +778,12 @@ internal sealed class AspireSkillsInstaller(
 
         await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
         var versionCacheDirectory = GetVersionCacheDirectory(cacheRoot, version);
-        var targetDir = GetBundleCacheDirectory(versionCacheDirectory, archiveSha256);
+        var targetDir = GetBundleCacheDirectory(versionCacheDirectory, archiveSha512);
         var cachedResult = await TryLoadCachedBundleCoreAsync(
             cacheRoot,
             version,
-            archiveSha256,
+            archiveSha512,
+            githubArchiveSha256,
             requireVerifiedGitHubSource: source == BundleArchiveSource.VerifiedGitHub,
             skipCompatibilityCheck: source == BundleArchiveSource.Embedded,
             activity: null,
@@ -751,7 +815,8 @@ internal sealed class AspireSkillsInstaller(
     {
         // These files describe local installer state, not bundle content. Always recreate them
         // from the acquisition path so an archive cannot claim freshness or GitHub provenance.
-        File.Delete(Path.Combine(bundleDirectory, ArchiveSha256FileName));
+        File.Delete(Path.Combine(bundleDirectory, ArchiveSha512FileName));
+        File.Delete(Path.Combine(bundleDirectory, GitHubArchiveSha256FileName));
         File.Delete(Path.Combine(bundleDirectory, GitHubAttestationVerifiedFileName));
         File.Delete(Path.Combine(bundleDirectory, LastUsedFileName));
     }
@@ -861,6 +926,12 @@ internal sealed class AspireSkillsInstaller(
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
+    private static string ComputeArchiveSha512(string archivePath)
+    {
+        using var stream = File.OpenRead(archivePath);
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
+    }
+
     private string GetCacheRoot()
     {
         return Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills");
@@ -871,17 +942,17 @@ internal sealed class AspireSkillsInstaller(
         return Path.Combine(cacheRoot, version);
     }
 
-    private static string GetBundleCacheDirectory(string versionCacheDirectory, string archiveSha256)
+    private static string GetBundleCacheDirectory(string versionCacheDirectory, string archiveSha512)
     {
         return Path.Combine(
             versionCacheDirectory,
-            AspireSkillsBundleProvider.NormalizeSha256(archiveSha256).ToLowerInvariant());
+            AspireSkillsBundleProvider.NormalizeSha512(archiveSha512).ToLowerInvariant());
     }
 
     private async Task CleanupStaleCacheEntriesAsync(
         string cacheRoot,
         string currentVersion,
-        string currentArchiveSha256,
+        string currentArchiveSha512,
         CancellationToken cancellationToken)
     {
         if (!Directory.Exists(cacheRoot))
@@ -948,10 +1019,15 @@ internal sealed class AspireSkillsInstaller(
 
                 foreach (var bundleDirectory in Directory.GetDirectories(directory))
                 {
-                    var archiveSha256 = TryNormalizeArchiveSha256(Path.GetFileName(bundleDirectory));
-                    if (archiveSha256 is null ||
-                        (isCurrentVersion &&
-                         string.Equals(archiveSha256, currentArchiveSha256, StringComparison.OrdinalIgnoreCase)) ||
+                    var directoryName = Path.GetFileName(bundleDirectory);
+                    var archiveSha512 = TryNormalizeArchiveSha512(directoryName);
+                    if (archiveSha512 is null)
+                    {
+                        continue;
+                    }
+
+                    if ((isCurrentVersion &&
+                         string.Equals(archiveSha512, currentArchiveSha512, StringComparison.OrdinalIgnoreCase)) ||
                         DateTimeOffset.UtcNow - GetLastUsed(bundleDirectory) <= maxAge)
                     {
                         continue;
@@ -981,7 +1057,8 @@ internal sealed class AspireSkillsInstaller(
     {
         return Directory.Exists(Path.Combine(versionCacheDirectory, "skills")) ||
             File.Exists(Path.Combine(versionCacheDirectory, "skill-manifest.json")) ||
-            File.Exists(Path.Combine(versionCacheDirectory, ArchiveSha256FileName)) ||
+            File.Exists(Path.Combine(versionCacheDirectory, ArchiveSha512FileName)) ||
+            File.Exists(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, LastUsedFileName));
     }
@@ -992,7 +1069,8 @@ internal sealed class AspireSkillsInstaller(
         // those known entries so digest-addressed children created by newer CLIs remain intact.
         TryDeleteDirectory(Path.Combine(versionCacheDirectory, "skills"));
         TryDeleteFile(Path.Combine(versionCacheDirectory, "skill-manifest.json"));
-        TryDeleteFile(Path.Combine(versionCacheDirectory, ArchiveSha256FileName));
+        TryDeleteFile(Path.Combine(versionCacheDirectory, ArchiveSha512FileName));
+        TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, LastUsedFileName));
     }
@@ -1097,21 +1175,35 @@ internal sealed class AspireSkillsInstaller(
         AcquisitionStatus Status,
         AspireSkillsBundle? Bundle,
         string? Message,
-        string? KnownArchiveSha256)
+        string? ArchiveSha512,
+        string? KnownGitHubArchiveSha256)
     {
-        public static AcquisitionResult Installed(AspireSkillsBundle bundle, string archiveSha256)
+        public static AcquisitionResult Installed(
+            AspireSkillsBundle bundle,
+            string archiveSha512,
+            string? knownGitHubArchiveSha256 = null)
         {
-            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null, archiveSha256);
+            return new AcquisitionResult(
+                AcquisitionStatus.Installed,
+                bundle,
+                null,
+                archiveSha512,
+                knownGitHubArchiveSha256);
         }
 
-        public static AcquisitionResult Unavailable(string? knownArchiveSha256 = null)
+        public static AcquisitionResult Unavailable(string? knownGitHubArchiveSha256 = null)
         {
-            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null, knownArchiveSha256);
+            return new AcquisitionResult(
+                AcquisitionStatus.Unavailable,
+                null,
+                null,
+                null,
+                knownGitHubArchiveSha256);
         }
 
         public static AcquisitionResult Failed(string message)
         {
-            return new AcquisitionResult(AcquisitionStatus.Failed, null, message, null);
+            return new AcquisitionResult(AcquisitionStatus.Failed, null, message, null, null);
         }
     }
 

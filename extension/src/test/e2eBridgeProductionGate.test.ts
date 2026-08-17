@@ -36,6 +36,14 @@ const withEnvironmentVariable = (name: string, value: string | undefined, action
  * inside the published extension.
  */
 suite('E2E bridge production gate', () => {
+    test('redacts every debugger environment shape captured by the E2E bridge', () => {
+        const bridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+
+        assert.ok(bridge.includes("if ('env' in copy)"));
+        assert.ok(bridge.includes("if ('environment' in copy)"));
+        assert.ok(bridge.includes("if ('environmentVariables' in copy)"));
+    });
+
     test('replaces the E2E bridge in production builds', () => {
         const configure = loadWebpackConfig();
 

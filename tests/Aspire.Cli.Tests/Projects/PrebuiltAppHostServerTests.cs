@@ -449,8 +449,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideTempDir()
     {
         // End-to-end pin for the staging temp-config hang fix: when the real PackagingService
-        // synthesizes the staging channel (here driven by overrideStagingFeed on a stable-shaped
-        // CLI so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
+        // synthesizes the staging channel (here driven by overrideStagingFeed on a staging
+        // identity so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
         // PrebuiltAppHostServer must point globalPackagesFolder at an absolute path that survives
         // the TemporaryNuGetConfig.Dispose recursive delete. Otherwise BundleNuGetService restores
         // staging assemblies into <temp>/.nugetpackages, bakes those paths into
@@ -473,8 +473,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache(),
             new TestFeatures(),
             configuration,
-            NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => true);
+            NullLogger<PackagingService>.Instance);
 
         var server = CreateServerWithPackagingService(workspace, packagingService, executionContext);
 
@@ -1240,6 +1239,65 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(result.Success);
             Assert.NotNull(restoreArgs);
             Assert.Equal([packageSource.FullName, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithHiveBackedChannelUsingFileUri_UsesLocalAspireSourceAsOverride()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        var packageSourceUri = new Uri(packageSource.FullName).AbsoluteUri;
+        List<string>? restoreArgs = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-12345"
+            }
+            """);
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "pr-12345",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSourceUri)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Contains(packageSourceUri, GetSourceArguments(restoreArgs!));
             Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
             Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
             Assert.Contains("--nuget-config", restoreArgs!);

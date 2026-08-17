@@ -184,7 +184,7 @@ internal static partial class ConnectionStringParser
         databaseName = null;
 
         // Database URI paths use these shapes:
-        //   mongodb://user:password@localhost:27017/catalogdb
+        //   mongodb://PlaceholderUser:PlaceholderPassword@localhost:27017/catalogdb
         //   jdbc:postgresql://localhost:5432/catalogdb
         // Restrict parsing to database schemes so paths in endpoint URLs aren't treated as database names.
         var uriValue = connectionString.StartsWith(jdbcPrefix, StringComparison.OrdinalIgnoreCase)

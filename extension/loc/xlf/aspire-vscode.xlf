@@ -16,6 +16,9 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleBusy">
+      <source xml:lang="en">Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathCopiedToClipboard">
       <source xml:lang="en">AppHost path copied to clipboard.</source>
     </trans-unit>
@@ -99,6 +102,15 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.azureFunctionsCmdPercentArgument">
       <source xml:lang="en">Azure Functions launch arguments containing &quot;%&quot; are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsTaskExitedBeforeStartup">
+      <source xml:lang="en">Azure Functions task exited with code {0} before startup completed.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.unsupportedBrowserDebugTarget">
+      <source xml:lang="en">Browser &apos;{0}&apos; cannot be debugged for &apos;{1}&apos;. Supported browsers are: {2}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.unsupportedBrowserDebugTargetWithoutUrl">
+      <source xml:lang="en">Browser &apos;{0}&apos; cannot be debugged. Supported browsers are: {1}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.buildFailedForProjectWithError">
       <source xml:lang="en">Build failed for project {0} with error: {1}.</source>
@@ -352,6 +364,9 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.mode.description">
+      <source xml:lang="en">How to start the AppHost: &apos;run&apos; starts it without attaching the debugger, &apos;debug&apos; starts it with the debugger attached.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
     </trans-unit>
@@ -550,6 +565,12 @@
     <trans-unit id="configuration.aspire.appHostsPollingInterval">
       <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.modelDescription">
+      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started.</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.modelDescription">
+      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through &apos;aspire stop --apphost&apos; for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
     </trans-unit>
@@ -583,6 +604,9 @@
     <trans-unit id="command.restore">
       <source xml:lang="en">Restore packages</source>
     </trans-unit>
+    <trans-unit id="command.codeLensRevealAppHost">
+      <source xml:lang="en">Reveal AppHost in Aspire panel</source>
+    </trans-unit>
     <trans-unit id="command.codeLensRevealResource">
       <source xml:lang="en">Reveal resource in Aspire panel</source>
     </trans-unit>
@@ -612,6 +636,15 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestore">
       <source xml:lang="en">Running aspire restore on {0} ...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLabel">
+      <source xml:lang="en">Rust</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDebuggerExtensionNotInstalled">
+      <source xml:lang="en">Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustDisplayName">
+      <source xml:lang="en">Rust: {0}</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
@@ -670,8 +703,23 @@
     <trans-unit id="command.startResource">
       <source xml:lang="en">Start</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.displayName">
+      <source xml:lang="en">Start Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationTitle">
+      <source xml:lang="en">Start Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.userDescription">
+      <source xml:lang="en">Start an Aspire AppHost from this workspace in run or debug mode.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessage">
+      <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode?</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
       <source xml:lang="en">Start your Aspire app to launch all services. The dashboard stays available from the Aspire panel when you need it.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartInvocationMessage">
+      <source xml:lang="en">Starting Aspire AppHost {0}...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostStartingDescription">
       <source xml:lang="en">Starting...</source>
@@ -681,6 +729,21 @@
     </trans-unit>
     <trans-unit id="command.stopAppHost">
       <source xml:lang="en">Stop</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.displayName">
+      <source xml:lang="en">Stop Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopConfirmationTitle">
+      <source xml:lang="en">Stop Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStop.userDescription">
+      <source xml:lang="en">Stop a running Aspire AppHost from this workspace.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopConfirmationMessage">
+      <source xml:lang="en">Stop the Aspire AppHost {0}?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStopInvocationMessage">
+      <source xml:lang="en">Stopping Aspire AppHost {0}...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.testRunSessionManagerNotInitialized">
       <source xml:lang="en">Test run session manager has not been initialized with DCP server connection information.</source>
@@ -709,6 +772,9 @@
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustLaunchConfigurationMissingExecutable">
+      <source xml:lang="en">The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.</source>
+    </trans-unit>
     <trans-unit id="views.appHosts.genericErrorWelcome">
       <source xml:lang="en">The Aspire panel couldn&apos;t load AppHost data right now. See Aspire Extension output for details.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
@@ -720,6 +786,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.azureFunctionsUnsupportedTaskShell">
       <source xml:lang="en">The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustWindowsGnuDebuggerUnsupported">
+      <source xml:lang="en">The cppvsdbg debugger cannot debug Rust target {0} because GNU Windows targets use DWARF symbols. Install CodeLLDB or build an MSVC Rust target such as x86_64-pc-windows-msvc.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
       <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
@@ -733,6 +802,9 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchAlreadyClaimed">
+      <source xml:lang="en">This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
     </trans-unit>
@@ -744,6 +816,18 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval.deprecated">
       <source xml:lang="en">This setting has been renamed to aspire.appHostsPollingInterval.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsHostStartupTimedOut">
+      <source xml:lang="en">Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsWorkerStartupTimedOut">
+      <source xml:lang="en">Timed out after {0} seconds waiting for the Azure Functions worker process to start.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debugSessionStartTimedOut">
+      <source xml:lang="en">Timed out after {1} seconds waiting for debug session &apos;{0}&apos; to start.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debugSessionStopTimedOut">
+      <source xml:lang="en">Timed out after {1} seconds waiting for debug session &apos;{0}&apos; to stop.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
       <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Streaming discovery resets this timeout when output is received and has a maximum runtime of five minutes. Minimum: 1000.</source>
@@ -823,6 +907,9 @@
     <trans-unit id="aspire-vscode.strings.workspaceViewSelectedMultipleAppHosts">
       <source xml:lang="en">Workspace view selected because aspire ls found {0} buildable AppHosts.</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHost.appHostPath.description">
+      <source xml:lang="en">Workspace-relative path of an AppHost that Aspire has already discovered in this workspace, for example &apos;AppHost/AppHost.csproj&apos; or &apos;apphost.cs&apos;. The value must match one of the discovered AppHosts exactly; arbitrary paths, absolute paths, and files Aspire did not discover are rejected. In a multi-root workspace, always prefix the path with the workspace folder name (for example &apos;backend/AppHost/AppHost.csproj&apos;).</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.yesLabel">
       <source xml:lang="en">Yes</source>
     </trans-unit>
@@ -835,14 +922,41 @@
     <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
       <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildStderrTruncated">
+      <source xml:lang="en">[cargo stderr truncated to the last {0} characters.]</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildOutputRedacted">
+      <source xml:lang="en">[redacted]</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleUnresolvedPath">
+      <source xml:lang="en">an unresolved path</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathMustBeNonEmptyAbsolute">
       <source xml:lang="en">appHostPath must be a non-empty absolute path</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithError">
+      <source xml:lang="en">cargo build failed in {0} with error: {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildFailedWithExitCode">
+      <source xml:lang="en">cargo build failed in {0} with exit code {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildProducedNoExecutable">
+      <source xml:lang="en">cargo build in {0} completed but did not produce a runnable binary. Ensure the crate defines a binary target.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.rustBuildProducedMultipleExecutables">
+      <source xml:lang="en">cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleUnspecifiedMode">
+      <source xml:lang="en">unspecified</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debugSessionsFailedToStop">
+      <source xml:lang="en">{0} debug sessions failed to stop: {1}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandFailed">
       <source xml:lang="en">{0} exited with code {1}{2}</source>

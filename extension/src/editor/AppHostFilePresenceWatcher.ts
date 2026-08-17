@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getParserForDocument, getAllParsers, getFileExtension } from './parsers/AppHostResourceParser';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { projectContentsReferencesRunnableAspireAppHost } from '../utils/appHostLanguage';
 
 /**
