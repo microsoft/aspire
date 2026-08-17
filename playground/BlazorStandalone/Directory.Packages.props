@@ -1,10 +1,18 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- Pin packages compatible with net10.0 and the WASM client. -->
+  <PropertyGroup>
+    <CentralPackageTransitivePinningEnabled
+      Condition="'$(MSBuildProjectName)' == 'BlazorStandalone' or '$(MSBuildProjectName)' == 'BlazorStandalone.ClientServiceDefaults'">false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- Pin the .NET 11 Preview 7 packages that provide the SDK-generated SPA fallback contract. -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="$(MicrosoftAspNetCoreComponentsGatewayCliVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="$(MicrosoftAspNetCoreComponentsGatewayCliVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="$(MicrosoftAspNetCoreComponentsGatewayCliVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Configuration.EnvironmentVariables"
+                    Version="$(MicrosoftAspNetCoreComponentsGatewayCliVersion)"
+                    Condition="'$(MSBuildProjectName)' == 'BlazorStandalone' or '$(MSBuildProjectName)' == 'BlazorStandalone.ClientServiceDefaults'" />
   </ItemGroup>
 </Project>

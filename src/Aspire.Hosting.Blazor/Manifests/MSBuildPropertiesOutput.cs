@@ -18,6 +18,8 @@ internal sealed class MSBuildManifestProperties
 {
     public string StaticWebAssetEndpointsBuildManifestPath { get; set; } = "";
     public string StaticWebAssetDevelopmentManifestPath { get; set; } = "";
+    public string TargetFramework { get; set; } = "";
+    public string TargetFrameworks { get; set; } = "";
 
     [JsonExtensionData]
     public Dictionary<string, System.Text.Json.JsonElement>? ExtensionData { get; set; }

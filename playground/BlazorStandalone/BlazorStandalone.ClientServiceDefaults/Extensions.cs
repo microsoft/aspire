@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -65,17 +66,15 @@ public static class BlazorClientExtensions
         var baseAddress = new Uri(builder.HostEnvironment.BaseAddress);
         var otlpEndpoint = new Uri(baseAddress, $"{otlpPathBase}/");
 
-        // Wire HttpClientFactory for all OTLP exporter instances via IPostConfigureOptions.
-        // This runs during options resolution for all 3 signals (traces, metrics, logging),
-        // and has access to the DI container to resolve ILoggerFactory.
-        builder.Services.AddSingleton<IPostConfigureOptions<OtlpExporterOptions>>(sp =>
+        // Resolving ILoggerFactory while OtlpExporterOptions are being created cycles back through
+        // the OpenTelemetry logger provider on .NET 11. Remove this workaround when
+        // https://github.com/dotnet/aspnetcore/issues/67259 is fixed.
+        var exporterLogger = NullLoggerFactory.Instance.CreateLogger("Aspire.OtlpExport");
+        builder.Services.AddSingleton<IPostConfigureOptions<OtlpExporterOptions>>(
+            new PostConfigureOptions<OtlpExporterOptions>(null, options =>
         {
-            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Aspire.OtlpExport");
-            return new PostConfigureOptions<OtlpExporterOptions>(null, o =>
-            {
-                o.HttpClientFactory = () => new HttpClient(new BackgroundExportHandler(pipeline, logger));
-            });
-        });
+            options.HttpClientFactory = () => new HttpClient(new BackgroundExportHandler(pipeline, exporterLogger));
+        }));
 
         builder.Logging.AddOpenTelemetry(logging =>
         {

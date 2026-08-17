@@ -27,6 +27,7 @@ public static class BlazorGatewayExtensions
 {
     private static readonly string s_blazorGatewayCliVersion = GetAssemblyMetadataValue("BlazorGatewayCliVersion");
     private static readonly string s_dotNetImageTag = GetDotNetImageTag();
+    private static readonly string s_blazorWasmSdkImageTag = GetAssemblyMetadataValue("BlazorWasmSdkImageTag");
     private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
     private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
     private const string BlazorGatewayCliPackageId = "Microsoft.AspNetCore.Components.Gateway.Cli";
@@ -364,13 +365,7 @@ public static class BlazorGatewayExtensions
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
 
-                GatewayConfigurationBuilder.EmitProxyConfiguration(
-                    context.EnvironmentVariables,
-                    registeredApps,
-                    gatewayEndpoint,
-                    httpGatewayEndpoint,
-                    httpOtlpEndpointUrl,
-                    proxyRouteOrder: int.MinValue);
+                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
             });
         }
 
@@ -387,10 +382,24 @@ public static class BlazorGatewayExtensions
     private static ProjectInfo GetProjectInfo(string projectPath, string appHostDirectory)
     {
         var projectDir = Path.GetDirectoryName(projectPath)!;
-        var solutionRoot = Path.GetFullPath(Path.Combine(appHostDirectory, ".."));
+        var solutionRoot = GetSolutionRoot(appHostDirectory);
         var relativeProjectPath = Path.GetRelativePath(solutionRoot, projectDir)
             .Replace('\\', '/');
         return new ProjectInfo(solutionRoot, relativeProjectPath);
+    }
+
+    internal static string GetSolutionRoot(string appHostDirectory)
+    {
+        for (var directory = new DirectoryInfo(appHostDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (directory.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any()
+                || directory.EnumerateFiles("*.slnx", SearchOption.TopDirectoryOnly).Any())
+            {
+                return directory.FullName;
+            }
+        }
+
+        return Path.GetFullPath(Path.Combine(appHostDirectory, ".."));
     }
 
     private static void MirrorGatewayStateToClients<TGateway>(IResourceBuilder<TGateway> gateway)
@@ -545,22 +554,19 @@ public static class BlazorGatewayExtensions
             .WithImage("placeholder")
             .WithContainerFilesSource("/app/output");
 
-        companion.WithDockerfileFactory(project.SolutionRoot, ctx =>
+        companion.WithDockerfileFactory(project.SolutionRoot, async context =>
         {
-            return $$"""
-                FROM {{DotNetSdkImageRepo}}:{{s_dotNetImageTag}} AS build
-                WORKDIR /src
-                COPY . .
-                RUN dotnet publish "{{relativeProjectPath}}" -c Release -o /app/publish
+            ILogger logger = context.Services.GetService<ILogger<BlazorWasmAppResource>>() is { } typedLogger
+                ? typedLogger
+                : Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+            var targetFramework = await BlazorWasmAppBuilder.GetTargetFrameworkAsync(
+                wasmApp.Resource.ProjectPath,
+                logger,
+                context.CancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Unable to determine the target framework for '{wasmApp.Resource.ProjectPath}'.");
 
-                # Prefix asset paths and add SPA fallback endpoint
-                RUN mkdir -p /app/output/wwwroot/{{pathPrefix}} && \
-                    cp -r /app/publish/wwwroot/* /app/output/wwwroot/{{pathPrefix}}/ && \
-                    dotnet run "{{scriptRelativePath}}" -- \
-                        /app/publish/*.staticwebassets.endpoints.json \
-                        {{pathPrefix}} \
-                        /app/output/{{pathPrefix}}.endpoints.json
-                """;
+            var sdkImageTag = GetBlazorWasmSdkImageTag(targetFramework);
+            return BuildBlazorWasmPublishDockerfile(relativeProjectPath, scriptRelativePath, pathPrefix, sdkImageTag);
         });
 
         gateway.WithAnnotation(new ContainerFilesDestinationAnnotation
@@ -568,6 +574,35 @@ public static class BlazorGatewayExtensions
             Source = companion.Resource,
             DestinationPath = "."
         });
+    }
+
+    internal static string BuildBlazorWasmPublishDockerfile(
+        string relativeProjectPath,
+        string scriptRelativePath,
+        string pathPrefix,
+        string sdkImageTag)
+    {
+        return $$"""
+            FROM {{DotNetSdkImageRepo}}:{{sdkImageTag}} AS build
+            WORKDIR /src
+            COPY . .
+            RUN dotnet publish "{{relativeProjectPath}}" -c Release -o /app/publish
+
+            # Prefix asset paths and add SPA fallback endpoint
+            RUN mkdir -p /app/output/wwwroot/{{pathPrefix}} && \
+                cp -r /app/publish/wwwroot/* /app/output/wwwroot/{{pathPrefix}}/ && \
+                dotnet run "{{scriptRelativePath}}" -- \
+                    /app/publish/*.staticwebassets.endpoints.json \
+                    {{pathPrefix}} \
+                    /app/output/{{pathPrefix}}.endpoints.json
+            """;
+    }
+
+    internal static string GetBlazorWasmSdkImageTag(string targetFramework)
+    {
+        return targetFramework.StartsWith("net11.", StringComparison.OrdinalIgnoreCase)
+            ? s_blazorWasmSdkImageTag
+            : s_dotNetImageTag;
     }
 
     private static string GetScriptPath(string scriptName)

@@ -88,7 +88,7 @@ foreach (var appConfig in appConfigs.Values)
         app.MapGroup(appConfig.PathPrefix!).MapStaticAssets(appConfig.EndpointsManifest)
             .Add(ep =>
             {
-                if (ep is RouteEndpointBuilder reb && reb.RoutePattern.RawText?.Contains("{**path") == true)
+                if (ep is RouteEndpointBuilder reb && reb.RoutePattern.RawText?.Contains(":nonfile}", StringComparison.Ordinal) == true)
                 {
                     reb.Order = int.MaxValue;
                 }

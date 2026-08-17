@@ -14,6 +14,7 @@
 //
 // Usage: dotnet run PrefixEndpoints.cs -- <manifest-path> <prefix> <output-path>
 
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -31,6 +32,10 @@ var outputPath = args[2];
 var manifest = JsonSerializer.Deserialize(
     File.ReadAllText(manifestPath),
     ManifestJsonContext.Default.EndpointsManifest)!;
+
+manifest.Endpoints = manifest.Endpoints
+    .Where(endpoint => endpoint.Route is not ("{**fallback:nonfile}" or "{**path:nonfile}"))
+    .ToArray();
 
 var fallbackEndpoints = new List<EndpointEntry>();
 
@@ -51,7 +56,11 @@ foreach (var ep in manifest.Endpoints)
             // Deep-clone via round-trip serialization, then patch route and cache header
             var fallbackJson = JsonSerializer.Serialize(ep, ManifestJsonContext.Default.EndpointEntry);
             var fallback = JsonSerializer.Deserialize(fallbackJson, ManifestJsonContext.Default.EndpointEntry)!;
-            fallback.Route = "{**path:nonfile}";
+            fallback.Route = "{**fallback:nonfile}";
+            fallback.ExtensionData ??= [];
+            fallback.ExtensionData["Order"] = JsonSerializer.SerializeToElement(
+                int.MaxValue.ToString(CultureInfo.InvariantCulture),
+                ManifestJsonContext.Default.String);
             if (fallback.ResponseHeaders is not null)
             {
                 foreach (var header in fallback.ResponseHeaders)
@@ -118,6 +127,7 @@ class EndpointResponseHeader
 
 [JsonSerializable(typeof(EndpointsManifest))]
 [JsonSerializable(typeof(EndpointEntry))]
+[JsonSerializable(typeof(string))]
 [JsonSourceGenerationOptions(
     WriteIndented = true)]
 partial class ManifestJsonContext : JsonSerializerContext

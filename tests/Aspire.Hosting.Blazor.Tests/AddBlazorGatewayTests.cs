@@ -117,6 +117,61 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void BlazorWasmPublishCompanion_UsesNet11Sdk()
+    {
+        var dockerfile = BlazorGatewayExtensions.BuildBlazorWasmPublishDockerfile(
+            "Blazor/Blazor.csproj",
+            ".aspire/scripts/PrefixEndpoints.cs",
+            "app",
+            BlazorGatewayExtensions.GetBlazorWasmSdkImageTag("net11.0"));
+
+        Assert.StartsWith("FROM mcr.microsoft.com/dotnet/sdk:11.0.100-preview.7 AS build", dockerfile);
+        Assert.Contains("RUN dotnet publish \"Blazor/Blazor.csproj\" -c Release -o /app/publish", dockerfile);
+    }
+
+    [Theory]
+    [InlineData("net8.0", "10.0")]
+    [InlineData("net10.0", "10.0")]
+    [InlineData("net11.0", "11.0.100-preview.7")]
+    public void GetBlazorWasmSdkImageTag_SelectsCompatibleSdk(string targetFramework, string expected)
+    {
+        Assert.Equal(expected, BlazorGatewayExtensions.GetBlazorWasmSdkImageTag(targetFramework));
+    }
+
+    [Fact]
+    public void GetSolutionRoot_UsesNearestSolutionAncestor()
+    {
+        var solutionRoot = Directory.CreateTempSubdirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(solutionRoot.FullName, "Test.slnx"), "<Solution />");
+            var appHostDirectory = Directory.CreateDirectory(Path.Combine(solutionRoot.FullName, "src", "AppHost")).FullName;
+
+            Assert.Equal(solutionRoot.FullName, BlazorGatewayExtensions.GetSolutionRoot(appHostDirectory));
+        }
+        finally
+        {
+            solutionRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetSolutionRoot_WithoutSolution_UsesAppHostParent()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var appHostDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "AppHost")).FullName;
+
+            Assert.Equal(directory.FullName, BlazorGatewayExtensions.GetSolutionRoot(appHostDirectory));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void WithBlazorClientApp_RunModeGateway_ForwardsServiceReferences()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

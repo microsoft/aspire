@@ -32,28 +32,6 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
     }
 
     [Fact]
-    public void EmitProxyConfiguration_WithProxyRouteOrder_PrioritizesApiAndOtlpRoutes()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
-            .WithHttpsEndpoint();
-        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
-        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
-        var env = new Dictionary<string, object>();
-
-        GatewayConfigurationBuilder.EmitProxyConfiguration(
-            env,
-            [registration],
-            gateway.GetEndpoint("https"),
-            httpOtlpEndpoint: "http://localhost:4318",
-            proxyRouteOrder: int.MinValue);
-
-        Assert.Equal(int.MinValue, env["ReverseProxy__Routes__route-store-weatherapi__Order"]);
-        Assert.Equal(int.MinValue, env["ReverseProxy__Routes__route-otlp-store__Order"]);
-    }
-
-    [Fact]
     public void EmitProxyConfiguration_EmitsYarpCluster_ForService()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
