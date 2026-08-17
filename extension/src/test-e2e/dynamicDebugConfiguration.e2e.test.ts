@@ -62,7 +62,6 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.strictEqual(configurationIndexes.length, 2, `Expected two Aspire dynamic configurations. Visible labels: ${JSON.stringify(quickPickLabels)}`);
 
         const secondFolderConfigurationIndex = configurationIndexes[1];
-        const secondFolderConfiguration = quickPickLabels[secondFolderConfigurationIndex];
         const beforeFirstLaunch = getDebugConsoleOutputCount();
         await chooseActiveQuickPickAtIndex(secondFolderConfigurationIndex);
 
@@ -73,11 +72,7 @@ suite('Aspire dynamic debug configuration E2E', function () {
         await waitForNoDebugSessions();
 
         const beforeSecondLaunch = getDebugConsoleOutputCount();
-        const startStatus = await executeE2eControlCommand({
-            name: 'startDynamicConfigurationByName',
-            configurationName: secondFolderConfiguration,
-        }, { timeoutMs: 60000 });
-        assert.strictEqual(startStatus.result, true);
+        await executeCommandFromPalette('Debug: Start Debugging');
 
         const secondLaunch = await waitForLaunchOutput(beforeSecondLaunch);
         assert.ok(secondLaunch.appHostPath);
