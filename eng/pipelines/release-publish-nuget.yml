@@ -2353,10 +2353,13 @@ extends:
       #      supported by the Releases REST API.
       #
       #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
-      #      GitHub Actions workflow after release asset upload. The workflow
-      #      reads the .sha512 assets, commits eng/nix/versions.json to
-      #      the update-baseline-<version> branch, and opens the PR from that
-      #      branch (release-github-tasks.yml created only the branch via
+      #      GitHub Actions workflow. It reads the aspire-cli-*.tar.gz.sha512
+      #      checksums from the signed source build's BlobArtifacts and passes
+      #      them to the workflow as inputs, so the manifest is built from the
+      #      build (not the draft release, whose assets aren't publicly
+      #      downloadable). The workflow commits eng/nix/versions.json to the
+      #      update-baseline-<version> branch and opens the PR from that branch
+      #      (release-github-tasks.yml created only the branch via
       #      defer_baseline_pr=true; PR creation is handled here).
       #
       # After these jobs succeed the release is a fully-prepared DRAFT — the
@@ -2638,13 +2641,17 @@ extends:
                   ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
                   ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
 
-          # Dispatch the Nix manifest update workflow only after the GitHub
-          # release assets are live. The updater reads the release .sha512
-          # assets, commits eng/nix/versions.json to the update-baseline-<version>
-          # branch created by release-github-tasks.yml (which deferred PR creation
-          # via defer_baseline_pr=true), and opens the PR from that branch.
-          # Accepting 'Skipped' supports partial-failure re-runs where the
-          # assets were already uploaded and SkipReleaseAssets=true is used.
+          # Dispatch the Nix manifest update workflow. The checksums come from
+          # the signed source build's BlobArtifacts (the .sha512 sidecars this
+          # job downloads below), NOT from the GitHub release, so the manifest
+          # can be produced while the release is still an unpublished draft —
+          # required for immutable releases. The updater commits
+          # eng/nix/versions.json to the update-baseline-<version> branch created
+          # by release-github-tasks.yml (which deferred PR creation via
+          # defer_baseline_pr=true) and opens the PR from that branch. dependsOn
+          # PublishReleaseAssetsJob is kept for ordering (branch creation +
+          # single release upload), and accepting 'Skipped' supports
+          # partial-failure re-runs where SkipReleaseAssets=true is used.
           - job: UpdateNixPackageJob
             displayName: 'Update baseline PR with Nix flake manifest'
             dependsOn: PublishReleaseAssetsJob
@@ -2675,10 +2682,56 @@ extends:
                 displayName: 'Checkout repo (for dispatch script)'
                 fetchDepth: 1
 
+              # Download the aspire-cli-* .sha512 sidecars from the source build.
+              # These are the checksums we forward to the Nix updater so it never
+              # has to read the (draft, non-public) GitHub release assets. Only
+              # the tiny .sha512 files are needed here — not the archives — so the
+              # glob is narrowed accordingly. See PublishReleaseAssetsJob for the
+              # broader '**/aspire-cli-*' download and the reason the '**/' prefix
+              # is required (the artifact name is a path prefix on each item).
+              - download: aspire-build
+                displayName: 'Download aspire-cli-*.sha512 from Source Build'
+                artifact: BlobArtifacts
+                patterns: '**/aspire-cli-*.sha512'
+
               - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $version   = "$(ReleaseVersionEffective)"
+                  $assetsDir = Join-Path "$(Pipeline.Workspace)" 'aspire-build/BlobArtifacts'
+
+                  # The Nix flake ships the .tar.gz (macOS/Linux) archives only, so
+                  # read just those four RIDs' checksums. Map each to the workflow
+                  # input name expected by update-nix-cli-flake.yml.
+                  $ridToInput = [ordered]@{
+                    'osx-arm64'   = 'sha512_osx_arm64'
+                    'osx-x64'     = 'sha512_osx_x64'
+                    'linux-arm64' = 'sha512_linux_arm64'
+                    'linux-x64'   = 'sha512_linux_x64'
+                  }
+
                   $inputs = @{
-                    release_version = "$(ReleaseVersionEffective)"
-                    dry_run        = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                    release_version = $version
+                    dry_run         = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                  }
+
+                  foreach ($rid in $ridToInput.Keys) {
+                    $shaPath = Join-Path $assetsDir "aspire-cli-$rid-$version.tar.gz.sha512"
+                    if (-not (Test-Path $shaPath)) {
+                        Write-Host "ERROR: No .sha512 companion found for aspire-cli-$rid-$version.tar.gz (expected at $shaPath). The source build must produce the CLI archives and their checksums before the Nix manifest can be built." -ForegroundColor Red
+                        exit 1
+                    }
+
+                    # .sha512 files emitted by the build are a single line:
+                    # <hex-hash>[whitespace<filename>]. Take the first token and
+                    # lowercase it, matching publish-release-cli-assets.ps1.
+                    $hex = ((Get-Content $shaPath -Raw).Trim() -split '\s+')[0].ToLower()
+                    if ($hex -notmatch '^[0-9a-f]{128}$') {
+                        Write-Host "ERROR: '$shaPath' did not contain a 128-char hex SHA512 (got '$hex')." -ForegroundColor Red
+                        exit 1
+                    }
+
+                    $inputs[$ridToInput[$rid]] = $hex
+                    Write-Host "  $($ridToInput[$rid]) = $hex"
                   }
 
                   & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `

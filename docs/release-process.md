@@ -16,7 +16,7 @@ The Aspire release process uses these main automation components:
    - Optionally publishes the signed VS Code extension to the Visual Studio Marketplace.
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot` GitHub App and waits for it to complete.
    - Uploads `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the **draft** GitHub Release as the `aspire-repo-bot`.
-   - Dispatches the Nix flake update workflow after the stable release assets are uploaded to the draft.
+   - Dispatches the Nix flake update workflow, passing the `aspire-cli-*.tar.gz.sha512` checksums read from the source build's `BlobArtifacts` (so the manifest is built from the build, not the draft release).
 2. **GitHub Actions workflow** (`.github/workflows/release-github-tasks.yml`)
    - Creates Git tags.
    - Creates **draft** GitHub Releases (see [Draft-then-publish release flow](#draft-then-publish-release-flow)).
@@ -27,7 +27,7 @@ The Aspire release process uses these main automation components:
    - Triggered when the draft release is created.
    - Replaces the placeholder release notes body with auto-generated notes against the live draft (via the gh-aw `update-release` safe output).
 4. **GitHub Actions workflow** (`.github/workflows/update-nix-cli-flake.yml`)
-   - Reads the stable release's official `.sha512` assets after `release-publish-nuget` uploads them.
+   - Receives the CLI `.sha512` checksums from the AzDO pipeline (sourced from the source build's `BlobArtifacts`), so it can run while the release is still a draft. Manual runs against a published release omit the inputs and read the release's `.sha512` assets instead.
    - Updates `eng/nix/versions.json`.
    - Commits the Nix manifest update to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, then creates or updates the PR.
    - Normally dispatched automatically by the AzDO pipeline; it can also be run manually as a fallback after the GitHub release assets are live.
@@ -68,7 +68,7 @@ Aspire ships through several channels. The release pipeline either submits the b
 | **Homebrew cask** (`brew install --cask aspire`) | Upstream Homebrew/homebrew-cask's [autobump workflow](https://github.com/Homebrew/homebrew-cask/blob/master/.github/workflows/autobump.yml) opens the bump PR on a 3-hour schedule, detecting the new version via the cask's `livecheck` block. `homebrew-validate-release.yml` validates the cask against the live GitHub release after the release manager publishes it. | [`eng/homebrew/README.md`](../eng/homebrew/README.md) |
 | **`dotnet tool install -g Aspire.Cli`** | `release-publish-nuget` pushes the per-RID `Aspire.Cli.*.nupkg` packages to NuGet.org alongside the libraries | [`docs/specs/install-routes.md`](specs/install-routes.md) |
 | **Install script** (`get-aspire-cli.sh` / `.ps1`) | No separate publication — the script downloads directly from the GitHub release assets attached in Step 1 | [`docs/specs/install-routes.md`](specs/install-routes.md), `eng/scripts/get-aspire-cli.*` |
-| **Nix flake** (`nix run github:microsoft/aspire#aspire-cli`) | `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml` after stable GitHub release assets are uploaded; the workflow adds the manifest update to the baseline version branch and creates or updates the PR | [`eng/nix/README.md`](../eng/nix/README.md), [`docs/ci/native-cli-packaging.md`](ci/native-cli-packaging.md) |
+| **Nix flake** (`nix run github:microsoft/aspire#aspire-cli`) | `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml`, passing the CLI `.sha512` checksums from the source build; the workflow adds the manifest update to the baseline version branch and creates or updates the PR | [`eng/nix/README.md`](../eng/nix/README.md), [`docs/ci/native-cli-packaging.md`](ci/native-cli-packaging.md) |
 
 The CLI identifies which channel installed it via a per-install sidecar so that self-update can route back through the same channel. See [`docs/specs/install-routes.md`](specs/install-routes.md).
 
@@ -125,7 +125,7 @@ Before starting a release:
    | `SkipWinGetPublish` | Set `true` if re-running after WinGet success. | `true` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
-   | `SkipNixPackageUpdate` | Set `true` if the Nix flake update was already added to the baseline version PR. Stable releases dispatch the updater after the GitHub release assets are uploaded; prereleases skip it. | `false` |
+   | `SkipNixPackageUpdate` | Set `true` if the Nix flake update was already added to the baseline version PR. Stable releases dispatch the updater with checksums from the source build; prereleases skip it. | `false` |
    | `SkipVSCodeExtensionPublish` | Set `false` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace. | `true` |
    | `NpmPublishOwners` | Single ESRP owner alias or email. Overrides must be one of the required owner aliases in `eng/pipelines/release-publish-nuget.yml` (currently `joperezr` or `ankj`). | `joperezr` |
    | `NpmPublishApprovers` | Single ESRP approver alias or email. The approver must be a Microsoft address and must not be the same alias as the owner. | `adamratzman` |
@@ -135,7 +135,7 @@ Before starting a release:
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown.
    - The picker shows all recent builds from the `microsoft-aspire` pipeline regardless of branch. Pick the build that corresponds to the release branch and version you intend to ship.
    - Each build's tags are shown alongside its number. Verify the `release-version - X.Y.Z` tag matches the version you intend to ship before clicking **Run**. If the tag is missing, either re-run the source build after the tag-emitting change in `azure-pipelines.yml` is on that release branch or pass an explicit `ReleaseVersion` override.
-5. Click **Run** and monitor the pipeline. The final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created **draft** GitHub release, and then dispatches `update-nix-cli-flake.yml` for stable releases so `eng/nix/versions.json` is bumped from the `.sha512` assets on the `update-baseline-<version>` branch before the baseline PR is created or updated. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Nix update dispatch succeed.
+5. Click **Run** and monitor the pipeline. The final stage (`GitHubTasks`) dispatches `release-github-tasks.yml`, waits for it to complete, uploads the `aspire-cli-*` archives from the source build's `BlobArtifacts` onto the newly-created **draft** GitHub release, and then dispatches `update-nix-cli-flake.yml` for stable releases so `eng/nix/versions.json` is bumped from the source build's `.sha512` checksums on the `update-baseline-<version>` branch before the baseline PR is created or updated. The AzDO pipeline only succeeds if the enabled GitHub tasks, asset upload, and Nix update dispatch succeed.
 6. Verify packages appear on NuGet.org and npm, verify that the `aspire-cli-*` archives are attached to the draft GitHub release, and review the generated baseline version PR including the Nix flake manifest update. Then proceed to [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 
 To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
@@ -264,7 +264,7 @@ These automations are designed to be idempotent and safe to re-run.
 | Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
 | GitHubTasks dispatch | Re-run with completed AzDO-side work skipped and `SkipGitHubTasks: false`; set `SkipReleaseAssets` according to whether release asset upload already completed. |
 | Release asset upload | Re-run with `SkipGitHubTasks: true` and `SkipReleaseAssets: false` after the draft GitHub release exists. |
-| Nix flake update dispatch | Re-run with `SkipGitHubTasks: true`, `SkipReleaseAssets: true`, and `SkipNixPackageUpdate: false` after the stable GitHub release assets and `update-baseline-<version>` branch exist. If the Nix manifest was already committed to the baseline PR, set `SkipNixPackageUpdate: true` instead. For prereleases, leave it skipped because the Nix manifest only tracks stable `x.y.z` releases. |
+| Nix flake update dispatch | Re-run with `SkipGitHubTasks: true`, `SkipReleaseAssets: true`, and `SkipNixPackageUpdate: false` after the `update-baseline-<version>` branch exists. The job sources checksums from the source build's `BlobArtifacts`, so it does not require the GitHub release assets to be uploaded first. If the Nix manifest was already committed to the baseline PR, set `SkipNixPackageUpdate: true` instead. For prereleases, leave it skipped because the Nix manifest only tracks stable `x.y.z` releases. |
 
 ### GitHub Actions failures
 
@@ -392,8 +392,8 @@ Official source build
      -> signed native archives / native CLI packages
      -> npm tarballs verified against the native archive
   -> PackageArtifacts: NuGet packages
-  -> BlobArtifacts: microsoft-aspire-cli*.tgz and aspire-cli-* release assets
-  -> eng/nix/versions.json can be updated from the published aspire-cli-* release assets
+  -> BlobArtifacts: microsoft-aspire-cli*.tgz and aspire-cli-* archives + .sha512 sidecars
+  -> eng/nix/versions.json is updated from the build's aspire-cli-*.tar.gz.sha512 checksums
 
 Azure DevOps release-publish-nuget.yml
   -> PrepareArtifacts
@@ -412,7 +412,8 @@ Azure DevOps release-publish-nuget.yml
   -> GitHubTasks
      -> dispatch release-github-tasks.yml as aspire-repo-bot
      -> upload aspire-cli-* assets to the draft GitHub release
-     -> dispatch update-nix-cli-flake.yml as aspire-repo-bot (stable releases)
+     -> dispatch update-nix-cli-flake.yml as aspire-repo-bot (stable releases),
+        passing the build's aspire-cli-*.tar.gz.sha512 checksums as inputs
 
 GitHub release-github-tasks.yml
   -> create tag
@@ -421,9 +422,9 @@ GitHub release-github-tasks.yml
   -> create baseline version branch
   -> create baseline version PR immediately only when Nix update is skipped or the workflow is run manually without deferral
 
-GitHub update-nix-cli-flake.yml (dispatched after asset upload, stable releases)
-  -> read .sha512 assets from the draft GitHub release
-  -> update eng/nix/versions.json
+GitHub update-nix-cli-flake.yml (dispatched by UpdateNixPackageJob, stable releases)
+  -> receive the build's aspire-cli-*.tar.gz.sha512 checksums as inputs
+  -> update eng/nix/versions.json (no draft-release read needed)
   -> commit the Nix manifest update to update-baseline-<version>
   -> create or update the baseline version PR
 
