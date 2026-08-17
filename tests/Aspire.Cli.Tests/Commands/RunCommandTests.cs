@@ -926,6 +926,46 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_DetachedChild_PreservesAppHostArgumentsAfterSingleSeparator()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var expectedAppHostArguments = new[] { "true", "false", string.Empty, "--detach", "--option-shaped" };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--detach",
+            "--apphost", appHostFile.FullName,
+            "--no-build",
+            "--",
+            .. expectedAppHostArguments
+        ]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
+
+        AssertDetachedChildArguments(command, processFactory.LastArguments, expectedAppHostArguments);
+    }
+
+    [Fact]
     public async Task RunCommand_WithoutDetachFlag_ShowsUpdateNotification()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -3986,6 +4026,41 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(process.Id);
         Assert.NotNull(startTime);
         return startTime.Value;
+    }
+
+    private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)
+    {
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        return appHostFile;
+    }
+
+    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string[] expectedAppHostArguments)
+    {
+        var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
+        var separatorIndex = Array.IndexOf(forwardedArguments, "--");
+        var noBuildIndex = Array.IndexOf(forwardedArguments, "--no-build");
+
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--"));
+        Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
+        Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
+        Assert.Equal(["--no-build", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
+        var childParseResult = command.Parse(["run", .. forwardedArguments[noBuildIndex..]]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
+    }
+
+    private static string[] ExtractForwardedRunArguments(string[] childArguments)
+    {
+        var runIndex = Array.IndexOf(childArguments, "run");
+        Assert.True(runIndex >= 0, "Expected detached child arguments to include the run command.");
+
+        return childArguments[runIndex..];
     }
 
 }

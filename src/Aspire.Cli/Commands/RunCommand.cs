@@ -1200,7 +1200,8 @@ internal sealed class RunCommand : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var appHostArgs = parseResult.UnmatchedTokens;
+        var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -1209,6 +1210,12 @@ internal sealed class RunCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (appHostArgs.Count > 0)
+        {
+            additionalArgs.Add("--");
+            additionalArgs.AddRange(appHostArgs);
         }
 
         return _appHostLauncher.LaunchDetachedAsync(

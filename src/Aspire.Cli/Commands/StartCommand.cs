@@ -58,7 +58,8 @@ internal sealed class StartCommand : BaseCommand
         var isExtensionHost = false;
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.ToList();
+        var appHostArgs = parseResult.UnmatchedTokens;
+        var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -105,6 +106,12 @@ internal sealed class StartCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (appHostArgs.Count > 0)
+        {
+            additionalArgs.Add("--");
+            additionalArgs.AddRange(appHostArgs);
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
