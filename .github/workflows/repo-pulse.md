@@ -32,7 +32,7 @@ network: defaults
 tools:
   # Shell access is explicit because the unfiltered GitHub integrity setting
   # requires an intentional allowlist for reading the preloaded data bundle.
-  bash: ["cat", "ls", "find", "grep", "head", "tail", "wc"]
+  bash: ["cat", "ls", "grep", "head", "tail", "wc"]
   github:
     # Data collection runs in pre-agent-steps via `gh api`; the agent
     # does not need to search GitHub itself.

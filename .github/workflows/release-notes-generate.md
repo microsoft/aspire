@@ -68,7 +68,7 @@ safe-outputs:
 tools:
   # Shell access is explicit because the unfiltered GitHub integrity setting
   # requires an intentional allowlist.
-  bash: ["cat", "ls", "find", "grep", "head", "tail", "wc"]
+  bash: ["cat", "ls", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes get_release_by_tag / list_releases and commit-comparison
     # APIs. `pull_requests` and `search` are used to enrich commits with PR
