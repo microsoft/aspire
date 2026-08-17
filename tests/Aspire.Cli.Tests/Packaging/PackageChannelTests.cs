@@ -8,6 +8,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -235,6 +236,153 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetIntegrationPackagesAsync_WithStableRemoteSource_QueriesOnlyStablePackages()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stableSearches = 0;
+        var prereleaseSearches = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseSearches);
+                    return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [
+                        new() { Id = "Aspire.Hosting.Azure.Kubernetes", Version = "13.5.0-preview.1" },
+                        new() { Id = "Aspire.Hosting.Redis", Version = "13.6.0-preview.1" }
+                    ]);
+                }
+
+                Interlocked.Increment(ref stableSearches);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                [
+                    new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" }
+                ]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Stable,
+            [new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.Equal(1, stableSearches);
+        Assert.Equal(0, prereleaseSearches);
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.Redis", package.Id);
+        Assert.Equal("13.5.0", package.Version);
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_WithPrereleaseRemoteSource_QueriesOnlyPrereleaseAndFiltersStableNoise()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stableSearches = 0;
+        var prereleaseSearches = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                if (!prerelease)
+                {
+                    Interlocked.Increment(ref stableSearches);
+                    return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+                }
+
+                Interlocked.Increment(ref prereleaseSearches);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                [
+                    new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" },
+                    new() { Id = "Aspire.Hosting.Redis", Version = "13.6.0-preview.1" }
+                ]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Daily,
+            PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", "https://daily.example/v3/index.json")],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.Equal(0, stableSearches);
+        Assert.Equal(1, prereleaseSearches);
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.Redis", package.Id);
+        Assert.Equal("13.6.0-preview.1", package.Version);
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_WithBothRemoteSource_ReturnsStableAndPrereleasePackages()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stableSearches = 0;
+        var prereleaseSearches = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseSearches);
+                    return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [
+                        new() { Id = "Aspire.Hosting.Azure.Kubernetes", Version = "13.6.0-pr.19404.gf51e8e1d" },
+                        new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" },
+                        new() { Id = "Aspire.Hosting.Redis", Version = "13.6.0-preview.1" }
+                    ]);
+                }
+
+                Interlocked.Increment(ref stableSearches);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                [
+                    new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" }
+                ]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "pr-19404",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "https://pr.example/v3/index.json")],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+            .OrderBy(package => package.Id, StringComparer.Ordinal)
+            .ThenBy(package => package.Version, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(1, stableSearches);
+        Assert.Equal(1, prereleaseSearches);
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Azure.Kubernetes", package.Id);
+                Assert.Equal("13.6.0-pr.19404.gf51e8e1d", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("13.5.0", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("13.6.0-preview.1", package.Version);
+            });
+    }
+
+    [Fact]
     public async Task GetIntegrationPackagesAsync_WithStableLocalSource_ReturnsOnlyStablePackages()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -270,6 +418,34 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var package = Assert.Single(packages);
         Assert.Equal("Aspire.Hosting.Redis", package.Id);
         Assert.Equal("13.5.0-preview.1", package.Version);
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_WithBothLocalSource_ReturnsLatestPackageAcrossQualities()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Redis.13.5.0.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Redis.13.6.0-preview.1.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Azure.Kubernetes.13.6.0-pr.19404.gf51e8e1d.nupkg"), string.Empty);
+
+        var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Both);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Azure.Kubernetes", package.Id);
+                Assert.Equal("13.6.0-pr.19404.gf51e8e1d", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("13.6.0-preview.1", package.Version);
+            });
     }
 
     [Fact]

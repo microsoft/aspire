@@ -449,8 +449,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideTempDir()
     {
         // End-to-end pin for the staging temp-config hang fix: when the real PackagingService
-        // synthesizes the staging channel (here driven by overrideStagingFeed on a stable-shaped
-        // CLI so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
+        // synthesizes the staging channel (here driven by overrideStagingFeed on a staging
+        // identity so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
         // PrebuiltAppHostServer must point globalPackagesFolder at an absolute path that survives
         // the TemporaryNuGetConfig.Dispose recursive delete. Otherwise BundleNuGetService restores
         // staging assemblies into <temp>/.nugetpackages, bakes those paths into
@@ -473,8 +473,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache(),
             new TestFeatures(),
             configuration,
-            NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => true);
+            NullLogger<PackagingService>.Instance);
 
         var server = CreateServerWithPackagingService(workspace, packagingService, executionContext);
 
