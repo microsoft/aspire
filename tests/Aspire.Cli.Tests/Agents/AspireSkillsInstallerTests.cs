@@ -518,13 +518,20 @@ public class AspireSkillsInstallerTests
             var cachedBundleDirectory = GetBundleCacheDirectory(executionContext, embeddedBundleProvider.Metadata!.Sha512!);
             await CreateCachedBundleAsync(cachedBundleDirectory, archiveSha512: embeddedBundleProvider.Metadata!.Sha512);
             Directory.CreateDirectory(Path.Combine(cachedBundleDirectory, ".lastused"));
-            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+            var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                embeddedBundleProvider: embeddedBundleProvider,
+                features: features);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(Directory.Exists(cachedBundleDirectory));
+            Assert.False(embeddedBundleProvider.CreateBundleCalled);
         }
         finally
         {
@@ -896,13 +903,29 @@ public class AspireSkillsInstallerTests
                 FileShare.None);
             var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
             var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var retryObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var sink = new TestSink();
+            sink.MessageLogged += context =>
+            {
+                if (context.Message?.Contains(CacheLockRetryLogMessage, StringComparison.Ordinal) == true)
+                {
+                    retryObserved.TrySetResult();
+                }
+            };
+            var logger = new TestLogger<AspireSkillsInstaller>(new TestLoggerFactory(sink, enabled: true));
             var installer = CreateInstaller(
                 executionContext,
                 embeddedBundleProvider: embeddedBundleProvider,
-                features: features);
+                features: features,
+                logger: logger);
+            using var cancellationTokenSource = new CancellationTokenSource();
 
+            var installTask = installer.InstallAsync(cancellationTokenSource.Token);
+            await retryObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(installTask.IsCompleted);
+            cancellationTokenSource.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => installer.InstallAsync(new CancellationToken(canceled: true)));
+                () => installTask);
         }
         finally
         {
@@ -1376,39 +1399,6 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(embeddedBundleProvider.CreateBundleCalled);
-            Assert.False(attestationVerifier.VerifyCalled);
-        }
-        finally
-        {
-            Directory.Delete(rootDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabledAndCacheExists_UsesCacheWithoutNetwork()
-    {
-        var rootDirectory = CreateTempDirectory();
-
-        try
-        {
-            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
-            var cachedBundleDirectory = GetBundleCacheDirectory(executionContext, embeddedBundleProvider.Metadata!.Sha512!);
-            await CreateCachedBundleAsync(cachedBundleDirectory, archiveSha512: embeddedBundleProvider.Metadata!.Sha512);
-            var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
-            var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when cache is used."));
-            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
-            var installer = CreateInstaller(
-                executionContext,
-                httpMessageHandler: handler,
-                githubArtifactAttestationVerifier: attestationVerifier,
-                embeddedBundleProvider: embeddedBundleProvider,
-                features: features);
-
-            var result = await installer.InstallAsync(CancellationToken.None);
-
-            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
-            Assert.NotNull(result.Bundle);
             Assert.False(attestationVerifier.VerifyCalled);
         }
         finally
