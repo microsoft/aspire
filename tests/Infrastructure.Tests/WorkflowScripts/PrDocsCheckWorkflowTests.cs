@@ -75,6 +75,18 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public void OutcomeValidatorReadsCanonicalBase()
+    {
+        var validator = File.ReadAllText(
+            Path.Combine(RepoRoot.Path, ".github", "workflows", "pr-docs-check", "validate_outcome.py"));
+
+        Assert.Contains("create_pull_request.get(\"base\")", validator, StringComparison.Ordinal);
+        Assert.Equal(
+            -1,
+            validator.IndexOf("create_pull_request.get(\"base_branch\")", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SourceAndCompiledWorkflowGuardDraftedPrBase()
     {
         foreach (var workflowName in new[] { "pr-docs-check.md", "pr-docs-check.lock.yml" })
