@@ -566,6 +566,27 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.cliPath, customPath);
         });
 
+        test('keeps a bare configured command name as an explicit probeable value', async () => {
+            const configuredPath = 'aspire';
+            const tryExecute = sinon.stub().callsFake(async candidate => candidate === configuredPath);
+            const findOnPath = sinon.stub().resolves('/somewhere/else/aspire');
+
+            const result = await resolveCliPath(createMockDeps({
+                getConfiguredPath: () => configuredPath,
+                findOnPath,
+                tryExecute,
+            }));
+
+            assert.deepStrictEqual(result, {
+                cliPath: configuredPath,
+                available: true,
+                source: 'configured',
+            });
+            assert.ok(tryExecute.calledOnceWithExactly(configuredPath));
+            assert.ok(findOnPath.notCalled);
+            assert.strictEqual(isConfiguredCliPathRejectedForForwarding(configuredPath), false);
+        });
+
         test('keeps an explicitly configured Windows command shim ahead of PATH', async () => {
             const configuredShim = 'C:\\Users\\user\\.dotnet\\tools\\aspire.cmd';
             const findOnPath = sinon.stub().resolves('aspire');
@@ -696,6 +717,47 @@ suite('utils/cliPath tests', () => {
 
             assert.strictEqual(result.source, 'path');
             assert.ok(isConfiguredCliPathRejectedForForwarding(configuredPath));
+        });
+
+        test('rejects a configured POSIX relative path-like value and falls through to PATH without probing it', async () => {
+            const relativeConfiguredPath = './tools/aspire';
+            const tryExecute = sinon.stub().resolves(true);
+            const findOnPath = sinon.stub().resolves('aspire');
+
+            const result = await resolveCliPath(createMockDeps({
+                getConfiguredPath: () => relativeConfiguredPath,
+                findOnPath,
+                tryExecute,
+            }));
+
+            assert.deepStrictEqual(result, {
+                cliPath: 'aspire',
+                available: true,
+                source: 'path',
+            });
+            assert.ok(tryExecute.notCalled);
+            assert.ok(findOnPath.calledOnce);
+            assert.ok(isConfiguredCliPathRejectedForForwarding(relativeConfiguredPath));
+        });
+
+        test('rejects a configured Windows relative path-like value and falls through to default discovery without probing it', async () => {
+            const relativeConfiguredPath = '.\\tools\\aspire.cmd';
+            const discoveredCliPath = 'C:\\Users\\me\\.aspire\\bin\\aspire.exe';
+            const tryExecute = sinon.stub().resolves(true);
+
+            const result = await resolveCliPath(createMockDeps({
+                getConfiguredPath: () => relativeConfiguredPath,
+                findAtDefaultPath: async () => discoveredCliPath,
+                tryExecute,
+            }));
+
+            assert.deepStrictEqual(result, {
+                cliPath: discoveredCliPath,
+                available: true,
+                source: 'default-install',
+            });
+            assert.ok(tryExecute.notCalled);
+            assert.ok(isConfiguredCliPathRejectedForForwarding(relativeConfiguredPath));
         });
 
         test('does not suppress forwarding when the configured path executes successfully', async () => {

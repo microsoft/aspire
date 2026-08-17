@@ -69,6 +69,10 @@ function isAbsoluteCliPath(cliPath: string): boolean {
     return path.posix.isAbsolute(cliPath) || isFullyQualifiedWindowsPath(cliPath);
 }
 
+function isRelativePathLikeCliPath(cliPath: string): boolean {
+    return !isAbsoluteCliPath(cliPath) && (cliPath.includes('/') || cliPath.includes('\\'));
+}
+
 function containsCliPath(paths: readonly string[], candidate: string): boolean {
     return paths.some(defaultPath => areCliPathsEqual(defaultPath, candidate));
 }
@@ -503,19 +507,29 @@ async function resolveCliPathCore(
 
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && (!configuredPathIsLegacyDefault || isCommandShimPath(configuredPath))) {
-        const isValid = await deps.tryExecute(configuredPath);
-        if (isValid) {
-            updateRejectedConfiguredCliPath(configuredPath, undefined, deps.getConfiguredPath, resolutionGeneration);
-            return { cliPath: configuredPath, available: true, source: 'configured' };
+        if (isRelativePathLikeCliPath(configuredPath)) {
+            // The setting describes an executable path. Probing a relative path here would resolve
+            // it against the extension host's cwd, while later AppHost launches resolve it from a
+            // different working directory and can therefore pick a different executable.
+            extensionLogOutputChannel.warn(`Configured CLI path is relative and will not be probed: ${configuredPath}`);
+            extensionLogOutputChannel.warn('Suppressing AspireCliPath forwarding for the rejected configured CLI path');
+            updateRejectedConfiguredCliPath(configuredPath, configuredPath, deps.getConfiguredPath, resolutionGeneration);
         }
+        else {
+            const isValid = await deps.tryExecute(configuredPath);
+            if (isValid) {
+                updateRejectedConfiguredCliPath(configuredPath, undefined, deps.getConfiguredPath, resolutionGeneration);
+                return { cliPath: configuredPath, available: true, source: 'configured' };
+            }
 
-        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
-        // Everything below this point resolves a different CLI. The setting is kept so an
-        // explicit user pin is not silently erased, but it must stop being forwarded as
-        // AspireCliPath, otherwise MSBuild resolves bundle assets from the CLI that failed.
-        extensionLogOutputChannel.warn('Suppressing AspireCliPath forwarding for the rejected configured CLI path');
-        updateRejectedConfiguredCliPath(configuredPath, configuredPath, deps.getConfiguredPath, resolutionGeneration);
-        // Continue to check other locations
+            extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
+            // Everything below this point resolves a different CLI. The setting is kept so an
+            // explicit user pin is not silently erased, but it must stop being forwarded as
+            // AspireCliPath, otherwise MSBuild resolves bundle assets from the CLI that failed.
+            extensionLogOutputChannel.warn('Suppressing AspireCliPath forwarding for the rejected configured CLI path');
+            updateRejectedConfiguredCliPath(configuredPath, configuredPath, deps.getConfiguredPath, resolutionGeneration);
+            // Continue to check other locations
+        }
     }
     else {
         updateRejectedConfiguredCliPath(configuredPath, undefined, deps.getConfiguredPath, resolutionGeneration);
