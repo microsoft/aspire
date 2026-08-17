@@ -13,6 +13,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -915,7 +916,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     private static async Task ExecutePipelineAsync(DistributedApplication app)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(30));
+        cts.CancelAfter(TestConstants.LongTimeoutTimeSpan);
         var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
         var context = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
