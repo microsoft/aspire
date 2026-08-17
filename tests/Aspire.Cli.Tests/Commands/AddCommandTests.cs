@@ -2428,6 +2428,46 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    // The staging channel can see the current SHA package alongside an older NuGet.org fallback.
+    // A same-line stable package outranks its preview, while a current-line preview-only integration
+    // outranks a stable package from the previous release.
+    [InlineData("13.5.0", "13.5.0-preview.1.26415.2", "13.5.0")]
+    [InlineData("13.4.6", "13.5.0-preview.1.26415.2", "13.5.0-preview.1.26415.2")]
+    public async Task AddCommandPrompter_StagingChannelSelectsHighestVersionAcrossPackageQualities(
+        string stableVersion,
+        string prereleaseVersion,
+        string expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                [CreatePackage("Aspire.Hosting.Redis", prerelease ? prereleaseVersion : stableVersion)])
+        };
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "staging")],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var packages = (await stagingChannel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+            .Select(package => ("redis", package, stagingChannel))
+            .ToArray();
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().First()
+        };
+        var prompter = new AddCommandPrompter(interactionService);
+
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, PackageChannelNames.Staging, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(expectedVersion, result.Package.Version);
+        Assert.Same(stagingChannel, result.Channel);
+    }
+
+    [Theory]
     [InlineData(KnownLanguageId.CSharp, PackageChannelNames.Staging, "13.5.0", "13.5.0-preview.1.26415.2")]
     [InlineData(KnownLanguageId.TypeScript, PackageChannelNames.Staging, "13.5.0", "13.5.0-preview.1.26415.2")]
     [InlineData(KnownLanguageId.CSharp, PackageChannelNames.Daily, "13.6.0-preview.1.26415.1", "13.6.0-preview.1.26415.1")]
