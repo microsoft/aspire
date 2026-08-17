@@ -51,6 +51,13 @@ public static class BlazorGatewayExtensions
             // Keep the ProjectResource shape and project defaults for dashboard and endpoint behavior, but force
             // process execution so IDEs do not launch the file-based app represented by its project metadata.
             gateway
+                .WithInitialState(new CustomResourceSnapshot
+                {
+                    ResourceType = "Project",
+                    Properties = [
+                        new(CustomResourceKnownProperties.Source, string.Empty)
+                    ]
+                })
                 .WithAnnotation(new ExecutableAnnotation
                 {
                     Command = "dotnet",
@@ -357,7 +364,13 @@ public static class BlazorGatewayExtensions
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
 
-                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
+                GatewayConfigurationBuilder.EmitProxyConfiguration(
+                    context.EnvironmentVariables,
+                    registeredApps,
+                    gatewayEndpoint,
+                    httpGatewayEndpoint,
+                    httpOtlpEndpointUrl,
+                    proxyRouteOrder: int.MinValue);
             });
         }
 

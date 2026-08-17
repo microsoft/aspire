@@ -23,7 +23,8 @@ internal static class GatewayConfigurationBuilder
         List<GatewayAppRegistration> apps,
         EndpointReference gatewayEndpoint,
         EndpointReference? httpGatewayEndpoint = null,
-        object? httpOtlpEndpoint = null)
+        object? httpOtlpEndpoint = null,
+        int? proxyRouteOrder = null)
     {
         var addedClusters = new HashSet<string>();
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
@@ -64,7 +65,7 @@ internal static class GatewayConfigurationBuilder
                 reg.OtlpPrefix);
 
             EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyBlazorTelemetry, addedClusters,
-                reg.OtlpPrefix, httpOtlpEndpoint);
+                reg.OtlpPrefix, httpOtlpEndpoint, proxyRouteOrder);
         }
 
         if (apps.Any(app => app.ProxyBlazorTelemetry))
@@ -134,7 +135,8 @@ internal static class GatewayConfigurationBuilder
         bool proxyBlazorTelemetry,
         HashSet<string>? addedClusters,
         string otlpPrefix = DefaultOtlpPrefix,
-        object? httpOtlpEndpoint = null)
+        object? httpOtlpEndpoint = null,
+        int? proxyRouteOrder = null)
     {
         var pathBase = prefix != null ? $"/{prefix}" : "";
 
@@ -146,6 +148,10 @@ internal static class GatewayConfigurationBuilder
             env[$"ReverseProxy__Routes__{routeId}__ClusterId"] = clusterId;
             env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}/{{**catch-all}}";
             env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
+            if (proxyRouteOrder is not null)
+            {
+                env[$"ReverseProxy__Routes__{routeId}__Order"] = proxyRouteOrder.Value;
+            }
 
             // Use endpoint name as destination ID for named endpoints so multiple named
             // endpoints on the same service each get their own destination in the cluster.
@@ -162,6 +168,10 @@ internal static class GatewayConfigurationBuilder
             env[$"ReverseProxy__Routes__{otlpRouteId}__ClusterId"] = "cluster-otlp-dashboard";
             env[$"ReverseProxy__Routes__{otlpRouteId}__Match__Path"] = $"{pathBase}/{otlpPrefix}/{{**catch-all}}";
             env[$"ReverseProxy__Routes__{otlpRouteId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{otlpPrefix}";
+            if (proxyRouteOrder is not null)
+            {
+                env[$"ReverseProxy__Routes__{otlpRouteId}__Order"] = proxyRouteOrder.Value;
+            }
 
             if (env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var headersObj) && headersObj is string headersStr)
             {

@@ -32,6 +32,12 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(builder.AppHostDirectory, executable.WorkingDirectory);
         Assert.Single(gateway.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
 
+        var initialSnapshot = Assert.Single(gateway.Resource.Annotations.OfType<ResourceSnapshotAnnotation>()).InitialSnapshot;
+        var source = Assert.Single(
+            initialSnapshot.Properties,
+            property => property.Name == CustomResourceKnownProperties.Source);
+        Assert.Equal(string.Empty, source.Value);
+
         Assert.Collection(
             gateway.Resource.Annotations.OfType<EndpointAnnotation>().OrderBy(endpoint => endpoint.Name),
             endpoint => Assert.Equal("http", endpoint.Name),
