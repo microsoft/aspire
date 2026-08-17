@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
@@ -25,6 +25,9 @@ suite('Aspire Azure Functions E2E', function () {
         }
 
         await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await reloadWorkspaceForE2E();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
         // Opening the generated workspace reloads the extension host and returns VS Code to Explorer.

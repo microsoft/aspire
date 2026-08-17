@@ -87,6 +87,19 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
+    const reloadStatus = await executeE2eControlCommand(
+        { name: 'openWorkspaceFolder', folderPath: getWorkspaceRoot() },
+        { waitFor: 'started' });
+
+    // The fresh extension host initializes its state bridge without the command status
+    // written by the previous host, so this waits for the reload rather than stale state.
+    await waitForExtensionState(
+        file => file.control?.revision !== reloadStatus.revision,
+        'extension host to reload after reopening the E2E workspace',
+        timeoutMs);
+}
+
 export async function snapshotClipboardForE2E(): Promise<void> {
     await executeE2eControlCommand({ name: 'snapshotClipboard' });
 }

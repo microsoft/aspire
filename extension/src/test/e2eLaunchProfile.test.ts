@@ -523,17 +523,21 @@ suite('E2E launch profile', () => {
         assert.strictEqual(runner.includes('completedTests'), false);
     });
 
-    test('reopens the Aspire view after loading the generated Azure Functions workspace', () => {
+    test('reloads the generated Azure Functions workspace before reopening the Aspire view', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'azureFunctions.e2e.test.ts'), 'utf8');
         const firstOpenIndex = spec.indexOf('await openAspireView();');
-        const workspaceLoadedIndex = spec.indexOf('await waitForWorkspaceAppHost();');
+        const initialWorkspaceLoadedIndex = spec.indexOf('await waitForWorkspaceAppHost();');
+        const reloadWorkspaceIndex = spec.indexOf('await reloadWorkspaceForE2E();');
+        const reloadedWorkspaceIndex = spec.indexOf('await waitForWorkspaceAppHost();', initialWorkspaceLoadedIndex + 1);
         const reopenedViewIndex = spec.indexOf('await openAspireView();', firstOpenIndex + 1);
         const runAppHostIndex = spec.indexOf("name: 'runAppHost'");
 
         assert.ok(firstOpenIndex >= 0);
-        assert.ok(workspaceLoadedIndex > firstOpenIndex);
-        assert.ok(reopenedViewIndex > workspaceLoadedIndex);
+        assert.ok(initialWorkspaceLoadedIndex > firstOpenIndex);
+        assert.ok(reloadWorkspaceIndex > initialWorkspaceLoadedIndex);
+        assert.ok(reloadedWorkspaceIndex > reloadWorkspaceIndex);
+        assert.ok(reopenedViewIndex > reloadedWorkspaceIndex);
         assert.ok(runAppHostIndex > reopenedViewIndex);
     });
 
