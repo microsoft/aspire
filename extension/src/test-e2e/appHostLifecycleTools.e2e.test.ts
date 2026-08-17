@@ -266,6 +266,116 @@ suite('Aspire AppHost lifecycle E2E', function () {
             }
         });
 
+        test('runAspireCli requires a workspace-relative working directory', async () => {
+            const linkedFixture = fixture;
+            assert.ok(linkedFixture);
+            const relativeWorkingDirectory = path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath);
+
+            await assert.rejects(
+                () => invokeControlCommand({
+                    name: 'runAspireCli',
+                    args: ['--version'],
+                    workingDirectory: linkedFixture.linkedWorktreePath,
+                }),
+                /runAspireCli workingDirectory must be workspace-relative/);
+            await assert.rejects(
+                () => invokeControlCommand({
+                    name: 'runAspireCli',
+                    args: ['--version'],
+                    workingDirectory: path.join('..', path.basename(linkedFixture.linkedWorktreePath)),
+                }),
+                /runAspireCli workingDirectory must stay inside the configured E2E workspace root/);
+
+            const result = await invokeControlCommand<{ exitCode: number | null }>({
+                name: 'runAspireCli',
+                args: ['--version'],
+                workingDirectory: relativeWorkingDirectory,
+            });
+            assert.strictEqual(result.exitCode, 0);
+        });
+
+        test('runAspireCli waits for timed-out process tree cleanup', async () => {
+            const linkedFixture = fixture;
+            assert.ok(linkedFixture);
+            const wrapper = writeTimeoutCliWrapper();
+            let descendantPid: number | undefined;
+
+            try {
+                await writeWorkspaceCliPath(wrapper.cliPath);
+                await setE2eCliPathForE2E(wrapper.cliPath);
+                const invocation = invokeControlCommand({
+                    name: 'runAspireCli',
+                    args: ['timeout-tree'],
+                    workingDirectory: path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath),
+                    timeoutMs: 1000,
+                }, 30000);
+                invocation.catch(() => undefined);
+
+                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 10000);
+                await assert.rejects(invocation, /timed out after 1000ms/);
+                await waitForProcessExit(descendantPid, 5000);
+            }
+            finally {
+                await runE2eTeardown([
+                    () => restoreE2eCliPathForE2E(),
+                    () => restoreWorkspaceCliPath(),
+                ], 'runAspireCli timeout process tree E2E cleanup failed.');
+                if (descendantPid !== undefined && isProcessRunning(descendantPid)) {
+                    terminateProcessTree(descendantPid, 'SIGKILL');
+                }
+                fs.rmSync(wrapper.directory, { recursive: true, force: true });
+            }
+        });
+
+        test('runAspireCli redacts forwarded values and output from errors', async () => {
+            const linkedFixture = fixture;
+            assert.ok(linkedFixture);
+            const wrapper = writeTimeoutCliWrapper();
+            const forwardedValue = `forwarded-${process.pid}-${Date.now()}`;
+            let descendantPid: number | undefined;
+
+            try {
+                await writeWorkspaceCliPath(wrapper.cliPath);
+                await setE2eCliPathForE2E(wrapper.cliPath);
+
+                const timeoutError = await captureError(() => invokeControlCommand({
+                    name: 'runAspireCli',
+                    args: ['timeout-tree', '--', forwardedValue],
+                    workingDirectory: path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath),
+                    timeoutMs: 1000,
+                }, 30000));
+                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 10000);
+                if (timeoutError.message.includes(forwardedValue)) {
+                    throw new Error('runAspireCli timeout diagnostics exposed a forwarded argument or command output.');
+                }
+                assert.match(timeoutError.message, /timeout-tree -- <redacted> timed out after 1000ms/);
+                assert.strictEqual(timeoutError.message.includes('stdout:'), false);
+                assert.strictEqual(timeoutError.message.includes('stderr:'), false);
+
+                const nonzeroError = await captureError(() => invokeControlCommand({
+                    name: 'runAspireCli',
+                    args: ['fail', '--', forwardedValue],
+                    workingDirectory: path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath),
+                }, 30000));
+                if (nonzeroError.message.includes(forwardedValue)) {
+                    throw new Error('runAspireCli nonzero-exit diagnostics exposed a forwarded argument or command output.');
+                }
+                assert.match(nonzeroError.message, /fail -- <redacted> exited with code 23/);
+                assert.strictEqual(nonzeroError.message.includes('stdout:'), false);
+                assert.strictEqual(nonzeroError.message.includes('stderr:'), false);
+            }
+            finally {
+                await runE2eTeardown([
+                    () => restoreE2eCliPathForE2E(),
+                    () => restoreWorkspaceCliPath(),
+                ], 'runAspireCli redaction E2E cleanup failed.');
+                if (descendantPid !== undefined && isProcessRunning(descendantPid)) {
+                    terminateProcessTree(descendantPid, 'SIGKILL');
+                }
+                fs.rmSync(wrapper.directory, { recursive: true, force: true });
+            }
+        });
+
         test('starts a linked-worktree AppHost with inferred isolation through vscode.lm.invokeTool', async () => {
             assert.ok(fixture);
             let artifact: Record<string, unknown> = {};
@@ -396,6 +506,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 '--',
                 ...appHostArguments,
             ];
+            const workingDirectory = path.relative(getWorkspaceRoot(), fixture.linkedWorktreePath);
             let artifact: Record<string, unknown> = {};
 
             try {
@@ -405,6 +516,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     ...fixture,
                     cliArguments,
                     appHostArguments,
+                    workingDirectory,
                     argvEvidencePath,
                     cli: {
                         path: getCliPath(),
@@ -417,13 +529,23 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 const cliResult = await invokeControlCommand<{ exitCode: number | null; stdout: string; stderr: string }>({
                     name: 'runAspireCli',
                     args: cliArguments,
-                    workingDirectory: fixture.linkedWorktreePath,
+                    workingDirectory,
                     timeoutMs: 600000,
                 }, 600000);
                 assert.strictEqual(cliResult.exitCode, 0);
 
                 await waitForDebugSessionStartup(fixture.appHostPath, 600000);
-                const cliProcess = await waitForExactLinkedAppHostCliProcess(fixture.appHostPath, appHostArguments, 180000);
+                const processInfo = await invokeControlCommand<{ appHostPath?: string; cliPid?: number; appHostPid?: number }>({
+                    name: 'getDebugSessionProcessInfo',
+                    appHostPath: fixture.appHostPath,
+                });
+                assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the direct CLI process: ${JSON.stringify(processInfo)}`);
+                const cliProcess = await waitForExactLinkedAppHostCliProcess(
+                    processInfo.cliPid,
+                    fixture.appHostPath,
+                    appHostArguments,
+                    180000,
+                    undefined);
                 const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
                 assert.deepStrictEqual(appHostArgv, appHostArguments);
 
@@ -436,6 +558,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     status: 'passed',
                     cliResult,
                     cliProcess,
+                    processInfo,
                     appHostArgv,
                     activeDebugSession,
                 });
@@ -528,7 +651,12 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     assert.ok(processInfo.appHostPath && isSamePath(processInfo.appHostPath, fixture.appHostPath));
                     assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the linked AppHost CLI process on pass ${pass}: ${JSON.stringify(processInfoStatus)}`);
 
-                    const cliProcess = await waitForExactLinkedAppHostCliProcess(fixture.appHostPath, appHostArguments, 180000);
+                    const cliProcess = await waitForExactLinkedAppHostCliProcess(
+                        processInfo.cliPid,
+                        fixture.appHostPath,
+                        appHostArguments,
+                        180000,
+                        getExpectedLinkedAppHostCliArguments(fixture.appHostPath, appHostArguments));
                     const cliInvocations = waitForCliFallbackAndLaunchInvocations(
                         cliInvocationLogPath,
                         invocationCountBeforeLaunch,
@@ -802,29 +930,39 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
 }
 
 async function waitForExactLinkedAppHostCliProcess(
+    cliPid: number,
     appHostPath: string,
     appHostArguments: readonly string[],
-    timeoutMs: number
+    timeoutMs: number,
+    expectedCliArguments: readonly string[] | undefined,
 ): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-        const cliProcess = (await listProcessEntries('--start-debug-session')).find(processEntry => {
-            const appHostOptionIndex = processEntry.arguments.indexOf('--apphost');
-            return processEntry.arguments.length > 0 &&
-                commandLineArgumentEquals(processEntry.arguments[0], getCliPath()) &&
-                processEntry.arguments.includes('--start-debug-session') &&
-                appHostOptionIndex >= 0 &&
-                commandLineArgumentEquals(processEntry.arguments[appHostOptionIndex + 1], appHostPath);
-        });
+        const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath(), appHostArguments);
+            if (expectedCliArguments) {
+                assertExactCliCommandArguments(cliProcess.arguments, expectedCliArguments);
+            }
+            else {
+                assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath(), appHostArguments);
+            }
             return cliProcess;
         }
 
         await delay(250);
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for the exact Aspire CLI child argv that launches ${appHostPath}.`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for exact argv from Aspire CLI process ${cliPid} that launches ${appHostPath}.`);
+}
+
+function assertExactCliCommandArguments(actualArguments: readonly string[], expectedArguments: readonly string[]): void {
+    const actualCommandArguments = actualArguments.slice(-expectedArguments.length);
+    assert.strictEqual(actualCommandArguments.length, expectedArguments.length);
+    assert.ok(actualCommandArguments.every((argument, index) =>
+        index === 5
+            ? commandLineArgumentEquals(argument, expectedArguments[index])
+            : argument === expectedArguments[index]),
+    `Expected exact Aspire CLI command arguments ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(actualArguments)}.`);
 }
 
 function waitForCliFallbackAndLaunchInvocations(
@@ -834,16 +972,7 @@ function waitForCliFallbackAndLaunchInvocations(
     appHostArguments: readonly string[]
 ): string[][] {
     const invocations = getCliWrapperInvocations(invocationLogPath).slice(invocationCountBeforeLaunch);
-    const expectedRunInvocation = [
-        'run',
-        '--isolated',
-        '--start-debug-session',
-        '--nologo',
-        '--apphost',
-        appHostPath,
-        '--',
-        ...appHostArguments,
-    ];
+    const expectedRunInvocation = getExpectedLinkedAppHostCliArguments(appHostPath, appHostArguments);
     const runInvocations = invocations.filter(invocation => invocation[0] === 'run');
     assert.strictEqual(runInvocations.length, 1, `Expected one run invocation, got ${JSON.stringify(runInvocations)}.`);
     assert.strictEqual(runInvocations[0].length, expectedRunInvocation.length);
@@ -860,6 +989,19 @@ function waitForCliFallbackAndLaunchInvocations(
     assert.ok(versionFallbackIndex > configInfoIndex, `Expected stable 13.2 version fallback after tokenless config info: ${JSON.stringify(invocations)}.`);
 
     return invocations;
+}
+
+function getExpectedLinkedAppHostCliArguments(appHostPath: string, appHostArguments: readonly string[]): string[] {
+    return [
+        'run',
+        '--isolated',
+        '--start-debug-session',
+        '--nologo',
+        '--apphost',
+        appHostPath,
+        '--',
+        ...appHostArguments,
+    ];
 }
 
 async function waitForAppHostArgvEvidence(evidencePath: string, timeoutMs: number): Promise<string[]> {
@@ -1072,6 +1214,90 @@ function isProcessRunning(pid: number): boolean {
     catch (error) {
         return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
     }
+}
+
+function writeTimeoutCliWrapper(): { cliPath: string; pidPath: string; directory: string } {
+    const directory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'run-aspire-cli-timeout');
+    const childScriptPath = path.join(directory, 'timeout-child.js');
+    const pidPath = path.join(directory, 'timeout-child.pid');
+    fs.rmSync(directory, { recursive: true, force: true });
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(childScriptPath, [
+        "const fs = require('fs');",
+        'const [pidPath, mode, ...args] = process.argv.slice(2);',
+        "const output = args.join(' ');",
+        'console.log(output);',
+        'console.error(output);',
+        "if (mode === 'fail') {",
+        '  process.exit(23);',
+        '}',
+        'fs.writeFileSync(pidPath, String(process.pid));',
+        'setInterval(() => undefined, 1000);',
+        '',
+    ].join('\n'));
+
+    if (process.platform === 'win32') {
+        const cliPath = path.join(directory, 'aspire-timeout.cmd');
+        fs.writeFileSync(cliPath, [
+            '@echo off',
+            'if "%~1"=="--version" (',
+            '  echo 99.0.0',
+            '  exit /b 0',
+            ')',
+            `${quoteWindowsBatchArgument(process.execPath)} ${quoteWindowsBatchArgument(childScriptPath)} ${quoteWindowsBatchArgument(pidPath)} %*`,
+            '',
+        ].join('\r\n'));
+        return { cliPath, pidPath, directory };
+    }
+
+    const cliPath = path.join(directory, 'aspire-timeout');
+    fs.writeFileSync(cliPath, [
+        '#!/bin/sh',
+        'if [ "$1" = "--version" ]; then',
+        '  echo "99.0.0"',
+        '  exit 0',
+        'fi',
+        `${quotePosixShellArgument(process.execPath)} ${quotePosixShellArgument(childScriptPath)} ${quotePosixShellArgument(pidPath)} "$@" &`,
+        'child_pid=$!',
+        'wait "$child_pid"',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    return { cliPath, pidPath, directory };
+}
+
+function quotePosixShellArgument(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function quoteWindowsBatchArgument(value: string): string {
+    return `"${value.replace(/%/g, '%%')}"`;
+}
+
+async function waitForProcessIdFile(filePath: string, timeoutMs: number): Promise<number> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (fs.existsSync(filePath)) {
+            const pid = Number.parseInt(fs.readFileSync(filePath, 'utf8'), 10);
+            if (Number.isInteger(pid) && pid > 0) {
+                return pid;
+            }
+        }
+
+        await delay(100);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for process ID evidence at ${filePath}.`);
+}
+
+async function captureError(action: () => Promise<unknown>): Promise<Error> {
+    try {
+        await action();
+    }
+    catch (error) {
+        return error instanceof Error ? error : new Error(String(error));
+    }
+
+    throw new Error('Expected the operation to fail.');
 }
 
 async function invokeControlCommand<T>(command: Parameters<typeof executeE2eControlCommand>[0], timeoutMs = 120000): Promise<T> {

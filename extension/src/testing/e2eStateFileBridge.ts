@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
-import { spawnCliProcess } from '../utils/process/cliProcess';
+import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
@@ -782,7 +782,7 @@ async function executeE2eControlCommand(
         throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
       }
 
-      const workingDirectory = getE2eRunDirectory(command.workingDirectory);
+      const workingDirectory = getE2eRunAspireCliWorkingDirectory(command.workingDirectory);
       const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
       const commandPromise = runAspireCliForE2E(
         terminalProvider,
@@ -1367,6 +1367,7 @@ async function runAspireCliForE2E(
   environment: Record<string, string | undefined>
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
+  const diagnosticCommand = [cliPath, ...redactCliArgsForLogging(args)].join(' ');
   return await new Promise((resolve, reject) => {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -1377,8 +1378,8 @@ async function runAspireCliForE2E(
       }
 
       completed = true;
-      child.kill('SIGTERM');
-      reject(new Error(`${cliPath} ${args.join(' ')} timed out after ${timeoutMs}ms.\nstdout:\n${stdout.join('')}\nstderr:\n${stderr.join('')}`));
+      void terminateCliProcess(child, 'Aspire extension E2E CLI command', { suppressTimeoutWarning: true })
+        .then(() => reject(new Error(`${diagnosticCommand} timed out after ${timeoutMs}ms.`)));
     }, timeoutMs);
 
     const child = spawnCliProcess(terminalProvider, cliPath, args, {
@@ -1396,7 +1397,7 @@ async function runAspireCliForE2E(
         if (code === 0) {
           resolve(result);
         } else {
-          reject(new Error(`${cliPath} ${args.join(' ')} exited with code ${code}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`));
+          reject(new Error(`${diagnosticCommand} exited with code ${code}.`));
         }
       },
       errorCallback: error => {
@@ -1409,6 +1410,7 @@ async function runAspireCliForE2E(
         reject(error);
       },
       noExtensionVariables: true,
+      createProcessGroup: true,
       env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
     });
@@ -1568,21 +1570,26 @@ function getE2eRunPath(filePath: unknown): string {
   return filePath;
 }
 
-function getE2eRunDirectory(directoryPath: unknown): string {
-  if (typeof directoryPath !== 'string' || directoryPath.length === 0 || !path.isAbsolute(directoryPath)) {
-    throw new Error('Aspire extension E2E runAspireCli workingDirectory must be an absolute path.');
+function getE2eRunAspireCliWorkingDirectory(directoryPath: unknown): string {
+  if (typeof directoryPath !== 'string' || directoryPath.length === 0 || path.isAbsolute(directoryPath)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must be workspace-relative.');
   }
 
-  if (!fs.existsSync(directoryPath) || !fs.statSync(directoryPath).isDirectory()) {
+  const workspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT;
+  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+    throw new Error('Aspire extension E2E runAspireCli requires the configured E2E workspace root.');
+  }
+
+  const resolvedDirectory = path.resolve(workspaceRoot, directoryPath);
+  if (!isPathWithinDirectory(resolvedDirectory, workspaceRoot)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must stay inside the configured E2E workspace root.');
+  }
+
+  if (!fs.existsSync(resolvedDirectory) || !fs.statSync(resolvedDirectory).isDirectory()) {
     throw new Error(`Aspire extension E2E runAspireCli requires an existing workingDirectory: ${directoryPath}`);
   }
 
-  const runRoot = process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
-  if (typeof runRoot !== 'string' || runRoot.length === 0 || !isPathWithinDirectory(directoryPath, runRoot)) {
-    throw new Error('Aspire extension E2E runAspireCli workingDirectory must stay inside the configured E2E run root.');
-  }
-
-  return directoryPath;
+  return resolvedDirectory;
 }
 
 function getE2eBreakpointLine(line: unknown): number {
