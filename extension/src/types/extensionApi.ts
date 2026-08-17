@@ -222,6 +222,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
     | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
+    | { name: 'reloadWindow' }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }

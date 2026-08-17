@@ -319,6 +319,19 @@ suite('E2E launch profile', () => {
         assert.ok(openFolderIndex > clearControlFileIndex);
     });
 
+    test('uses a dedicated E2E command to reload the extension host', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const reloadWindowCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'reloadWindow'"), e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"));
+        const clearControlFileIndex = reloadWindowCase.indexOf('clearPendingE2eControlFile();');
+        const reloadWindowIndex = reloadWindowCase.indexOf("vscode.commands.executeCommand('workbench.action.reloadWindow')");
+
+        assert.ok(apiTypes.includes("{ name: 'reloadWindow' }"));
+        assert.ok(clearControlFileIndex >= 0);
+        assert.ok(reloadWindowIndex > clearControlFileIndex);
+    });
+
     test('validates explicit workspace folder before reporting bridge command start', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');

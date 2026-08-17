@@ -732,6 +732,12 @@ async function executeE2eControlCommand(
       await vscode.window.showTextDocument(document, { preview: false });
       return getActiveEditorInfo();
     }
+    case 'reloadWindow': {
+      markStarted();
+      clearPendingE2eControlFile();
+      await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      return undefined;
+    }
     case 'openWorkspaceFolder': {
       const folderPath = getE2eWorkspaceFolderPath(command.folderPath);
       markStarted();

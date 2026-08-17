@@ -89,7 +89,7 @@ export async function executeE2eControlCommand(
 
 export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
     const reloadStatus = await executeE2eControlCommand(
-        { name: 'openWorkspaceFolder', folderPath: getWorkspaceRoot() },
+        { name: 'reloadWindow' },
         { waitFor: 'started' });
 
     // The fresh extension host initializes its state bridge without the command status
