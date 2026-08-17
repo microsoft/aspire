@@ -603,6 +603,27 @@ public static partial class DevTunnelsResourceBuilderExtensions
             .WithReferenceRelationship(targetResource)
             .ExcludeFromManifest() // Dev tunnels do not get deployed
             .WithHealthCheck(healtCheckKey)
+            .WithCommand(
+                DevTunnelPortResource.ShowTunnelUrlsCommandName,
+                MessageStrings.ShowTunnelUrlsCommandDisplayName,
+                context => ShowTunnelUrlsAsync(portResource, context),
+                new CommandOptions
+                {
+                    Description = MessageStrings.ShowTunnelUrlsCommandDescription,
+                    IconName = "LinkMultiple",
+                    IconVariant = IconVariant.Regular,
+                    IsHighlighted = true,
+                    Visibility = ResourceCommandVisibility.UI,
+                    UpdateState = context =>
+                    {
+                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
+                        return interactionService.IsAvailable &&
+                            context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
+                            portResource.LastKnownStatus?.PortUri is not null
+                            ? ResourceCommandState.Enabled
+                            : ResourceCommandState.Disabled;
+                    }
+                })
             // NOTE:
             // The endpoint target full host is set by the dev tunnels service and is not known in advance, but the suffix is always devtunnels.ms
             // We might consider updating the central logic that creates endpoint URLs to allow setting a target host like *.devtunnels.ms & if the
@@ -635,15 +656,11 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 // Add the inspect URL if available
                 var portResource = (DevTunnelPortResource)context.Resource;
-                if (portResource.LastKnownStatus?.PortUri is { } portUri)
+                if (portResource.LastKnownStatus?.PortUri is { } portUri && GetInspectUrl(portUri) is { } inspectUrlString)
                 {
-                    // If tunnel host is sdfdff-3456.usw.devtunnels.ms, the inspect host is sdfdff-3456-inspect.usw.devtunnels.ms
-                    var hostPrefixLength = portUri.Host.IndexOf('.');
-                    var hostPrefix = portUri.Host[..hostPrefixLength];
-                    var hostSuffix = portUri.Host[hostPrefixLength..];
                     urls.Add(new()
                     {
-                        Url = new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri.ToString(),
+                        Url = inspectUrlString,
                         DisplayText = "Inspect",
                         DisplayLocation = UrlDisplayLocation.DetailsOnly
                     });
@@ -709,6 +726,11 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 await notifications.PublishUpdateAsync(portResource, snapshot => snapshot with
                 {
                     State = KnownResourceStates.Running,
+                    Properties =
+                    [
+                        .. snapshot.Properties.Where(p => !IsDevTunnelUrlProperty(p.Name)),
+                        .. GetUrlProperties(portResource)
+                    ],
                     Urls = [.. snapshot.Urls.Select(u => u with
                         {
                             Url = raiseEndpointsAllocatedEvent
@@ -766,10 +788,116 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 {
                     State = KnownResourceStates.Finished,
                     StopTimeStamp = DateTime.UtcNow,
+                    Properties = [.. snapshot.Properties.Where(p => !IsDevTunnelUrlProperty(p.Name))],
                     Urls = [.. snapshot.Urls.Select(u => u with { IsInactive = true /* All URLs inactive */ })]
                 }).ConfigureAwait(false);
                 await eventing.PublishAsync<ResourceStoppedEvent>(new(portResource, e.Services, new(portResource, portResource.Name, stoppedSnapshot!)), ct).ConfigureAwait(false);
             });
+    }
+
+    private static async Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource, ExecuteCommandContext context)
+    {
+        var urlProperties = GetUrlProperties(portResource);
+        if (urlProperties.Count == 0)
+        {
+            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable);
+        }
+
+        var interactionService = context.Services.GetRequiredService<IInteractionService>();
+        if (!interactionService.IsAvailable)
+        {
+            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandInteractionUnavailable);
+        }
+
+        var markdown = string.Join(
+            $"  {Environment.NewLine}",
+            urlProperties.Select(p => $"**{p.DisplayName}:** <{p.Value}>"));
+
+        // This action only inspects derived resource state, so open an interaction directly instead of
+        // returning command-result data through the generic text visualizer.
+        _ = await interactionService.PromptMessageBoxAsync(
+            MessageStrings.ShowTunnelUrlsCommandResultHeading,
+            markdown,
+            new MessageBoxInteractionOptions
+            {
+                Intent = MessageIntent.None,
+                EnableMessageMarkdown = true,
+                PrimaryButtonText = MessageStrings.ShowTunnelUrlsCommandClose,
+                ShowSecondaryButton = false
+            },
+            context.CancellationToken).ConfigureAwait(false);
+
+        return CommandResults.Success();
+    }
+
+    private static List<ResourcePropertySnapshot> GetUrlProperties(DevTunnelPortResource portResource)
+    {
+        if (portResource.LastKnownStatus?.PortUri is not { } portUri)
+        {
+            return [];
+        }
+
+        List<ResourcePropertySnapshot> properties =
+        [
+            new(DevTunnelPortResource.TunnelUrlPropertyName, NormalizeUrl(portUri))
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel,
+                IsHighlighted = true
+            }
+        ];
+
+        if (GetInspectUrl(portUri) is { } inspectUrl)
+        {
+            properties.Add(new(DevTunnelPortResource.InspectUrlPropertyName, inspectUrl)
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel,
+                IsHighlighted = true
+            });
+        }
+
+        if (GetAllocatedUrl(portResource.TargetEndpoint) is { Length: > 0 } localUrl)
+        {
+            properties.Add(new(DevTunnelPortResource.LocalEndpointUrlPropertyName, localUrl)
+            {
+                DisplayName = MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel,
+                IsHighlighted = true
+            });
+        }
+
+        return properties;
+    }
+
+    private static string? GetAllocatedUrl(EndpointReference endpoint)
+    {
+        var networkId = endpoint.ContextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork;
+        // EndpointReference.Url preserves network context but throws while allocation is pending.
+        // Check the matching snapshot first so the optional local URL remains non-blocking.
+        var isAllocated = endpoint.EndpointAnnotation.AllAllocatedEndpoints.Any(
+            endpointSnapshot => endpointSnapshot.NetworkID == networkId && endpointSnapshot.Snapshot.IsValueSet);
+
+        return isAllocated ? endpoint.Url : null;
+    }
+
+    private static bool IsDevTunnelUrlProperty(string name) =>
+        name is DevTunnelPortResource.TunnelUrlPropertyName
+            or DevTunnelPortResource.InspectUrlPropertyName
+            or DevTunnelPortResource.LocalEndpointUrlPropertyName;
+
+    private static string NormalizeUrl(Uri url) => new UriBuilder(url).Uri.ToString().TrimEnd('/');
+
+    private static string? GetInspectUrl(Uri portUri)
+    {
+        // Dev Tunnel port hosts use a shape such as `n4skq32k-3000.use.devtunnels.ms`.
+        // The inspect host inserts `-inspect` before the first dot: `n4skq32k-3000-inspect.use.devtunnels.ms`.
+        var hostPrefixLength = portUri.Host.IndexOf('.');
+        if (hostPrefixLength < 0)
+        {
+            return null;
+        }
+
+        var hostPrefix = portUri.Host[..hostPrefixLength];
+        var hostSuffix = portUri.Host[hostPrefixLength..];
+        return NormalizeUrl(new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri);
     }
 
     private static string GetUserAgent()

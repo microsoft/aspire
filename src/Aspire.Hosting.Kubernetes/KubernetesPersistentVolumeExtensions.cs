@@ -236,7 +236,12 @@ public static class KubernetesPersistentVolumeExtensions
     /// <remarks>
     /// To bind a workload that does not already have a matching named mount (for
     /// example a <c>ProjectResource</c>), use the overload that accepts a
-    /// <c>mountPath</c> instead.
+    /// <c>mountPath</c> instead. The generated pod uses an Aspire-managed
+    /// <c>fsGroup</c> of <c>2000</c> with an <c>OnRootMismatch</c> change policy so
+    /// non-root containers can access supported volumes without matching the image's
+    /// primary group. Use
+    /// <see cref="KubernetesServiceExtensions.PublishAsKubernetesService{T}(IResourceBuilder{T}, Action{KubernetesResource})"/>
+    /// to customize the pod security context when a different group or policy is required.
     /// </remarks>
     /// <example>
     /// <code>
@@ -278,6 +283,13 @@ public static class KubernetesPersistentVolumeExtensions
     /// <param name="isReadOnly">When <see langword="true"/>, mounts the volume
     /// read-only.</param>
     /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// The generated pod uses an Aspire-managed <c>fsGroup</c> of <c>2000</c> with
+    /// an <c>OnRootMismatch</c> change policy so non-root containers can access
+    /// supported volumes without matching the image's primary group. Use
+    /// <see cref="KubernetesServiceExtensions.PublishAsKubernetesService{T}(IResourceBuilder{T}, Action{KubernetesResource})"/>
+    /// to customize the pod security context when a different group or policy is required.
+    /// </remarks>
     /// <example>
     /// <code>
     /// var media = k8s.AddPersistentVolume("media")

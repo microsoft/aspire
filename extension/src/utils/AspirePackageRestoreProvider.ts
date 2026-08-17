@@ -3,7 +3,7 @@ import path from 'path';
 import { aspireConfigFileName } from './cliTypes';
 import { findAspireSettingsFiles } from './workspace';
 import { ChildProcessWithoutNullStreams } from 'child_process';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { extensionLogOutputChannel } from './logging';
 import { getEnableAutoRestore } from './settings';

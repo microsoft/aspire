@@ -15,6 +15,9 @@ export type Capability =
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
+    | 'rust' // Support for running Rust projects
+    | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
+    | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
     | 'node' // Support for running Node.js projects
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
@@ -25,7 +28,7 @@ export type Capability =
 
 export type Capabilities = Capability[];
 
-function isExtensionInstalled(extensionId: string): boolean {
+export function isExtensionInstalled(extensionId: string): boolean {
     const extension = vscode.extensions.getExtension(extensionId);
     return !!extension;
 }
@@ -46,6 +49,28 @@ export function isGoInstalled() {
     return isExtensionInstalled("golang.go");
 }
 
+// Rust debugging depends on a native debugger extension. Prefer the Microsoft C++ extension's
+// Windows-only cppvsdbg engine when it is available, but CodeLLDB is also a valid Windows adapter
+// and is required for GNU Rust targets. CodeLLDB remains the default on macOS/Linux. See:
+// https://code.visualstudio.com/docs/languages/rust#_install-debugging-support
+export function getRustExtensionId(
+    platform: NodeJS.Platform = process.platform,
+    extensionInstalled?: (extensionId: string) => boolean
+): 'ms-vscode.cpptools' | 'vadimcn.vscode-lldb' {
+    if (platform === 'win32'
+        && extensionInstalled
+        && !extensionInstalled('ms-vscode.cpptools')
+        && extensionInstalled('vadimcn.vscode-lldb')) {
+        return 'vadimcn.vscode-lldb';
+    }
+
+    return platform === 'win32' ? 'ms-vscode.cpptools' : 'vadimcn.vscode-lldb';
+}
+
+export function isRustInstalled(platform: NodeJS.Platform = process.platform) {
+    return isExtensionInstalled(getRustExtensionId(platform, isExtensionInstalled));
+}
+
 export function isAzureFunctionsExtensionInstalled() {
     return isExtensionInstalled("ms-azuretools.vscode-azurefunctions");
 }
@@ -63,7 +88,7 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
-export function getSupportedCapabilities(): Capabilities {
+export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
     if (isCsDevKitInstalled()) {
@@ -90,6 +115,12 @@ export function getSupportedCapabilities(): Capabilities {
     if (isGoInstalled()) {
         capabilities.push("go");
         capabilities.push("golang.go");
+    }
+
+    if (isRustInstalled(platform)) {
+        const rustExtensionId = getRustExtensionId(platform, isExtensionInstalled);
+        capabilities.push("rust");
+        capabilities.push(rustExtensionId);
     }
 
     if (isNodeInstalled()) {

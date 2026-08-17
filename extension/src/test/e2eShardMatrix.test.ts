@@ -11,13 +11,17 @@ suite('E2E shard matrix', () => {
     const extensionRoot = path.resolve(__dirname, '..', '..');
     const workflowPath = path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml');
     const specDirectory = path.join(extensionRoot, 'src', 'test-e2e');
-    const disabledIssuePattern = /^https:\/\/github\.com\/microsoft\/aspire\/issues\/\d+$/;
+    const advisoryIssuePattern = /^https:\/\/github\.com\/microsoft\/aspire\/issues\/\d+$/;
 
-    // Hand-maintained on purpose: disabling an E2E shard must be an explicit, reviewable code change
-    // rather than something a workflow edit can do silently. Deriving this from the workflow would
-    // make the assertion vacuous. Keys are `name|shardName|spec` and values are the tracking issue.
-    // Add an entry when a row gains `disabledIssue`, and delete it when the shard is re-enabled.
-    const expectedDisabledRows = new Map<string, string>();
+    // Hand-maintained on purpose: making an E2E shard advisory must be an explicit, reviewable code
+    // change rather than something a workflow edit can do silently. Deriving this from the workflow
+    // would make the assertion vacuous. Keys are `name|shardName|spec` and values are tracking issues.
+    const expectedAdvisoryRows = new Map<string, string>([
+        ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
+        ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
+        ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19151'],
+        ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
+    ]);
 
     function canonicalSpecPaths(specFileNames: readonly string[]): string[] {
         return specFileNames
@@ -50,13 +54,13 @@ suite('E2E shard matrix', () => {
 
         return matrix.include.map((value, index) => {
             const row = asRecord(value, `Expected extension_e2e matrix row ${index + 1} to be a mapping.`);
+            assertNoLegacyFields(row, index);
 
             return {
                 name: optionalString(row, 'name', index),
                 shardName: optionalString(row, 'shardName', index),
                 spec: optionalString(row, 'spec', index),
-                allowFailure: optionalBoolean(row, 'allowFailure', index),
-                disabledIssue: optionalString(row, 'disabledIssue', index),
+                advisoryIssue: optionalString(row, 'advisoryIssue', index),
             };
         });
     }
@@ -72,7 +76,7 @@ suite('E2E shard matrix', () => {
             return undefined;
         }
 
-        // js-yaml parses a present-but-empty scalar such as `disabledIssue:` as null.
+        // js-yaml parses a present-but-empty scalar such as `advisoryIssue:` as null.
         // Keep that distinct from an absent field so downstream validation can reject
         // empty workflow values instead of silently treating them as omitted.
         if (value === null) {
@@ -83,14 +87,12 @@ suite('E2E shard matrix', () => {
         return value as string;
     }
 
-    function optionalBoolean(row: Record<string, unknown>, key: string, index: number): boolean | undefined {
-        const value = row[key];
-        if (value === undefined) {
-            return undefined;
+    function assertNoLegacyFields(row: Record<string, unknown>, index: number): void {
+        for (const key of ['allowFailure', 'disabledIssue']) {
+            assert.ok(
+                !Object.prototype.hasOwnProperty.call(row, key),
+                `Extension E2E matrix row ${index + 1} must not use legacy field '${key}'.`);
         }
-
-        assert.strictEqual(typeof value, 'boolean', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a boolean.`);
-        return value as boolean;
     }
 
     function matrixSpecPaths(workflow: string): string[] {
@@ -100,23 +102,23 @@ suite('E2E shard matrix', () => {
         }))].sort();
     }
 
-    function disabledRowKey(row: MatrixRow): string {
-        assert.ok(row.name, 'Disabled E2E matrix rows must include name.');
-        assert.ok(row.shardName, 'Disabled E2E matrix rows must include shardName.');
-        assert.ok(row.spec, 'Disabled E2E matrix rows must include spec.');
+    function advisoryRowKey(row: MatrixRow): string {
+        assert.ok(row.name, 'Advisory E2E matrix rows must include name.');
+        assert.ok(row.shardName, 'Advisory E2E matrix rows must include shardName.');
+        assert.ok(row.spec, 'Advisory E2E matrix rows must include spec.');
 
         return `${row.name}|${row.shardName}|${row.spec}`;
     }
 
-    function assertDisabledRowsAreTracked(workflow: string, expectedRowsByKey: ReadonlyMap<string, string>): void {
+    function assertAdvisoryRowsAreTracked(workflow: string, expectedRowsByKey: ReadonlyMap<string, string>): void {
         const actualRows = matrixRows(workflow)
-            .filter(row => row.disabledIssue !== undefined)
+            .filter(row => row.advisoryIssue !== undefined)
             .map(row => {
                 assert.ok(
-                    disabledIssuePattern.test(row.disabledIssue ?? ''),
-                    `Disabled E2E matrix row '${disabledRowKey(row)}' must use a microsoft/aspire issue URL.`);
+                    advisoryIssuePattern.test(row.advisoryIssue ?? ''),
+                    `Advisory E2E matrix row '${advisoryRowKey(row)}' must use a microsoft/aspire issue URL.`);
 
-                return [disabledRowKey(row), row.disabledIssue] as [string, string];
+                return [advisoryRowKey(row), row.advisoryIssue] as [string, string];
             })
             .sort(([left], [right]) => left.localeCompare(right));
         const expectedRows = [...expectedRowsByKey.entries()]
@@ -125,16 +127,7 @@ suite('E2E shard matrix', () => {
         assert.deepStrictEqual(
             actualRows,
             expectedRows,
-            'Disabled E2E matrix rows must exactly match the explicit allowlist in e2eShardMatrix.test.ts.');
-    }
-
-    function assertAllRowsAllowFailure(workflow: string): void {
-        for (const row of matrixRows(workflow)) {
-            assert.strictEqual(
-                row.allowFailure,
-                true,
-                `E2E matrix row '${row.name}|${row.shardName}|${row.spec}' must set allowFailure: true.`);
-        }
+            'Advisory E2E matrix rows must exactly match the explicit map in e2eShardMatrix.test.ts.');
     }
 
     function assertMatrixMatchesSpecs(workflow: string, specFileNames: readonly string[]): void {
@@ -163,8 +156,7 @@ suite('E2E shard matrix', () => {
         assert.ok(canonicalSpecPaths(specFileNames).length > 0, `Expected E2E spec files under ${specDirectory}.`);
         assert.ok(matrixSpecPaths(workflow).length > 0, 'Expected spec entries in the E2E workflow matrix.');
         assertMatrixMatchesSpecs(workflow, specFileNames);
-        assertAllRowsAllowFailure(workflow);
-        assertDisabledRowsAreTracked(workflow, expectedDisabledRows);
+        assertAdvisoryRowsAreTracked(workflow, expectedAdvisoryRows);
     });
 
     test('rejects a spec that has no matrix row', () => {
@@ -234,44 +226,77 @@ suite('E2E shard matrix', () => {
             /E2E matrix rows must include a non-empty spec/);
     });
 
-    test('requires disabled rows to be explicitly tracked', () => {
-        const spec = 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js';
-        const issue = 'https://github.com/microsoft/aspire/issues/19151';
+    test('treats rows without advisoryIssue as blocking by default', () => {
         const workflow = workflowWithRows(
-            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  disabledIssue: ${issue}`);
+            '- name: Linux\n  shardName: edge-cases\n  spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js');
 
-        assert.throws(
-            () => assertDisabledRowsAreTracked(workflow, new Map()),
-            assert.AssertionError);
-        assertDisabledRowsAreTracked(workflow, new Map([[`Linux|azure-functions|${spec}`, issue]]));
+        assertAdvisoryRowsAreTracked(workflow, new Map());
     });
 
-    test('tracks disabled platform rows separately and validates issue URLs', () => {
+    test('requires advisory rows to be explicitly tracked', () => {
         const spec = 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js';
         const issue = 'https://github.com/microsoft/aspire/issues/19151';
         const workflow = workflowWithRows(
-            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  disabledIssue: ${issue}`,
-            `- name: Windows\n  shardName: azure-functions\n  spec: ${spec}\n  disabledIssue: ${issue}`);
+            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  advisoryIssue: ${issue}`);
 
-        assertDisabledRowsAreTracked(workflow, new Map([
+        assert.throws(
+            () => assertAdvisoryRowsAreTracked(workflow, new Map()),
+            assert.AssertionError);
+        assertAdvisoryRowsAreTracked(workflow, new Map([[`Linux|azure-functions|${spec}`, issue]]));
+    });
+
+    test('tracks advisory rows with platform-specific keys', () => {
+        const spec = 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js';
+        const issue = 'https://github.com/microsoft/aspire/issues/19151';
+        const workflow = workflowWithRows(
+            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  advisoryIssue: ${issue}`,
+            `- name: Windows\n  shardName: azure-functions\n  spec: ${spec}\n  advisoryIssue: ${issue}`);
+
+        assertAdvisoryRowsAreTracked(workflow, new Map([
             [`Linux|azure-functions|${spec}`, issue],
             [`Windows|azure-functions|${spec}`, issue],
         ]));
-
-        const malformed = workflow.replaceAll(issue, 'not-an-issue-url');
         assert.throws(
-            () => assertDisabledRowsAreTracked(malformed, new Map()),
+            () => assertAdvisoryRowsAreTracked(workflow, new Map([[`Linux|azure-functions|${spec}`, issue]])),
+            assert.AssertionError);
+    });
+
+    test('rejects malformed advisory issue URLs', () => {
+        const spec = 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js';
+        const workflow = workflowWithRows(
+            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  advisoryIssue: not-an-issue-url`);
+
+        assert.throws(
+            () => assertAdvisoryRowsAreTracked(workflow, new Map()),
             /must use a microsoft\/aspire issue URL/);
     });
 
-    test('rejects a disabled row when disabledIssue is present but empty', () => {
+    test('rejects an advisory row when advisoryIssue is present but empty', () => {
         const spec = 'out/test-e2e/test-e2e/azureFunctions.e2e.test.js';
         const workflow = workflowWithRows(
-            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  disabledIssue:`);
+            `- name: Linux\n  shardName: azure-functions\n  spec: ${spec}\n  advisoryIssue:`);
 
         assert.throws(
-            () => assertDisabledRowsAreTracked(workflow, new Map()),
+            () => assertAdvisoryRowsAreTracked(workflow, new Map()),
             /must use a microsoft\/aspire issue URL/);
+    });
+
+    test('rejects the legacy allowFailure field', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: edge-cases\n  spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js\n  allowFailure: true');
+
+        assert.throws(
+            () => matrixRows(workflow),
+            /must not use legacy field 'allowFailure'/);
+    });
+
+    test('rejects the legacy disabledIssue field', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: edge-cases\n  spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js\n  disabledIssue: https://github.com/microsoft/aspire/issues/19282');
+
+        assert.throws(
+            () => matrixRows(workflow),
+            /must not use legacy field 'disabledIssue'/);
     });
 });
 
@@ -279,6 +304,5 @@ interface MatrixRow {
     name?: string;
     shardName?: string;
     spec?: string;
-    allowFailure?: boolean;
-    disabledIssue?: string;
+    advisoryIssue?: string;
 }

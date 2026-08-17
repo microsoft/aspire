@@ -16,7 +16,7 @@ function createEditor(filePath: string): vscode.TextEditor {
         document: {
             uri: vscode.Uri.file(filePath),
             fileName: filePath,
-            languageId: filePath.endsWith('.ts') ? 'typescript' : 'csharp'
+            languageId: filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'csharp'
         } as vscode.TextDocument
     } as vscode.TextEditor;
 }
@@ -111,6 +111,20 @@ suite('AspireEditorCommandProvider', () => {
         activeEditor = createEditor(appHostPath);
 
         const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
+        try {
+            assert.strictEqual(await provider.getAppHostPath(), appHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('returns source file when active editor is Rust apphost.rs', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.rs');
+        fs.writeFileSync(appHostPath, 'fn main() {}');
+        activeEditor = createEditor(appHostPath);
+
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }

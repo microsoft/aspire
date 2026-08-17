@@ -9,8 +9,8 @@ namespace Infrastructure.Tests.Pipelines;
 /// <summary>
 /// Guards the advisory-failure contract in <c>.github/workflows/extension-e2e-tests.yml</c>.
 ///
-/// Every shard still runs and produces diagnostics, but failures from the VS Code test execution
-/// are temporarily non-blocking. Setup before test execution and cleanup remain blocking.
+/// Every shard still runs and produces diagnostics. Only issue-tracked rows may treat completed
+/// VS Code test failures as advisory; setup, harness, and cleanup failures remain blocking.
 /// </summary>
 public sealed class ExtensionE2eWorkflowTests
 {
@@ -18,22 +18,28 @@ public sealed class ExtensionE2eWorkflowTests
     private const string CallerWorkflowRelativePath = ".github/workflows/tests.yml";
 
     [Fact]
-    public void AllShardRowsRunWithAllowedTestFailures()
+    public void AdvisoryShardRowsRemainIssueTrackedWithoutWeakeningRunnerStep()
     {
         var job = LoadExtensionE2eJob();
 
         var rows = MatrixIncludeRows(job).ToList();
         Assert.NotEmpty(rows);
-        Assert.All(rows, row => Assert.Equal("true", Scalar(row, "allowFailure")));
-        Assert.All(rows, row => Assert.False(row.Children.ContainsKey(new YamlScalarNode("disabledIssue"))));
+        Assert.All(rows, row =>
+        {
+            Assert.False(row.Children.ContainsKey(new YamlScalarNode("allowFailure")));
+            Assert.False(row.Children.ContainsKey(new YamlScalarNode("disabledIssue")));
+        });
+        Assert.Contains(rows, row => row.Children.ContainsKey(new YamlScalarNode("advisoryIssue")));
+        Assert.Contains(rows, row => !row.Children.ContainsKey(new YamlScalarNode("advisoryIssue")));
 
         var steps = ((YamlSequenceNode)job.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
         var runSuiteStep = Assert.Single(steps, step => Scalar(step, "name") == "Run extension E2E tests");
-        Assert.Null(Scalar(runSuiteStep, "if"));
-        Assert.Null(Scalar(runSuiteStep, "continue-on-error"));
+        Assert.False(runSuiteStep.Children.ContainsKey(new YamlScalarNode("if")));
+        Assert.False(runSuiteStep.Children.ContainsKey(new YamlScalarNode("continue-on-error")));
 
         var environment = (YamlMappingNode)runSuiteStep.Children[new YamlScalarNode("env")];
-        Assert.Equal("${{ matrix.allowFailure }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE"));
+        Assert.False(environment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE")));
+        Assert.Equal("${{ matrix.advisoryIssue }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE"));
     }
 
     [Fact]

@@ -340,16 +340,28 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
+        assert.ok(runner.includes("const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');"));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS'));
         assert.ok(runner.includes('await runWithProcessTreeTimeout(process.execPath'));
         assert.ok(runner.includes('getRunTestsTimeoutMs()'));
         assert.ok(runner.includes('2400000'));
-        assert.ok(runner.includes('did not exit after process-tree termination'));
-        assert.ok(runner.includes('child.unref()'));
         assert.ok(runner.includes("spawnSync('taskkill'"));
-        assert.ok(runner.includes("terminateProcessTree(child.pid, 'SIGTERM')"));
-        assert.ok(runner.includes("terminateProcessTree(child.pid, 'SIGKILL')"));
         assert.ok(runner.includes('process.kill(-pid, signal)'));
+    });
+
+    test('wires the ExTester process lifecycle into the extracted runner', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const invocationStart = runner.indexOf('await runWithProcessTreeTimeout(process.execPath');
+        const invocationEnd = runner.indexOf('\n      });', invocationStart);
+        const runnerOptions = runner.slice(invocationStart, invocationEnd);
+
+        assert.ok(invocationStart >= 0);
+        assert.ok(invocationEnd > invocationStart);
+        assert.ok(runnerOptions.includes('quoteShellArgument: quoteWindowsShellArgument,'));
+        assert.ok(runnerOptions.includes("stdio: 'inherit',"));
+        assert.ok(runnerOptions.includes("detached: process.platform !== 'win32',"));
+        assert.ok(runnerOptions.includes('terminateProcessTree,'));
     });
 
     test('bounds retryable runner setup steps so setup failures still collect diagnostics', () => {
@@ -493,18 +505,21 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
-        assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE: ${{ matrix.allowFailure }}'));
+        assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
     });
 
-    test('allows completed E2E test failures without hiding setup or cleanup failures', () => {
+    test('wires structured E2E harness failures into advisory handling', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
-        assert.ok(runner.includes("const allowTestFailure = process.env.ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE === 'true';"));
+        assert.ok(runner.includes("const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');"));
+        assert.ok(runner.includes("const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';"));
         assert.ok(runner.includes('let cleanupFailed = false;'));
         assert.ok(runner.includes('cleanupFailed = true;'));
-        assert.ok(runner.includes('if (allowTestFailure && hasCompletedMochaTestFailures(readMochaResults()) && !cleanupFailed)'));
+        assert.ok(runner.includes('shouldAllowAdvisoryTestFailure(testFailure, readMochaResults(), cleanupFailed)'));
+        assert.ok(runner.includes('completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.'));
+        assert.strictEqual(runner.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE'), false);
         assert.strictEqual(runner.includes('completedTests'), false);
     });
 
@@ -799,6 +814,7 @@ suite('E2E launch profile', () => {
     test('waits for durable AppHost discovery gates before asserting running state', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
         const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
         const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
 
@@ -806,25 +822,51 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('function waitForReleaseFile'));
         assert.ok(fixtures.includes('waitForPsSnapshotRequest: () => waitForPath(psSnapshotRequestFilePath, 30_000)'));
         assert.ok(fixtures.includes('waitForLsCandidateRequest: () => waitForPath(lsCandidateRequestFilePath, 30_000)'));
+        assert.ok(fixtures.includes('psSnapshotAppHostPid'));
+        assert.ok(fixtures.includes("args.includes('--follow')"));
+        assert.ok(fixtures.includes('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_147_483_647);'));
+        assert.ok(fixtures.includes('fs.writeSync(process.stdout.fd, JSON.stringify(payload)'));
         assert.ok(appHostTree.includes('writeGatedStreamingDiscoveryCliWrapper'));
         assert.ok(appHostTree.includes('discoveryGate.releasePsSnapshot();'));
         assert.ok(appHostTree.includes('discoveryGate.releaseLsCandidate();'));
         assert.ok(!runningBeforeDiscoveryTest.includes('waitForWorkspaceRediscoveryLoading'));
+        assert.ok(vscodeHelpers.includes('export async function startAppHostsSectionTextTransition'));
+        assert.ok(vscodeHelpers.includes('export async function waitForAppHostsSectionTextAfterTransition'));
+        assert.ok(vscodeHelpers.includes('export async function cancelAppHostsSectionTextTransition'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const runningAppHost = findRunningAppHost(running.state);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;'));
+        assert.ok(runningBeforeDiscoveryTest.includes('writeGatedStreamingDiscoveryCliWrapper(runningAppHost.appHostPath, authoritativeSnapshotAppHostPid)'));
+        assert.ok(runningBeforeDiscoveryTest.includes('await startAppHostsSectionTextTransition([appHostLabel], /\\(\\d+ resources\\)/);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('const snapshotReleasedAt = Date.now();'));
+        assert.ok(runningBeforeDiscoveryTest.includes('await waitForAppHostsSectionTextAfterTransition([appHostLabel], /\\(\\d+ resources\\)/, snapshotReleasedAt);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('file.state.isRepositoryLoading === false'));
+        assert.ok(runningBeforeDiscoveryTest.includes('findRunningAppHost(file.state)?.appHostPid === authoritativeSnapshotAppHostPid'));
 
         const cleanupIndex = runningBeforeDiscoveryTest.indexOf('finally {');
         assert.ok(cleanupIndex >= 0, 'Expected the E2E to keep cleanup releases in a finally block.');
         const testBeforeCleanup = runningBeforeDiscoveryTest.slice(0, cleanupIndex);
+        const cleanup = runningBeforeDiscoveryTest.slice(cleanupIndex);
+        const startTransitionIndex = testBeforeCleanup.indexOf('await startAppHostsSectionTextTransition([appHostLabel], /\\(\\d+ resources\\)/);');
+        const refreshIndex = testBeforeCleanup.indexOf("await executeE2eControlCommand({ name: 'refreshAppHosts' }");
         const waitForPsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForPsSnapshotRequest();');
         const waitForLsRequestIndex = testBeforeCleanup.indexOf('await discoveryGate.waitForLsCandidateRequest();');
-        const runningStateIndex = testBeforeCleanup.indexOf('const runningBeforeDiscovery = await waitForExtensionState');
+        const snapshotReleasedAtIndex = testBeforeCleanup.indexOf('const snapshotReleasedAt = Date.now();');
         const releasePsIndex = testBeforeCleanup.indexOf('discoveryGate.releasePsSnapshot();');
+        const runningStateIndex = testBeforeCleanup.indexOf('const runningBeforeDiscovery = await waitForExtensionState');
+        const runningTreeTextIndex = testBeforeCleanup.indexOf('await waitForAppHostsSectionTextAfterTransition([appHostLabel], /\\(\\d+ resources\\)/, snapshotReleasedAt);');
         const releaseLsIndex = testBeforeCleanup.indexOf('discoveryGate.releaseLsCandidate();');
 
+        assert.ok(startTransitionIndex >= 0, 'The E2E must track the currently rendered running row before refresh.');
+        assert.ok(refreshIndex > startTransitionIndex, 'The AppHosts pane transition must be tracked before refresh starts.');
         assert.ok(waitForPsRequestIndex >= 0, 'The E2E must wait until the running AppHost snapshot reaches its gate.');
         assert.ok(waitForLsRequestIndex > waitForPsRequestIndex, 'The E2E must wait until workspace discovery reaches its gate.');
-        assert.ok(runningStateIndex > waitForLsRequestIndex, 'The running AppHost must be asserted only after both refresh paths are gated.');
-        assert.ok(releasePsIndex > runningStateIndex, 'The running AppHost snapshot must remain gated until the running AppHost is observed.');
-        assert.ok(releaseLsIndex > releasePsIndex, 'The slow workspace candidate must be released after the running AppHost snapshot.');
+        assert.ok(snapshotReleasedAtIndex > waitForLsRequestIndex, 'The fresh running AppHost snapshot release time must be captured only after both refresh paths are gated.');
+        assert.ok(releasePsIndex > snapshotReleasedAtIndex, 'The fresh running AppHost snapshot must be released after its transition threshold is captured.');
+        assert.ok(runningStateIndex > releasePsIndex, 'The running AppHost must be asserted after the fresh snapshot is released.');
+        assert.ok(runningTreeTextIndex > runningStateIndex, 'The fresh running AppHost snapshot must be visibly rendered before discovery is released.');
+        assert.ok(releaseLsIndex > runningTreeTextIndex, 'The slow workspace candidate must remain gated until the running AppHost is rendered.');
+        assert.ok(cleanup.includes('await runE2eTeardown(['), 'Every cleanup must run even when another cleanup fails.');
+        assert.ok(cleanup.includes('() => cancelAppHostsSectionTextTransition()'), 'The transition tracker must be disposed even when the E2E fails before observing the rendered row.');
     });
 
     test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {

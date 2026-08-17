@@ -4,6 +4,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, MauiLaunchConfiguration, isMauiLaunchConfiguration } from "../../dcp/types";
 import { invalidLaunchConfiguration } from "../../loc/strings";
+import { delay } from "../../utils/async";
 import { addFilteredEnvironmentKeys, removeFilteredEnvironmentKeys } from "../../utils/environment";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
@@ -105,10 +106,6 @@ async function waitForMauiCommand(command: string, timeoutMs: number): Promise<b
     }
 
     return false;
-}
-
-function delay(timeoutMs: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, timeoutMs));
 }
 
 function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {

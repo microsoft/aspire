@@ -322,6 +322,18 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(await getAppHostTargetVersion(dir), '13.4.2');
     });
 
+    test('reads the Rust SDK version from aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.rs');
+        writeFileSync(appHostPath, 'fn main() {}');
+        writeFileSync(join(dir, 'aspire.config.json'), `{
+  // Guest AppHost SDK selected by the CLI.
+  "sdk": { "version": "13.6.0" }
+}`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0');
+    });
+
     test('summarizes a BOM-prefixed polyglot SDK version from aspire.config.json', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'apphost.ts');

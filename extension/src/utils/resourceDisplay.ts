@@ -1,5 +1,5 @@
 import { ResourceState, ResourceType, CommandName, ParameterPropertyName } from '../editor/resourceConstants';
-import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../views/AppHostDataRepository';
+import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../data/AppHostDataRepository';
 import { parameterValueMissing } from '../loc/strings';
 
 // Sort commands by sort order, then name.

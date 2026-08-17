@@ -5,18 +5,20 @@ import * as vscode from 'vscode';
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
+import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
 
@@ -28,6 +30,7 @@ export function createE2eStateFileBridge(
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
+  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
 ): vscode.Disposable {
   const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
   const controlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
@@ -41,6 +44,11 @@ export function createE2eStateFileBridge(
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
   const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
   const taskProcessEvents: AspireExtensionE2ETaskProcessEvent[] = [];
+  // VS Code's browser debug sessions are not part of the extension's state snapshot, so they are
+  // tracked here. Tests need this to tell "the extension thinks it stopped" apart from "the
+  // browser session actually terminated" — the two diverged in
+  // https://github.com/microsoft/aspire/issues/19289.
+  const browserDebugSessions: AspireExtensionE2EBrowserDebugSession[] = [];
   const clipboardSnapshot: E2eClipboardSnapshot = { hasSnapshot: false };
   const clipboardExpectation: E2eClipboardExpectation = {};
   let commandInvocationSequence = 0;
@@ -68,6 +76,7 @@ export function createE2eStateFileBridge(
       debugConsoleOutputs,
       stoppingPathEvents,
       taskProcessEvents,
+      browserDebugSessions,
       control: controlStatus,
     });
   };
@@ -163,6 +172,29 @@ export function createE2eStateFileBridge(
   });
 
   let controlProcessing: Promise<void> | undefined;
+  const browserDebugSessionStartSubscription = vscode.debug.onDidStartDebugSession(session => {
+    if (!isBrowserDebugSessionType(session.type)) {
+      return;
+    }
+
+    browserDebugSessions.push({
+      id: session.id,
+      type: session.type,
+      name: session.name,
+      parentSessionId: session.parentSession?.id,
+      parentSessionType: session.parentSession?.type,
+    });
+    writeStateFile();
+  });
+  const browserDebugSessionEndSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+    const index = browserDebugSessions.findIndex(tracked => tracked.id === session.id);
+    if (index < 0) {
+      return;
+    }
+
+    browserDebugSessions.splice(index, 1);
+    writeStateFile();
+  });
   const controlInterval = controlFile
     ? setInterval(() => {
       if (controlProcessing) {
@@ -213,7 +245,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, appHostLifecycleTools, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -237,7 +269,11 @@ export function createE2eStateFileBridge(
     }
   });
 
-  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, taskStartSubscription, taskEndSubscription, controlSubscription);
+  return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, taskStartSubscription, taskEndSubscription, browserDebugSessionStartSubscription, browserDebugSessionEndSubscription, controlSubscription);
+}
+
+function isBrowserDebugSessionType(type: string): boolean {
+  return type === 'pwa-chrome' || type === 'pwa-msedge' || type === 'firefox';
 }
 
 function trimTaskProcessEvents(events: AspireExtensionE2ETaskProcessEvent[]): void {
@@ -325,6 +361,7 @@ async function executeE2eControlCommand(
   terminalProvider: AspireTerminalProvider,
   clipboardSnapshot: E2eClipboardSnapshot,
   clipboardExpectation: E2eClipboardExpectation,
+  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -542,6 +579,42 @@ async function executeE2eControlCommand(
       const commands = await vscode.commands.getCommands(true);
       return commands.filter(commandId => commandId.startsWith('aspire-vscode.')).sort();
     }
+    case 'getRegisteredLanguageModelTools': {
+      markStarted();
+      return vscode.lm.tools
+        .filter(tool => tool.name.startsWith('aspire_'))
+        .map(tool => ({ name: tool.name, tags: [...tool.tags], description: tool.description }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+    }
+    case 'prepareLanguageModelToolInvocation': {
+      markStarted();
+      const tool = appHostLifecycleTools.get(command.toolName);
+      if (!tool) {
+        throw new Error(`Language model tool '${command.toolName}' is not registered.`);
+      }
+
+      const prepared = await tool.prepareInvocation({ input: command.input }, new vscode.CancellationTokenSource().token);
+      return {
+        invocationMessage: prepared.invocationMessage,
+        confirmationTitle: prepared.confirmationMessages?.title,
+        confirmationMessage: prepared.confirmationMessages?.message,
+      };
+    }
+    case 'invokeLanguageModelTool': {
+      markStarted();
+      const invocationCount = Math.max(1, command.times ?? 1);
+      const invocationResults = await Promise.all(Array.from({ length: invocationCount }, () => vscode.lm.invokeTool(command.toolName, {
+        input: command.input,
+        toolInvocationToken: undefined,
+      })));
+
+      return {
+        results: invocationResults.map(invocationResult => invocationResult.content
+          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+          .map(part => part.value)
+          .join('')),
+      };
+    }
     case 'getDebugSessionProcessInfo': {
       markStarted();
       const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
@@ -598,6 +671,10 @@ async function executeE2eControlCommand(
       } finally {
         cleanupRun(runId);
       }
+    }
+    case 'proveAppHostAndResourceDebugging': {
+      markStarted();
+      return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
     }
     case 'proveMauiResourceDebugging': {
       markStarted();
@@ -778,6 +855,7 @@ function getE2eEnvVars(value: unknown): EnvVar[] {
   return value.map(item => ({ name: item.name, value: item.value }));
 }
 
+type AppHostAndResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }>;
 type MauiResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' }>;
 
 interface DebugSessionSnapshot {
@@ -817,6 +895,201 @@ interface DebugAdapterMessageSummary {
   command?: string;
   success?: boolean;
   body?: unknown;
+}
+
+async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider): Promise<unknown> {
+  const appHostPath = getE2eWorkspacePath(command.appHostPath);
+  const appHostSourcePath = getE2eWorkspacePath(command.appHostSourcePath);
+  const resourceSourcePath = getE2eWorkspacePath(command.resourceSourcePath);
+  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E debug proof requires resourceName.');
+  const appHostBreakpointLine = getE2eBreakpointLine(command.appHostBreakpointLine);
+  const resourceBreakpointLine = getE2eBreakpointLine(command.resourceBreakpointLine);
+  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+
+  const debugSessions: DebugSessionSnapshot[] = [];
+  const sessionById = new Map<string, vscode.DebugSession>();
+  const launchRequests: DebugAdapterLaunchRequest[] = [];
+  const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const breakpointRequests: DebugAdapterMessageSummary[] = [];
+  const breakpointResponses: DebugAdapterMessageSummary[] = [];
+
+  const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
+    sessionById.set(session.id, session);
+    debugSessions.push(toDebugSessionSnapshot(session));
+  });
+  const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+    createDebugAdapterTracker(session) {
+      return {
+        onWillReceiveMessage(message) {
+          if (message?.type === 'request' && message.command === 'launch') {
+            launchRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              arguments: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            breakpointRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+        },
+        onDidSendMessage(message) {
+          if (message?.type === 'response' && message.success === false) {
+            debugAdapterResponses.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message),
+            });
+          }
+          if (message?.type === 'response' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            breakpointResponses.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message.body),
+            });
+          }
+          if (message?.type === 'event' && message.event === 'stopped') {
+            stoppedEvents.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              reason: message.body?.reason,
+              threadId: message.body?.threadId,
+            });
+          }
+        }
+      };
+    }
+  });
+
+  const appHostBreakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(appHostSourcePath), new vscode.Position(appHostBreakpointLine, 0)),
+    true);
+  const resourceBreakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(resourceSourcePath), new vscode.Position(resourceBreakpointLine, 0)),
+    true);
+  vscode.debug.addBreakpoints([appHostBreakpoint, resourceBreakpoint]);
+
+  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForE2eValue(
+    `breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+    timeoutMs,
+    async () => {
+      for (const stoppedEvent of stoppedEvents) {
+        if (stoppedEvent.threadId === undefined) {
+          continue;
+        }
+
+        const session = sessionById.get(stoppedEvent.sessionId);
+        if (!session) {
+          continue;
+        }
+
+        let stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> } | undefined;
+        try {
+          stackTrace = await session.customRequest('stackTrace', {
+            threadId: stoppedEvent.threadId,
+            startFrame: 0,
+            levels: 20,
+          });
+        }
+        catch {
+          continue;
+        }
+
+        const matchingFrame = stackTrace?.stackFrames?.find(frame =>
+          typeof frame.source?.path === 'string' && isSamePath(frame.source.path, sourcePath));
+        if (matchingFrame) {
+          return { session, stoppedEvent, stackTrace, matchingFrame };
+        }
+      }
+
+      return undefined;
+    });
+
+  try {
+    const appHostElement = getAppHostElement(appHostTreeProvider, appHostPath);
+    await vscode.commands.executeCommand('aspire-vscode.debugAppHost', appHostElement);
+
+    const appHostHit = await waitForBreakpoint(appHostSourcePath, appHostBreakpointLine);
+    if (appHostHit.matchingFrame.line !== appHostBreakpointLine + 1) {
+      throw new Error(`Expected AppHost breakpoint line ${appHostBreakpointLine + 1}, got ${appHostHit.matchingFrame.line}.`);
+    }
+    await appHostHit.session.customRequest('continue', { threadId: appHostHit.stoppedEvent.threadId });
+
+    const resourceHit = await waitForBreakpoint(resourceSourcePath, resourceBreakpointLine);
+    if (resourceHit.matchingFrame.line !== resourceBreakpointLine + 1) {
+      throw new Error(`Expected resource breakpoint line ${resourceBreakpointLine + 1}, got ${resourceHit.matchingFrame.line}.`);
+    }
+    await resourceHit.session.customRequest('continue', { threadId: resourceHit.stoppedEvent.threadId });
+
+    const aspireDebugSession = await waitForE2eValue(
+      'Aspire AppHost debug startup completion',
+      timeoutMs,
+      () => aspireContext.aspireDebugSessions.find(session =>
+        session.startupCompleted &&
+        typeof session.appHostPath === 'string' &&
+        isSamePath(session.appHostPath, appHostPath)));
+
+    return {
+      proof: 'aspire-apphost-and-resource-debug-breakpoints-hit',
+      appHostPath,
+      resourceName,
+      aspireDebugSessionId: aspireDebugSession.debugSessionId,
+      appHostBreakpoint: {
+        sourcePath: appHostSourcePath,
+        line: appHostBreakpointLine + 1,
+        text: fs.readFileSync(appHostSourcePath, 'utf8').split(/\r?\n/)[appHostBreakpointLine]?.trim(),
+        stoppedEvent: appHostHit.stoppedEvent,
+        matchingStackFrame: appHostHit.matchingFrame,
+        topStackFrame: appHostHit.stackTrace?.stackFrames?.[0],
+      },
+      resourceBreakpoint: {
+        sourcePath: resourceSourcePath,
+        line: resourceBreakpointLine + 1,
+        text: fs.readFileSync(resourceSourcePath, 'utf8').split(/\r?\n/)[resourceBreakpointLine]?.trim(),
+        stoppedEvent: resourceHit.stoppedEvent,
+        matchingStackFrame: resourceHit.matchingFrame,
+        topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
+      },
+      debugSessions,
+      launchRequests,
+      debugAdapterResponses,
+      breakpointRequests,
+      breakpointResponses,
+      stoppedEvents,
+    };
+  }
+  catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}
+Diagnostics:
+${JSON.stringify({
+      debugSessions,
+      launchRequests,
+      debugAdapterResponses,
+      breakpointRequests,
+      breakpointResponses,
+      stoppedEvents,
+    }, undefined, 2)}`);
+  }
+  finally {
+    vscode.debug.removeBreakpoints([appHostBreakpoint, resourceBreakpoint]);
+    sessionSubscription.dispose();
+    trackerRegistration.dispose();
+    await vscode.debug.stopDebugging();
+  }
 }
 
 async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
@@ -1050,6 +1323,9 @@ function redactDebugAdapterArguments(value: unknown): unknown {
   if ('env' in copy) {
     copy.env = '<redacted>';
   }
+  if ('environment' in copy) {
+    copy.environment = '<redacted>';
+  }
   if ('environmentVariables' in copy) {
     copy.environmentVariables = '<redacted>';
   }
@@ -1171,10 +1447,6 @@ async function stopDebuggingForE2E(
 function hasRunningAppHost(state: AspireExtensionStateSnapshot, appHostPath: string): boolean {
   return (state.workspaceAppHost !== undefined && isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
     || state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath));
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function getE2eRequiredString(value: unknown, errorMessage: string): string {

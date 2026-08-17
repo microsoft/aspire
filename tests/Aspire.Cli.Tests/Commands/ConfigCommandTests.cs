@@ -474,6 +474,75 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigListCommand_WithAllFlag_DoesNotListHiddenFeature()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var listResult = command.Parse("config list --all");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        // A non-hidden feature is listed, proving the available-features section rendered...
+        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
+        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not be advertised.
+        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
+    }
+
+    [Fact]
+    public async Task ConfigInfoJson_DoesNotAdvertiseHiddenFeature()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var infoResult = command.Parse("config info --json");
+        var infoExitCode = await infoResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, infoExitCode);
+
+        // The only place a feature name reaches the JSON is availableFeatures (SettingsSchemaBuilder
+        // does not enumerate feature flags), so asserting on the name token reliably proves exclusion.
+        var output = string.Join("\n", outputWriter.Logs);
+        // A non-hidden feature is present, proving availableFeatures was emitted...
+        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
+        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not appear.
+        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
+    }
+
+    [Fact]
+    public void HiddenFeature_WhenSetExplicitly_IsStillHonored()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(
+            workspace,
+            outputHelper,
+            // Hiding a feature only removes it from discovery; a value set directly in
+            // configuration must still be honored by IFeatures.
+            options => options.ConfigurationCallback += config =>
+            {
+                config[$"{KnownFeatures.FeaturePrefix}:{KnownFeatures.AspireSkillsRemoteFetchEnabled}"] = "true";
+            });
+        using var provider = services.BuildServiceProvider();
+
+        var featureFlags = provider.GetRequiredService<IFeatures>();
+        Assert.True(featureFlags.IsFeatureEnabled(KnownFeatures.AspireSkillsRemoteFetchEnabled, defaultValue: false));
+    }
+
+    [Fact]
     public async Task FeatureFlags_WhenSetToTrue_ReturnsTrue()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

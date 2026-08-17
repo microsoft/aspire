@@ -9,6 +9,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Certificates;
 
@@ -42,6 +43,8 @@ internal sealed class EnsureCertificatesTrustedResult
 internal interface ICertificateService
 {
     Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
+
+    string? ExportDevCertificatePem(CancellationToken cancellationToken);
 }
 
 internal sealed class CertificateService(
@@ -49,9 +52,13 @@ internal sealed class CertificateService(
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    IEnvironment environment) : ICertificateService
+    IEnvironment environment,
+    CliExecutionContext executionContext,
+    ILogger<CertificateService> logger) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
+    internal string DevCertDirectory => Path.Combine(
+        executionContext.AspireHomeDirectory.FullName, "dev-certs");
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -195,6 +202,33 @@ internal sealed class CertificateService(
             systemCertDirs.Add(devCertsTrustPath);
 
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
+        }
+    }
+
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertDirectory, cancellationToken);
+            if (result is not null)
+            {
+                logger.LogDebug("Exported dev certificate public PEM to {Path}", result);
+            }
+            else
+            {
+                logger.LogDebug("No valid dev certificate found to export as PEM");
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to export dev certificate as PEM");
+            return null;
         }
     }
 }
