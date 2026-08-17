@@ -69,15 +69,21 @@ function isAbsoluteCliPath(cliPath: string): boolean {
     return path.posix.isAbsolute(cliPath) || isFullyQualifiedWindowsPath(cliPath);
 }
 
-function isRelativePathLikeCliPath(cliPath: string): boolean {
-    if (isAbsoluteCliPath(cliPath)) {
-        return false;
+function expandWindowsEnvironmentVariables(
+    value: string,
+    environment: NodeJS.ProcessEnv = process.env,
+): string {
+    if (process.platform !== 'win32') {
+        return value;
     }
 
-    // `C:aspire.exe` is relative to the current directory on drive C:, even without a separator.
-    // Probe and launch can use different working directories, so it has the same ambiguity as
-    // `C:tools\aspire.exe`.
-    return /^[A-Za-z]:/.test(cliPath) || cliPath.includes('/') || cliPath.includes('\\');
+    const environmentVariables = new Map(
+        Object.entries(environment).map(([name, environmentValue]) => [name.toLowerCase(), environmentValue]),
+    );
+
+    return value.replace(/%([^%]+)%/g, (match, name: string) => {
+        return environmentVariables.get(name.toLowerCase()) ?? match;
+    });
 }
 
 function containsCliPath(paths: readonly string[], candidate: string): boolean {
@@ -441,7 +447,7 @@ export function resolveCliPath(deps: CliPathDependencies = defaultDependencies):
 
             deps.updateResolvedPathForForwarding(
                 currentConfiguredPathSnapshot.configuredPath,
-                (result.source === 'default-install' || result.source === 'path')
+                (result.source === 'configured' || result.source === 'default-install' || result.source === 'path')
                     && isAbsoluteCliPath(result.cliPath)
                     && !areCliPathsEqual(currentConfiguredPathSnapshot.configuredPath, result.cliPath)
                     ? result.cliPath
@@ -514,19 +520,19 @@ async function resolveCliPathCore(
 
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && (!configuredPathIsLegacyDefault || isCommandShimPath(configuredPath))) {
-        if (isRelativePathLikeCliPath(configuredPath)) {
-            // The setting describes an executable path. Probing a relative path here would resolve
-            // it against the extension host's cwd, while later AppHost launches resolve it from a
-            // different working directory and can therefore pick a different executable.
-            extensionLogOutputChannel.warn(`Configured CLI path is relative and will not be probed: ${configuredPath}`);
+        const expandedConfiguredPath = expandWindowsEnvironmentVariables(configuredPath);
+        if (!isAbsoluteCliPath(expandedConfiguredPath)) {
+            // The setting is an executable pin. Relative paths and bare command names can resolve
+            // differently between the extension probe, AppHost launch, and forwarded environment.
+            extensionLogOutputChannel.warn(`Configured CLI path is not absolute and will not be probed: ${configuredPath}`);
             extensionLogOutputChannel.warn('Suppressing AspireCliPath forwarding for the rejected configured CLI path');
             updateRejectedConfiguredCliPath(configuredPath, configuredPath, deps.getConfiguredPath, resolutionGeneration);
         }
         else {
-            const isValid = await deps.tryExecute(configuredPath);
+            const isValid = await deps.tryExecute(expandedConfiguredPath);
             if (isValid) {
                 updateRejectedConfiguredCliPath(configuredPath, undefined, deps.getConfiguredPath, resolutionGeneration);
-                return { cliPath: configuredPath, available: true, source: 'configured' };
+                return { cliPath: expandedConfiguredPath, available: true, source: 'configured' };
             }
 
             extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);

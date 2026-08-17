@@ -566,25 +566,29 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.cliPath, customPath);
         });
 
-        test('keeps a bare configured command name as an explicit probeable value', async () => {
+        test('resolves a bare configured command name to the concrete PATH executable', async () => {
             const configuredPath = 'aspire';
-            const tryExecute = sinon.stub().callsFake(async candidate => candidate === configuredPath);
-            const findOnPath = sinon.stub().resolves('/somewhere/else/aspire');
+            const resolvedPath = '/somewhere/else/aspire';
+            const tryExecute = sinon.stub().resolves(true);
+            const findOnPath = sinon.stub().resolves(resolvedPath);
+            const updateResolvedPathForForwarding = sinon.stub();
 
             const result = await resolveCliPath(createMockDeps({
                 getConfiguredPath: () => configuredPath,
                 findOnPath,
                 tryExecute,
+                updateResolvedPathForForwarding,
             }));
 
             assert.deepStrictEqual(result, {
-                cliPath: configuredPath,
+                cliPath: resolvedPath,
                 available: true,
-                source: 'configured',
+                source: 'path',
             });
-            assert.ok(tryExecute.calledOnceWithExactly(configuredPath));
-            assert.ok(findOnPath.notCalled);
-            assert.strictEqual(isConfiguredCliPathRejectedForForwarding(configuredPath), false);
+            assert.ok(tryExecute.notCalled);
+            assert.ok(findOnPath.calledOnce);
+            assert.strictEqual(isConfiguredCliPathRejectedForForwarding(configuredPath), true);
+            assert.ok(updateResolvedPathForForwarding.calledOnceWithExactly(configuredPath, resolvedPath));
         });
 
         test('keeps an explicitly configured Windows command shim ahead of PATH', async () => {
@@ -758,6 +762,73 @@ suite('utils/cliPath tests', () => {
             });
             assert.ok(tryExecute.notCalled);
             assert.ok(isConfiguredCliPathRejectedForForwarding(relativeConfiguredPath));
+        });
+
+        test('expands a Windows environment-variable configured path before probing and forwarding it', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const originalAspireHome = process.env.ASPIRE_HOME;
+            process.env.ASPIRE_HOME = 'C:\\Aspire Home';
+            const configuredPath = '%aspire_home%\\aspire.cmd';
+            const expandedPath = 'C:\\Aspire Home\\aspire.cmd';
+            const tryExecute = sinon.stub().callsFake(async candidate => candidate === expandedPath);
+            const findOnPath = sinon.stub().resolves('C:\\Other\\aspire.exe');
+            const updateResolvedPathForForwarding = sinon.stub();
+
+            try {
+                const result = await resolveCliPath(createMockDeps({
+                    getConfiguredPath: () => configuredPath,
+                    findOnPath,
+                    tryExecute,
+                    updateResolvedPathForForwarding,
+                }));
+
+                assert.deepStrictEqual(result, {
+                    cliPath: expandedPath,
+                    available: true,
+                    source: 'configured',
+                });
+                assert.ok(tryExecute.calledOnceWithExactly(expandedPath));
+                assert.ok(findOnPath.notCalled);
+                assert.strictEqual(isConfiguredCliPathRejectedForForwarding(configuredPath), false);
+                assert.ok(updateResolvedPathForForwarding.calledOnceWithExactly(configuredPath, expandedPath));
+            }
+            finally {
+                platformStub.restore();
+                if (originalAspireHome === undefined) {
+                    delete process.env.ASPIRE_HOME;
+                }
+                else {
+                    process.env.ASPIRE_HOME = originalAspireHome;
+                }
+            }
+        });
+
+        test('rejects a configured Windows path whose environment variable cannot be expanded', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const configuredPath = '%ASPIRE_UNKNOWN_HOME%\\aspire.cmd';
+            const resolvedPath = 'C:\\Other\\aspire.exe';
+            const tryExecute = sinon.stub().resolves(true);
+            const findOnPath = sinon.stub().resolves(resolvedPath);
+
+            try {
+                const result = await resolveCliPath(createMockDeps({
+                    getConfiguredPath: () => configuredPath,
+                    findOnPath,
+                    tryExecute,
+                }));
+
+                assert.deepStrictEqual(result, {
+                    cliPath: resolvedPath,
+                    available: true,
+                    source: 'path',
+                });
+                assert.ok(tryExecute.notCalled);
+                assert.ok(findOnPath.calledOnce);
+                assert.strictEqual(isConfiguredCliPathRejectedForForwarding(configuredPath), true);
+            }
+            finally {
+                platformStub.restore();
+            }
         });
 
         test('rejects a configured Windows drive-relative path-like value and falls through to the discovered CLI without probing it', async () => {
