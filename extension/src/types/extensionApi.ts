@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -227,6 +227,15 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }
-    | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
+    | {
+        name: 'createResourceDebugConfiguration';
+        launchConfig: ExecutableLaunchConfiguration;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        debug?: boolean;
+        isApphost?: boolean;
+        debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
+        environmentKeys?: readonly string[];
+    }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

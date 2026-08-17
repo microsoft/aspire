@@ -265,6 +265,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: azure-functions
             advisoryIssue: https://github.com/microsoft/aspire/issues/19151
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
