@@ -788,7 +788,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             omittedLaunchToolArgumentCount = Math.Max(0, omittedLaunchToolArgumentCount - 1);
         }
 
-        var dotnetProjectLaunchResourceArgumentIndex = FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
+        var (dotnetProjectLaunchResourceArgumentIndex, canReuseArgsForProcessFallback) = AnalyzeExecutableAnnotatedDotnetProjectArguments(
             er.ModelResource,
             appHostArgList);
         var dotnetProjectApplicationArgumentBoundaryIndex =
@@ -799,7 +799,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 : -1;
         var launchArgs = new List<LaunchArgument>();
         int? dotnetProjectLaunchArgumentIndex = null;
-        var canReuseArgsForProcessFallback = true;
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
         List<string>? projectLaunchProfileArgs = null;
         var includeProfileArgsInSpec = false;
@@ -927,13 +926,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return (launchArgs, dotnetProjectLaunchArgumentIndex, canReuseArgsForProcessFallback);
     }
 
-    private static int? FindExecutableAnnotatedDotnetProjectLaunchArgumentIndex(
+    private static (int? ProjectLaunchArgumentIndex, bool CanReuseArgsForProcessFallback) AnalyzeExecutableAnnotatedDotnetProjectArguments(
         IResource resource,
         IReadOnlyList<(string Value, bool IsSensitive)> appHostArgs)
     {
         if (!IsExecutableAnnotatedDotnetProject(resource))
         {
-            return null;
+            return (null, true);
         }
 
         // Recognize the project-launching SDK verb after supported non-terminating command prefixes:
@@ -972,13 +971,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         if (projectLaunchArgumentIndex < appHostArgs.Count)
         {
             var candidate = appHostArgs[projectLaunchArgumentIndex].Value;
-            if (candidate == "run" || (candidate == "watch" && !hasEnvironmentVariableDirective))
+            if (candidate == "run")
             {
-                return projectLaunchArgumentIndex;
+                return (projectLaunchArgumentIndex, true);
+            }
+
+            if (candidate == "watch")
+            {
+                return hasEnvironmentVariableDirective
+                    ? (null, false)
+                    : (projectLaunchArgumentIndex, true);
             }
         }
 
-        return null;
+        return (null, true);
     }
 
     private static bool IsDotnetEnvironmentVariableDirective(string argument)

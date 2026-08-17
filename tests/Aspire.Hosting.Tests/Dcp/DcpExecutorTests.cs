@@ -6410,9 +6410,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationWithoutLaunchProfileArgsOffersProcessFallback(bool useExec)
+    [InlineData(new string[] { "exec", "app.dll", "run" }, true)]
+    [InlineData(new string[] { "app.dll", "run" }, true)]
+    [InlineData(new string[] { "[env:ASPIRE_PREFIX_PROBE=1]", "watch" }, false)]
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationWithoutLaunchProfileArgsSetsExpectedProcessFallback(
+        string[] resourceArgs,
+        bool offersProcessFallback)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -6422,9 +6425,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
         }
 
-        string[] resourceArgs = useExec
-            ? ["exec", "app.dll", "run"]
-            : ["app.dll", "run"];
         projectBuilder
             .WithAnnotation(new ExecutableAnnotation
             {
@@ -6454,7 +6454,14 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(resourceArgs, exe.Spec.Args);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        if (offersProcessFallback)
+        {
+            Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        }
+        else
+        {
+            Assert.Null(exe.Spec.FallbackExecutionTypes);
+        }
     }
 
     [Fact]
