@@ -12,6 +12,7 @@ suite('Aspire dynamic debug configuration E2E', function () {
     const fixtureRoot = path.join(getWorkspaceRoot(), '.e2e-dynamic-debug');
     const firstFolderPath = path.join(fixtureRoot, 'first');
     const secondFolderPath = path.join(fixtureRoot, 'second');
+    const firstAppHostPath = path.join(firstFolderPath, 'apphost.cs');
     const appHostPath = path.join(secondFolderPath, 'apphost.cs');
     let appHostPidBeforeStop: number | undefined;
 
@@ -22,8 +23,10 @@ suite('Aspire dynamic debug configuration E2E', function () {
     teardown(async () => {
         await runE2eTeardown([
             () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
+            () => appHostPidBeforeStop ??= getRunningAppHostPid(firstAppHostPath),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopAppHostIfRunning(appHostPath),
+            () => stopAppHostIfRunning(firstAppHostPath),
             () => appHostPidBeforeStop === undefined
                 ? undefined
                 : waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000),
@@ -62,6 +65,10 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.strictEqual(configurationIndexes.length, 2, `Expected two Aspire dynamic configurations. Visible labels: ${JSON.stringify(quickPickLabels)}`);
 
         const secondFolderConfigurationIndex = configurationIndexes[1];
+        const secondFolderConfiguration = quickPickLabels[secondFolderConfigurationIndex];
+        assert.ok(
+            secondFolderConfiguration.includes(workspaceFolders[1].uri),
+            `Expected the selected dynamic configuration to identify the second workspace folder URI '${workspaceFolders[1].uri}'. Selected label: ${JSON.stringify(secondFolderConfiguration)}`);
         const beforeFirstLaunch = getDebugConsoleOutputCount();
         await chooseActiveQuickPickAtIndex(secondFolderConfigurationIndex);
 
@@ -85,12 +92,14 @@ suite('Aspire dynamic debug configuration E2E', function () {
         fs.mkdirSync(secondFolderPath, { recursive: true });
         const appHostSdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
         assert.ok(appHostSdkVersion);
-        fs.writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@${appHostSdkVersion}
+        const appHostSource = `#:sdk Aspire.AppHost.Sdk@${appHostSdkVersion}
 
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.Build().Run();
-`);
+`;
+        fs.writeFileSync(firstAppHostPath, appHostSource);
+        fs.writeFileSync(appHostPath, appHostSource);
     }
 });
 

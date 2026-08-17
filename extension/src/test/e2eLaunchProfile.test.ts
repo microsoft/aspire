@@ -1017,7 +1017,9 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
         assert.ok(dynamicDebugConfiguration.includes('let appHostPidBeforeStop: number | undefined;'));
         assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)'));
+        assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(firstAppHostPath)'));
         assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(appHostPath)'));
+        assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(firstAppHostPath)'));
         assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)"));
         assert.ok(dynamicDebugConfiguration.indexOf("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)") < dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })'));
         assert.ok(commandPalette.includes('runE2eTeardown'));
