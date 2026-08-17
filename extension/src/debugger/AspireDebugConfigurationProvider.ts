@@ -37,20 +37,20 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const activeEditorFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
         if (activeEditorFolder?.uri.toString() !== folder.uri.toString()) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const candidate = await this.tryFindCandidateForEditorFile(activeEditor.document.uri.fsPath, folder);
         if (!candidate) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
-        return [this.createProvidedConfiguration(folder, getDebugTargetForCandidate(candidate))];
+        return this.createProvidedConfigurations(folder, getDebugTargetForCandidate(candidate));
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
@@ -215,37 +215,35 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
     }
 
-    private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
-        return this.createProvidedConfiguration(folder, folder.uri.fsPath);
+    private createDefaultConfigurations(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration[] {
+        return this.createProvidedConfigurations(folder, folder.uri.fsPath);
     }
 
-    private createProvidedConfiguration(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration {
-        // VS Code remembers a dynamic configuration by name and later searches all workspace
-        // folders for the first match. Preserve the shipped name when there is no collision so
-        // existing single-root selections keep working. In multi-root windows, include the stable
-        // URI for every folder because mixing alias-only and alias-plus-URI identities can collide.
-        const name = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
-            ? this.getDynamicConfigurationName(folder)
-            : defaultConfigurationName;
-
-        return this.withProvidedSelectionOrigin({
+    private createProvidedConfigurations(folder: vscode.WorkspaceFolder, program: string): vscode.DebugConfiguration[] {
+        const isDynamic = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic;
+        const config: vscode.DebugConfiguration = {
             type: 'aspire',
             request: 'launch',
-            name,
+            name: isDynamic
+                ? defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString())
+                : defaultConfigurationName,
             program
-        });
-    }
+        };
 
-    private getDynamicConfigurationName(folder: vscode.WorkspaceFolder): string {
-        return (vscode.workspace.workspaceFolders?.length ?? 0) <= 1
-            ? defaultConfigurationName
-            : defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
-    }
+        if (!isDynamic) {
+            return [config];
+        }
 
-    private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
-        return this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
-            ? { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }
-            : config;
+        const visibleConfig = { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' };
+        // VS Code remembers dynamic selections by name. Keep the shipped single-root name as a
+        // hidden alias so upgrades can replay that selection without exposing a duplicate entry.
+        const legacyConfig = {
+            ...visibleConfig,
+            name: defaultConfigurationName,
+            presentation: { hidden: true },
+        };
+
+        return [visibleConfig, legacyConfig];
     }
 
     private isWorkspaceFolderRoot(program: string, folder: vscode.WorkspaceFolder | undefined): boolean {

@@ -577,7 +577,7 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'explicit-launch-configuration');
     });
 
-    test('preserves remembered dynamic launch config name when active file resolves in a single-folder workspace', async () => {
+    test('provides a stable visible dynamic launch config and hidden legacy alias in a single-folder workspace', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'AppHost', 'Program.cs');
         const projectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
@@ -587,10 +587,36 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].name, defaultConfigurationName);
-        assert.strictEqual(configs[0].program, projectPath);
-        assert.strictEqual(configs[0][appHostSelectionOriginConfigKey], 'default-discovery');
+        assert.deepStrictEqual(
+            configs.map(config => config.name),
+            [
+                defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString()),
+                defaultConfigurationName,
+            ]);
+        const visibleConfig = getVisibleDynamicConfiguration(configs, folder);
+        const legacyConfig = getLegacyDynamicConfiguration(configs);
+        assert.strictEqual(visibleConfig.program, projectPath);
+        assert.strictEqual(visibleConfig[appHostSelectionOriginConfigKey], 'default-discovery');
+        assert.strictEqual(visibleConfig.presentation, undefined);
+        assert.strictEqual(legacyConfig.program, visibleConfig.program);
+        assert.strictEqual(legacyConfig[appHostSelectionOriginConfigKey], visibleConfig[appHostSelectionOriginConfigKey]);
+    });
+
+    test('keeps the visible dynamic launch config identity when another workspace root is added', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'repo-with-apphost'), 'src');
+        const otherFolder = createWorkspaceFolder(path.join(tempDir, 'repo-docs'), 'docs', 1);
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(folder.uri.fsPath, null), launchReservation);
+        let workspaceFolders = [folder];
+        sandbox.stub(vscode.workspace, 'workspaceFolders').get(() => workspaceFolders);
+        sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
+
+        const singleRootConfigs = await provider.provideDebugConfigurations(folder);
+        workspaceFolders = [folder, otherFolder];
+        const multiRootConfigs = await provider.provideDebugConfigurations(folder);
+
+        const expectedName = defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
+        assert.strictEqual(getVisibleDynamicConfiguration(singleRootConfigs, folder).name, expectedName);
+        assert.strictEqual(getVisibleDynamicConfiguration(multiRootConfigs, folder).name, expectedName);
     });
 
     test('omits selection origin from launch configurations written to launch.json', async () => {
@@ -608,6 +634,7 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(configs.length, 1);
         assert.strictEqual(configs[0].name, defaultConfigurationName);
         assert.strictEqual(configs[0].program, projectPath);
+        assert.strictEqual(configs[0].presentation, undefined);
         assert.ok(!(appHostSelectionOriginConfigKey in configs[0]));
     });
 
@@ -628,9 +655,9 @@ suite('AspireDebugConfigurationProvider', () => {
             provider.provideDebugConfigurations(secondDuplicateFolder),
         ]);
         const configurationNames = [
-            uniqueConfigs[0].name,
-            firstDuplicateConfigs[0].name,
-            secondDuplicateConfigs[0].name,
+            getVisibleDynamicConfiguration(uniqueConfigs, uniqueFolder).name,
+            getVisibleDynamicConfiguration(firstDuplicateConfigs, firstDuplicateFolder).name,
+            getVisibleDynamicConfiguration(secondDuplicateConfigs, secondDuplicateFolder).name,
         ];
 
         assert.deepStrictEqual(
@@ -651,8 +678,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].program, folder.uri.fsPath);
+        assert.strictEqual(getVisibleDynamicConfiguration(configs, folder).program, folder.uri.fsPath);
     });
 
     test('provides default dynamic launch config when discovery fails', async () => {
@@ -663,8 +689,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].program, folder.uri.fsPath);
+        assert.strictEqual(getVisibleDynamicConfiguration(configs, folder).program, folder.uri.fsPath);
     });
 
     test('provides default dynamic launch config when there is no active editor', async () => {
@@ -674,8 +699,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.strictEqual(configs.length, 1);
-        assert.strictEqual(configs[0].program, folder.uri.fsPath);
+        assert.strictEqual(getLegacyDynamicConfiguration(configs).program, folder.uri.fsPath);
     });
 
     test('leaves launch config program unchanged when debug target resolution fails', async () => {
@@ -748,6 +772,21 @@ function createWorkspaceFolder(folderPath: string, name = 'workspace', index = 0
         name,
         index,
     };
+}
+
+function getVisibleDynamicConfiguration(configs: vscode.DebugConfiguration[], folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
+    const expectedName = defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
+    const config = configs.find(config => config.name === expectedName);
+    assert.ok(config, `Expected visible dynamic configuration '${expectedName}'.`);
+    assert.notStrictEqual(config.presentation?.hidden, true);
+    return config;
+}
+
+function getLegacyDynamicConfiguration(configs: vscode.DebugConfiguration[]): vscode.DebugConfiguration {
+    const config = configs.find(config => config.name === defaultConfigurationName);
+    assert.ok(config, `Expected legacy dynamic configuration '${defaultConfigurationName}'.`);
+    assert.strictEqual(config.presentation?.hidden, true);
+    return config;
 }
 
 function createAppHostDiscoveryService(resolvedPath: string, candidatePath: string | null = resolvedPath, language = 'csharp'): AppHostDiscoveryService {
