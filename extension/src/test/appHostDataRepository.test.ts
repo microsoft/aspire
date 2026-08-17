@@ -5767,16 +5767,19 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args) =>
             args[0] === 'describe' ? childProcess : new TestChildProcess());
         const taskkillCalls: Array<{ command: string; args: string[]; windowsHide: boolean | undefined }> = [];
+        const taskkillProcesses: EventEmitter[] = [];
         spawnProcessStub.callsFake((command: string, args?: readonly string[], options?: nodeChildProcess.SpawnOptions) => {
+            const taskkillProcess = Object.assign(new EventEmitter(), {
+                unref: () => { },
+            });
             taskkillCalls.push({
                 command,
                 args: [...(args ?? [])],
                 windowsHide: options?.windowsHide,
             });
+            taskkillProcesses.push(taskkillProcess);
 
-            return Object.assign(new EventEmitter(), {
-                unref: () => { },
-            }) as nodeChildProcess.ChildProcess;
+            return taskkillProcess as nodeChildProcess.ChildProcess;
         });
         const repository = new AppHostDataRepository(terminalProvider);
 
@@ -5792,7 +5795,11 @@ suite('AppHostDataRepository', () => {
                 args: ['/pid', '4242', '/t'],
                 windowsHide: true,
             }]);
+            assert.strictEqual(taskkillProcesses.length, 1);
             assert.deepStrictEqual(childProcess.killSignals, []);
+
+            taskkillProcesses[0].emit('close', 0);
+            await waitForMicrotasks();
 
             await clock.tickAsync(5000);
 
@@ -5808,6 +5815,13 @@ suite('AppHostDataRepository', () => {
                     windowsHide: true,
                 },
             ]);
+            assert.strictEqual(taskkillProcesses.length, 2);
+            assert.deepStrictEqual(childProcess.killSignals, []);
+
+            taskkillProcesses[1].emit('close', 0);
+            childProcess.markExited(0);
+            childProcess.emit('close', 0);
+            await waitForMicrotasks();
         } finally {
             repository.dispose();
             clock.restore();
