@@ -62,7 +62,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "`/tmp/gh-aw/agent/extension-changelog-candidates.tsv`",
+            "`${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv`",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -144,8 +144,20 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.False(
             prompt.Contains("`git log", StringComparison.Ordinal),
             "The prompt must not expose broad Git execution to the agent.");
+        Assert.DoesNotContain(
+            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
+            prompt,
+            StringComparison.Ordinal);
         var tools = GetSection(prompt, "^tools:", "^pre-agent-steps:");
         Assert.DoesNotContain("\"git\"", tools, StringComparison.Ordinal);
+        Assert.Contains(
+            "--mount \"${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro\"",
+            compiledWorkflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
+            compiledWorkflow,
+            StringComparison.Ordinal);
         Assert.Contains("{{#runtime-import .github/workflows/extension-changelog.md}}", compiledWorkflow, StringComparison.Ordinal);
     }
 
@@ -240,7 +252,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.Contains("aspire-ext-changelog", preloadScript, StringComparison.Ordinal);
         Assert.Contains("git fetch --no-tags", preloadScript, StringComparison.Ordinal);
         Assert.Contains(
-            "CANDIDATES_FILE=/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
+            "CANDIDATES_FILE=\"${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv\"",
             preloadScript,
             StringComparison.Ordinal);
         Assert.Contains("git log --format='%H%x09%s' --no-merges", preloadScript, StringComparison.Ordinal);

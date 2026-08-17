@@ -175,8 +175,8 @@ pre-agent-steps:
 
       FROM_SHA="${BASH_REMATCH[1]}"
       TO_SHA="${BASH_REMATCH[2]}"
-      CANDIDATES_FILE=/tmp/gh-aw/agent/extension-changelog-candidates.tsv
-      mkdir -p /tmp/gh-aw/agent
+      CANDIDATES_FILE="${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv"
+      mkdir -p "${RUNNER_TEMP}/gh-aw"
       rm -f "${CANDIDATES_FILE}"
       CURRENT_BRANCH="$(git branch --show-current)"
       if [ -z "${CURRENT_BRANCH}" ]; then
@@ -334,7 +334,7 @@ the only authoritative source.
 
 A deterministic pre-agent step already validated and materialized the
 authoritative marker range as
-`/tmp/gh-aw/agent/extension-changelog-candidates.tsv`. Do not run `git` or
+`${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv`. Do not run `git` or
 perform any network fetch in the agent step. If the candidate file cannot be
 read, treat that as a workflow error and fail with a diagnostic instead of
 trying to repair it here.
