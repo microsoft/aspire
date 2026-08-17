@@ -250,6 +250,25 @@ public class KubernetesPersistentVolumeRunModeTests
         Assert.Contains("container", exception.Message);
     }
 
+    [Fact]
+    public async Task PublishOnlyBindingsAllowMixedContainerAndProjectConsumers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        // Neither binding asks for the run-mode environment path, so the project materializes no
+        // local backing store and cannot conflict with the container's named volume. This shape
+        // predates the env overload and must keep working.
+        builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithPersistentVolume(volume, "/srv/data");
+        builder.AddContainer("container", "image")
+            .WithPersistentVolume(volume, "/srv/data");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(
         DistributedApplication app,

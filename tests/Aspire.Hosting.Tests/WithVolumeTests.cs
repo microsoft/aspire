@@ -209,4 +209,26 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         var dcpVolume = ContainerVolume.Create("shared-data-resource", sessionMount.Source!);
         Assert.True(dcpVolume.Spec.Persistent);
     }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentUsesStorePathForCustomComputeResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var custom = builder.AddResource(new TestComputeResource("custom"))
+            .WithVolume("data", "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var expectedPath = VolumeMountPathResolver.GetLocalPath(store, custom.Resource, "data");
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            custom.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal(expectedPath, environment["DATA_PATH"]);
+    }
+
+    private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment
+    {
+    }
 }

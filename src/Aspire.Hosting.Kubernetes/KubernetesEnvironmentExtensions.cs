@@ -128,13 +128,20 @@ public static class KubernetesEnvironmentExtensions
                 item => item.Annotation.Volume.Name,
                 StringComparer.OrdinalIgnoreCase))
             {
-                var hasContainer = volumeGroup.Any(item => item.Resource is ContainerResource);
-                var hasHostProcess = volumeGroup.Any(item => item.Resource is ProjectResource or ExecutableResource);
+                var containers = volumeGroup.Where(item => item.Resource is ContainerResource).ToArray();
 
-                if (hasContainer && hasHostProcess)
+                // Only host processes that asked for the environment path materialize an IAspireStore
+                // directory. A project or executable bound to a publish-only volume consumes no local
+                // backing store in run mode, so it cannot conflict with a container's named volume.
+                // Rejecting it would break AppHosts that predate the environment-path feature.
+                var hostProcesses = volumeGroup.Where(item =>
+                    item.Resource is ProjectResource or ExecutableResource &&
+                    item.Annotation.EnvironmentVariableName is not null).ToArray();
+
+                if (containers.Length > 0 && hostProcesses.Length > 0)
                 {
                     var volume = volumeGroup.First().Annotation.Volume;
-                    var resourceNames = string.Join(", ", volumeGroup.Select(item => $"'{item.Resource.Name}'"));
+                    var resourceNames = string.Join(", ", containers.Concat(hostProcesses).Select(item => $"'{item.Resource.Name}'"));
                     throw new DistributedApplicationException(
                         $"Kubernetes persistent volume '{volume.Name}' is used by both local container and host-process resources ({resourceNames}). " +
                         $"Run mode cannot provide one shared backing store across those execution types. Use only containers or only projects/executables for this volume.");

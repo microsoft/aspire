@@ -123,30 +123,27 @@ public static class VolumeResourceBuilderExtensions
             return target;
         }
 
-        if (context.Resource is ProjectResource or ExecutableResource)
+        if (name is null)
         {
-            if (name is null)
-            {
-                throw new InvalidOperationException(
-                    $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
-            }
-
-            var resolver = context.Resource.Annotations
-                .OfType<VolumeMountPathResolverAnnotation>()
-                .LastOrDefault(annotation => string.Equals(annotation.VolumeName, name, StringComparison.Ordinal))
-                ?.Resolver;
-
-            if (resolver is not null)
-            {
-                return resolver(context);
-            }
-
-            var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
-            return VolumeMountPathResolver.GetOrCreateLocalPath(store, context.Resource, name);
+            throw new InvalidOperationException(
+                $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
         }
 
-        throw new InvalidOperationException(
-            $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode. " +
-            $"Only project, executable, and container resources are supported.");
+        var resolver = context.Resource.Annotations
+            .OfType<VolumeMountPathResolverAnnotation>()
+            .LastOrDefault(annotation => string.Equals(annotation.VolumeName, name, StringComparison.Ordinal))
+            ?.Resolver;
+
+        if (resolver is not null)
+        {
+            return resolver(context);
+        }
+
+        // Containers already returned above, so everything remaining runs as a host process and needs
+        // a local directory. Projects and executables are the in-box cases, but the public overload
+        // accepts any IComputeResource, so custom compute resources resolve here too. Throwing instead
+        // would let a call that compiles cleanly fail much later during environment evaluation.
+        var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
+        return VolumeMountPathResolver.GetOrCreateLocalPath(store, context.Resource, name);
     }
 }
