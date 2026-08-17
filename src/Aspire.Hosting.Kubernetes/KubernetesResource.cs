@@ -441,6 +441,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     {
         switch (helmExpression)
         {
+            case { ValueContainsSecretValuesExpression: true, ValueString: { } secretValue }:
+                // Parameter-driven conditionals are stored as literal Helm flow-control expressions.
+                // Route the final environment variable through a Secret when either branch references
+                // a secret value, even though the HelmValue itself has no Expression metadata.
+                Secrets[key] = new(key.ToHelmSecretExpression(TargetResource.Name), secretValue);
+                return;
             case { ExpressionContainsHelmSecretExpression: true, ValueContainsSecretValuesExpression: false }:
                 Secrets[key] = helmExpression;
                 return;

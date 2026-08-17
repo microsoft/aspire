@@ -903,6 +903,95 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var first = builder.AddParameter("first", "alpha", publishValueAsDefault: true);
+        var second = builder.AddParameter("second", "beta", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("COMPOSITE", $"prefix-{{literal}}-{second}-{first}-{second}-suffix");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_SharedEmbeddedParameterIsScopedPerResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var sharedHost = builder.AddParameter("shared-host", "shared.internal", publishValueAsDefault: true);
+
+        builder.AddContainer("first", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/first");
+
+        builder.AddContainer("second", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/second");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/first/config.yaml",
+            "templates/second/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -914,7 +1003,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment(context =>
             {
                 var conditional = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.TrueString),
+                    new TestValueProvider(bool.TrueString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Empty);
@@ -922,7 +1011,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
 
                 var conditionalFalse = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.FalseString),
+                    new TestValueProvider(bool.FalseString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Create($",ssl=false"));
@@ -941,6 +1030,57 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             "templates/env-dashboard/service.yaml",
             "templates/myapp/deployment.yaml",
             "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConditionalBranchesCaptureEmbeddedParameters()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+        var user = builder.AddParameter("user", "alice", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", "test-password", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["OPTIONS"] = ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "enabled",
+                    ReferenceExpression.Create($"user={user};password={password}"),
+                    ReferenceExpression.Create($"user={user};disabled"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/secrets.yaml",
         };
 
         SettingsTask settingsTask = default!;
@@ -1635,17 +1775,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 Assert.DoesNotContain(pattern, content);
             }
         }
-    }
-
-    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
-    {
-        public string ValueExpression => "test-condition";
-
-        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
-            => new(value);
-
-        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
-            => new(value);
     }
 
     private sealed class TestProject : IProjectMetadata

@@ -1618,6 +1618,50 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DeferredValueProvider_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var provider = new TestValueProvider("resolved-value", "{outputs.deferred}");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["DEFERRED_VALUE"] = provider;
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "DEFERRED_VALUE" &&
+            captured.ValueProvider == provider);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "myapp", "config.yaml")),
+                "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
     public void AddKubernetesEnvironment_CreatesDashboardByDefault()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

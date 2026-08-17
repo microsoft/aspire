@@ -311,4 +311,74 @@ builder.Build().Run();
             }
         }
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task RenderEmbeddedEnvironmentExpressionsWithHelm()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.VerifyPullRequestCliVersionAsync(counter);
+        await auto.InstallKindAndHelmAsync(counter);
+
+        await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
+        await auto.RunCommandAsync($"cd {ProjectName}", counter);
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+        var appHostFilePath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ProjectName,
+            $"{ProjectName}.AppHost",
+            "AppHost.cs");
+
+        File.WriteAllText(
+            appHostFilePath,
+            """
+            #pragma warning disable ASPIRECOMPUTE003, ASPIREPIPELINES001
+            using Aspire.Hosting;
+            using Aspire.Hosting.Kubernetes;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            var host = builder.AddParameter("host", "publish-host");
+            var token = builder.AddParameter("token", "publish-token", secret: true);
+
+            builder.AddContainer("myapp", "nginx")
+                .WithEnvironment("SOME_URL", $"http://{host}/test")
+                .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+            builder.AddKubernetesEnvironment("env");
+
+            builder.Build().Run();
+            """);
+
+        await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
+        await auto.RunCommandAsync(
+            "aspire publish -o helm-output --non-interactive",
+            counter,
+            TimeSpan.FromMinutes(5));
+        await auto.RunCommandAsync(
+            "helm template aspire-app helm-output " +
+            "--set-string config.myapp.host=rendered-host " +
+            "--set-string secrets.myapp.token=rendered-token > rendered.yaml",
+            counter);
+        await auto.RunCommandAsync(
+            "grep -F 'SOME_URL: \"http://rendered-host/test\"' rendered.yaml",
+            counter);
+        await auto.RunCommandAsync(
+            "grep -F 'SECRET_URL: \"http://rendered-host/test?token=rendered-token\"' rendered.yaml",
+            counter);
+    }
 }
