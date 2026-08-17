@@ -50,6 +50,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
     internal Dictionary<string, HelmValue> Parameters { get; } = [];
     internal Dictionary<string, HelmValue> AdditionalConfigValues { get; } = [];
+    internal Dictionary<string, HelmValue> AdditionalSecretValues { get; } = [];
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
@@ -527,7 +528,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ParameterResource param)
             {
-                return AllocateParameter(param, TargetResource);
+                var helmValue = AllocateParameter(param, TargetResource);
+                if (embedded)
+                {
+                    AllocateAdditionalParameter(param, helmValue);
+                }
+
+                return helmValue;
             }
 
             if (value is ConnectionStringReference cs)
@@ -652,8 +659,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     /// <summary>
     /// Ensures that any <see cref="ParameterResource"/> instances referenced in a branch's
-    /// value providers are allocated in the appropriate dictionary (EnvironmentVariables or
-    /// Secrets) so their values flow to values.yaml via <c>AddValuesToHelmSectionAsync</c>.
+    /// value providers are allocated so their values flow to values.yaml.
     /// </summary>
     private void AllocateBranchParameters(ReferenceExpression branch)
     {
@@ -662,21 +668,19 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             if (vp is ParameterResource branchParam)
             {
                 var helmValue = AllocateParameter(branchParam, TargetResource);
-                var key = branchParam.Name.ToHelmValuesSectionName();
-
-                // Store in AdditionalConfigValues rather than EnvironmentVariables to avoid
-                // case-insensitive key collisions in ToConfigMap's processedKeys. These values
-                // flow to the config section of values.yaml but do not appear as env vars.
-                if (helmValue.ExpressionContainsHelmSecretExpression)
-                {
-                    Secrets.TryAdd(key, helmValue);
-                }
-                else
-                {
-                    AdditionalConfigValues.TryAdd(key, helmValue);
-                }
+                AllocateAdditionalParameter(branchParam, helmValue);
             }
         }
+    }
+
+    /// <summary>
+    /// Allocates an embedded parameter without adding a synthetic environment variable.
+    /// </summary>
+    private void AllocateAdditionalParameter(ParameterResource parameter, HelmValue helmValue)
+    {
+        var key = parameter.Name.ToHelmValuesSectionName();
+        var values = parameter.Secret ? AdditionalSecretValues : AdditionalConfigValues;
+        values.TryAdd(key, helmValue);
     }
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)

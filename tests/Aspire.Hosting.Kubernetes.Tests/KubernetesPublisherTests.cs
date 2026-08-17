@@ -856,6 +856,53 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_EmbeddedParametersInEnvironmentExpressionsPopulateValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Regression for https://github.com/microsoft/aspire/issues/11140: the base chart keeps
+        // deployment parameters empty, but every nested Helm reference must still be declared.
+        var host = builder.AddParameter("host", "localhost");
+        var token = builder.AddParameter("token", "test-token", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

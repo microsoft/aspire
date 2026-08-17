@@ -187,16 +187,22 @@ internal sealed class KubernetesPublishingContext(
     {
         await AddValuesToHelmSectionAsync(resource, resourceContext.Parameters, HelmExtensions.ParametersKey).ConfigureAwait(false);
 
-        // Merge AdditionalConfigValues (e.g., branch parameters from if/else conditionals)
-        // into a combined dictionary for the config section of values.yaml.
+        // Embedded parameters need values.yaml entries for their Helm references, but they must
+        // not become additional environment variables in the generated ConfigMap or Secret.
         var configItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.EnvironmentVariables);
         foreach (var kvp in resourceContext.AdditionalConfigValues)
         {
             configItems.TryAdd(kvp.Key, kvp.Value);
         }
 
+        var secretItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.Secrets);
+        foreach (var kvp in resourceContext.AdditionalSecretValues)
+        {
+            secretItems.TryAdd(kvp.Key, kvp.Value);
+        }
+
         await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Secrets, HelmExtensions.SecretsKey).ConfigureAwait(false);
+        await AddValuesToHelmSectionAsync(resource, secretItems, HelmExtensions.SecretsKey).ConfigureAwait(false);
     }
 
     private async Task AddValuesToHelmSectionAsync(

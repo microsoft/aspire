@@ -1574,6 +1574,50 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EmbeddedParametersInEnvironmentExpressions_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var host = builder.AddParameter("host", "localhost");
+        var token = builder.AddParameter("token", "test-token", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "host" &&
+            captured.Parameter == host.Resource);
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "secrets" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "token" &&
+            captured.Parameter == token.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
     public void AddKubernetesEnvironment_CreatesDashboardByDefault()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

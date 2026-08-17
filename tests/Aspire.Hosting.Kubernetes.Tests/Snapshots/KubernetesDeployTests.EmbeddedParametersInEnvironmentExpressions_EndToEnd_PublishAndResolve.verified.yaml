@@ -1,0 +1,8 @@
+﻿config:
+  myapp:
+    host: localhost
+    SOME_URL: http://localhost/test
+secrets:
+  myapp:
+    token: test-token
+    SECRET_URL: http://localhost/test?token=test-token
