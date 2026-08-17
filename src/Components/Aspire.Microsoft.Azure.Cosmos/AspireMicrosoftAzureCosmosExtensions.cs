@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire;
 using Aspire.Hosting.Azure.CosmosDB;
 using Aspire.Microsoft.Azure.Cosmos;
@@ -27,6 +28,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <param name="configureClientOptions">An optional method that can be used for customizing the <see cref="CosmosClientOptions"/>.</param>
     /// <remarks>Reads the configuration from "Aspire:Microsoft:Azure:Cosmos" section.</remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static void AddAzureCosmosClient(
         this IHostApplicationBuilder builder,
         string connectionName,
@@ -61,6 +63,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <see cref="CosmosDatabaseBuilder.AddKeyedContainer(string)"/> for each container.
     /// </remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static void AddAzureCosmosContainer(
         this IHostApplicationBuilder builder,
         string connectionName,
@@ -87,6 +90,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <param name="configureClientOptions">An optional method that can be used for customizing the <see cref="CosmosClientOptions"/>.</param>
     /// <remarks>Reads the configuration from "Aspire:Microsoft:Azure:Cosmos:{name}" section.</remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static void AddKeyedAzureCosmosClient(
         this IHostApplicationBuilder builder,
         string name,
@@ -129,6 +133,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <see cref="CosmosDatabaseBuilder.AddKeyedContainer(string)"/> for each container.
     /// </remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static void AddKeyedAzureCosmosContainer(
         this IHostApplicationBuilder builder,
         string name,
@@ -155,6 +160,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <param name="configureClientOptions">An optional method that can be used for customizing the <see cref="CosmosClientOptions"/>.</param>
     /// <remarks>Reads the configuration from "Aspire:Microsoft:Azure:Cosmos:{name}" section.</remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static CosmosDatabaseBuilder AddAzureCosmosDatabase(
         this IHostApplicationBuilder builder,
         string connectionName,
@@ -181,6 +187,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
     /// <param name="configureClientOptions">An optional method that can be used for customizing the <see cref="CosmosClientOptions"/>.</param>
     /// <remarks>Reads the configuration from "Aspire:Microsoft:Azure:Cosmos:{name}" section.</remarks>
     /// <exception cref="InvalidOperationException">If required ConnectionString is not provided in configuration section</exception>
+    [OverloadResolutionPriority(1)]
     public static CosmosDatabaseBuilder AddKeyedAzureCosmosDatabase(
        this IHostApplicationBuilder builder,
        string name,

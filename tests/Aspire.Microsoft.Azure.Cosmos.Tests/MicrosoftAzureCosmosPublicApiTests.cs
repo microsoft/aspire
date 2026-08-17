@@ -38,6 +38,17 @@ public class MicrosoftAzureCosmosPublicApiTests
     }
 
     [Fact]
+    public void AddAzureCosmosClientWithNullCallbacksShouldCompile()
+    {
+        IHostApplicationBuilder builder = null!;
+
+        var action = () => builder.AddAzureCosmosClient("cosmos", null, null);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
     public void AddKeyedAzureCosmosClientShouldThrowWhenBuilderIsNull()
     {
         IHostApplicationBuilder builder = null!;

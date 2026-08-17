@@ -15,6 +15,7 @@
     <Compile Include="..\..\Shared\Cosmos\CosmosUtils.cs" Link="Shared\CosmosUtils.cs" />
     <Compile Include="..\..\Shared\StableConnectionStringBuilder.cs" Link="Shared\StableConnectionStringBuilder.cs" />
     <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
+    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
   </ItemGroup>
 
   <ItemGroup>
