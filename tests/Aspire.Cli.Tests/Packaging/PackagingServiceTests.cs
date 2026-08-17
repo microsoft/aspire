@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
+using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -65,7 +66,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
                 [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
             })
             .Build();
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
@@ -83,39 +84,105 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingOnStableShapedCli_DefaultsToStableQuality()
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingOnStableShapedCli_DiscoversMixedPackageQualities()
     {
-        // Regression test for https://github.com/microsoft/aspire/issues/17527: during release
-        // stabilization the staging CLI ships with a stable-shaped version (e.g. "13.4.0"). The
-        // shared dotnet9 daily feed only carries prerelease-tagged 13.4.0-preview.* packages,
-        // so a stabilizing staging CLI must route Aspire.* to the SHA-derived darc-pub-aspire-<hash>
-        // feed instead — which requires defaulting the synthesized staging channel quality to
-        // Stable (so useSharedFeed in CreateStagingChannel resolves false). No overrideStagingFeed
-        // is set: the injected informational version makes the darc derivation deterministic so the
-        // test exercises (and asserts) the real SHA-feed routing rather than an override crutch.
+        // A stable-shaped staging build publishes a mixed set to one SHA-specific feed: most
+        // packages are stable, while integrations with SuppressFinalPackageVersion remain
+        // prerelease. The channel must query both qualities for integration and polyglot-tag
+        // discovery; changing the generic Stable contract would expose these packages on released
+        // channels too. Regression test for https://github.com/microsoft/aspire/issues/19423.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: hivesDir,
+            identityChannel: PackageChannelNames.Staging,
+            identityVersion: "13.5.0");
+
+        var stableIntegrationSearches = 0;
+        var prereleaseIntegrationSearches = 0;
+        var stableTagSearches = 0;
+        var prereleaseTagSearches = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseIntegrationSearches);
+                }
+                else
+                {
+                    Interlocked.Increment(ref stableIntegrationSearches);
+                }
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    prerelease
+                        ? [new() { Id = "Aspire.Hosting.Azure.Kubernetes", Version = "13.5.0-preview.1.26415.2" }]
+                        : [new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" }]);
+            },
+            GetPackagesAsyncCallback = (_, query, _, prerelease, _, _, _) =>
+            {
+                Assert.Equal("tags:polyglot", query);
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseTagSearches);
+                }
+                else
+                {
+                    Interlocked.Increment(ref stableTagSearches);
+                }
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    prerelease
+                        ? [new() { Id = "Aspire.Hosting.Azure.Kubernetes", Version = "13.5.0-preview.1.26415.2" }]
+                        : [new() { Id = "Aspire.Hosting.Redis", Version = "13.5.0" }]);
+            }
+        };
 
         var packagingService = new PackagingService(
             executionContext,
-            new FakeNuGetPackageCache(),
+            cache,
             new TestFeatures(),
             new ConfigurationBuilder().Build(),
             NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => true,
-            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+            cliInformationalVersionProvider: () => "13.5.0+abcdef1234567890abcdef1234567890abcdef12");
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
         var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
-        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
 
         var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
         Assert.Equal(
             "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
             aspireMapping.Source);
+
+        var packages = (await stagingChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout())
+            .OrderBy(package => package.Id, StringComparer.Ordinal)
+            .ToArray();
+        var polyglotPackageIds = (await stagingChannel.GetPolyglotCompatiblePackageIdsAsync(tempDir, CancellationToken.None).DefaultTimeout())
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Azure.Kubernetes", package.Id);
+                Assert.Equal("13.5.0-preview.1.26415.2", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("13.5.0", package.Version);
+            });
+        Assert.Equal(["Aspire.Hosting.Azure.Kubernetes", "Aspire.Hosting.Redis"], polyglotPackageIds);
+        Assert.Equal(1, stableIntegrationSearches);
+        Assert.Equal(1, prereleaseIntegrationSearches);
+        Assert.Equal(1, stableTagSearches);
+        Assert.Equal(1, prereleaseTagSearches);
     }
 
     [Fact]
@@ -140,7 +207,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new ConfigurationBuilder().Build(),
             NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => false,
             cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -164,9 +230,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenIdentityChannelIsStagingStableShaped_RoutesAspirePackagesToDarcFeed()
     {
         // Regression guard for https://github.com/microsoft/aspire/issues/17527: a stable-shaped
-        // staging CLI ("13.4.0") must resolve Aspire.* from its SHA-specific darc feed with Stable
-        // quality (version filtering). The fix keeps this behavior while also covering the
-        // prerelease-shaped case above.
+        // staging CLI ("13.4.0") must resolve Aspire.* from its SHA-specific darc feed. Its quality
+        // remains Both because that feed can also contain deliberately prerelease-only packages.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
@@ -178,13 +243,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new ConfigurationBuilder().Build(),
             NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => true,
             cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
         var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
-        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
 
         var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
         Assert.Equal(
@@ -218,7 +282,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             configuration,
             NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => false,
             cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -248,7 +311,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new ConfigurationBuilder().Build(),
             logger,
-            isStableShapedCliVersion: () => false,
             cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6"); // no '+<commit>' build metadata
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -274,20 +336,21 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     // shared dotnet9 daily feed, an explicit override always wins, and an identity with no staging
     // opt-in synthesizes no channel at all.
     [Theory]
-    [InlineData(PackageChannelNames.Staging, false, false, false, null, ExpectedStagingFeed.Darc)]        // staging identity, prerelease-shaped
-    [InlineData(PackageChannelNames.Staging, true, false, false, null, ExpectedStagingFeed.Darc)]         // staging identity, stable-shaped
-    [InlineData(PackageChannelNames.Staging, false, false, false, "https://example.com/o/v3/index.json", ExpectedStagingFeed.Override)] // override always wins
-    [InlineData(PackageChannelNames.Stable, false, false, true, null, ExpectedStagingFeed.Shared)]        // stable identity + config channel=staging => Both => shared
-    [InlineData(PackageChannelNames.Stable, false, true, false, null, ExpectedStagingFeed.Darc)]          // stable identity + feature flag only => Stable => darc
-    [InlineData(PackageChannelNames.Daily, false, true, false, null, ExpectedStagingFeed.Darc)]           // daily identity + feature flag only => Stable => darc
-    [InlineData(PackageChannelNames.Local, false, false, false, null, ExpectedStagingFeed.Absent)]        // local identity, no opt-in => no channel
+    [InlineData(PackageChannelNames.Staging, "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12", false, false, null, ExpectedStagingFeed.Darc, "Both")] // staging identity, prerelease-shaped
+    [InlineData(PackageChannelNames.Staging, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", false, false, null, ExpectedStagingFeed.Darc, "Both")] // staging identity, stable-shaped
+    [InlineData(PackageChannelNames.Staging, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", false, false, "https://example.com/o/v3/index.json", ExpectedStagingFeed.Override, "Both")] // override always wins
+    [InlineData(PackageChannelNames.Stable, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", false, true, null, ExpectedStagingFeed.Shared, "Both")] // stable identity + config channel=staging => Both => shared
+    [InlineData(PackageChannelNames.Stable, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", true, false, null, ExpectedStagingFeed.Darc, "Stable")] // stable identity + feature flag only => Stable => darc
+    [InlineData(PackageChannelNames.Daily, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", true, false, null, ExpectedStagingFeed.Darc, "Stable")] // daily identity + feature flag only => Stable => darc
+    [InlineData(PackageChannelNames.Local, "13.4.0+abcdef1234567890abcdef1234567890abcdef12", false, false, null, ExpectedStagingFeed.Absent, null)] // local identity, no opt-in => no channel
     public async Task GetChannelsAsync_StagingFeedRoutingDecisionTable(
         string identityChannel,
-        bool isStableShaped,
+        string informationalVersion,
         bool featureEnabled,
         bool configChannelStaging,
         string? overrideFeed,
-        ExpectedStagingFeed expected)
+        ExpectedStagingFeed expected,
+        string? expectedQuality)
     {
         const string DarcUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json";
         const string SharedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
@@ -320,8 +383,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             features,
             configuration,
             NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => isStableShaped,
-            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+            cliInformationalVersionProvider: () => informationalVersion);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var stagingChannel = channels.SingleOrDefault(c => c.Name == PackageChannelNames.Staging);
@@ -333,6 +395,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         }
 
         Assert.NotNull(stagingChannel);
+        Assert.Equal(Enum.Parse<PackageChannelQuality>(expectedQuality!), stagingChannel.Quality);
         var aspireSource = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*").Source;
         var expectedSource = expected switch
         {
@@ -385,10 +448,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetChannelsAsync_WhenVersionOverrideIsStableShaped_DefaultsToStableQuality()
+    public async Task GetChannelsAsync_WhenVersionOverrideIsStableShaped_UsesBothQuality()
     {
-        // A stable-shaped (no semver prerelease tag) version override drives the quality predicate to
-        // Stable, mirroring how an official stable-shaped staging build is filtered.
+        // Version shape does not narrow an official staging identity: its SHA feed can contain
+        // stable packages and deliberately prerelease-only integrations from the same build.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
@@ -407,7 +470,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
         var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
-        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
         Assert.Equal(
             "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
             Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*").Source);
@@ -518,34 +581,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         Assert.DoesNotContain(PackageChannelNames.Staging, channels.Select(c => c.Name));
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("diagnostic overrides are active"));
-    }
-
-    [Theory]
-    [InlineData("13.4.0+abcd-ef1234567890", true)]               // hyphen only in build metadata => stable-shaped
-    [InlineData("13.4.0-preview.1.26280.6+abcd-ef1234567890", false)] // semver prerelease tag => prerelease-shaped
-    public async Task GetChannelsAsync_VersionOverrideStableShapeIgnoresBuildMetadataHyphens(string overrideVersion, bool expectStableQuality)
-    {
-        // StripBuildMetadata removes the '+<commit>' before the prerelease-tag check, so a commit hash
-        // containing '-' must not be misread as a semver prerelease tag.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var tempDir = workspace.WorkspaceRoot;
-        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
-                [PackagingService.OverrideCliInformationalVersionConfigKey] = overrideVersion,
-            })
-            .Build();
-
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
-
-        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
-
-        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
-        Assert.Equal(expectStableQuality ? PackageChannelQuality.Stable : PackageChannelQuality.Both, stagingChannel.Quality);
     }
 
     [Fact]

@@ -174,7 +174,7 @@ public class InteractionServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptMessageBoxAsync("Are you sure?", "Confirmation")).DefaultTimeout();
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => interactionService.PromptProgressAsync("Please wait", "Working...")).DefaultTimeout();
+            () => interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions { Title = "Working..." })).DefaultTimeout();
     }
 
     [Fact]
@@ -1132,8 +1132,9 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var workExecuted = false;
-        var result = await interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var result = await interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
         {
+            Title = "Working...",
             Work = async ctx =>
             {
                 await Task.Delay(10, ctx.CancellationToken);
@@ -1153,8 +1154,9 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var tcs = new TaskCompletionSource();
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
         {
+            Title = "Working...",
             PrimaryButtonText = "Cancel",
             Work = async ctx =>
             {
@@ -1185,8 +1187,9 @@ public class InteractionServiceTests
         // thread. Inlining would run the cancellation below before the callback returns, so the prompt task could
         // never complete and the test would deadlock until the timeout.
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
         {
+            Title = "Working...",
             PrimaryButtonText = "Cancel",
             Work = async ctx =>
             {
@@ -1218,8 +1221,9 @@ public class InteractionServiceTests
 
         using var cts = new CancellationTokenSource();
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
         {
+            Title = "Working...",
             Work = async ctx =>
             {
                 tcs.SetResult();
@@ -1250,10 +1254,12 @@ public class InteractionServiceTests
         var interactionService = CreateInteractionService();
 
         var cts = new CancellationTokenSource();
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", cancellationToken: cts.Token);
+        var resultTask = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions { Title = "Working..." }, cancellationToken: cts.Token);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
         Assert.Equal(Interaction.InteractionState.InProgress, interaction.State);
+        Assert.Equal("Working...", interaction.Title);
+        Assert.Equal("Please wait", interaction.Message);
 
         cts.Cancel();
 
@@ -1267,8 +1273,9 @@ public class InteractionServiceTests
     {
         var interactionService = CreateInteractionService();
 
-        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        var resultTask = interactionService.PromptProgressAsync("Please wait", new ProgressInteractionOptions
         {
+            Title = "Working...",
             PrimaryButtonText = "Cancel"
         });
 
@@ -1283,7 +1290,7 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task PromptProgressAsync_NullTitle_CreatesInteraction()
+    public async Task PromptProgressAsync_WithoutTitle_CreatesInteraction()
     {
         var interactionService = CreateInteractionService();
 
