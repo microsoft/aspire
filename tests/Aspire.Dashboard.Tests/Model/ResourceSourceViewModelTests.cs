@@ -175,6 +175,18 @@ public sealed class ResourceSourceViewModelTests
                 ValueToVisualize: "source-value",
                 Tooltip: "source-value"));
 
+        // Explicitly empty source suppresses inferred source metadata.
+        data.Add(new TestData(
+                ResourceType: "Project",
+                ExecutablePath: "path/to/executable",
+                ExecutableArguments: ["arg1"],
+                AppArgs: ["arg1"],
+                AppArgsSensitivity: [false],
+                ProjectPath: "path/to/project",
+                ContainerImage: null,
+                SourceProperty: string.Empty),
+            null);
+
         // Executable path without arguments
         data.Add(new TestData(
                 ResourceType: "Executable",

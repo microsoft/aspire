@@ -17,12 +17,21 @@
          app and the WASM client projects target this version, so published containers must use
          matching SDK/runtime base images. -->
     <BlazorGatewayDotNetImageTag>10.0</BlazorGatewayDotNetImageTag>
+    <BlazorWasmSdkImageTag>11.0.100-preview.7</BlazorWasmSdkImageTag>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BlazorGatewayCliVersion</_Parameter1>
+      <_Parameter2>$(MicrosoftAspNetCoreComponentsGatewayCliVersion)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>BlazorGatewayDotNetImageTag</_Parameter1>
       <_Parameter2>$(BlazorGatewayDotNetImageTag)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BlazorWasmSdkImageTag</_Parameter1>
+      <_Parameter2>$(BlazorWasmSdkImageTag)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 
@@ -32,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
   </ItemGroup>

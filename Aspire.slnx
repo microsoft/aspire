@@ -132,10 +132,8 @@
   </Folder>
   <Folder Name="/playground/BlazorStandalone/">
     <Project Path="playground/BlazorStandalone/BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
-    <Project Path="playground/BlazorStandalone/BlazorStandalone.ClientServiceDefaults/BlazorStandalone.ClientServiceDefaults.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone.TimeApi/BlazorStandalone.TimeApi.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj" />
-    <Project Path="playground/BlazorStandalone/BlazorStandalone/BlazorStandalone.csproj" />
   </Folder>
   <Folder Name="/playground/AspireWithJavaScript/">
     <Project Path="playground/AspireWithJavaScript/AspireJavaScript.AppHost/AspireJavaScript.AppHost.csproj" />

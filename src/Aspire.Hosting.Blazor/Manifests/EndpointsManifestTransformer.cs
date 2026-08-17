@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -24,6 +25,13 @@ internal static class EndpointsManifestTransformer
             ManifestJsonContext.Default.EndpointsManifest)
             ?? throw new InvalidOperationException($"Failed to deserialize endpoints manifest from '{manifestPath}'.");
 
+        // .NET 11 can generate SPA fallback endpoints when StaticWebAssetSpaFallbackEnabled is set.
+        // Replace SDK-generated or previously transformed fallbacks so the gateway has one identity
+        // fallback with the route shape and content-encoding behavior expected by this integration.
+        manifest.Endpoints = manifest.Endpoints
+            .Where(endpoint => endpoint.Route is not ("{**fallback:nonfile}" or "{**path:nonfile}"))
+            .ToArray();
+
         var fallbackEndpoints = new List<EndpointEntry>();
 
         foreach (var ep in manifest.Endpoints)
@@ -43,7 +51,13 @@ internal static class EndpointsManifestTransformer
                     // Deep-clone via round-trip serialization, then patch route and cache header
                     var fallbackJson = JsonSerializer.Serialize(ep, ManifestJsonContext.Relaxed.EndpointEntry);
                     var fallback = JsonSerializer.Deserialize(fallbackJson, ManifestJsonContext.Default.EndpointEntry)!;
-                    fallback.Route = "{**path:nonfile}";
+                    fallback.Route = "{**fallback:nonfile}";
+                    // The official gateway maps configuration and proxy endpoints alongside static assets.
+                    // Keep the SPA fallback last so those endpoints handle matching requests first.
+                    fallback.ExtensionData ??= [];
+                    fallback.ExtensionData["Order"] = JsonSerializer.SerializeToElement(
+                        int.MaxValue.ToString(CultureInfo.InvariantCulture),
+                        ManifestJsonContext.Default.String);
                     if (fallback.ResponseHeaders is not null)
                     {
                         foreach (var header in fallback.ResponseHeaders)

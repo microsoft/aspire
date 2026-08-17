@@ -21,7 +21,7 @@ internal static class BlazorWasmAppBuilder
     {
         var psi = new ProcessStartInfo
         {
-            FileName = GetDotNetCommandPath(),
+            FileName = "dotnet",
             Arguments = $"build \"{projectPath}\"",
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
             RedirectStandardOutput = true,
@@ -64,7 +64,7 @@ internal static class BlazorWasmAppBuilder
     {
         var psi = new ProcessStartInfo
         {
-            FileName = GetDotNetCommandPath(),
+            FileName = "dotnet",
             Arguments = $"msbuild \"{projectPath}\" -t:ResolveStaticWebAssetsConfiguration -getProperty:StaticWebAssetEndpointsBuildManifestPath -getProperty:StaticWebAssetDevelopmentManifestPath",
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
             RedirectStandardOutput = true,
@@ -122,20 +122,73 @@ internal static class BlazorWasmAppBuilder
         return (endpoints, runtime);
     }
 
-    private static string GetDotNetCommandPath()
+    public static async Task<string?> GetTargetFrameworkAsync(
+        string projectPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
-        return Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
-            ? dotnetHostPath
-            : "dotnet";
+        var psi = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"msbuild \"{projectPath}\" -getProperty:TargetFramework -getProperty:TargetFrameworks",
+            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = StartProcess(psi, logger, projectPath);
+        if (process is null)
+        {
+            return null;
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+        {
+            BlazorGatewayLog.MsBuildTargetFailed(logger, projectPath, stdout, stderr);
+            return null;
+        }
+
+        MSBuildPropertiesOutput? output;
+        try
+        {
+            output = JsonSerializer.Deserialize(stdout.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+        }
+        catch (JsonException ex)
+        {
+            BlazorGatewayLog.ManifestJsonParseFailed(logger, projectPath, ex);
+            return null;
+        }
+
+        var properties = output?.Properties;
+        if (!string.IsNullOrEmpty(properties?.TargetFramework))
+        {
+            return properties.TargetFramework;
+        }
+
+        return properties?.TargetFrameworks
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
     }
 
     private static Process? StartProcess(ProcessStartInfo startInfo, ILogger logger, string projectPath)
     {
         try
         {
+            // On Windows, Process.Start searches the AppHost executable directory before PATH.
+            // Resolve explicitly so the project-scoped global.json is evaluated by the PATH-selected SDK host.
+            startInfo.FileName = PathLookupHelper.ResolveExecutablePath(startInfo.FileName);
             return Process.Start(startInfo);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or FileNotFoundException)
         {
             BlazorGatewayLog.ProcessStartFailed(logger, startInfo.FileName, projectPath, ex.Message);
             return null;

@@ -11,7 +11,7 @@ var timeApi = builder.AddProject<Projects.BlazorStandalone_TimeApi>("timeapi")
 // The resource name becomes the URL path prefix (e.g., "app" → served at /app/).
 // WithReference declares service dependencies that the gateway will proxy via YARP.
 // Using a specific named endpoint ensures only that endpoint is forwarded to the gateway.
-var blazorApp = builder.AddBlazorWasmProject<Projects.BlazorStandalone>("app")
+var blazorApp = builder.AddBlazorWasmApp("app", "../BlazorStandalone/BlazorStandalone.csproj")
     .WithReference(weatherApi)
     .WithReference(timeApi.GetEndpoint("api"));
 

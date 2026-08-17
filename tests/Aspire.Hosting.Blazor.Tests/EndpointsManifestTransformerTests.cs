@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 
 namespace Aspire.Hosting.Blazor.Tests;
@@ -70,9 +71,69 @@ public class EndpointsManifestTransformerTests : IDisposable
         // Should have original + fallback
         Assert.Equal(2, transformed.Endpoints.Length);
 
-        var fallback = transformed.Endpoints.Single(ep => ep.Route == "{**path:nonfile}");
+        var fallback = transformed.Endpoints.Single(ep => ep.Route == "{**fallback:nonfile}");
         Assert.Equal("store/index.html", fallback.AssetFile);
+        Assert.Equal(JsonValueKind.String, fallback.ExtensionData!["Order"].ValueKind);
+        Assert.Equal(int.MaxValue.ToString(CultureInfo.InvariantCulture), fallback.ExtensionData!["Order"].GetString());
         Assert.Contains(fallback.ResponseHeaders!, h => h.Name == "Cache-Control" && h.Value == "no-store");
+    }
+
+    [Fact]
+    public async Task PrefixEndpointsAssetFile_ReplacesSdkGeneratedFallbackEndpoints()
+    {
+        var manifest = new EndpointsManifest
+        {
+            Endpoints =
+            [
+                new EndpointEntry
+                {
+                    Route = "index.html",
+                    AssetFile = "index.html",
+                    ResponseHeaders = [new EndpointResponseHeader { Name = "Cache-Control", Value = "max-age=3600" }]
+                },
+                new EndpointEntry
+                {
+                    Route = "{**fallback:nonfile}",
+                    AssetFile = "index.html",
+                    ExtensionData = new Dictionary<string, JsonElement>
+                    {
+                        ["Order"] = JsonSerializer.SerializeToElement(int.MaxValue.ToString(CultureInfo.InvariantCulture))
+                    }
+                },
+                new EndpointEntry
+                {
+                    Route = "{**fallback:nonfile}",
+                    AssetFile = "index.html.gz",
+                    Selectors = [new EndpointSelector { Name = "Content-Encoding" }],
+                    ExtensionData = new Dictionary<string, JsonElement>
+                    {
+                        ["Order"] = JsonSerializer.SerializeToElement(int.MaxValue.ToString(CultureInfo.InvariantCulture))
+                    }
+                }
+            ]
+        };
+
+        var manifestPath = Path.Combine(_tempDir, "endpoints.json");
+        await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Default.EndpointsManifest));
+
+        var result = await EndpointsManifestTransformer.PrefixEndpointsAssetFileAsync(manifestPath, "store", CancellationToken.None);
+        var transformed = JsonSerializer.Deserialize(result, ManifestJsonContext.Default.EndpointsManifest)!;
+
+        Assert.Collection(
+            transformed.Endpoints,
+            endpoint =>
+            {
+                Assert.Equal("index.html", endpoint.Route);
+                Assert.Equal("store/index.html", endpoint.AssetFile);
+            },
+            fallback =>
+            {
+                Assert.Equal("{**fallback:nonfile}", fallback.Route);
+                Assert.Equal("store/index.html", fallback.AssetFile);
+                Assert.Null(fallback.Selectors);
+                Assert.Equal(JsonValueKind.String, fallback.ExtensionData!["Order"].ValueKind);
+                Assert.Equal(int.MaxValue.ToString(CultureInfo.InvariantCulture), fallback.ExtensionData!["Order"].GetString());
+            });
     }
 
     [Fact]

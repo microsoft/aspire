@@ -72,6 +72,7 @@
   <PropertyGroup Label="BlazorAssets">
     <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
     <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+    <MicrosoftAspNetCoreComponentsGatewayCliVersion>11.0.0-preview.7.26381.103</MicrosoftAspNetCoreComponentsGatewayCliVersion>
   </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
