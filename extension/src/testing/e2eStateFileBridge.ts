@@ -777,6 +777,22 @@ async function executeE2eControlCommand(
       markStarted();
       return getActiveEditorInfo();
     }
+    case 'runAspireCli': {
+      if (!Array.isArray(command.args) || !command.args.every(argument => typeof argument === 'string')) {
+        throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
+      }
+
+      const workingDirectory = getE2eRunDirectory(command.workingDirectory);
+      const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+      const commandPromise = runAspireCliForE2E(
+        terminalProvider,
+        [...command.args],
+        workingDirectory,
+        timeoutMs,
+        terminalProvider.createEnvironment());
+      markStarted();
+      return await commandPromise;
+    }
     default:
       throw new Error(`Unsupported Aspire extension E2E control command: ${getUnknownCommandName(command)}`);
   }
@@ -1218,7 +1234,7 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
       resourceStartTimeoutMs,
-      aspireDebugSession.debugSessionId);
+      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false));
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
@@ -1343,7 +1359,13 @@ function redactDebugAdapterArguments(value: unknown): unknown {
   return copy;
 }
 
-async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args: string[], workingDirectory: string, timeoutMs: number, debugSessionId: string): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+async function runAspireCliForE2E(
+  terminalProvider: AspireTerminalProvider,
+  args: string[],
+  workingDirectory: string,
+  timeoutMs: number,
+  environment: Record<string, string | undefined>
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
   return await new Promise((resolve, reject) => {
     const stdout: string[] = [];
@@ -1387,7 +1409,7 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
         reject(error);
       },
       noExtensionVariables: true,
-      env: Object.entries(terminalProvider.createDcpRunSessionEnvironment(debugSessionId, false))
+      env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
     });
   });
@@ -1544,6 +1566,23 @@ function getE2eRunPath(filePath: unknown): string {
   }
 
   return filePath;
+}
+
+function getE2eRunDirectory(directoryPath: unknown): string {
+  if (typeof directoryPath !== 'string' || directoryPath.length === 0 || !path.isAbsolute(directoryPath)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must be an absolute path.');
+  }
+
+  if (!fs.existsSync(directoryPath) || !fs.statSync(directoryPath).isDirectory()) {
+    throw new Error(`Aspire extension E2E runAspireCli requires an existing workingDirectory: ${directoryPath}`);
+  }
+
+  const runRoot = process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
+  if (typeof runRoot !== 'string' || runRoot.length === 0 || !isPathWithinDirectory(directoryPath, runRoot)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must stay inside the configured E2E run root.');
+  }
+
+  return directoryPath;
 }
 
 function getE2eBreakpointLine(line: unknown): number {

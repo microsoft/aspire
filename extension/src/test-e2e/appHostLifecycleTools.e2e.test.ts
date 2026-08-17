@@ -58,6 +58,7 @@ interface ExtensionSpawnLog {
 const startToolName = 'aspire_apphost_start';
 const stopToolName = 'aspire_apphost_stop';
 const appHostArgvEvidenceEnvironmentVariable = 'ASPIRE_EXTENSION_E2E_APPHOST_ARGV_EVIDENCE';
+const appHostArgvEvidenceArgumentPrefix = '--e2e-argv-evidence=';
 
 suite('Aspire AppHost lifecycle E2E', function () {
     this.timeout(900000);
@@ -374,6 +375,86 @@ suite('Aspire AppHost lifecycle E2E', function () {
             }
         });
 
+        test('Aspire CLI start-debug-session preserves exact linked-worktree AppHost argv', async () => {
+            assert.ok(fixture);
+            const diagnosticsDirectory = ensureDiagnosticsDir();
+            const argvEvidencePath = path.join(diagnosticsDirectory, 'apphost-direct-cli-argv-live.json');
+            const appHostArguments = [
+                `${appHostArgvEvidenceArgumentPrefix}${argvEvidencePath}`,
+                '--custom',
+                'value with spaces',
+                '',
+                'literal "quote"',
+                path.join('e2e path with spaces', 'backslash\\segment'),
+                '--detach',
+            ];
+            const cliArguments = [
+                'run',
+                '--start-debug-session',
+                '--apphost',
+                fixture.appHostPath,
+                '--',
+                ...appHostArguments,
+            ];
+            let artifact: Record<string, unknown> = {};
+
+            try {
+                fs.rmSync(argvEvidencePath, { force: true });
+                artifact = {
+                    status: 'created',
+                    ...fixture,
+                    cliArguments,
+                    appHostArguments,
+                    argvEvidencePath,
+                    cli: {
+                        path: getCliPath(),
+                        version: (await runProcess(getCliPath(), ['--version'], { timeoutMs: 60000 })).stdout.trim(),
+                        repositoryHead: (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: getRepoRoot(), timeoutMs: 30000 })).stdout.trim(),
+                    },
+                };
+                writeLinkedWorktreeArtifact('direct', artifact);
+
+                const cliResult = await invokeControlCommand<{ exitCode: number | null; stdout: string; stderr: string }>({
+                    name: 'runAspireCli',
+                    args: cliArguments,
+                    workingDirectory: fixture.linkedWorktreePath,
+                    timeoutMs: 600000,
+                }, 600000);
+                assert.strictEqual(cliResult.exitCode, 0);
+
+                await waitForDebugSessionStartup(fixture.appHostPath, 600000);
+                const cliProcess = await waitForExactLinkedAppHostCliProcess(fixture.appHostPath, appHostArguments, 180000);
+                const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
+                assert.deepStrictEqual(appHostArgv, appHostArguments);
+
+                const runningState = readStateFile();
+                const activeDebugSession = runningState.state.debugSessions.find(session =>
+                    fixture && session.appHostPath && isSamePath(session.appHostPath, fixture.appHostPath) && session.startupCompleted);
+                assert.ok(activeDebugSession, `Expected an active debug session for ${fixture.appHostPath}.`);
+
+                Object.assign(artifact, {
+                    status: 'passed',
+                    cliResult,
+                    cliProcess,
+                    appHostArgv,
+                    activeDebugSession,
+                });
+                writeLinkedWorktreeArtifact('direct', artifact);
+            }
+            catch (error) {
+                Object.assign(artifact, {
+                    status: 'failed',
+                    error: error instanceof Error ? `${error.name}: ${error.message.split(/\r?\n/, 1)[0]}` : String(error),
+                });
+                writeLinkedWorktreeArtifact('direct', artifact);
+                throw error;
+            }
+            finally {
+                await resetLinkedWorktreeAppHostFixture(fixture, launchJsonPath, originalLaunchJson);
+                fs.rmSync(argvEvidencePath, { force: true });
+            }
+        });
+
         test('launch.json F5 isolates a linked worktree and preserves exact .NET AppHost argv twice', async () => {
             assert.ok(fixture);
             const diagnosticsDirectory = ensureDiagnosticsDir();
@@ -540,10 +621,22 @@ async function createLinkedWorktreeAppHostFixture(): Promise<LinkedWorktreeAppHo
 
 using System.Text.Json;
 
-var argvEvidencePath = Environment.GetEnvironmentVariable("${appHostArgvEvidenceEnvironmentVariable}");
+const string argvEvidenceArgumentPrefix = "${appHostArgvEvidenceArgumentPrefix}";
+var appHostArguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
+var argvEvidenceArgument = appHostArguments.FirstOrDefault(argument =>
+    argument.StartsWith(argvEvidenceArgumentPrefix, StringComparison.Ordinal));
+var argvEvidencePath = argvEvidenceArgument is not null
+    ? argvEvidenceArgument[argvEvidenceArgumentPrefix.Length..]
+    : Environment.GetEnvironmentVariable("${appHostArgvEvidenceEnvironmentVariable}");
 if (!string.IsNullOrEmpty(argvEvidencePath))
 {
-    File.WriteAllText(argvEvidencePath, JsonSerializer.Serialize(Environment.GetCommandLineArgs().Skip(1)));
+    var evidenceDirectory = Path.GetDirectoryName(Path.GetFullPath(argvEvidencePath));
+    if (evidenceDirectory is not null)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+    }
+
+    File.WriteAllText(argvEvidencePath, JsonSerializer.Serialize(appHostArguments));
 }
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -836,7 +929,7 @@ function findFilesNamed(rootPath: string, fileName: string): string[] {
     });
 }
 
-function writeLinkedWorktreeArtifact(scenario: 'lm' | 'f5', artifact: Record<string, unknown>): void {
+function writeLinkedWorktreeArtifact(scenario: 'lm' | 'f5' | 'direct', artifact: Record<string, unknown>): void {
     const artifactPath = path.join(ensureDiagnosticsDir(), `apphost-lifecycle-linked-worktree-${scenario}.json`);
     fs.writeFileSync(artifactPath, JSON.stringify(artifact, undefined, 2));
 }
