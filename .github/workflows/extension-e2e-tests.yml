@@ -266,7 +266,6 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
-            advisoryIssue: https://github.com/microsoft/aspire/issues/19151
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
