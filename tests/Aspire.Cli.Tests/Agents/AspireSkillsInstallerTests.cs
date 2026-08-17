@@ -1289,6 +1289,68 @@ public class AspireSkillsInstallerTests
         }
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("not-a-sha256-digest", false)]
+    [InlineData(null, true)]
+    public async Task InstallAsync_WhenReleaseDigestCannotIdentifyUnavailableAsset_UsesEmbeddedBundle(
+        string? releaseDigest,
+        bool assetRequestTimesOut)
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var staleArchiveSha512 = new string('a', 128);
+            var verifiedGitHubCacheDirectory = GetBundleCacheDirectory(executionContext, staleArchiveSha512);
+            await CreateCachedBundleAsync(
+                verifiedGitHubCacheDirectory,
+                archiveSha512: staleArchiveSha512,
+                githubArchiveSha256: new string('a', 64),
+                githubAttestationVerified: true,
+                skillBody: "# Stale GitHub");
+            var assetDownloadRequested = false;
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                {
+                    return CreateJsonResponse(CreateGitHubReleaseJson(
+                        "aspire-skills-v0.0.1.tgz",
+                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        releaseDigest));
+                }
+
+                assetDownloadRequested = true;
+                if (assetRequestTimesOut)
+                {
+                    throw new TaskCanceledException("The request timed out.", new TimeoutException());
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            });
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(assetDownloadRequested);
+            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+            var skill = Assert.Single(result.Bundle.GetSkillDefinitions());
+            var skillFile = Assert.Single(await result.Bundle.GetSkillFilesAsync(skill, CancellationToken.None));
+            Assert.Contains("# Aspire", skillFile.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabled_SkipsGitHubAndUsesEmbedded()
     {
