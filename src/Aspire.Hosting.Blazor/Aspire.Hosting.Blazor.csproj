@@ -21,6 +21,10 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>BlazorGatewayCliVersion</_Parameter1>
+      <_Parameter2>$(MicrosoftAspNetCoreComponentsGatewayCliVersion)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>BlazorGatewayDotNetImageTag</_Parameter1>
       <_Parameter2>$(BlazorGatewayDotNetImageTag)</_Parameter2>
     </AssemblyAttribute>

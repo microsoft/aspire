@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
@@ -13,6 +14,8 @@ using Microsoft.Extensions.Logging;
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
 #pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject is experimental
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental
 
 namespace Aspire.Hosting;
 
@@ -22,14 +25,16 @@ namespace Aspire.Hosting;
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BlazorGatewayExtensions
 {
+    private static readonly string s_blazorGatewayCliVersion = GetAssemblyMetadataValue("BlazorGatewayCliVersion");
     private static readonly string s_dotNetImageTag = GetDotNetImageTag();
     private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
     private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
+    private const string BlazorGatewayCliPackageId = "Microsoft.AspNetCore.Components.Gateway.Cli";
 
     /// <summary>
-    /// Registers the built-in Blazor Gateway as a file-based C# app.
-    /// The gateway is shipped as Gateway.cs alongside this library and launched
-    /// via <c>AddCSharpApp</c>. No separate project is needed.
+    /// Registers the built-in Blazor Gateway.
+    /// During development the gateway runs from the official .NET tool. The file-based app
+    /// shipped with this package remains the publish implementation.
     /// </summary>
     [AspireExport]
     public static IResourceBuilder<ProjectResource> AddBlazorGateway(
@@ -41,6 +46,36 @@ public static class BlazorGatewayExtensions
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            // Keep the ProjectResource shape and project defaults for dashboard and endpoint behavior, but force
+            // process execution so IDEs do not launch the file-based app represented by its project metadata.
+            gateway
+                .WithAnnotation(new ExecutableAnnotation
+                {
+                    Command = "dotnet",
+                    WorkingDirectory = builder.AppHostDirectory
+                })
+                .WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run"]))
+                .WithLaunchToolArgs(context =>
+                {
+                    context.Args.Add("tool");
+                    context.Args.Add("exec");
+                    context.Args.Add(BlazorGatewayCliPackageId);
+                    context.Args.Add("--version");
+                    context.Args.Add(s_blazorGatewayCliVersion);
+                    context.Args.Add("--yes");
+                    context.Args.Add("--");
+                }, showInCommandLine: false)
+                .WithArgs(
+                    "--environment", builder.Environment.EnvironmentName,
+                    "--Logging:LogLevel:Microsoft=Warning",
+                    "--Logging:LogLevel:Microsoft.Hosting.Lifetime=Information",
+                    "--Logging:LogLevel:System.Net.Http.HttpClient.OtlpExporter=Warning")
+                .WithRequiredCommand(
+                    "dotnet",
+                    context => ValidateDotnetSdkVersionAsync(context, builder.AppHostDirectory));
+        }
         if (builder.ExecutionContext.IsPublishMode)
         {
             var gatewayDir = Path.GetDirectoryName(gatewayPath)!;
@@ -777,5 +812,102 @@ public static class BlazorGatewayExtensions
         }
 
         return tag;
+    }
+
+    private static string GetAssemblyMetadataValue(string key)
+    {
+        return typeof(BlazorGatewayExtensions).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), inherit: false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == key)
+            ?.Value
+            ?? throw new InvalidOperationException($"Assembly metadata '{key}' is required.");
+    }
+
+    private static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(
+        RequiredCommandValidationContext context,
+        string workingDirectory)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = context.ResolvedPath,
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+        process.StartInfo.ArgumentList.Add("--version");
+
+        if (!process.Start())
+        {
+            return context.Failure("The .NET SDK version could not be determined.");
+        }
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(context.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(context.CancellationToken);
+        await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
+        var stdout = (await stdoutTask.ConfigureAwait(false)).Trim();
+        var stderr = (await stderrTask.ConfigureAwait(false)).Trim();
+
+        var stableVersion = stdout.Split('-', 2)[0];
+        if (process.ExitCode == 0
+            && Version.TryParse(stableVersion, out var version)
+            && IsCompatibleDotnetSdkVersion(stdout, version))
+        {
+            return context.Success();
+        }
+
+        var detectedVersion = string.IsNullOrEmpty(stdout) ? "unknown" : stdout;
+        var details = string.IsNullOrEmpty(stderr) ? string.Empty : $" {stderr}";
+        return context.Failure(
+            $"The Blazor gateway requires the .NET 11 Preview 7 SDK or later. Detected version: {detectedVersion}.{details}");
+    }
+
+    internal static bool IsCompatibleDotnetSdkVersion(string versionText)
+    {
+        var stableVersion = versionText.Split('-', 2)[0];
+        return Version.TryParse(stableVersion, out var version)
+            && IsCompatibleDotnetSdkVersion(versionText, version);
+    }
+
+    private static bool IsCompatibleDotnetSdkVersion(string versionText, Version version)
+    {
+        if (version.Major > 11)
+        {
+            return true;
+        }
+
+        if (version.Major < 11)
+        {
+            return false;
+        }
+
+        var separatorIndex = versionText.IndexOf('-');
+        if (separatorIndex < 0)
+        {
+            return true;
+        }
+
+        var prerelease = versionText[(separatorIndex + 1)..];
+        if (prerelease.StartsWith("rc.", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        const string PreviewPrefix = "preview.";
+        if (!prerelease.StartsWith(PreviewPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var previewNumberEnd = prerelease.IndexOf('.', PreviewPrefix.Length);
+        var previewNumber = previewNumberEnd < 0
+            ? prerelease[PreviewPrefix.Length..]
+            : prerelease[PreviewPrefix.Length..previewNumberEnd];
+        return int.TryParse(previewNumber, out var value) && value >= 7;
     }
 }
