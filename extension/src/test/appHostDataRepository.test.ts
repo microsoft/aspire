@@ -5725,6 +5725,7 @@ suite('AppHostDataRepository', () => {
     });
 
     test('stubborn describe is force killed', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('linux');
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -5750,6 +5751,7 @@ suite('AppHostDataRepository', () => {
             repository.dispose();
             clock.restore();
             workspaceFoldersStub.restore();
+            platformStub.restore();
         }
     });
 
