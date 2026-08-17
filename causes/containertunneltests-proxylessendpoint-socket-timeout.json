@@ -1,0 +1,17 @@
+{
+  "id": "containertunneltests-proxylessendpoint-socket-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: ContainerTunnelTests.ProxylessEndpointWorksWithContainerTunnel times out with socket cancellation",
+  "test_name": "Aspire.Hosting.Tests.ContainerTunnelTests.ProxylessEndpointWorksWithContainerTunnel",
+  "error_pattern": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:00:30'. ---- System.Threading.Tasks.TaskCanceledException : The operation was canceled. ---- System.IO.IOException : Unable to read data from the transport connection: Operation canceled. ---- System.Net.Sockets.SocketException : Operation canceled",
+  "occurrences": [
+    {
+      "run_id": 32053958727,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32053958727",
+      "job": "Tests / Hosting-2 / Hosting-2 (8-core-ubuntu-latest)",
+      "pr_number": 19400,
+      "observed_at": "2026-08-17T18:58:20Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19442"
+}

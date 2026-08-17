@@ -1,0 +1,55 @@
+{
+  "run_id": 32053958727,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32053958727",
+  "analyzed_at": "2026-08-17T18:58:20Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19400,
+    "title": "Honor selected AppHost launch profile in VS Code",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-19387-apphost-launch-profile",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19400"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-2 / Hosting-2 (8-core-ubuntu-latest)",
+      "id": 95460475166,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32053958727/job/95460475166",
+      "classification": "flaky-test",
+      "reason": "ContainerTunnelTests.ProxylessEndpointWorksWithContainerTunnel timed out with a network/socket cancellation error. PR only touches VS Code extension TypeScript files, not Aspire.Hosting.Tests or container tunnel code, so this is unrelated to PR changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 95460493250,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32053958727/job/95460493250",
+      "classification": "flaky-test",
+      "reason": "AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout is a known timing-sensitive test on Windows runners, unrelated to PR's extension-only changes. Matches prior cause cli-apphostserversession-rpc-timeout-flaky.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected RPC connection to fail promptly after the server process exited, but it took 00:00:09.6671288.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 153",
+      "classification": "flaky",
+      "reason": "Timing-sensitive assertion on process exit detection under CI load on Windows runner. Test file not touched by this PR, and matches a previously seen recurring flaky test cause."
+    },
+    {
+      "name": "Aspire.Hosting.Tests.ContainerTunnelTests.ProxylessEndpointWorksWithContainerTunnel",
+      "job": "Tests / Hosting-2 / Hosting-2 (8-core-ubuntu-latest)",
+      "error": "Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:00:30'. ---- System.Threading.Tasks.TaskCanceledException : The operation was canceled. ---- System.IO.IOException : Unable to read data from the transport connection: Operation canceled. ---- System.Net.Sockets.SocketException : Operation canceled",
+      "stack_trace": "at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, ResilienceContext context, TState state)\n   at Polly.CircuitBreaker.CircuitBreakerResilienceStrategy`1.ExecuteCore[TState]",
+      "classification": "flaky",
+      "reason": "Network socket cancellation/timeout error in a container tunnel integration test under CI load. PR does not touch Aspire.Hosting.Tests or container tunneling code (only VS Code extension files changed), so this is an environmental/timing flake unrelated to PR changes."
+    }
+  ],
+  "causes": ["cli-apphostserversession-rpc-timeout-flaky", "containertunneltests-proxylessendpoint-socket-timeout"]
+}
