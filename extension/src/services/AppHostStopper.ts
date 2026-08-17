@@ -45,7 +45,9 @@ export async function stopExternalAppHost(
             }
 
             termination ??= terminateCliProcess(cliProcess, 'aspire stop');
-            void termination.then(settleCancellation);
+            void termination.then(
+                settleCancellation,
+                error => settle(() => reject(error)));
         };
 
         cancellationRegistration = cancellationToken.onCancellationRequested(() => {

@@ -178,7 +178,7 @@ suite('AspireDebugSession tests', () => {
     test('redacts forwarded AppHost arguments from shutdown logs', async () => {
         const cliProcess = createFakeCliProcess(4323);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const logStub = sinon.stub(extensionLogOutputChannel, 'info');
         const aspireDebugSession = createSessionForSpawn();
@@ -235,7 +235,7 @@ suite('AspireDebugSession tests', () => {
         // `taskkill /pid <pid> /t` instead of calling `child.kill`, so running it for real would
         // both fail this assertion on the Windows CI agents and signal whatever process happens to
         // own the made-up PID there.
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const running = createFakeCliProcess(4322);
         const aspireDebugSession = createSessionForSpawn();
         (aspireDebugSession as any)._cliProcess = running;
@@ -261,7 +261,7 @@ suite('AspireDebugSession tests', () => {
     });
 
     test('terminateCliProcessTree is idempotent after signalling a CLI process', () => {
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const cliProcess = createFakeCliProcess(4324);
         const aspireDebugSession = createSessionForSpawn();
         (aspireDebugSession as any)._cliProcess = cliProcess;
@@ -283,7 +283,7 @@ suite('AspireDebugSession tests', () => {
         // the state the old early return skipped on.
         const cliProcess = createFakeCliProcess(4325, 0);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSessionForSpawn();
 
@@ -310,7 +310,7 @@ suite('AspireDebugSession tests', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const cliProcess = createFakeCliProcess(4327, 0);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSessionForSpawn();
 
@@ -337,7 +337,7 @@ suite('AspireDebugSession tests', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const cliProcess = createFakeCliProcess(4328, 0);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSessionForSpawn();
 
@@ -364,7 +364,7 @@ suite('AspireDebugSession tests', () => {
         const cliProcess = createFakeCliProcess(4329, 0);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
         const removeAspireDebugSession = sinon.stub();
-        sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSessionForSpawn(
             async () => '/usr/local/bin/aspire',
@@ -390,7 +390,7 @@ suite('AspireDebugSession tests', () => {
     test('a forced CLI process tree termination is not repeated by the exit callback', async () => {
         const cliProcess = createFakeCliProcess(4326, 0);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSessionForSpawn();
 

@@ -172,7 +172,7 @@ suite('AppHostStopper', () => {
         }
     });
 
-    test('bounds cancellation when the child never reports completion', async () => {
+    test('reports cleanup failure when cancellation cannot confirm process termination', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const childState = createTestChildProcess();
@@ -180,21 +180,21 @@ suite('AppHostStopper', () => {
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(child);
         const processKillStub = sinon.stub(process, 'kill').returns(true);
         const cancellationSource = new vscode.CancellationTokenSource();
-        let cancelled = false;
+        let rejection: unknown;
 
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
                 '/repo/AppHost/AppHost.csproj',
                 cancellationSource.token).catch(error => {
-                    cancelled = error instanceof vscode.CancellationError;
+                    rejection = error;
                 });
             await clock.tickAsync(0);
 
             cancellationSource.cancel();
             await clock.tickAsync(11_000);
 
-            assert.strictEqual(cancelled, true);
+            assert.match(String(rejection), /Could not confirm aspire stop process group termination within 5000ms/);
             await stopping;
         }
         finally {

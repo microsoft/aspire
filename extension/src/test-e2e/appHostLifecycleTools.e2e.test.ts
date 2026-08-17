@@ -249,6 +249,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
 
         suiteSetup(async () => {
             await openAspireView();
+            await waitForWorkspaceAppHost();
             await waitForRepositoryIdle();
             originalLaunchJson = fs.existsSync(launchJsonPath) ? fs.readFileSync(launchJsonPath, 'utf8') : undefined;
             fixture = await createLinkedWorktreeAppHostFixture();
@@ -542,10 +543,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the direct CLI process: ${JSON.stringify(processInfo)}`);
                 const cliProcess = await waitForExactLinkedAppHostCliProcess(
                     processInfo.cliPid,
+                    getCliPath(),
                     fixture.appHostPath,
                     appHostArguments,
-                    180000,
-                    undefined);
+                    180000);
                 const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
                 assert.deepStrictEqual(appHostArgv, appHostArguments);
 
@@ -653,10 +654,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
 
                     const cliProcess = await waitForExactLinkedAppHostCliProcess(
                         processInfo.cliPid,
+                        cliWrapperPath,
                         fixture.appHostPath,
                         appHostArguments,
-                        180000,
-                        getExpectedLinkedAppHostCliArguments(fixture.appHostPath, appHostArguments));
+                        180000);
                     const cliInvocations = waitForCliFallbackAndLaunchInvocations(
                         cliInvocationLogPath,
                         invocationCountBeforeLaunch,
@@ -931,21 +932,16 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
 
 async function waitForExactLinkedAppHostCliProcess(
     cliPid: number,
+    cliPath: string,
     appHostPath: string,
     appHostArguments: readonly string[],
     timeoutMs: number,
-    expectedCliArguments: readonly string[] | undefined,
 ): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            if (expectedCliArguments) {
-                assertExactCliCommandArguments(cliProcess.arguments, expectedCliArguments);
-            }
-            else {
-                assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath(), appHostArguments);
-            }
+            assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, cliPath, appHostArguments);
             return cliProcess;
         }
 
@@ -953,16 +949,6 @@ async function waitForExactLinkedAppHostCliProcess(
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for exact argv from Aspire CLI process ${cliPid} that launches ${appHostPath}.`);
-}
-
-function assertExactCliCommandArguments(actualArguments: readonly string[], expectedArguments: readonly string[]): void {
-    const actualCommandArguments = actualArguments.slice(-expectedArguments.length);
-    assert.strictEqual(actualCommandArguments.length, expectedArguments.length);
-    assert.ok(actualCommandArguments.every((argument, index) =>
-        index === 5
-            ? commandLineArgumentEquals(argument, expectedArguments[index])
-            : argument === expectedArguments[index]),
-    `Expected exact Aspire CLI command arguments ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(actualArguments)}.`);
 }
 
 function waitForCliFallbackAndLaunchInvocations(
@@ -1257,8 +1243,16 @@ function writeTimeoutCliWrapper(): { cliPath: string; pidPath: string; directory
         '  echo "99.0.0"',
         '  exit 0',
         'fi',
-        `${quotePosixShellArgument(process.execPath)} ${quotePosixShellArgument(childScriptPath)} ${quotePosixShellArgument(pidPath)} "$@" &`,
+        'mode=$1',
+        'shift',
+        'printf "%s\\n" "$*"',
+        'printf "%s\\n" "$*" >&2',
+        'if [ "$mode" = "fail" ]; then',
+        '  exit 23',
+        'fi',
+        '/bin/sleep 600 &',
         'child_pid=$!',
+        `printf "%s" "$child_pid" > ${quotePosixShellArgument(pidPath)}`,
         'wait "$child_pid"',
         '',
     ].join('\n'), { mode: 0o755 });

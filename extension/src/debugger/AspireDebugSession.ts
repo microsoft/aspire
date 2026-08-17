@@ -611,7 +611,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     // members of a managed process group in that case, and that is the only path that collects
     // AppHost and resource processes which outlived the CLI that owned them.
     this._cliProcessTreeTerminationAttempted = true;
-    terminateCliProcess(cliProcess, `Aspire CLI for debug session ${this.debugSessionId}`, options);
+    void terminateCliProcess(cliProcess, `Aspire CLI for debug session ${this.debugSessionId}`, options).catch(error => {
+      extensionLogOutputChannel.error(`Failed to terminate Aspire CLI for debug session ${this.debugSessionId}: ${String(error)}`);
+    });
     if (this._disposed) {
       this.releaseExtensionContextOwnership();
     }

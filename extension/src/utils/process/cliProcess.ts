@@ -115,7 +115,7 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
         return terminateWindowsCliProcess(childProcess, description, options);
     }
 
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         const processGroupPid = managedPosixProcessGroups.has(childProcess)
             ? childProcess.pid
             : undefined;
@@ -142,7 +142,7 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
 
             return forceSignalSent;
         };
-        const stopTracking = () => {
+        const settle = (error?: Error) => {
             if (settled) {
                 return;
             }
@@ -160,7 +160,18 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 confirmationTimer = undefined;
             }
             managedPosixProcessGroups.delete(childProcess);
-            resolve();
+            if (error) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        };
+        const rejectUnconfirmedTermination = (message: string) => {
+            const error = new Error(message);
+            if (!options?.suppressTimeoutWarning) {
+                extensionLogOutputChannel.warn(error.message);
+            }
+            settle(error);
         };
         const scheduleProcessGroupConfirmation = () => {
             if (settled || confirmationTimer) {
@@ -178,19 +189,23 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
             }
 
             if (!hasLiveProcessGroup()) {
-                stopTracking();
+                settle();
                 return;
             }
 
             if (confirmationDeadline !== undefined && Date.now() >= confirmationDeadline) {
-                if (!options?.suppressTimeoutWarning) {
-                    extensionLogOutputChannel.warn(`${description} process group remained live after forced termination; stopping process tracking.`);
-                }
-                stopTracking();
+                rejectUnconfirmedTermination(`Could not confirm ${description} process group termination within ${processShutdownGracePeriodMs}ms.`);
                 return;
             }
 
             scheduleProcessGroupConfirmation();
+        };
+        const scheduleChildExitConfirmation = () => {
+            confirmationTimer = setTimeout(() => {
+                confirmationTimer = undefined;
+                rejectUnconfirmedTermination(`Could not confirm ${description} termination within ${processShutdownGracePeriodMs}ms after forced termination.`);
+            }, processShutdownGracePeriodMs);
+            confirmationTimer.unref();
         };
         const onExit = () => {
             if (settled) {
@@ -207,7 +222,10 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 if (!forceSignalSent && processGroupAlive) {
                     // Once the leader exits, force any remaining descendants immediately. Delaying another
                     // negative-PID signal would allow the operating system to recycle the process-group ID.
-                    forceTermination();
+                    if (!forceTermination()) {
+                        settle(new Error(`Could not forcefully terminate ${description}.`));
+                        return;
+                    }
                     processGroupAlive = hasLiveProcessGroup();
                 }
 
@@ -217,7 +235,7 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 }
             }
 
-            stopTracking();
+            settle();
         };
 
         if (!exited) {
@@ -226,33 +244,29 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
         } else {
             if (processGroupPid !== undefined) {
                 if (hasLiveProcessGroup()) {
-                    forceTermination();
+                    if (!forceTermination()) {
+                        settle(new Error(`Could not forcefully terminate ${description}.`));
+                        return;
+                    }
                 }
                 if (hasLiveProcessGroup()) {
                     scheduleProcessGroupConfirmation();
                     return;
                 }
             }
-            stopTracking();
+            settle();
             return;
         }
 
         if (options?.force) {
             if (!forceTermination()) {
-                stopTracking();
+                settle(new Error(`Could not forcefully terminate ${description}.`));
                 return;
             }
             if (processGroupPid !== undefined) {
                 scheduleProcessGroupConfirmation();
             } else {
-                confirmationTimer = setTimeout(() => {
-                    confirmationTimer = undefined;
-                    if (!options.suppressTimeoutWarning) {
-                        extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
-                    }
-                    stopTracking();
-                }, processShutdownGracePeriodMs);
-                confirmationTimer.unref();
+                scheduleChildExitConfirmation();
             }
             return;
         }
@@ -263,7 +277,7 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 if (!signalSent) {
                     extensionLogOutputChannel.warn(`Failed to terminate ${description}.`);
                     if (childProcess.pid === undefined) {
-                        stopTracking();
+                        settle(new Error(`Could not terminate ${description} because no process identifier was available.`));
                         return;
                     }
                 }
@@ -271,7 +285,7 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
         } catch (error) {
             extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`);
             if (childProcess.pid === undefined) {
-                stopTracking();
+                settle(new Error(`Could not terminate ${description} because no process identifier was available.`));
                 return;
             }
         }
@@ -292,20 +306,13 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
             }
 
             if (!forceTermination()) {
-                stopTracking();
+                settle(new Error(`Could not forcefully terminate ${description}.`));
                 return;
             }
             if (processGroupPid !== undefined) {
                 scheduleProcessGroupConfirmation();
             } else {
-                confirmationTimer = setTimeout(() => {
-                    confirmationTimer = undefined;
-                    if (!options?.suppressTimeoutWarning) {
-                        extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
-                    }
-                    stopTracking();
-                }, processShutdownGracePeriodMs);
-                confirmationTimer.unref();
+                scheduleChildExitConfirmation();
             }
         }, processShutdownGracePeriodMs);
         forceKillTimer.unref();
@@ -340,16 +347,30 @@ async function terminateWindowsCliProcess(
         return;
     }
 
-    if (childProcess.pid === undefined) {
-        childProcess.kill(options?.force ? 'SIGKILL' : undefined);
-        await waitForChildProcessExit(childProcess, processShutdownGracePeriodMs);
-        return;
-    }
-
-    const childExit = observeChildProcessExit(childProcess);
+    const childClose = observeChildProcessClose(childProcess);
     try {
-        await runTaskkill(childProcess, options?.force === true);
-        if (await childExit.wait(processShutdownGracePeriodMs)) {
+        if (childProcess.pid === undefined) {
+            if (!childProcess.kill(options?.force ? 'SIGKILL' : undefined)) {
+                throw new Error(`Could not terminate ${description} because no process identifier was available.`);
+            }
+            if (!await childClose.wait(processShutdownGracePeriodMs)) {
+                throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after termination.`);
+            }
+            return;
+        }
+
+        const runAndValidateTaskkill = async (force: boolean) => {
+            const exitCode = await runTaskkill(childProcess, description, force, processShutdownGracePeriodMs);
+            if (exitCode !== 0 &&
+                childProcess.exitCode === null &&
+                childProcess.signalCode === null &&
+                !childClose.hasClosed()) {
+                throw new Error(`taskkill for ${description} exited with code ${exitCode} while PID ${childProcess.pid} remained live.`);
+            }
+        };
+
+        await runAndValidateTaskkill(options?.force === true);
+        if (await childClose.wait(processShutdownGracePeriodMs)) {
             return;
         }
 
@@ -358,23 +379,26 @@ async function terminateWindowsCliProcess(
                 extensionLogOutputChannel.warn(`${description} did not exit within ${processShutdownGracePeriodMs}ms; forcing termination.`);
             }
 
-            await runTaskkill(childProcess, true);
-            if (await childExit.wait(processShutdownGracePeriodMs)) {
+            await runAndValidateTaskkill(true);
+            if (await childClose.wait(processShutdownGracePeriodMs)) {
                 return;
             }
         }
 
-        if (!options?.suppressTimeoutWarning) {
-            extensionLogOutputChannel.warn(`${description} did not report exit after forced termination; stopping process tracking.`);
-        }
+        throw new Error(`${description} did not report exit within ${processShutdownGracePeriodMs}ms after taskkill succeeded.`);
     }
     finally {
-        childExit.dispose();
+        childClose.dispose();
     }
 }
 
-function runTaskkill(childProcess: ChildProcessWithoutNullStreams, force: boolean): Promise<void> {
-    return new Promise(resolve => {
+function runTaskkill(
+    childProcess: ChildProcessWithoutNullStreams,
+    description: string,
+    force: boolean,
+    timeoutMs: number
+): Promise<number | null> {
+    return new Promise((resolve, reject) => {
         const args = ['/pid', String(childProcess.pid), '/t'];
         if (force) {
             args.push('/f');
@@ -384,25 +408,49 @@ function runTaskkill(childProcess: ChildProcessWithoutNullStreams, force: boolea
             stdio: 'ignore',
             windowsHide: true,
         });
-        let completed = false;
-        const complete = () => {
-            if (completed) {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) {
                 return;
             }
 
-            completed = true;
+            settled = true;
             taskkill.off('error', onError);
-            taskkill.off('close', complete);
-            resolve();
+            taskkill.off('close', onClose);
+            try {
+                taskkill.kill('SIGKILL');
+            } catch {
+                // The bounded failure remains authoritative even if the helper exits during cleanup.
+            }
+            reject(new Error(`taskkill for ${description} did not exit within ${timeoutMs}ms.`));
+        }, timeoutMs);
+        timer.unref();
+        const cleanup = () => {
+            clearTimeout(timer);
+            taskkill.off('error', onError);
+            taskkill.off('close', onClose);
         };
         const onError = (error: Error) => {
-            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
-            childProcess.kill();
-            complete();
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            reject(new Error(`Failed to run taskkill for ${description} (PID ${childProcess.pid}): ${error.message}`));
+        };
+        const onClose = (code: number | null) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            resolve(code);
         };
 
         taskkill.once('error', onError);
-        taskkill.once('close', complete);
+        taskkill.once('close', onClose);
     });
 }
 
@@ -418,60 +466,56 @@ function isNoSuchProcessError(error: unknown): boolean {
     return error instanceof Error && 'code' in error && error.code === 'ESRCH';
 }
 
-function observeChildProcessExit(childProcess: ChildProcessWithoutNullStreams): {
+function observeChildProcessClose(childProcess: ChildProcessWithoutNullStreams): {
+    hasClosed(): boolean;
     wait(timeoutMs: number): Promise<boolean>;
     dispose(): void;
 } {
-    let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
-    let resolveExit: (() => void) | undefined;
-    const exitPromise = new Promise<void>(resolve => {
-        resolveExit = resolve;
+    let closed = false;
+    let resolveClose: (() => void) | undefined;
+    const closePromise = new Promise<void>(resolve => {
+        resolveClose = resolve;
     });
-    const onExit = () => {
-        if (exited) {
+    const onClose = () => {
+        if (closed) {
             return;
         }
 
-        exited = true;
-        childProcess.off('close', onExit);
-        childProcess.off('exit', onExit);
-        resolveExit?.();
+        closed = true;
+        childProcess.off('close', onClose);
+        resolveClose?.();
     };
-    if (!exited) {
-        childProcess.once('close', onExit);
-        childProcess.once('exit', onExit);
-    }
+    childProcess.once('close', onClose);
 
     return {
+        hasClosed(): boolean {
+            return closed;
+        },
         async wait(timeoutMs: number): Promise<boolean> {
-            if (exited) {
+            if (closed) {
                 return true;
             }
 
             return await new Promise(resolve => {
-                const timer = setTimeout(() => resolve(false), timeoutMs);
-                timer.unref();
-                void exitPromise.then(() => {
+                let settled = false;
+                const complete = (result: boolean) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
                     clearTimeout(timer);
-                    resolve(true);
-                });
+                    resolve(result);
+                };
+                const timer = setTimeout(() => complete(false), timeoutMs);
+                timer.unref();
+                void closePromise.then(() => complete(true));
             });
         },
         dispose(): void {
-            childProcess.off('close', onExit);
-            childProcess.off('exit', onExit);
+            childProcess.off('close', onClose);
         },
     };
-}
-
-async function waitForChildProcessExit(childProcess: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
-    const childExit = observeChildProcessExit(childProcess);
-    try {
-        return await childExit.wait(timeoutMs);
-    }
-    finally {
-        childExit.dispose();
-    }
 }
 
 export function redactCliArgsForLogging(args: string[] | undefined): string[] {

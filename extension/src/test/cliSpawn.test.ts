@@ -38,14 +38,14 @@ suite('spawnCliProcess tests', () => {
     test('force kills a POSIX process group after the grace period while its leader is alive', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const processKillStub = sinon.stub(process, 'kill').returns(true);
-        const clock = sinon.useFakeTimers();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const childProcess = createTestChildProcess(4242);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
 
         try {
             const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['ls'], { createProcessGroup: true });
-            terminateCliProcess(child, 'test Aspire CLI');
+            const termination = terminateCliProcess(child, 'test Aspire CLI');
             await clock.tickAsync(5000);
 
             assert.deepStrictEqual(processKillStub.args, [
@@ -53,6 +53,16 @@ suite('spawnCliProcess tests', () => {
                 [-4242, 'SIGKILL'],
             ]);
             assert.strictEqual(childProcess.kill.called, false);
+
+            processKillStub.callsFake((_pid, signal) => {
+                if (signal === 0) {
+                    throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+                }
+
+                return true;
+            });
+            await clock.tickAsync(50);
+            await termination;
         }
         finally {
             spawnStub.restore();
@@ -73,13 +83,15 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const childProcess = createTestChildProcess(4343);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
 
         try {
             const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['ls'], { createProcessGroup: true });
+            const closeListenerCount = childProcess.listenerCount('close');
+            const exitListenerCount = childProcess.listenerCount('exit');
             let settled = false;
             const termination = terminateCliProcess(child, 'test Aspire CLI').then(() => { settled = true; });
             childProcess.emit('close', null);
@@ -97,6 +109,39 @@ suite('spawnCliProcess tests', () => {
             await clock.tickAsync(50);
             await termination;
             assert.strictEqual(settled, true);
+            assert.strictEqual(childProcess.listenerCount('close'), closeListenerCount);
+            assert.strictEqual(childProcess.listenerCount('exit'), exitListenerCount);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            processKillStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('rejects when a POSIX process group remains alive after forced termination', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('linux');
+        const processKillStub = sinon.stub(process, 'kill').returns(true);
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const childProcess = createTestChildProcess(4595);
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+        const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+
+        try {
+            const child = spawnCliProcess(terminalProvider, '/usr/local/bin/aspire', ['run'], { createProcessGroup: true });
+            const closeListenerCount = childProcess.listenerCount('close');
+            const exitListenerCount = childProcess.listenerCount('exit');
+            let rejection: unknown;
+            void terminateCliProcess(child, 'test Aspire CLI', { force: true }).catch(error => { rejection = error; });
+
+            await clock.tickAsync(5000);
+
+            assert.match(String(rejection), /Could not confirm test Aspire CLI process group termination within 5000ms/);
+            assert.strictEqual(childProcess.listenerCount('close'), closeListenerCount);
+            assert.strictEqual(childProcess.listenerCount('exit'), exitListenerCount);
+            assert.strictEqual(clock.countTimers(), 0);
         }
         finally {
             spawnStub.restore();
@@ -112,7 +157,7 @@ suite('spawnCliProcess tests', () => {
         const processKillStub = sinon.stub(process, 'kill');
         processKillStub.onFirstCall().returns(true);
         processKillStub.onSecondCall().throws(noSuchProcess);
-        const clock = sinon.useFakeTimers();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const childProcess = createTestChildProcess(4444);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -147,7 +192,7 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const childProcess = createTestChildProcess(4545, 0);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -536,9 +581,153 @@ suite('spawnCliProcess tests', () => {
             taskkillProcess.emit('close', 0);
             await termination;
             assert.strictEqual(settled, true);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
         }
         finally {
             spawnStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('rejects when taskkill does not complete within the bounded deadline', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const taskkillKill = sinon.stub().returns(true);
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: taskkillKill });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(4848);
+
+        try {
+            let rejection: unknown;
+            void terminateCliProcess(child, 'test Aspire CLI', { force: true }).catch(error => { rejection = error; });
+
+            await clock.tickAsync(5000);
+
+            assert.match(String(rejection), /taskkill for test Aspire CLI did not exit within 5000ms/);
+            assert.deepStrictEqual(spawnStub.firstCall.args[1], ['/pid', '4848', '/t', '/f']);
+            sinon.assert.calledOnceWithExactly(taskkillKill, 'SIGKILL');
+            sinon.assert.notCalled(child.kill);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('rejects taskkill process errors and cleans listeners', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(4898);
+
+        try {
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true });
+            taskkillProcess.emit('error', new Error('spawn failed'));
+
+            await assert.rejects(termination, /Failed to run taskkill for test Aspire CLI \(PID 4898\): spawn failed/);
+            sinon.assert.notCalled(child.kill);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('rejects a nonzero taskkill result while the target process remains live', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(4949);
+
+        try {
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true });
+            taskkillProcess.emit('close', 128);
+
+            await assert.rejects(termination, /taskkill for test Aspire CLI exited with code 128 while PID 4949 remained live/);
+            sinon.assert.notCalled(child.kill);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+        }
+        finally {
+            spawnStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('accepts a nonzero taskkill result when the target process already exited', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(5050);
+
+        try {
+            const termination = terminateCliProcess(child, 'test Aspire CLI', { force: true });
+            (child as unknown as { exitCode: number | null }).exitCode = 0;
+            child.emit('close', 0);
+            taskkillProcess.emit('close', 128);
+
+            await termination;
+            sinon.assert.notCalled(child.kill);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+        }
+        finally {
+            spawnStub.restore();
+            platformStub.restore();
+        }
+    });
+
+    test('rejects when a Windows child does not close after successful taskkill', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
+            taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
+        const child = createTestChildProcess(5151);
+
+        try {
+            let rejection: unknown;
+            void terminateCliProcess(child, 'test Aspire CLI', { force: true }).catch(error => { rejection = error; });
+            taskkillProcess.emit('close', 0);
+
+            await clock.tickAsync(5000);
+
+            assert.match(String(rejection), /test Aspire CLI did not report exit within 5000ms after taskkill succeeded/);
+            assert.deepStrictEqual(spawnStub.firstCall.args[1], ['/pid', '5151', '/t', '/f']);
+            sinon.assert.notCalled(child.kill);
+            assert.strictEqual(child.listenerCount('close'), 0);
+            assert.strictEqual(child.listenerCount('exit'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('close'), 0);
+            assert.strictEqual(taskkillProcess.listenerCount('error'), 0);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            spawnStub.restore();
+            clock.restore();
             platformStub.restore();
         }
     });
@@ -554,7 +743,7 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const childProcess = createTestChildProcess(4646);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;

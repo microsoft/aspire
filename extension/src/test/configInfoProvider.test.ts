@@ -351,7 +351,7 @@ suite('configInfoProvider tests', () => {
 
             return childProcess;
         });
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
 
         try {
@@ -390,7 +390,7 @@ suite('configInfoProvider tests', () => {
             signalVersionStarted();
             return childProcess;
         });
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
         const cancellation = new vscode.CancellationTokenSource();
 
@@ -578,7 +578,7 @@ suite('configInfoProvider tests', () => {
         } as unknown as AspireTerminalProvider;
         const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
         sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
         const cancellation = new vscode.CancellationTokenSource();
 
@@ -609,7 +609,7 @@ suite('configInfoProvider tests', () => {
             }
             return childProcess;
         });
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
         const cancellation = new vscode.CancellationTokenSource();
 
@@ -653,7 +653,7 @@ suite('configInfoProvider tests', () => {
             probeOptions = options;
             return childProcess;
         });
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
         const cancellation = new vscode.CancellationTokenSource();
 
@@ -696,7 +696,7 @@ suite('configInfoProvider tests', () => {
             }
             return { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
         });
-        sinon.stub(cliModule, 'terminateCliProcess');
+        sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const provider = new ConfigInfoProvider(terminalProvider);
 
         const initial = provider.getConfigInfo({ cliPath: '/usr/bin/aspire', suppressErrors: true });

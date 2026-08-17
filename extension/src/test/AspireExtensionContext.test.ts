@@ -648,7 +648,7 @@ suite('AspireExtensionContext', () => {
         const context = createContext(order);
         const cliProcess = createFakeCliProcess(4321);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSpawnedDebugSession(context);
         context.addAspireDebugSession(aspireDebugSession);

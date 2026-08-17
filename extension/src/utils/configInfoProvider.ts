@@ -235,13 +235,17 @@ export class ConfigInfoProvider {
             timeout = setTimeout(() => {
                 settle('unavailable');
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe');
+                    void terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate timed-out Aspire CLI version probe: ${String(error)}`);
+                    });
                 }
             }, cliVersionProbeTimeoutMs);
             cancellation = cancellationToken?.onCancellationRequested(() => {
                 settle('unavailable');
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe');
+                    void terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate cancelled Aspire CLI version probe: ${String(error)}`);
+                    });
                 }
             });
 
@@ -429,13 +433,17 @@ export class ConfigInfoProvider {
                 settle(null);
 
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'timed-out aspire config info command');
+                    void terminateCliProcess(childProcess, 'timed-out aspire config info command').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate timed-out aspire config info command: ${String(error)}`);
+                    });
                 }
             }, timeoutMs);
             cancellation = cancellationToken?.onCancellationRequested(() => {
                 settle(null);
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'cancelled aspire config info command');
+                    void terminateCliProcess(childProcess, 'cancelled aspire config info command').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate cancelled aspire config info command: ${String(error)}`);
+                    });
                 }
             });
 
