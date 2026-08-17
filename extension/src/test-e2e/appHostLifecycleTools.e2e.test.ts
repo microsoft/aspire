@@ -8,7 +8,7 @@ import { runProcess, terminateProcessTree } from './helpers/process';
 import { getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
-import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
+import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, commandLineArgumentEquals, getExpectedLinkedAppHostCliProcessArguments } from '../test/helpers/processArguments';
 
 interface LifecycleToolResult {
     tool: string;
@@ -941,7 +941,20 @@ async function waitForExactLinkedAppHostCliProcess(
     while (Date.now() - started < timeoutMs) {
         const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, cliPath, appHostArguments);
+            if (process.platform === 'win32' && /\.cmd$/i.test(cliPath)) {
+                const expectedArguments = getExpectedLinkedAppHostCliProcessArguments(cliPath, appHostPath, appHostArguments);
+                assert.ok(
+                    cliProcess.arguments.length >= 5 &&
+                    cliProcess.arguments.slice(0, 5).every((argument, index) =>
+                        commandLineArgumentEquals(argument, expectedArguments[index])),
+                    `Expected the cmd.exe wrapper prefix ${JSON.stringify(expectedArguments.slice(0, 5))}, got ${JSON.stringify(cliProcess.arguments)}.`);
+                assert.ok(
+                    cliProcess.commandLine.toLowerCase().includes(expectedArguments[5].toLowerCase()),
+                    `Expected the raw cmd.exe command line to contain ${JSON.stringify(expectedArguments[5])}, got ${JSON.stringify(cliProcess.commandLine)}.`);
+            }
+            else {
+                assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, cliPath, appHostArguments);
+            }
             return cliProcess;
         }
 

@@ -1376,7 +1376,7 @@ async function runAspireCliForE2E(
       }
 
       completed = true;
-      void terminateCliProcess(child, 'Aspire extension E2E CLI command', { suppressTimeoutWarning: true })
+      void terminateCliProcess(child, 'Aspire extension E2E CLI command', { force: true, suppressTimeoutWarning: true })
         .then(
           () => reject(new Error(`${diagnosticCommand} timed out after ${timeoutMs}ms.`)),
           reject);
