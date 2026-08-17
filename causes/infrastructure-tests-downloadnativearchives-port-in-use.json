@@ -1,0 +1,17 @@
+{
+  "id": "infrastructure-tests-downloadnativearchives-port-in-use",
+  "type": "flaky-test",
+  "title": "Flaky: DownloadNativeArchivesTests.FailsWhenOneArtifactDownloadFails_ButReportsAllResults fails with 'Address already in use' port conflict",
+  "test_name": "Infrastructure.Tests.DownloadNativeArchivesTests.FailsWhenOneArtifactDownloadFails_ButReportsAllResults",
+  "error_pattern": "System.Net.HttpListenerException : Address already in use\n   at System.Net.HttpEndPointManager.GetEPListener(String host, Int32 port, HttpListener listener, Boolean secure)\n   at System.Net.HttpEndPointManager.AddPrefixInternal(String p, HttpListener listener)\n   at System.Net.HttpEndPointManager.AddListener(HttpListener listener)\n   at System.Net.HttpListener.Start()\n   at Infrastructure.Tests.DownloadNativeArchivesTests.MockAzdoServer.Start()",
+  "occurrences": [
+    {
+      "run_id": 32068234960,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32068234960",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 19440,
+      "observed_at": "2026-08-17T22:38:13Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19449"
+}

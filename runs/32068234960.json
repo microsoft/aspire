@@ -1,0 +1,47 @@
+{
+  "run_id": 32068234960,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32068234960",
+  "analyzed_at": "2026-08-17T22:38:13Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19440,
+    "title": "Update available external dependencies",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-update-nuget-dependencies",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19440"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "id": 95506600989,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32068234960/job/95506600989",
+      "classification": "flaky-test",
+      "reason": "Test DownloadNativeArchivesTests.FailsWhenOneArtifactDownloadFails_ButReportsAllResults fails with HttpListenerException: Address already in use, a port-conflict race unrelated to the PR's dependency version bumps (Directory.Packages.props, eng/Versions.props) and Qdrant changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, zero-to-running)",
+      "id": 95509971062,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32068234960/job/95509971062",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m and was cancelled during the 'Install E2E recorder' step; not caused by the PR's dependency/config changes.",
+      "failed_steps": ["Install E2E recorder"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.DownloadNativeArchivesTests.FailsWhenOneArtifactDownloadFails_ButReportsAllResults",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "error": "System.Net.HttpListenerException : Address already in use",
+      "stack_trace": "at System.Net.HttpEndPointManager.GetEPListener(String host, Int32 port, HttpListener listener, Boolean secure)\n   at System.Net.HttpEndPointManager.AddPrefixInternal(String p, HttpListener listener)\n   at System.Net.HttpEndPointManager.AddListener(HttpListener listener)\n   at System.Net.HttpListener.Start()\n   at Infrastructure.Tests.DownloadNativeArchivesTests.MockAzdoServer.Start()",
+      "classification": "flaky",
+      "reason": "Port-binding race condition in a mock HTTP listener used by the test; the test/file is unrelated to the PR's dependency-version changes."
+    }
+  ],
+  "causes": ["infrastructure-tests-downloadnativearchives-port-in-use", "vscode-e2e-zero-to-running-timeout"]
+}
