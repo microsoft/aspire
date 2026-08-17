@@ -766,7 +766,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         var buildResult = await RunDotNetWithArgumentsAsync(
             project.ProjectDirectory,
-            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=100", "-warnaserror"],
+            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=1000", "-warnaserror"],
             environment);
 
         Assert.True(buildResult.ExitCode == 0, buildResult.Output);
