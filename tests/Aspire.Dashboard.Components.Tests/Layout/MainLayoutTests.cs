@@ -18,7 +18,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
@@ -28,23 +27,14 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public partial class MainLayoutTests : DashboardTestContext
 {
+    private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
+
     [Fact]
     public async Task OnInitialize_UnsecuredOtlp_NotDismissed_DisplayMessageBar()
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
-
-        Message? message = null;
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            message = messageService.AllMessages.Single();
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
+        SetupMainLayoutServices(localStorage: testLocalStorage);
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -81,11 +71,8 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         // Assert
-        await messageShownTcs.Task.DefaultTimeout();
-
-        Assert.NotNull(message);
-
-        message.Close();
+        var dismissButton = _messageBarProvider!.WaitForElement($"fluent-button[aria-label='{Aspire.Dashboard.Resources.Dialogs.NotificationEntryDismiss}']");
+        dismissButton.Click();
 
         Assert.True(await dismissedSettingSetTcs.Task.DefaultTimeout());
     }
@@ -97,16 +84,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
-
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
+        SetupMainLayoutServices(localStorage: testLocalStorage);
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -130,13 +108,7 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         // Assert
-        var timeoutTask = Task.Delay(100);
-        var completedTask = await Task.WhenAny(messageShownTcs.Task, timeoutTask).DefaultTimeout();
-
-        // It's hard to test something not happening.
-        // In this case of checking for a message, apply a small display and then double check that no message was displayed.
-        Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed.");
-        Assert.Empty(messageService.AllMessages);
+        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
     }
 
     [Theory]
@@ -146,19 +118,10 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService, configureOptions: o =>
+        SetupMainLayoutServices(localStorage: testLocalStorage, configureOptions: o =>
         {
             o.Otlp.SuppressUnsecuredMessage = telemetrySuppressUnsecuredMessage;
         });
-
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -183,18 +146,16 @@ public partial class MainLayoutTests : DashboardTestContext
         // Assert
         if (!expectMessageBar)
         {
-            var timeoutTask = Task.Delay(100);
-            var completedTask = await Task.WhenAny(messageShownTcs.Task, timeoutTask).DefaultTimeout();
-
-            // When suppressed, no message should be displayed
-            Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed when suppressed by configuration.");
-            Assert.Empty(messageService.AllMessages);
+            Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
         }
         else
         {
-            // When not suppressed, message should be displayed since it wasn't dismissed
-            await messageShownTcs.Task.DefaultTimeout();
-            Assert.NotEmpty(messageService.AllMessages);
+            var messageBarProvider = _messageBarProvider!;
+            messageBarProvider.WaitForAssertion(() =>
+            {
+                var messageBar = Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>());
+                Assert.Contains("intent-warning", messageBar.Find("[role='alert']").ClassList);
+            });
         }
     }
 
@@ -247,7 +208,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -269,7 +230,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase));
+            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
         }
 
         Assert.NotNull(capturedParameters);
@@ -456,7 +418,7 @@ public partial class MainLayoutTests : DashboardTestContext
             item =>
             {
                 Assert.Equal("Live run", item.Text);
-                Assert.Equal(MenuItemRole.MenuItemRadio, item.Role);
+                Assert.Equal(MenuItemRole.Radio, item.Role);
                 Assert.True(item.Checked);
                 Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon);
                 Assert.IsType<Icons.Regular.Size16.Pin>(item.SecondaryActionIcon);
@@ -467,7 +429,7 @@ public partial class MainLayoutTests : DashboardTestContext
             item =>
             {
                 Assert.Equal(expectedHistoricalRunText, item.Text);
-                Assert.Equal(MenuItemRole.MenuItemRadio, item.Role);
+                Assert.Equal(MenuItemRole.Radio, item.Role);
                 Assert.False(item.Checked);
                 Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon);
                 Assert.IsType<Icons.Regular.Size16.Pin>(item.SecondaryActionIcon);
@@ -479,8 +441,8 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll("fluent-divider"));
         Assert.Empty(menuItems[0].QuerySelectorAll("span[slot='start']"));
         Assert.Empty(menuItems[1].QuerySelectorAll("span[slot='start']"));
-        Assert.Single(menuItems[0].QuerySelectorAll("[slot='radio-indicator']"));
-        Assert.Single(menuItems[1].QuerySelectorAll("[slot='radio-indicator']"));
+        Assert.Single(menuItems[0].QuerySelectorAll("[slot='indicator']"));
+        Assert.Single(menuItems[1].QuerySelectorAll("[slot='indicator']"));
         Assert.Equal("menuitemradio", menuItems[0].GetAttribute("role"));
         Assert.True(menuItems[0].HasAttribute("checked"));
         Assert.Equal("menuitemradio", menuItems[1].GetAttribute("role"));
@@ -511,7 +473,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.True(historicalItem.IsSecondaryActionSelected);
 
         menuItems = cut.WaitForElements("fluent-menu-item");
-        menuItems[1].Click();
+        menuItems[1].TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItems[1].Id, Text = menuItems[1].TextContent, Checked = true });
 
         Assert.Equal("historical", storedRunId);
         Assert.Equal("historical", runSelection.SelectedRunId);
@@ -548,7 +510,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll("fluent-divider"));
         Assert.Empty(menuItems[0].QuerySelectorAll("span[slot='start']"));
         Assert.Empty(menuItems[1].QuerySelectorAll("span[slot='start']"));
-        menuItems[0].Click();
+        menuItems[0].TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItems[0].Id, Text = menuItems[0].TextContent, Checked = true });
 
         Assert.Equal(string.Empty, storedRunId);
         Assert.Null(runSelection.SelectedRunId);
@@ -592,10 +554,10 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
-        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
-        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var testSink = new TestSink();
         Services.AddSingleton<ILogger<MainLayout>>(new TestLogger<MainLayout>(new TestLoggerFactory(testSink, enabled: true)));
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var exception = new InvalidOperationException("The historical database could not be opened.");
         runSelection.OnSelectRun = runId =>
@@ -614,7 +576,8 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelect = cut.FindComponent<DashboardRunSelect>();
         runSelect.Find("fluent-button").Click();
 
-        cut.WaitForElements("fluent-menu-item")[1].Click();
+        var menuItem = cut.WaitForElements("fluent-menu-item")[1];
+        menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent, Checked = true });
 
         Assert.NotNull(cut.Find("#body-content"));
         Assert.True(runSelection.SelectedRun.IsCurrent);
@@ -656,10 +619,9 @@ public partial class MainLayoutTests : DashboardTestContext
                 throw exception;
             }
         };
-        SetupMainLayoutServices(dashboardRunStore: runStore);
         var testSink = new TestSink();
         Services.AddSingleton<ILogger<DashboardRunSelect>>(new TestLogger<DashboardRunSelect>(new TestLoggerFactory(testSink, enabled: true)));
-        var provider = RenderComponent<FluentMenuProvider>();
+        SetupMainLayoutServices(dashboardRunStore: runStore);
         var cut = RenderComponent<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
@@ -668,7 +630,7 @@ public partial class MainLayoutTests : DashboardTestContext
         });
         cut.Find("fluent-button").Click();
 
-        var historicalMenuItem = provider.WaitForElements("fluent-menu-item")[1];
+        var historicalMenuItem = cut.WaitForElements("fluent-menu-item")[1];
         Assert.Single(historicalMenuItem.QuerySelectorAll("fluent-button")).Click();
 
         Assert.False(historicalRun.IsPinned);
@@ -709,7 +671,6 @@ public partial class MainLayoutTests : DashboardTestContext
             .ThenByDescending(run => run.StartedAtUtc)
             .Select(run => FormatHelpers.FormatTimeWithOptionalDate(browserTimeProvider, run.StartedAtUtc.UtcDateTime))
             .ToArray();
-        var provider = RenderComponent<FluentMenuProvider>();
         var cut = RenderComponent<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
@@ -728,7 +689,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.All(items.Skip(2).Take(2), item => Assert.True(item.IsSecondaryActionSelected));
         Assert.All(items.Skip(4), item => Assert.False(item.IsSecondaryActionSelected));
 
-        var menuItems = provider.WaitForElements("fluent-menu-item");
+        var menuItems = cut.WaitForElements("fluent-menu-item");
         Assert.Single(menuItems[3].QuerySelectorAll("fluent-button")).Click();
 
         expectedHistoricalTexts = historicalRuns
@@ -870,9 +831,9 @@ public partial class MainLayoutTests : DashboardTestContext
             OnGetAsync = _ => (true, "historical"),
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
-        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var testSink = new TestSink();
         Services.AddSingleton<ILogger<MainLayout>>(new TestLogger<MainLayout>(new TestLoggerFactory(testSink, enabled: true)));
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var selectedRunIds = new List<string?>();
         var exception = new InvalidOperationException("The historical database could not be opened.");
@@ -942,7 +903,8 @@ public partial class MainLayoutTests : DashboardTestContext
         });
         var runSelect = cut.FindComponent<DashboardRunSelect>();
         runSelect.Find("fluent-button").Click();
-        cut.WaitForElements("fluent-menu-item")[0].Click();
+        var menuItem = cut.WaitForElements("fluent-menu-item")[0];
+        menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent, Checked = true });
 
         Assert.Equal(string.Empty, storedRunId);
         await cut.InvokeAsync(() => runSelectionSource.SetResult((true, "historical")));
@@ -969,7 +931,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -992,7 +954,8 @@ public partial class MainLayoutTests : DashboardTestContext
                 : "Settings";
 
             await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            var menuItem = cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase));
+            await cut.InvokeAsync(() => menuItem.TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItem.Id, Text = menuItem.TextContent }));
         }
 
         Assert.NotNull(capturedParameters);
@@ -1025,7 +988,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -1054,7 +1017,6 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
-        MessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
         IDialogService? dialogService = null,
         BrowserTimeProvider? browserTimeProvider = null,
@@ -1064,7 +1026,6 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(
             this,
             localStorage: localStorage,
-            messageService: messageService,
             browserTimeProvider: browserTimeProvider,
             dashboardRunStore: dashboardRunStore,
             sessionStorage: sessionStorage);
@@ -1080,7 +1041,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient);
         Services.AddSingleton<ITooltipService, TooltipService>();
-        Services.AddSingleton<IToastService, ToastService>();
         Services.Configure<DashboardOptions>(o =>
         {
             // Configure OTLP endpoint URLs so they can be parsed
@@ -1098,11 +1058,15 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
+
+        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
+        {
+            builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
+        });
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentCombobox(this);
         FluentUISetupHelpers.SetupAspireMenuButtonModule(this);
-        FluentUISetupHelpers.SetupMenuService(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
 
