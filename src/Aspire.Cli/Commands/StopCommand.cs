@@ -263,7 +263,7 @@ internal sealed class StopCommand : BaseCommand
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, StopCommandStrings.SelectAppHostAction),
             SharedCommandStrings.AppHostNotRunning,
             cancellationToken,
-            allowOutOfScopeSelection: false);
+            restrictToCurrentWorktree: true);
 
         if (!result.Success)
         {

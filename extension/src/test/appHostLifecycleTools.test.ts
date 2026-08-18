@@ -913,9 +913,11 @@ suite('AppHost lifecycle language model tools', () => {
                 new vscode.CancellationTokenSource().token);
             const result = await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'run' }, new vscode.CancellationTokenSource().token);
 
+            // The confirmation names the isolation the launch will request, so the user
+            // approves what actually runs. Only the CLI capability probe stays deferred.
             assert.strictEqual(
                 prepared.confirmationMessages?.message,
-                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode?');
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode with isolation?');
             assert.strictEqual(
                 launchService.resolveLaunchIsolationCalls,
                 1,
@@ -923,6 +925,34 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(result.isolated, true);
             assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
             assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: true, isolated: true }]);
+        });
+
+        test('confirms explicit isolated false in a linked worktree instead of the inferred value', async () => {
+            fs.rmSync(path.join(workspaceRoot, '.git'), { recursive: true, force: true });
+            writeLinkedWorktreeMetadata(workspaceRoot, path.join(workspaceRoot, 'common', '.git'));
+
+            const tool = new AppHostStartLanguageModelTool(service);
+            const prepared = await tool.prepareInvocation(
+                { input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run', isolated: false } },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(
+                prepared.confirmationMessages?.message,
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode?');
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
+        });
+
+        test('confirms without isolation outside a linked worktree when isolated is omitted', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+
+            const prepared = await tool.prepareInvocation(
+                { input: { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' } },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(
+                prepared.confirmationMessages?.message,
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode?');
+            assert.strictEqual(launchService.resolveLaunchIsolationCalls, 0);
         });
 
         test('falls back to non-isolated launch when the CLI lacks isolation support', async () => {
@@ -938,9 +968,12 @@ suite('AppHost lifecycle language model tools', () => {
                 { appHostPath: 'AppHost/AppHost.csproj', mode: 'run' },
                 new vscode.CancellationTokenSource().token);
 
+            // Confirmation shows the requested isolation the worktree implies. Whether the
+            // selected CLI can honor it is only knowable by spawning it, which preparation
+            // deliberately never does, so degrading to a non-isolated launch happens later.
             assert.strictEqual(
                 prepared.confirmationMessages?.message,
-                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode?');
+                'Start the Aspire AppHost AppHost/AppHost.csproj in run mode with isolation?');
             assert.strictEqual(result.isolated, false);
             assert.deepStrictEqual(launchService.launchInputIsolations, [undefined]);
             assert.deepStrictEqual(launchService.launchCalls, [{

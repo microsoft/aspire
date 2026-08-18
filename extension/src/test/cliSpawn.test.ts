@@ -340,7 +340,7 @@ suite('spawnCliProcess tests', () => {
                 () => getCliSpawnCommand(
                     'C:\\Tools\\Aspire CLI\\aspire.cmd',
                     ['resource', 'api', 'echo', '--', '--path=%PATH%']),
-                /Percent-delimited arguments cannot be passed safely to a Windows command shim/);
+                /Arguments containing %NAME% cannot be forwarded through a Windows \.cmd or \.bat shim/);
         }
         finally {
             platformStub.restore();
@@ -606,7 +606,7 @@ suite('spawnCliProcess tests', () => {
         try {
             assert.throws(
                 () => getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['run', '--', '%ASPIRE_SECRET%']),
-                /Percent-delimited arguments cannot be passed safely to a Windows command shim/);
+                /Arguments containing %NAME% cannot be forwarded through a Windows \.cmd or \.bat shim/);
         }
         finally {
             platformStub.restore();
@@ -631,7 +631,7 @@ suite('spawnCliProcess tests', () => {
         try {
             assert.throws(
                 () => getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['run', '--', 'before%', '%after']),
-                /Percent-delimited arguments cannot be passed safely to a Windows command shim/);
+                /Arguments containing %NAME% cannot be forwarded through a Windows \.cmd or \.bat shim/);
         }
         finally {
             platformStub.restore();

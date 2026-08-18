@@ -25,6 +25,9 @@
     <trans-unit id="views.appHosts.name">
       <source xml:lang="en">AppHosts</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.cmdShimPercentArgument">
+      <source xml:lang="en">Arguments containing %NAME% cannot be forwarded through a Windows .cmd or .bat shim, because cmd.exe expands them before the Aspire CLI receives the value. Configure aspire.aspireCliExecutablePath to point at aspire.exe instead of the .cmd shim and try again.</source>
+    </trans-unit>
     <trans-unit id="mcpServerDefinitionProviders.aspire.label">
       <source xml:lang="en">Aspire</source>
     </trans-unit>
@@ -576,9 +579,6 @@
     </trans-unit>
     <trans-unit id="extension.debug.program">
       <source xml:lang="en">Path to the AppHost to run</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.cmdShimPercentArgument">
-      <source xml:lang="en">Percent-delimited arguments cannot be passed safely to a Windows command shim. Configure aspire.aspireCliExecutablePath to use aspire.exe and try again.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval">
       <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>

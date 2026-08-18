@@ -129,6 +129,9 @@
   <data name="AppHostNotRunning" xml:space="preserve">
     <value>No running AppHost found. Use 'aspire run' to start one first.</value>
   </data>
+  <data name="AppHostNotRunningInCurrentWorktree" xml:space="preserve">
+    <value>No running AppHost found in the current worktree. Use '--apphost &lt;path&gt;' to target one directly, or '--all' to include AppHosts from other worktrees.</value>
+  </data>
   <data name="AppHostNotRunningAtPath" xml:space="preserve">
     <value>No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</value>
     <comment>{0} is the AppHost project path.</comment>

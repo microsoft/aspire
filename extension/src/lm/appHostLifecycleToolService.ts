@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { appHostLifecycleUnresolvedPath } from '../loc/strings';
 import { canonicalizeAppHostPath } from '../utils/appHostIdentity';
+import { isLinkedGitWorktree } from '../utils/gitWorktree';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isCommandCancellation } from '../utils/telemetry';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
@@ -145,9 +146,20 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
         }
 
-        // Confirmation describes only the explicit request. Effective isolation is negotiated
-        // during the actual launch, after idempotent checks can return without probing the CLI.
-        return { displayPath: resolution.target.displayPath, isolated: input?.isolated === true };
+        // Confirmation reports the isolation the launch will actually request. Lifecycle-tool
+        // launches go through `launchFromLifecycleOwner`, which applies the
+        // `linked-worktree-default` policy, so an omitted `isolated` becomes true in a linked
+        // worktree. That half of the inference is a synchronous filesystem check, so it can be
+        // shown here and must be: this dialog gates "Always allow", and consenting to a
+        // non-isolated launch that then runs isolated is a consent mismatch. Only the CLI
+        // *capability* half stays deferred - it spawns the CLI, and degradation for older CLIs
+        // is negotiated at launch.
+        //
+        // `prepareInvocation` receives unvalidated model input, so only a real boolean counts as
+        // an explicit choice; anything else is rejected by `isValidStartInput` at invoke time.
+        const explicitIsolation = typeof input?.isolated === 'boolean' ? input.isolated : undefined;
+        const isolated = explicitIsolation ?? isLinkedGitWorktree(resolution.target.absolutePath);
+        return { displayPath: resolution.target.displayPath, isolated };
     }
 
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {

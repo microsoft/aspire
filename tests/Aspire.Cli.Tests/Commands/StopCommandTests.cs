@@ -306,18 +306,22 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_SingleOutOfScopeAppHostWithoutOverrideDoesNotPromptOrStop()
+    public async Task StopCommand_SingleAppHostInDifferentWorktreeWithoutOverrideDoesNotPromptOrStop()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var outOfScopeDir = workspace.CreateDirectory("out-of-scope");
+        var commonGitDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".git");
+        Directory.CreateDirectory(commonGitDirectory);
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".worktrees", "feature")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, commonGitDirectory);
+
         var interactionService = new TestInteractionService();
         interactionService.PromptForSelectionCallback = (_, _, _, _) =>
-            throw new InvalidOperationException("Out-of-scope AppHosts must not be offered by aspire stop without --apphost or --all.");
+            throw new InvalidOperationException("AppHosts in another worktree must not be offered by aspire stop without --apphost or --all.");
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        var appHostPath = Path.Combine(outOfScopeDir.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        var appHostPath = Path.Combine(worktreeRoot, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
         monitor.AddConnection("hash1", connection.SocketPath, connection);
@@ -338,8 +342,50 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
         Assert.Equal([SharedCommandStrings.ScanningForRunningAppHosts], statusMessages);
         Assert.Empty(interactionService.DisplayedSuccess);
-        Assert.Equal(SharedCommandStrings.AppHostNotRunning, Assert.Single(interactionService.DisplayedErrors));
+        // The AppHost is running, just not in this worktree, so the message must not say
+        // "start one first" and must name the flags that can reach across worktrees.
+        Assert.Equal(SharedCommandStrings.AppHostNotRunningInCurrentWorktree, Assert.Single(interactionService.DisplayedErrors));
         Assert.True(File.Exists(connection.SocketPath));
+    }
+
+    [Fact]
+    public async Task StopCommand_SingleAppHostOutsideWorkingDirectoryInSameWorktreePromptsAndStops()
+    {
+        // Regression coverage for `aspire stop` run from a sibling directory (repo/tests) while the
+        // AppHost lives elsewhere in the same checkout. Scope hides it from the direct match, but
+        // it is still the user's own worktree, so it must be offered.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Collection(
+            interactionService.DisplayedMessages.Select(message => message.Message),
+            message => Assert.Equal(SharedCommandStrings.NoInScopeAppHostsShowingAll, message),
+            message => Assert.Equal(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FoundRunningAppHost, appHostPath), message),
+            message => Assert.Equal(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.SendingStopSignal, appHostPath), message));
+        Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostPath));
+        Assert.False(File.Exists(connection.SocketPath));
     }
 
     [Fact]

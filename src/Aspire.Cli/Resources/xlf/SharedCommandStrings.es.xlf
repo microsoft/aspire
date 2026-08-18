@@ -17,6 +17,11 @@
         <target state="new">No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
+      <trans-unit id="AppHostNotRunningInCurrentWorktree">
+        <source>No running AppHost found in the current worktree. Use '--apphost &lt;path&gt;' to target one directly, or '--all' to include AppHosts from other worktrees.</source>
+        <target state="new">No running AppHost found in the current worktree. Use '--apphost &lt;path&gt;' to target one directly, or '--all' to include AppHosts from other worktrees.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="new">Output format for detached AppHost results</target>
