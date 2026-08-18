@@ -54,7 +54,7 @@ public partial class AspirePageContentLayout : ComponentBase
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IDialogReference? _toolbarPanel;
+    private DashboardDialogReference? _toolbarPanel;
 
     public bool IsToolbarPanelOpen => _toolbarPanel is not null;
 
@@ -94,7 +94,7 @@ public partial class AspirePageContentLayout : ComponentBase
                 Modal = false,
                 PrimaryAction = null,
                 SecondaryAction = null,
-                OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, async () =>
+                OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, async () =>
                 {
                     await InvokeListenersAsync();
                     _toolbarPanel = null;

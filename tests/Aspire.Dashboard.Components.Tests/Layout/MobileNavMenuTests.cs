@@ -128,8 +128,7 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.True(currentItem.ClassList.Contains("mobile-nav-menu-item-active"));
 
         // The active item swaps to the filled icon variant and tags the slot wrapper
-        // with mobile-nav-menu-icon-active so non-color cues stay alongside the
-        // ::before accent bar styled in app.css.
+        // so the selected state has a non-color cue.
         var activeIconSlot = Assert.Single(currentItem.QuerySelectorAll(".mobile-nav-menu-icon-active"));
         Assert.Equal("start", activeIconSlot.GetAttribute("slot"));
         Assert.NotEmpty(activeIconSlot.QuerySelectorAll("svg"));

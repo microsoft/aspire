@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -20,7 +19,6 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        RenderComponent<FluentMenuProvider>();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "view-options-button");
@@ -47,7 +45,6 @@ public class AspireMenuButtonTests : DashboardTestContext
         menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
 
         var providerInvocationCount = 0;
-        var provider = RenderComponent<FluentMenuProvider>();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "lazy-menu-button");
@@ -75,35 +72,26 @@ public class AspireMenuButtonTests : DashboardTestContext
         Assert.Single(cut.FindComponents<AspireMenu>());
         Assert.Single(cut.FindComponents<FluentMenu>());
         cut.WaitForAssertion(() => Assert.True(cut.FindComponent<AspireMenu>().Instance.Open));
-        var menuService = Services.GetRequiredService<IMenuService>();
-        var registeredMenu = menuService.Menus.Single();
-        Assert.True(registeredMenu.OpenChanged.HasDelegate);
-        provider.WaitForAssertion(() =>
-        {
-            Assert.True(registeredMenu.Open);
-            Assert.Single(provider.FindComponents<FluentMenu>());
-        });
-        Assert.True(provider.FindComponent<FluentMenu>().Instance.Open);
-        Assert.Equal("Item 1", provider.FindComponent<FluentMenuItem>().Instance.Label);
+        Assert.Equal("Item 1", cut.FindComponent<FluentMenuItem>().Instance.Label);
 
         var menu = cut.FindComponent<AspireMenu>().Instance;
         cut.Find("#lazy-menu-button").Click();
 
         Assert.Equal(1, providerInvocationCount);
         Assert.Same(menu, cut.FindComponent<AspireMenu>().Instance);
-        Assert.False(Services.GetRequiredService<IMenuService>().Menus.Single().Open);
+        Assert.False(cut.FindComponent<AspireMenu>().Instance.Open);
 
         cut.Find("#lazy-menu-button").Click();
 
         Assert.Equal(2, providerInvocationCount);
         Assert.Same(menu, cut.FindComponent<AspireMenu>().Instance);
-        Assert.True(registeredMenu.Open);
-        provider.WaitForAssertion(() => Assert.Equal("Item 2", provider.FindComponent<FluentMenuItem>().Instance.Label));
+        Assert.True(cut.FindComponent<AspireMenu>().Instance.Open);
+        cut.WaitForAssertion(() => Assert.Equal("Item 2", cut.FindComponent<FluentMenuItem>().Instance.Label));
 
-        await cut.InvokeAsync(provider.FindComponent<FluentMenu>().Instance.CloseAsync);
+        var fluentMenu = cut.FindComponent<FluentMenu>();
+        await fluentMenu.InvokeAsync(() => fluentMenu.Instance.OpenedChanged.InvokeAsync(false));
 
         Assert.False(cut.FindComponent<AspireMenu>().Instance.Open);
-        Assert.False(registeredMenu.Open);
     }
 
     [Fact]
@@ -116,7 +104,6 @@ public class AspireMenuButtonTests : DashboardTestContext
 
         var itemText = "First item";
         Func<IList<MenuButtonItem>> itemsProvider = () => [new MenuButtonItem { Text = itemText }];
-        var provider = RenderComponent<FluentMenuProvider>();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "refresh-menu-button");
@@ -125,12 +112,12 @@ public class AspireMenuButtonTests : DashboardTestContext
         });
 
         cut.Find("#refresh-menu-button").Click();
-        provider.WaitForAssertion(() => Assert.Equal("First item", provider.FindComponent<FluentMenuItem>().Instance.Label));
+        cut.WaitForAssertion(() => Assert.Equal("First item", cut.FindComponent<FluentMenuItem>().Instance.Label));
 
         itemText = "Second item";
         cut.SetParametersAndRender(builder => builder.Add(p => p.Text, "Updated view options"));
 
-        provider.WaitForAssertion(() => Assert.Equal("Second item", provider.FindComponent<FluentMenuItem>().Instance.Label));
+        cut.WaitForAssertion(() => Assert.Equal("Second item", cut.FindComponent<FluentMenuItem>().Instance.Label));
     }
 
     [Fact]
@@ -143,7 +130,6 @@ public class AspireMenuButtonTests : DashboardTestContext
         var menuButtonModule = JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
         var preparation = menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", "pending-items-menu-button");
         menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
-        var provider = RenderComponent<FluentMenuProvider>();
         var cut = RenderComponent<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "pending-items-menu-button");
@@ -157,7 +143,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         preparation.SetVoidResult();
         await clickTask;
 
-        provider.WaitForAssertion(() => Assert.Equal("Second item", provider.FindComponent<FluentMenuItem>().Instance.Label));
+        cut.WaitForAssertion(() => Assert.Equal("Second item", cut.FindComponent<FluentMenuItem>().Instance.Label));
     }
 
     [Fact]

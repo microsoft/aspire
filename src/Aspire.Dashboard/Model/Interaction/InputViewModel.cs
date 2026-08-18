@@ -110,7 +110,7 @@ public sealed class InputViewModel
         set => Input.Value = value ? "true" : "false";
     }
 
-    // Used when binding to FluentNumberField.
+    // Used when binding to FluentNumberInput.
     public int? NumberValue
     {
         get => int.TryParse(Input.Value, CultureInfo.InvariantCulture, out var result) ? result : null;

@@ -31,28 +31,33 @@
             <ToolbarSection>
                 @if (!ViewportInformation.IsDesktop)
                 {
-                    <FluentSearch @bind-Value="PageViewModel.Filter"
+                    <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="PageViewModel.Filter"
+                                  Class="toolbar-search"
                                   @bind-Value:after="HandleAfterFilterBindAsync"
                                   Name="spans-search"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                  title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]"/>
+                                  title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                        <StartTemplate>
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                        </StartTemplate>
+                    </FluentTextInput>
                     <SpanTypeSelect @bind-SpanType="@PageViewModel.SelectedSpanType"
                                     SpanTypes="@_spanTypes"
                                     HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
                     @if (PageViewModel.Filters.Count > 0)
                     {
-                        <div slot="end">
-                            <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                        <div>
+                            <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
                                 <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                             </FluentCounterBadge>
                         </div>
                     }
-                    <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
+                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
                         <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
                     </FluentButton>
-                    <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       ItemsProvider="@(() => _traceActionsMenuItems)"
                                       Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]"
@@ -103,14 +108,15 @@
 
                             <div id="@ScrollContainerId" class="tracedetails-grid-container" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)]">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                                    <FluentDataGrid @ref="_dataGrid"
+                                    <AspireFluentDataGrid @ref="_dataGrid"
                                                     Virtualize="true"
-                                                    GenerateHeader="GenerateHeaderOption.Sticky"
+                                                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                     Class="main-grid trace-view-grid enable-row-click"
                                                     ResizableColumns="true"
                                                     ItemsProvider="@GetData"
                                                     TGridItem="SpanWaterfallViewModel"
                                                     RowClass="@GetRowClass"
+                                                    ColumnOrder="@_manager.ColumnOrder"
                                                     GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                     RowSize="DataGridRowSize.Small"
                                                     OverscanCount="100"
@@ -147,8 +153,8 @@
                                                 <span @onclick:stopPropagation="true" style="margin-left: @(marginLeft)px;" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                                     @if (context.Children.Count > 0)
                                                     {
-                                                        <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                            <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                                        <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="ButtonAppearance.Transparent" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
+                                                            <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                                         </FluentButton>
                                                     }
                                                 </span>
@@ -196,12 +202,12 @@
                                                 <span @onclick:stopPropagation="true">
                                                     @if (IsGenAISpan(context))
                                                     {
-                                                        <FluentButton Appearance="Appearance.Lightweight"
+                                                        <FluentButton Appearance="ButtonAppearance.Transparent"
                                                                     Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                                     Class="genai-details-button"
                                                                     OnClick="() => OnGenAIClickedAsync(context.Span)">
                                                             <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                                                                        Color="Color.Accent" />
+                                                                        Color="Color.Primary" />
                                                         </FluentButton>
                                                     }
                                                 </span>
@@ -308,7 +314,7 @@
                                                 var id = context.Span.SpanId;
                                             }
 
-                                            <div @onclick:stopPropagation="true" style="margin-left: 7px;">
+                                            <div class="grid-action-container" @onclick:stopPropagation="true">
                                                 <SpanActions SpanViewModel="@context"
                                                             OnViewDetails="@((focusElementId) => OnShowPropertiesAsync(context, focusElementId))"
                                                             OnLaunchGenAI="@OnGenAIClickedAsync" />
@@ -318,7 +324,7 @@
                                     <EmptyContent>
                                         <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
                                     </EmptyContent>
-                                    </FluentDataGrid>
+                                    </AspireFluentDataGrid>
                                 </GridColumnManager>
                             </div>
                         </div>
@@ -350,49 +356,56 @@
     {
         return @<div class="trace-header main-toolbar">
             @GetTraceDetailsFragment()
-            <div class="trace-header-filters"
+            <div class="trace-header-filters filter-toolbar"
                  role="group"
                  aria-label="@ControlStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
-                <FluentSearch @bind-Value="PageViewModel.Filter"
+                <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="PageViewModel.Filter"
+                              Class="toolbar-search"
                               @bind-Value:after="HandleAfterFilterBindAsync"
                               Name="spans-search"
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]" />
+                              title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                    <StartTemplate>
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                    </StartTemplate>
+                </FluentTextInput>
 
-                <DesktopToolbarDivider />
+                <div class="toolbar-end">
+                    <DesktopToolbarDivider />
 
-                <SpanTypeSelect slot="end"
-                                @bind-SpanType="@PageViewModel.SelectedSpanType"
-                                SpanTypes="@_spanTypes"
-                                HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
+                    <SpanTypeSelect
+                                    @bind-SpanType="@PageViewModel.SelectedSpanType"
+                                    SpanTypes="@_spanTypes"
+                                    HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
 
-                <DesktopToolbarDivider />
+                    <DesktopToolbarDivider />
 
-                @if (PageViewModel.Filters.Count == 0)
-                {
-                    <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
-                }
-                else
-                {
-                    <div slot="end">
-                        <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
-                        </FluentCounterBadge>
-                    </div>
-                }
+                    @if (PageViewModel.Filters.Count == 0)
+                    {
+                        <span>@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
+                    }
+                    else
+                    {
+                        <div>
+                            <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                            </FluentCounterBadge>
+                        </div>
+                    }
 
-                <DesktopToolbarDivider />
+                    <DesktopToolbarDivider />
 
-                <FluentButton slot="end" Appearance="Appearance.Stealth" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
 
-                <DesktopToolbarDivider />
+                    <DesktopToolbarDivider />
 
-                <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                                  Icon="@(new Icons.Regular.Size20.Options())"
-                                  ItemsProvider="@(() => _traceActionsMenuItems)"
-                                  Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                      Icon="@(new Icons.Regular.Size20.Options())"
+                                      ItemsProvider="@(() => _traceActionsMenuItems)"
+                                      Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
+                </div>
             </div>
         </div>;
     }
@@ -404,28 +417,28 @@
 
         return @<FluentOverflow Class="trace-header-details">
             <ChildContent>
-                <FluentOverflowItem>
+                <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)] <strong title="@FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)">@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated)</strong>
-                </FluentOverflowItem>
-                <FluentOverflowItem>
+                </div>
+                <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDurationHeader)] <strong>@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</strong>
-                </FluentOverflowItem>
-                <FluentOverflowItem>
+                </div>
+                <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourcesHeader)] <strong>@_resourceCount</strong>
-                </FluentOverflowItem>
-                <FluentOverflowItem>
+                </div>
+                <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDepthHeader)] <strong>@_maxDepth</strong>
-                </FluentOverflowItem>
-                <FluentOverflowItem>
+                </div>
+                <div>
                     @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTotalSpansHeader)] <strong>@trace.Spans.Count</strong>
-                </FluentOverflowItem>
+                </div>
             </ChildContent>
             <OverflowTemplate Context="overflow">
                 <FluentTooltip UseTooltipService="false" Anchor="@overflow.IdMoreButton"
                                Class="trace-header-tooltip">
                     @foreach (var item in overflow.ItemsOverflow)
                     {
-                        <div style="margin: 5px;">@item.ChildContent</div>
+                        <div style="margin: 5px;">@item.Text</div>
                     }
                 </FluentTooltip>
             </OverflowTemplate>

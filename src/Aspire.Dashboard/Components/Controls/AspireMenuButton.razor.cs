@@ -13,6 +13,11 @@ namespace Aspire.Dashboard.Components;
 
 public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
 {
+    public AspireMenuButton(LibraryConfiguration configuration)
+        : base(configuration)
+    {
+    }
+
     private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
     private const int InitializationWaitMilliseconds = 100;
 
@@ -51,13 +56,13 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     public required Func<IList<MenuButtonItem>> ItemsProvider { get; set; }
 
     [Parameter]
-    public Appearance? ButtonAppearance { get; set; }
+    public ButtonAppearance? ButtonAppearance { get; set; }
 
     [Parameter]
     public string? Title { get; set; }
 
     [Parameter]
-    public string MenuButtonId { get; set; } = Identifier.NewId();
+    public string MenuButtonId { get; set; } = $"menu-button-{Guid.NewGuid():N}";
 
     [Parameter]
     public bool HideIcon { get; set; }
@@ -166,7 +171,7 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         if (_jsModule is { } jsModule)
         {
@@ -188,5 +193,7 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
 
             await JSInteropHelpers.SafeDisposeAsync(jsModule);
         }
+
+        await base.DisposeAsync();
     }
 }

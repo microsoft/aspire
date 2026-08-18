@@ -5,17 +5,16 @@
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
 <FluentMenu Class="aspire-menu-container"
             @ref="_menu"
-            Anchor="@Anchor"
-            Anchored="@Anchored"
-            Open="@Open"
-            OpenChanged="OnOpenChanged"
+            Trigger="@(Anchored ? Anchor : null)"
+            OpenedChanged="OnOpenChanged"
             Style="@Style"
-            VerticalThreshold="@CalculatedVerticalThreshold"
-            HorizontalThreshold="200">
-    @foreach (var item in Items)
-    {
-        @RenderMenuItem(item)
-    }
+            PersistOnItemClick="true">
+    <FluentMenuList>
+        @foreach (var item in Items)
+        {
+            @RenderMenuItem(item)
+        }
+    </FluentMenuList>
 </FluentMenu>
 
 @code {
@@ -50,12 +49,11 @@
             return null;
         }
 
-        // div is required because a single element has to be returned.
-        return @<div>
+        return @<FluentMenuList>
             @foreach (var nestedItem in item.NestedMenuItems)
             {
                 @RenderMenuItem(nestedItem)
             }
-        </div>;
+        </FluentMenuList>;
     }
 }

@@ -4,36 +4,35 @@
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@implements IDialogContentComponent<Aspire.Dashboard.Model.TextVisualizerDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="true">
-    <div class="dialog-title-grid">
-        <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
-        <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
-            @Content.Description
-        </FluentLabel>
+<FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
+    <TitleTemplate>
+        <div class="dialog-title-grid">
+            <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
+            <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
+                @Content.Description
+            </FluentLabel>
 
-        @if (!HasFixedFormat)
-        {
-            <div Style="grid-area: dialog-format;">
-                <FluentSelect TOption="SelectViewModel<string>"
-                              Id="@_selectFormatId"
-                              Items="@_options"
-                              Position="SelectPosition.Below"
-                              OptionText="@(option => option.Name)"
-                              OptionValue="@(option => option.Id)"
-                              OptionDisabled="@(option => !EnabledOptions.Contains(option.Id))"
-                              OptionTitle="@(option => option.Name)"
-                              @bind-SelectedOption="@_selectedFormat"
-                              @bind-SelectedOption:after="OnSelectedFormatChanged"
-                              AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              Style="min-width: 12rem; width: max-content; max-width: 100%;" />
-            </div>
-        }
-    </div>
-</FluentDialogHeader>
+            @if (!HasFixedFormat)
+            {
+                <div class="dialog-format">
+                    <FluentSelect TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                  Id="@_selectFormatId"
+                                  Items="@_options"
+                                  Position="SelectPosition.Below"
+                                  OptionText="@((SelectViewModel<string> option) => option.Name)"
+                                  OptionDisabled="@((SelectViewModel<string> option) => !EnabledOptions.Contains(option.Id))"
+                                  OptionTitle="@((SelectViewModel<string> option) => option.Name)"
+                                  @bind-Value="@_selectedFormat"
+                                  @bind-Value:after="OnSelectedFormatChanged"
+                                  AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  Style="width: clamp(7rem, 20vw, 12rem); max-width: 100%;" />
+                </div>
+            }
+        </div>
+    </TitleTemplate>
 
-<FluentDialogBody>
+    <ChildContent>
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
@@ -62,7 +61,10 @@
                 </div>
             </div>
         }
+    </div>
+    </ChildContent>
 
+    <ActionTemplate>
         <div class="button-container">
             @if (ShowSecretsWarning is true)
             {
@@ -84,7 +86,7 @@
                 }
 
                 <FluentButton Id="@_copyButtonId"
-                              Appearance="Appearance.Accent"
+                              Appearance="ButtonAppearance.Primary"
                               AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                     <span slot="start">
                         <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
@@ -94,7 +96,5 @@
                 </FluentButton>
             </div>
         </div>
-    </div>
+    </ActionTemplate>
 </FluentDialogBody>
-
-<FluentDialogFooter Visible="false" />

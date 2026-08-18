@@ -2,12 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
+using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -19,7 +25,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     [Fact]
     public async Task Render_FileUsesFallbackPlaceholderAndScopedBrowseLabel()
     {
-        var cut = SetUpDialog(out var dialogService);
+        var getCut = SetUpDialog(out var dialogService);
         var interaction = new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
@@ -43,6 +49,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Title = "Upload"
         });
+        var cut = getCut();
 
         cut.WaitForAssertion(() =>
         {
@@ -55,12 +62,13 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     [Fact]
     public async Task Render_SecretRevealButton_IsKeyboardFocusable()
     {
-        var cut = SetUpDialog(out var dialogService);
+        var getCut = SetUpDialog(out var dialogService);
 
         await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateSecretTextViewModel(), new DialogParameters
         {
             Title = "Credentials"
         });
+        var cut = getCut();
 
         cut.WaitForAssertion(() =>
         {
@@ -69,7 +77,33 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
     }
 
-    private IRenderedFragment SetUpDialog(out IDialogService dialogService)
+    [Fact]
+    public async Task Render_ActionButtons_DisplaySpecifiedText()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateSecretTextViewModel(), new DialogParameters
+        {
+            Title = "Credentials",
+            PrimaryAction = "Continue",
+            SecondaryAction = "Go back",
+            UseCustomFooter = true
+        });
+        var cut = getCut();
+
+        cut.WaitForAssertion(() =>
+        {
+            var buttons = cut.FindAll("fluent-dialog-body [slot='action'] footer fluent-button");
+            Assert.Collection(
+                buttons,
+                button => Assert.Equal("Continue", button.TextContent.Trim()),
+                button => Assert.Equal("Go back", button.TextContent.Trim()));
+
+            Assert.Empty(cut.FindAll("fluent-dialog-body + footer"));
+        });
+    }
+
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
 
@@ -82,10 +116,28 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        IRenderedFragment? cut = null;
+        TestDialogService? testDialogService = null;
+        testDialogService = new TestDialogService((content, _) =>
+        {
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
+            {
+                builder.Add(p => p.Value, testDialogService!.LastInstance!);
+                builder.AddChildContent<InteractionsInputDialog>(childBuilder =>
+                {
+                    childBuilder.Add(p => p.Content, Assert.IsType<InteractionsInputsDialogViewModel>(content));
+                });
+            });
+            return Task.CompletedTask;
+        });
+        Services.RemoveAll<IDialogService>();
+        Services.AddSingleton<IDialogService>(testDialogService);
 
-        dialogService = Services.GetRequiredService<IDialogService>();
-        return cut;
+        dialogService = new DashboardDialogService(
+            testDialogService,
+            new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
+            Services.GetRequiredService<DimensionManager>());
+        return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
     }
 
     private static InteractionsInputsDialogViewModel CreateSecretTextViewModel()

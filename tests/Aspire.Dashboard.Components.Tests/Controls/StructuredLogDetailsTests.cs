@@ -6,8 +6,10 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Tests.Shared.Telemetry;
+using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Common.V1;
 using Xunit;
 
@@ -62,6 +64,11 @@ public class StructuredLogDetailsTests : DashboardTestContext
         AssertUniqueKeys(cut.Instance.FilteredExceptionItems);
         AssertUniqueKeys(cut.Instance.FilteredResourceItems);
         AssertUniqueKeys(cut.Instance.FilteredItems);
+
+        Assert.True(cut.FindComponent<FluentAccordion>().Instance.Block);
+        Assert.All(cut.FindComponents<FluentAccordionItem>(), item => Assert.False(string.IsNullOrEmpty(item.Instance.Header)));
+        Assert.All(cut.FindComponents<FluentDivider>(), divider => Assert.True(divider.Instance.Vertical));
+        Assert.All(cut.FindAll(".details-toolbar fluent-divider"), divider => Assert.Equal("presentation", divider.GetAttribute("role")));
 
         static void AssertUniqueKeys(IEnumerable<TelemetryPropertyViewModel> properties)
         {

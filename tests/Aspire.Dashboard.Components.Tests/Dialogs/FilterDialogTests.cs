@@ -28,10 +28,11 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Single(cut.FindComponents<FluentNumberField<double?>>());
+        Assert.Single(cut.FindComponents<FluentDialogBody>());
+        Assert.Single(cut.FindComponents<FluentNumberInput<double?>>());
         Assert.DoesNotContain("fluent-combobox", cut.Markup);
 
-        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>>>());
+        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>, SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,
             item => Assert.Equal(FilterCondition.Equals, item.Id),
             item => Assert.Equal(FilterCondition.NotEqual, item.Id),
@@ -56,10 +57,10 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        Assert.Empty(cut.FindComponents<FluentNumberField<double?>>());
-        Assert.Contains("fluent-combobox", cut.Markup);
+        Assert.Empty(cut.FindComponents<FluentNumberInput<double?>>());
+        Assert.Contains("fluent-dropdown", cut.Markup);
 
-        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>>>());
+        var conditionSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<FilterCondition>, SelectViewModel<FilterCondition>>>());
         Assert.Collection(conditionSelect.Instance.Items!,
             item => Assert.Equal(FilterCondition.Equals, item.Id),
             item => Assert.Equal(FilterCondition.Contains, item.Id),

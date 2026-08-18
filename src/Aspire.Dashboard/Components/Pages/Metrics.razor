@@ -50,20 +50,20 @@
                                   HandleClearSignal="ClearMetrics"
                                   SelectedResource="@PageViewModel.SelectedResource"/>
 
-            <FluentInputLabel slot="end"
-                              Label="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"
-                              ForId="@_selectDurationId"
-                              Orientation="Orientation.Horizontal" />
+            <div class="toolbar-end">
+                <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
 
-            <DesktopToolbarDivider />
+                <DesktopToolbarDivider />
 
-            <FluentSelect slot="end" TOption="SelectViewModel<TimeSpan>"
-                          Id="@_selectDurationId"
-                          Items="@_durations"
-                          OptionText="@(c => c.Name)"
-                          @bind-SelectedOption="PageViewModel.SelectedDuration"
-                          @bind-SelectedOption:after="HandleSelectedDurationChangedAsync"
-                          AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+                <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
+                              Class="toolbar-select"
+                              Id="@_selectDurationId"
+                              Items="@_durations"
+                              OptionText="@(c => c.Name)"
+                              @bind-Value="PageViewModel.SelectedDuration"
+                              @bind-Value:after="HandleSelectedDurationChangedAsync"
+                              AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+            </div>
 
             @if (!ViewportInformation.IsDesktop)
             {
@@ -83,12 +83,10 @@
                     // Collapsed property only allows us to show Panel1 (which is the metric selector)
                     // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
                     // on mobile.
-                    <FluentSplitter BarHandle="@ViewportInformation.IsDesktop"
-                                    Style="height:100%"
-                                    Panel1Size="@(ViewportInformation.IsDesktop ? "2fr" : "0")"
-                                    Panel2Size="8fr"
-                                    BarSize="@(ViewportInformation.IsDesktop ? 5 : 0)">
-                        <Panel1>
+                    <FluentMultiSplitter Style="height:100%"
+                                         BarSize="@(ViewportInformation.IsDesktop ? "5px" : "0")">
+                        <FluentMultiSplitterPane Size="@(ViewportInformation.IsDesktop ? "2fr" : "0")"
+                                                 Collapsed="@(!ViewportInformation.IsDesktop)">
                             @if (ViewportInformation.IsDesktop)
                             {
                                 <TreeMetricSelector
@@ -96,8 +94,8 @@
                                     PageViewModel="@PageViewModel"
                                     HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
                             }
-                        </Panel1>
-                        <Panel2>
+                        </FluentMultiSplitterPane>
+                        <FluentMultiSplitterPane Size="8fr">
                             <div>
                                 <div class="metrics-content">
                                     @if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
@@ -123,9 +121,9 @@
                                             TGridItem="OtlpInstrumentSummary">
                                             <ChildContent>
                                                 <TemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
-                                                    <FluentAnchor Class="button-hyperlink-no-icon" Href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)" Appearance="Appearance.Lightweight">
+                                                    <a class="button-hyperlink-no-icon" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
                                                         @context.Name
-                                                    </FluentAnchor>
+                                                    </a>
                                                 </TemplateColumn>
                                                 <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" Tooltip="true" TooltipText="@(c => c.Description)" />
                                             </ChildContent>
@@ -140,16 +138,16 @@
                                         else
                                         {
                                             <div class="empty-content">
-                                                <FluentAnchor Href="#" Appearance="Appearance.Hypertext" OnClick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())">
+                                                <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">
                                                     @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectInstrument)]
-                                                </FluentAnchor>
+                                                </a>
                                             </div>
                                         }
                                     }
                                 </div>
                             </div>
-                        </Panel2>
-                    </FluentSplitter>
+                        </FluentMultiSplitterPane>
+                    </FluentMultiSplitter>
                 }
                 else if (PageViewModel.Instruments == null)
                 {
@@ -162,7 +160,7 @@
                         else
                         {
                             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>@:&nbsp;
-                            <FluentAnchor Href="#" Appearance="Appearance.Hypertext" OnClick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</FluentAnchor>
+                            <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</a>
                         }
                     </div>
                 }

@@ -22,18 +22,15 @@
                name and fails axe's aria-input-field-name (WCAG 4.1.2). Pin the name explicitly with
                aria-label so assistive tech announces the control; the visible Label stays for sighted
                users. See AccessibilityTests.DashboardDialog_HasNoSeriousOrCriticalWcagViolations. *@
-            <FluentSelect
-                TOption="CultureInfo"
+            <FluentSelect TOption="CultureInfo" TValue="CultureInfo"
                 ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
-                OptionValue="@(c => c!.Name)"
                 OptionText="@(c => c!.NativeName.Humanize())"
-                ValueChanged="@ValueChanged"
-                @bind-SelectedOption="@_selectedUiCulture"
-                @bind-SelectedOption:after="@OnLanguageChanged"
+                @bind-Value="@_selectedUiCulture"
+                @bind-Value:after="@OnLanguageChanged"
                 Class="language-select"/>
 
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>

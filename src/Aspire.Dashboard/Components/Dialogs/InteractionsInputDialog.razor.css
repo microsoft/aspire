@@ -2,6 +2,13 @@
     margin-bottom: 1rem;
 }
 
+.interaction-dialog-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .interaction-input-dialog .interaction-input ::deep {
     width: 100%;
 }
