@@ -439,6 +439,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentHelmExpression(HelmValue helmExpression, string key)
     {
+        if (helmExpression.ValueString is { } template &&
+            template.ContainsHelmFlowControlExpression())
+        {
+            helmExpression = HelmValue.Literal(template.ToQuotedHelmTemplateExpression());
+        }
+
         switch (helmExpression)
         {
             case { ValueContainsSecretValuesExpression: true, ValueString: { } secretValue }:
@@ -458,6 +464,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentStringValue(string stringValue, string key, string resourceName)
     {
+        if (stringValue.ContainsHelmFlowControlExpression())
+        {
+            stringValue = stringValue.ToQuotedHelmTemplateExpression();
+        }
+
         if (stringValue.ContainsHelmValuesSecretExpression())
         {
             var secretExpression = stringValue.ToHelmSecretExpression(resourceName);
@@ -534,7 +545,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ParameterResource param)
             {
-                var helmValue = AllocateParameter(param, TargetResource);
+                var helmValue = AllocateParameter(param, TargetResource, embedded);
                 if (embedded)
                 {
                     AllocateAdditionalParameter(param, helmValue);
@@ -657,9 +668,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         // Pipe through | lower for case-insensitive comparison, matching .NET's
         // StringComparison.OrdinalIgnoreCase used in other execution/publish paths.
         var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | lower)";
-        var escapedMatch = (expr.MatchValue ?? string.Empty).ToLowerInvariant().Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var matchValue = System.Text.Json.JsonSerializer.Serialize((expr.MatchValue ?? string.Empty).ToLowerInvariant());
 
-        var ifElseExpression = $"{{{{ if eq {conditionPath} \"{escapedMatch}\" }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
+        // Keep the flow control raw while expressions are composed. Once the complete environment
+        // value is known, ProcessEnvironmentHelmExpression or ProcessEnvironmentStringValue wraps
+        // the whole template in `tpl ... | quote` so nested conditionals remain composable and the
+        // final output is emitted as one YAML-safe scalar.
+        var ifElseExpression = $"{{{{ if eq {conditionPath} {matchValue} }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
         return HelmValue.Literal(ifElseExpression);
     }
 
@@ -673,7 +688,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         {
             if (vp is ParameterResource branchParam)
             {
-                var helmValue = AllocateParameter(branchParam, TargetResource);
+                var helmValue = AllocateParameter(branchParam, TargetResource, isEmbedded: true);
                 AllocateAdditionalParameter(branchParam, helmValue);
             }
         }
@@ -743,7 +758,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource)
+    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource, bool isEmbedded)
     {
         var formattedName = parameter.Name.ToHelmValuesSectionName();
 
@@ -754,7 +769,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         // Always store the parameter reference for deferred resolution.
         // Secrets and parameters without defaults are resolved at deploy time (not publish time).
         // ValuesKey preserves the parameter name so values.yaml key matches the Helm expression path.
-        return new(expression, parameter) { ValuesKey = formattedName };
+        return new(expression, parameter)
+        {
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = isEmbedded
+        };
     }
     
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
@@ -905,6 +924,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// the Helm expression path (e.g., parameter name "cache_password" vs env var name "REDIS_PASSWORD").
         /// </summary>
         public string? ValuesKey { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether this value supplies a parameter embedded in another Helm value.
+        /// </summary>
+        public bool IsEmbeddedParameter { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

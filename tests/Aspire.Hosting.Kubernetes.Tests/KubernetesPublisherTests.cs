@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
@@ -900,6 +903,32 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConflictingEmbeddedParameterValuesPathReportsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var host = builder.AddParameter("host", "parameter-host", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("host", "environment-host")
+            .WithEnvironment("URL", $"http://{host}/test");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both environment value 'host' and embedded parameter 'host' " +
+            "to Helm values path 'config.myapp.host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
     }
 
     [Fact]

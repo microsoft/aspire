@@ -1588,7 +1588,7 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
-        var host = builder.AddParameter("host", "localhost");
+        var host = builder.AddParameter("host", "localhost", publishValueAsDefault: true);
         var token = builder.AddParameter("token", "test-token", secret: true);
 
         builder.AddContainer("myapp", "nginx")

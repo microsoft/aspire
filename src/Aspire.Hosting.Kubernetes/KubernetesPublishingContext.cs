@@ -189,20 +189,69 @@ internal sealed class KubernetesPublishingContext(
 
         // Embedded parameters need values.yaml entries for their Helm references, but they must
         // not become additional environment variables in the generated ConfigMap or Secret.
-        var configItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.EnvironmentVariables);
-        foreach (var kvp in resourceContext.AdditionalConfigValues)
-        {
-            configItems.TryAdd(kvp.Key, kvp.Value);
-        }
-
-        var secretItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.Secrets);
-        foreach (var kvp in resourceContext.AdditionalSecretValues)
-        {
-            secretItems.TryAdd(kvp.Key, kvp.Value);
-        }
+        var configItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ConfigKey,
+            resourceContext.EnvironmentVariables,
+            resourceContext.AdditionalConfigValues);
+        var secretItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.SecretsKey,
+            resourceContext.Secrets,
+            resourceContext.AdditionalSecretValues);
 
         await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
         await AddValuesToHelmSectionAsync(resource, secretItems, HelmExtensions.SecretsKey).ConfigureAwait(false);
+    }
+
+    private static Dictionary<string, KubernetesResource.HelmValue> MergeHelmValueMappings(
+        IResource resource,
+        string helmKey,
+        IReadOnlyDictionary<string, KubernetesResource.HelmValue> environmentValues,
+        IReadOnlyDictionary<string, KubernetesResource.HelmValue> embeddedParameters)
+    {
+        var resourceKey = resource.Name.ToHelmValuesSectionName();
+        var result = new Dictionary<string, KubernetesResource.HelmValue>(StringComparer.Ordinal);
+        var origins = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        AddMappings(environmentValues, "environment value");
+        AddMappings(embeddedParameters, "embedded parameter");
+
+        return result;
+
+        void AddMappings(
+            IReadOnlyDictionary<string, KubernetesResource.HelmValue> mappings,
+            string originKind)
+        {
+            foreach (var (key, value) in mappings)
+            {
+                var valuesKey = value.ValuesKey ?? key.ToHelmValuesSectionName();
+                var origin = $"{originKind} '{key}'";
+
+                if (!result.TryGetValue(valuesKey, out var existing))
+                {
+                    result.Add(valuesKey, value);
+                    origins.Add(valuesKey, origin);
+                    continue;
+                }
+
+                if (value.ParameterSource is not null &&
+                    ReferenceEquals(existing.ParameterSource, value.ParameterSource))
+                {
+                    if (value.IsEmbeddedParameter && !existing.IsEmbeddedParameter)
+                    {
+                        result[valuesKey] = value;
+                    }
+
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' maps both {origins[valuesKey]} and {origin} " +
+                    $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Rename one of them " +
+                    "so each value has a unique Helm path.");
+            }
+        }
     }
 
     private async Task AddValuesToHelmSectionAsync(
@@ -248,18 +297,29 @@ internal sealed class KubernetesPublishingContext(
                 if (parameter.Secret || parameter.Default is null)
                 {
                     // Don't resolve secrets or parameters without defaults during publish.
-                    // Write an empty placeholder and capture the mapping for deploy-time resolution.
                     value = string.Empty;
-                    environment?.CapturedHelmValues.Add(
+                }
+                else
+                {
+                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                // Embedded parameters must participate in deploy-time lookup even when their
+                // published default is already present in values.yaml. Parent composite values
+                // are resolved from this lookup when writing the deploy override file.
+                if ((parameter.Secret || parameter.Default is null || helmExpressionWithValue.IsEmbeddedParameter) &&
+                    environment is not null &&
+                    !environment.CapturedHelmValues.Any(captured =>
+                        captured.Section == helmKey &&
+                        captured.ResourceKey == resource.Name.ToHelmValuesSectionName() &&
+                        captured.ValueKey == valuesKey))
+                {
+                    environment.CapturedHelmValues.Add(
                         new KubernetesEnvironmentResource.CapturedHelmValue(
                             helmKey,
                             resource.Name.ToHelmValuesSectionName(),
                             valuesKey,
                             parameter));
-                }
-                else
-                {
-                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else

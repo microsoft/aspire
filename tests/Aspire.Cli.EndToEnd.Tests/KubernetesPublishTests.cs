@@ -354,10 +354,24 @@ builder.Build().Run();
 
             var host = builder.AddParameter("host", "publish-host");
             var token = builder.AddParameter("token", "publish-token", secret: true);
+            var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+            var user = builder.AddParameter("user", "publish-user", publishValueAsDefault: true);
+            var password = builder.AddParameter("password", "publish-password", secret: true);
 
             builder.AddContainer("myapp", "nginx")
                 .WithEnvironment("SOME_URL", $"http://{host}/test")
-                .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+                .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}")
+                .WithEnvironment(context =>
+                {
+                    var options = ReferenceExpression.CreateConditional(
+                        mode.Resource,
+                        "enabled",
+                        ReferenceExpression.Create($"user={user};password={password}"),
+                        ReferenceExpression.Create($"disabled"));
+
+                    context.EnvironmentVariables["OPTIONS"] = options;
+                    context.EnvironmentVariables["EMBEDDED_OPTIONS"] = ReferenceExpression.Create($"prefix-{options}-suffix");
+                });
 
             builder.AddKubernetesEnvironment("env");
 
@@ -372,13 +386,22 @@ builder.Build().Run();
         await auto.RunCommandAsync(
             "helm template aspire-app helm-output " +
             "--set-string config.myapp.host=rendered-host " +
-            "--set-string secrets.myapp.token=rendered-token > rendered.yaml",
+            "--set-string secrets.myapp.token=rendered-token " +
+            "--set-string parameters.myapp.mode=enabled " +
+            "--set-string config.myapp.user=rendered-user " +
+            "--set-string 'secrets.myapp.password=rendered: password' > rendered.yaml",
             counter);
         await auto.RunCommandAsync(
             "grep -F 'SOME_URL: \"http://rendered-host/test\"' rendered.yaml",
             counter);
         await auto.RunCommandAsync(
             "grep -F 'SECRET_URL: \"http://rendered-host/test?token=rendered-token\"' rendered.yaml",
+            counter);
+        await auto.RunCommandAsync(
+            "grep -F 'OPTIONS: \"user=rendered-user;password=rendered: password\"' rendered.yaml",
+            counter);
+        await auto.RunCommandAsync(
+            "grep -F 'EMBEDDED_OPTIONS: \"prefix-user=rendered-user;password=rendered: password-suffix\"' rendered.yaml",
             counter);
     }
 }

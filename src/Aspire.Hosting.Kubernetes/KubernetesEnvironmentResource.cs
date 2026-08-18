@@ -145,7 +145,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     /// <summary>
     /// Captured parameter-to-values.yaml mappings populated during publish, consumed during deploy
-    /// to resolve secret and unresolved parameter values into the environment values file.
+    /// to resolve parameter values and composite references into the environment values file.
     /// </summary>
     internal List<CapturedHelmValue> CapturedHelmValues { get; } = [];
 
