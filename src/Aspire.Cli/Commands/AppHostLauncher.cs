@@ -7,7 +7,6 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Diagnostics;
-using Aspire.Cli.Git;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
@@ -91,37 +90,19 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Resolves the isolated option value to propagate to another CLI invocation.
+    /// Gets the isolated option value to propagate to another CLI invocation.
     /// </summary>
-    internal static bool? ResolveIsolatedOption(bool? explicitIsolated, string? startPath)
+    internal static bool? ResolveIsolatedOption(bool? explicitIsolated)
     {
-        return explicitIsolated
-            ?? (GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null ? true : null);
+        return explicitIsolated;
     }
 
     /// <summary>
-    /// Inserts inferred isolation before AppHost arguments when the option was omitted.
+    /// Resolves whether the AppHost should run isolated from the explicit CLI option.
     /// </summary>
-    internal static void InsertInferredIsolatedOption(
-        ForwardedArguments arguments,
-        bool? explicitIsolated,
-        string? startPath)
+    internal static bool ResolveIsolated(ParseResult parseResult)
     {
-        if (explicitIsolated is null &&
-            GitWorktree.TryGetLinkedWorktreeRoot(startPath) is not null)
-        {
-            arguments.InsertCliOption(s_isolatedOption.Name);
-        }
-    }
-
-    /// <summary>
-    /// Resolves whether the AppHost should run isolated. An explicit <c>--isolated</c>
-    /// wins; otherwise a linked git worktree infers isolated mode so it does not collide
-    /// with the primary checkout on ports or user secrets.
-    /// </summary>
-    internal static bool ResolveIsolated(ParseResult parseResult, string? startPath)
-    {
-        return ResolveIsolatedOption(GetExplicitIsolated(parseResult), startPath) ?? false;
+        return ResolveIsolatedOption(GetExplicitIsolated(parseResult)) ?? false;
     }
 
     /// <summary>
@@ -179,9 +160,7 @@ internal sealed class AppHostLauncher(
 
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
 
-        // Infer only when the option was omitted. An explicit false must survive the
-        // parent-to-child launch even when the selected AppHost is in a linked worktree.
-        var isolatedOption = ResolveIsolatedOption(isolated, effectiveAppHostFile.FullName);
+        var isolatedOption = ResolveIsolatedOption(isolated);
 
         // Check for running instance and stop it if found (same behavior as regular run)
         await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);

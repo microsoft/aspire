@@ -83,11 +83,6 @@ internal sealed class StartCommand : BaseCommand
                 AppHostLauncher.s_formatOption,
                 RootCommand.StartDebugSessionOption,
                 RootCommand.NonInteractiveOption);
-            AppHostLauncher.InsertInferredIsolatedOption(
-                debugSessionArguments,
-                explicitIsolated,
-                passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
-
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "start"));
             await extensionInteractionService.StartDebugSessionAsync(
                 ExecutionContext.WorkingDirectory.FullName,

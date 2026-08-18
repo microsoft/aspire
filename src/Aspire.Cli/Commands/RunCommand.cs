@@ -222,11 +222,6 @@ internal sealed class RunCommand : BaseCommand
                 s_detachOption,
                 RootCommand.StartDebugSessionOption,
                 RootCommand.NonInteractiveOption);
-            AppHostLauncher.InsertInferredIsolatedOption(
-                debugSessionArguments,
-                AppHostLauncher.GetExplicitIsolated(parseResult),
-                passedAppHostProjectFile?.FullName ?? ExecutionContext.WorkingDirectory.FullName);
-
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
             await extensionInteractionService.StartDebugSessionAsync(
                 ExecutionContext.WorkingDirectory.FullName,
@@ -278,7 +273,7 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
-            var isolated = AppHostLauncher.ResolveIsolated(parseResult, effectiveAppHostFile.FullName);
+            var isolated = AppHostLauncher.ResolveIsolated(parseResult);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Resolve the language for this file and get the appropriate handler

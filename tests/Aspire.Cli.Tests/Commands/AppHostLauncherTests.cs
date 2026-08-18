@@ -55,23 +55,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void InsertInferredIsolatedOption_InsertsAtForwardingBoundary()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        TestGitWorktree.WriteLinkedWorktreeMetadata(
-            workspace.WorkspaceRoot.FullName,
-            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
-        var arguments = new ForwardedArguments(["--debug", "--", "--isolated"], optionCount: 1);
-
-        AppHostLauncher.InsertInferredIsolatedOption(
-            arguments,
-            explicitIsolated: null,
-            workspace.WorkspaceRoot.FullName);
-
-        Assert.Equal(["--debug", "--isolated", "--", "--isolated"], arguments.Tokens);
-    }
-
-    [Fact]
     public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
     {
         var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");

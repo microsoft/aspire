@@ -1037,12 +1037,14 @@ function waitForCliFallbackAndLaunchInvocations(
             ? commandLineArgumentEquals(argument, expectedRunInvocation[index])
             : argument === expectedRunInvocation[index]));
 
-    const configInfoIndex = invocations.findIndex(invocation =>
-        JSON.stringify(invocation) === JSON.stringify(['config', 'info', '--json', '--nologo']));
-    assert.ok(configInfoIndex >= 0, `Expected tokenless capability negotiation before launch: ${JSON.stringify(invocations)}.`);
-    const versionFallbackIndex = invocations.findIndex(
-        (invocation, index) => index > configInfoIndex && JSON.stringify(invocation) === JSON.stringify(['--version']));
-    assert.ok(versionFallbackIndex > configInfoIndex, `Expected stable 13.2 version fallback after tokenless config info: ${JSON.stringify(invocations)}.`);
+    if (expectRootIsolation) {
+        const configInfoIndex = invocations.findIndex(invocation =>
+            JSON.stringify(invocation) === JSON.stringify(['config', 'info', '--json', '--nologo']));
+        assert.ok(configInfoIndex >= 0, `Expected tokenless capability negotiation before launch: ${JSON.stringify(invocations)}.`);
+        const versionFallbackIndex = invocations.findIndex(
+            (invocation, index) => index > configInfoIndex && JSON.stringify(invocation) === JSON.stringify(['--version']));
+        assert.ok(versionFallbackIndex > configInfoIndex, `Expected stable 13.2 version fallback after tokenless config info: ${JSON.stringify(invocations)}.`);
+    }
 
     return invocations;
 }

@@ -3707,7 +3707,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenRunningInExtensionInLinkedWorktree_InsertsInferredIsolatedBeforeAppHostArguments()
+    public async Task RunCommand_WhenRunningInExtensionInLinkedWorktree_DoesNotInferIsolation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestGitWorktree.WriteLinkedWorktreeMetadata(
@@ -3731,7 +3731,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(options);
         Assert.NotNull(options.Args);
-        Assert.Equal(["--debug", "--isolated", "--", "--custom-arg", "value"], options.Args);
+        Assert.Equal(["--debug", "--", "--custom-arg", "value"], options.Args);
     }
 
     [Fact]
@@ -3759,13 +3759,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(options);
         Assert.NotNull(options.Args);
-        Assert.Equal(["--debug", "--isolated", "--", "--secret", "value"], options.Args);
+        Assert.Equal(["--debug", "--", "--secret", "value"], options.Args);
 
         var childParseResult = command.Parse(["run", .. options.Args]);
 
         Assert.Empty(childParseResult.Errors);
         Assert.True(childParseResult.GetValue(RootCommand.DebugOption));
-        Assert.True(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));
+        Assert.False(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));
         Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
     }
 

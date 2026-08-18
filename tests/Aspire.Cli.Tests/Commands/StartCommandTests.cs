@@ -393,7 +393,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartCommand_WhenRunningInExtensionInLinkedWorktree_ForwardsInferredIsolation()
+    public async Task StartCommand_WhenRunningInExtensionInLinkedWorktree_DoesNotInferIsolation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestGitWorktree.WriteLinkedWorktreeMetadata(
@@ -411,7 +411,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.NotNull(options);
         Assert.NotNull(options.Args);
-        Assert.Equal(["--isolated"], options.Args);
+        Assert.Empty(options.Args);
     }
 
     [Fact]
@@ -489,7 +489,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveIsolated_LinkedWorktree_InfersIsolated()
+    public void ResolveIsolated_LinkedWorktree_RequiresExplicitIsolation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestGitWorktree.WriteLinkedWorktreeMetadata(
@@ -500,12 +500,12 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), workspace.WorkspaceRoot.FullName));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start")));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run")));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false")));
     }
 
     [Theory]
@@ -532,12 +532,12 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start"), workspace.WorkspaceRoot.FullName));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated"), workspace.WorkspaceRoot.FullName));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false"), workspace.WorkspaceRoot.FullName));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run"), workspace.WorkspaceRoot.FullName));
-        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated"), workspace.WorkspaceRoot.FullName));
-        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false"), workspace.WorkspaceRoot.FullName));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start")));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("start --isolated false")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run")));
+        Assert.True(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated")));
+        Assert.False(AppHostLauncher.ResolveIsolated(command.Parse("run --isolated false")));
     }
 
     private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)
