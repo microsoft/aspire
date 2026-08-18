@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-#if ASPIRE_WASM_DEBUGGER_ENABLED
 using System.Text.Json;
-#endif
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
@@ -71,7 +69,6 @@ public static class BlazorHostedExtensions
         return host;
     }
 
-#if ASPIRE_WASM_DEBUGGER_ENABLED
     /// <summary>
     /// Configures the browser launched when starting a debug session for the hosted Blazor WebAssembly client.
     /// The value is read when the debugger is registered on the first <see cref="ProxyBlazorService"/> or
@@ -89,7 +86,6 @@ public static class BlazorHostedExtensions
 
         return host;
     }
-#endif
 
     private static void EnsureEnvironmentCallback(
         IResourceBuilder<ProjectResource> host,
@@ -102,7 +98,6 @@ public static class BlazorHostedExtensions
 
         annotation.IsInitialized = true;
 
-#if ASPIRE_WASM_DEBUGGER_ENABLED
         // Register "Debug in Browser" for the hosted WASM client automatically (idempotent).
         if (!host.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -120,7 +115,6 @@ public static class BlazorHostedExtensions
                 }
             }
         }
-#endif
 
         host.WithEnvironment(context =>
         {
@@ -178,7 +172,6 @@ public static class BlazorHostedExtensions
         return endpoint.Exists ? endpoint : null;
     }
 
-#if ASPIRE_WASM_DEBUGGER_ENABLED
     /// <summary>
     /// Resolves the Blazor WebAssembly client project path from the server project's references.
     /// The server project target asks each evaluated project reference whether it is a
@@ -249,7 +242,6 @@ public static class BlazorHostedExtensions
             relativePath,
             browser: browser);
     }
-#endif
 }
 
 /// <summary>
@@ -261,9 +253,7 @@ internal sealed class HostedClientAnnotation : IResourceAnnotation
     public bool ProxyBlazorTelemetry { get; set; }
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
-#if ASPIRE_WASM_DEBUGGER_ENABLED
     public string DebuggerBrowser { get; set; } = "msedge";
-#endif
 }
 
 /// <summary>

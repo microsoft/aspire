@@ -17,7 +17,7 @@
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
-    <AspireProjectOrPackageReference Include="Aspire.Hosting.Blazor" AdditionalProperties="AspireWasmDebuggerEnabled=true" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Blazor" />
   </ItemGroup>
 
   <ItemGroup>

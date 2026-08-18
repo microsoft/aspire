@@ -237,7 +237,6 @@ public static class BlazorGatewayExtensions
 
         gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
-#if ASPIRE_WASM_DEBUGGER_ENABLED
         // Register browser debugging support: create a hidden child debugger resource
         // parented to the gateway, and a "Debug in Browser" command on the WASM app resource.
         if (!gateway.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -250,12 +249,10 @@ public static class BlazorGatewayExtensions
                 relativePath: pathPrefix,
                 browser: wasmApp.Resource.DebuggerBrowser);
         }
-#endif
 
         return gateway;
     }
 
-#if ASPIRE_WASM_DEBUGGER_ENABLED
     /// <summary>
     /// Configures the browser launched when starting a debug session for the Blazor WebAssembly app.
     /// The value is read when the debugger is registered on the gateway, so call this before
@@ -273,7 +270,6 @@ public static class BlazorGatewayExtensions
         wasmApp.Resource.DebuggerBrowser = browser;
         return wasmApp;
     }
-#endif
 
     /// <summary>
     /// Attaches a Blazor WebAssembly app to a Gateway project resource at the given path prefix.
