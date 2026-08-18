@@ -779,7 +779,7 @@ suite('AspireDebugConfigurationProvider', () => {
     });
 
     test('resolveDebugConfiguration resolves CLI availability with the supplied workspace folder target', async () => {
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         const folder = createWorkspaceFolder('/repo');
         const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/repo/bin/aspire', available: true, source: 'configured' });
 
@@ -798,7 +798,7 @@ suite('AspireDebugConfigurationProvider', () => {
         const folderA = createWorkspaceFolder(path.join(tempDir, 'workspace-a'));
         const folderB = createWorkspaceFolder(path.join(tempDir, 'workspace-b'));
         const programPath = path.join(folderB.uri.fsPath, 'AppHost.csproj');
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(programPath), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService(programPath), launchReservation);
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
             if (uri.fsPath.startsWith(folderA.uri.fsPath)) {
                 return folderA;
@@ -823,7 +823,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
     test('resolveDebugConfiguration uses the supplied folder while program variables are unresolved', async () => {
         const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         const getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder');
         const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/workspace/bin/aspire', available: true, source: 'configured' });
 
@@ -840,7 +840,7 @@ suite('AspireDebugConfigurationProvider', () => {
     });
 
     test('resolveDebugConfiguration resolves CLI availability with the window target when no folder is supplied', async () => {
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
 
         const config = await provider.resolveDebugConfiguration(undefined, {
@@ -855,7 +855,7 @@ suite('AspireDebugConfigurationProvider', () => {
     });
 
     test('preserves the CLI path selected by a normal launch availability gate', async () => {
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
             cliPath: '/verified/aspire',
             available: true,
@@ -881,7 +881,7 @@ suite('AspireDebugConfigurationProvider', () => {
         const folderA = createWorkspaceFolder(path.join(tempDir, 'workspace-a'));
         const folderB = createWorkspaceFolder(path.join(tempDir, 'workspace-b'));
         const programPath = path.join(folderB.uri.fsPath, 'AppHost.java');
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(programPath), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService(programPath), launchReservation);
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
             if (uri.fsPath.startsWith(folderA.uri.fsPath)) {
                 return folderA;
@@ -935,7 +935,7 @@ suite('AspireDebugConfigurationProvider', () => {
     });
 
     test('removes a resolved CLI path injected by a launch configuration', async () => {
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
 
         const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
             name: 'Debug AppHost',
@@ -950,7 +950,7 @@ suite('AspireDebugConfigurationProvider', () => {
     });
 
     test('preserves the resolved CLI path on an extension-owned launch', async () => {
-        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const provider = createProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         const initialConfig = {
             name: 'Debug AppHost',
             type: 'aspire',
