@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "HTTP resource commands no longer fail after 100 seconds due to the default HttpClient timeout. Commands invoked without a named HTTP client now run until they complete or the command cancellation token is cancelled.",
-  "docsPrs": [],
+  "docsPrs": [
+    1515
+  ],
   "docsRequired": false,
   "emoji": "⏱️",
   "firstMergedAt": "2026-08-06T02:35:29Z",

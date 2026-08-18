@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #18986 (HTTP command timeout behavior)",
+  "mergedAt": "2026-08-18T08:13:08Z",
+  "number": 1515,
+  "runDate": "2026-08-18T12:11:43Z",
+  "status": "included",
+  "title": "[docs] Document HTTP command timeout behavior"
+}

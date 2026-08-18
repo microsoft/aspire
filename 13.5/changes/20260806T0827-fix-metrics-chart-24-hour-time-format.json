@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "The metrics chart now respects the dashboard's configured time format preference. When 24-hour time is selected, chart axis labels use 24-hour format consistently with the rest of the dashboard.",
-  "docsPrs": [],
+  "docsPrs": [
+    1521
+  ],
   "docsRequired": true,
   "emoji": "🕐",
   "firstMergedAt": "2026-08-06T08:27:41Z",
