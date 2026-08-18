@@ -28,6 +28,9 @@ public sealed class ProcessInvocationOptionsTests
             IsolateConsole = true,
             KillOnParentExit = true,
             Detached = true,
+            // Internal properties are included below, so they need non-default values too.
+            DetachedUnixLauncherPathOverride = "detached-launcher-override",
+            AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
@@ -54,6 +57,8 @@ public sealed class ProcessInvocationOptionsTests
 
     private static IEnumerable<PropertyInfo> GetSettableProperties() =>
         typeof(ProcessInvocationOptions)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            // NonPublic is included so internal options — such as the redaction boundary carried for
+            // direct AppHost launches — are held to the same Clone() coverage as public ones.
+            .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Where(p => p is { CanRead: true, CanWrite: true });
 }

@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -98,6 +98,12 @@ export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
     updatedAt: string;
+    /**
+     * Identifies the E2E run whose extension host produced this file. The state and control files
+     * live at a stable per-shard path, so an extension host left behind by an earlier run can still
+     * be polling them. Readers compare this against their own run id to ignore a foreign writer.
+     */
+    runId?: string;
     state: AspireExtensionStateSnapshot;
     dashboardUrl?: string;
     commandInvocations: readonly AspireExtensionE2ECommandInvocation[];
@@ -167,6 +173,12 @@ export interface AspireExtensionE2EControlStatus {
 
 export interface AspireExtensionE2EControlPayload {
     revision: number;
+    /**
+     * Addresses this payload to a single E2E run. `revision` alone cannot do that: it restarts at 0
+     * in every test process while a freshly launched extension host starts at -1, so a host left
+     * behind by an earlier run would accept another run's commands.
+     */
+    runId?: string;
     aspireCliExecutablePath?: string;
     e2eCliExecutablePath?: string | null;
     forceCliUnavailable?: boolean;
@@ -207,6 +219,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'setSourceBreakpoint'; filePath: string; line: number; clearExisting?: boolean }
     | { name: 'clearBreakpoints' }
     | { name: 'getBreakpoints' }
+    | { name: 'startDebugging'; configurationName: string }
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
@@ -223,10 +236,25 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
+    | { name: 'setWorkspaceFolders'; folders: readonly { folderPath: string; name?: string }[] }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
+    | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
+    | { name: 'runAspireCli'; args: readonly string[]; workingDirectory: string; timeoutMs?: number }
     | { name: 'getResourceDebuggerExtensions' }
-    | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
-    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; timeoutMs?: number }
+    | { name: 'getSupportedCapabilities' }
+    | { name: 'getVisibleExtensionIds' }
+    | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
+    | {
+        name: 'createResourceDebugConfiguration';
+        launchConfig: ExecutableLaunchConfiguration;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        debug?: boolean;
+        isApphost?: boolean;
+        debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
+        environmentKeys?: readonly string[];
+    }
+    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

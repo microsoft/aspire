@@ -208,6 +208,116 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LaunchDetachedAsync_ExplicitFalseFromLinkedWorktree_ForwardsFalse()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.SetLinkedWorktree();
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(["--isolated", "false"], harness.ProcessFactory.CreatedArguments!.TakeLast(2));
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_OmittedFromLinkedWorktree_DoesNotInferIsolation()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.SetLinkedWorktree();
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_ExplicitTrue_ForwardsFlag()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: true,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal("--isolated", harness.ProcessFactory.CreatedArguments![^1]);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_OmittedFromPrimaryCheckout_DoesNotForwardOption()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
+    }
+
+    [Fact]
     public async Task LaunchDetachedAsync_DeletesDeadPidSocketBeforeStartingChildProcess()
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
@@ -1046,6 +1156,13 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             Monitor.AddConnection(hash, $"{socketPrefix}.sock", connection);
         }
 
+        public void SetLinkedWorktree()
+        {
+            TestGitWorktree.WriteLinkedWorktreeMetadata(
+                _workspace.WorkspaceRoot.FullName,
+                Path.Combine(_workspace.WorkspaceRoot.FullName, "common", ".git"));
+        }
+
         public string CreateMatchingSocketFile(int pid)
         {
             var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
@@ -1086,6 +1203,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public Process? StartedProcess { get; private set; }
 
         private TestDetachedProcessExecution? CreatedExecution { get; set; }
+
+        public IReadOnlyList<string>? CreatedArguments => CreatedExecution?.Arguments;
 
         public int CreatedExecutionDisposeCount => CreatedExecution?.DisposeCount ?? 0;
 

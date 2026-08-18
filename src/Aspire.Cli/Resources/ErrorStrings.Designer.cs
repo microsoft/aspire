@@ -488,5 +488,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The integration project could not be built..
+        /// </summary>
+        public static string IntegrationBuildFailed {
+            get {
+                return ResourceManager.GetString("IntegrationBuildFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects..
+        /// </summary>
+        public static string IntegrationBuildPackageDowngradeFailed {
+            get {
+                return ResourceManager.GetString("IntegrationBuildPackageDowngradeFailed", resourceCulture);
+            }
+        }
     }
 }

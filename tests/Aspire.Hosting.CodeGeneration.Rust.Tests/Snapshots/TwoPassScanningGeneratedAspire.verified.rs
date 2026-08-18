@@ -1188,6 +1188,8 @@ impl InteractionInputsDialogOptions {
 /// InteractionProgressOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InteractionProgressOptions {
+    #[serde(rename = "Title", skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
     pub primary_button_text: Option<String>,
     #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
@@ -1199,6 +1201,9 @@ pub struct InteractionProgressOptions {
 impl InteractionProgressOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
+        if let Some(ref v) = self.title {
+            map.insert("Title".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.primary_button_text {
             map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
@@ -12181,13 +12186,10 @@ impl IInteractionService {
     }
 
     /// Displays a progress dialog with an indeterminate progress indicator.
-    pub fn prompt_progress(&self, message: &str, title: Option<&str>, options: Option<InteractionProgressOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
+    pub fn prompt_progress(&self, message: &str, options: Option<InteractionProgressOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
         args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
-        if let Some(ref v) = title {
-            args.insert("title".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
         if let Some(ref v) = options {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }

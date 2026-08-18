@@ -186,9 +186,7 @@ export class AppHostLaunchReservations implements vscode.Disposable {
                 return false;
             }
         }
-
         const key = getAppHostPathComparisonKey(appHostPath);
-        this.cancelExternalReservationExpiry(key);
         const reservationId = String(++this._nextLaunchReservationId);
         this._launchReservationIds.set(key, reservationId);
         this.recordLatestLaunchReservation(appHostPath, reservationId);
@@ -199,6 +197,34 @@ export class AppHostLaunchReservations implements vscode.Disposable {
             this._launchingPaths.add(key);
             this._onDidChangeLaunchingState.fire();
         }
+        this.scheduleExternalReservationExpiry(key, reservationId);
+        return reservationId;
+    }
+
+    /**
+     * Atomically validates a repeated resolver pass against the reservation generation it
+     * received. A live pending reservation keeps its ID and gets a fresh expiry window. An
+     * expired reservation may reacquire with a new ID, but an ID mismatch means a newer
+     * owner won and must not be replaced or released by the stale resolver pass.
+     */
+    validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope = false): string | false {
+        const key = getAppHostPathComparisonKey(appHostPath);
+        const ownsCurrentReservation = this._launchingPaths.has(key) &&
+            this._launchReservationIds.get(key) === reservationId &&
+            !this._lifecycleLaunchClaims.has(key) &&
+            this._externalDirectoryLaunchReservations.has(key) === isDirectoryScope;
+        if (ownsCurrentReservation) {
+            if (this._externalReservationExpiries.has(key)) {
+                this.scheduleExternalReservationExpiry(key, reservationId);
+            }
+            return reservationId;
+        }
+
+        return this.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
+    }
+
+    private scheduleExternalReservationExpiry(key: string, reservationId: string): void {
+        this.cancelExternalReservationExpiry(key);
         const expiry = setTimeout(() => {
             // Only expire while this timer is still the registered one for the key. Another
             // reservation arriving in the meantime cancels this timer, so reaching here means
@@ -214,7 +240,6 @@ export class AppHostLaunchReservations implements vscode.Disposable {
         // A reservation must never be a reason for the host process to stay alive.
         expiry.unref?.();
         this._externalReservationExpiries.set(key, expiry);
-        return reservationId;
     }
 
     /**

@@ -59,6 +59,7 @@
     <Project Path="src/Aspire.Hosting.GitHub.Models/Aspire.Hosting.GitHub.Models.csproj" />
     <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
     <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
+    <Project Path="src/Aspire.Hosting.Java/Aspire.Hosting.Java.csproj" />
     <Project Path="src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
     <Project Path="src/Aspire.Hosting.Kafka/Aspire.Hosting.Kafka.csproj" />
     <Project Path="src/Aspire.Hosting.Keycloak/Aspire.Hosting.Keycloak.csproj" />
@@ -368,6 +369,15 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/JavaSpringBoot/">
+    <Project Path="playground/JavaSpringBoot/JavaSpringBoot.AppHost/JavaSpringBoot.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/JavaQuarkus/">
+    <Project Path="playground/JavaQuarkus/JavaQuarkus.AppHost/JavaQuarkus.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/JavaSwing/">
+    <Project Path="playground/JavaSwing/JavaSwing.AppHost/JavaSwing.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/rust/">
     <Project Path="playground/rust/Rust.AppHost/Rust.AppHost.csproj" />
   </Folder>
@@ -538,6 +548,7 @@
     <Project Path="tests/Aspire.Hosting.Garnet.Tests/Aspire.Hosting.Garnet.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.GitHub.Models.Tests/Aspire.Hosting.GitHub.Models.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Java.Tests/Aspire.Hosting.Java.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Kafka.Tests/Aspire.Hosting.Kafka.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Keycloak.Tests/Aspire.Hosting.Keycloak.Tests.csproj" />

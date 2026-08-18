@@ -72,6 +72,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly ProfileCaptureState _profileCaptureState;
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
@@ -131,6 +132,7 @@ internal sealed class RunCommand : BaseCommand
         FileLoggerProvider fileLoggerProvider,
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
+        ProfileCaptureState profileCaptureState,
         TimeProvider timeProvider,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
@@ -147,6 +149,7 @@ internal sealed class RunCommand : BaseCommand
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
+        _profileCaptureState = profileCaptureState;
         _timeProvider = timeProvider;
 
         Options.Add(s_detachOption);
@@ -162,7 +165,6 @@ internal sealed class RunCommand : BaseCommand
         var detach = parseResult.GetValue(s_detachOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var captureProfileDelay = TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption));
@@ -212,8 +214,26 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
+            var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
+                parseResult,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                s_detachOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                startDebugSession,
+                new DebugSessionOptions
+                {
+                    Command = "run",
+                    Args = [.. debugSessionArguments.Tokens]
+                });
+            _profileCaptureState.MarkTransferred();
+
             return CommandResult.Success();
         }
 
@@ -229,7 +249,6 @@ internal sealed class RunCommand : BaseCommand
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             using var activity = _profilingTelemetry.StartRunCommand();
 
@@ -253,6 +272,9 @@ internal sealed class RunCommand : BaseCommand
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
+
+            var isolated = AppHostLauncher.ResolveIsolated(parseResult);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Resolve the language for this file and get the appropriate handler
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);
@@ -1169,11 +1191,12 @@ internal sealed class RunCommand : BaseCommand
     private Task<CommandResult> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var isolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var appHostArgs = parseResult.UnmatchedTokens;
+        var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -1182,6 +1205,12 @@ internal sealed class RunCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (appHostArgs.Count > 0)
+        {
+            additionalArgs.Add("--");
+            additionalArgs.AddRange(appHostArgs);
         }
 
         return _appHostLauncher.LaunchDetachedAsync(

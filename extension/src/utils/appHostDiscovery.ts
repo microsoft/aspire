@@ -13,6 +13,7 @@ import { sendTelemetryEvent } from './telemetry';
 import { isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 import { ConfigInfoProvider } from './configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
+import { workspaceFolderCliPathTarget } from './cliPathVariables';
 import { isSamePath } from './paths/comparison';
 import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
 import { createLsStreamCandidateHandler, parseCandidateOutput, parseLegacyGetAppHostsOutput, toCandidatesFromLegacySearchResult } from './appHostCandidateParsing';
@@ -277,8 +278,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken, forceRefresh: boolean): Promise<AppHostDiscoveryResult> {
         let cliPath: string | undefined;
         try {
-            cliPath = await this._getAspireCliExecutablePath(cancellationToken);
-            const lsJsonStreamSupported = await this._resolveLsStreamCapability(cliPath, forceRefresh);
+            cliPath = await this._getAspireCliExecutablePath(workspaceFolder, cancellationToken);
+            const lsJsonStreamSupported = await this._resolveLsStreamCapability(cliPath, workspaceFolder, forceRefresh);
             let appHosts: CandidateAppHostDisplayInfo[];
             if (lsJsonStreamSupported) {
                 try {
@@ -374,10 +375,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return toCandidatesFromLegacySearchResult(parsed);
     }
 
-    private _getAspireCliExecutablePath(cancellationToken: vscode.CancellationToken): Promise<string> {
+    private _getAspireCliExecutablePath(workspaceFolder: vscode.WorkspaceFolder, cancellationToken: vscode.CancellationToken): Promise<string> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
 
+        const target = workspaceFolderCliPathTarget(workspaceFolder);
         return new Promise<string>((resolve, reject) => {
             let settled = false;
             let cancellationDisposable: vscode.Disposable | undefined;
@@ -407,7 +409,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             try {
-                this._terminalProvider.getAspireCliExecutablePath().then(
+                this._terminalProvider.getAspireCliExecutablePath(target).then(
                     cliPath => settle(() => resolve(cliPath)),
                     error => settle(() => reject(error instanceof Error ? error : new Error(String(error)))));
             }
@@ -417,11 +419,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         });
     }
 
-    private async _resolveLsStreamCapability(cliPath: string, forceRefresh: boolean): Promise<boolean> {
+    private async _resolveLsStreamCapability(cliPath: string, workspaceFolder: vscode.WorkspaceFolder, forceRefresh: boolean): Promise<boolean> {
         const configInfo = await this._configInfoProvider.getConfigInfo({
             suppressErrors: true,
             forceRefresh,
             cliPath,
+            target: workspaceFolderCliPathTarget(workspaceFolder),
         });
         const supported = configInfo?.capabilities?.includes(lsJsonStreamCapability) ?? false;
         extensionLogOutputChannel.info(`CLI capability '${lsJsonStreamCapability}' ${supported ? 'advertised' : 'not advertised'}; aspire ls --stream ${supported ? 'enabled' : 'disabled'}.`);
@@ -476,6 +479,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             '**/apphost.mjs',
             '**/apphost.cjs',
             '**/apphost.rs',
+            // Java requires the file name to match the public class name, so this is always
+            // AppHost.java. Watcher globs are case-sensitive on Linux, so the pattern has to
+            // carry the real casing rather than the lowercase form used by the other entries.
+            '**/AppHost.java',
             `**/${aspireConfigFileName}`,
             '**/.aspire/settings.json',
         ];
@@ -630,7 +637,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             const cancel = (error: Error) => {
                 settle(() => reject(error));
                 if (childProcess) {
-                    terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`);
+                    void terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`).catch(terminationError => {
+                        extensionLogOutputChannel.error(`Failed to terminate AppHost discovery command: ${String(terminationError)}`);
+                    });
                 }
             };
             const cleanup = () => {

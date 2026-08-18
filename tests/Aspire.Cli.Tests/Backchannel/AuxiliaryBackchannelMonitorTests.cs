@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -60,5 +61,75 @@ public class AuxiliaryBackchannelMonitorTests
     {
         Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(null, Path.GetTempPath()));
         Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(string.Empty, Path.GetTempPath()));
+    }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_NestedLinkedWorktree_IsNotInScopeOfPrimary()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-worktree-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+            TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
+
+            var primaryAppHost = Path.Combine(primaryRoot, "AppHost.csproj");
+            var nestedAppHost = Path.Combine(worktreeRoot, "AppHost.csproj");
+
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, primaryRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, primaryRoot));
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, worktreeRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(primaryAppHost, worktreeRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_Submodule_IsInScopeOfPrimary()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-submodule-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var submoduleRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, "extern", "dep")).FullName;
+            TestGitWorktree.WriteGitDirFile(
+                submoduleRoot,
+                Path.Combine(primaryRoot, ".git", "modules", "dep"));
+
+            var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, primaryRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsAppHostInScopeOfDirectory_SubmoduleInsideLinkedWorktree_UsesEnclosingWorktree()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-scope-linked-submodule-");
+        try
+        {
+            var primaryRoot = tempRoot.FullName;
+            Directory.CreateDirectory(Path.Combine(primaryRoot, ".git"));
+            var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+            var adminDirectory = TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
+            var submoduleRoot = Directory.CreateDirectory(Path.Combine(worktreeRoot, "extern", "dep")).FullName;
+            TestGitWorktree.WriteGitDirFile(submoduleRoot, Path.Combine(adminDirectory, "modules", "dep"));
+            var submoduleAppHost = Path.Combine(submoduleRoot, "AppHost.csproj");
+
+            Assert.True(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, worktreeRoot));
+            Assert.False(AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(submoduleAppHost, primaryRoot));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
     }
 }

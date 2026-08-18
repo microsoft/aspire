@@ -1040,6 +1040,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(
                 ["--from-msbuild", "two words", "--explicit", "1"],
                 args);
+            // The direct command line carries no "--" separator, so the boundary between the
+            // MSBuild-supplied arguments and the user's AppHost arguments travels in the options
+            // and is what keeps "--explicit 1" out of logs and traces.
+            Assert.Equal(2, options.AppHostArgumentStartIndex);
+            Assert.Equal(
+                "--from-msbuild two words <redacted> <redacted>",
+                AppHostArgumentRedactor.RedactFromToString(args, options.AppHostArgumentStartIndex!.Value));
             Assert.NotNull(env);
             Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);

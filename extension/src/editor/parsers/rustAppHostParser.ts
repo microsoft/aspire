@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
 import { initializeTreeSitter, resolveBundledWasmAssetPath } from './treeSitter';
-import { visit } from './treeSitterHelpers';
+import { isInInactiveNode, visit } from './treeSitterHelpers';
 
 /**
  * Rust AppHost resource parser.
@@ -65,6 +65,15 @@ class RustAppHostParser implements AppHostResourceParser {
             const builderCall = findCall(tree.rootNode, isCreateBuilderCall);
             return builderCall ? findContainingStatementStartLine(builderCall) : undefined;
         });
+    }
+
+    async filterActiveOffsets(document: vscode.TextDocument, offsets: readonly number[]): Promise<number[]> {
+        if (offsets.length === 0) {
+            return [];
+        }
+
+        return await withRustTree(document.getText(), tree =>
+            offsets.filter(offset => !isInInactiveNode(tree.rootNode, offset)));
     }
 }
 

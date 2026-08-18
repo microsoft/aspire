@@ -86,6 +86,7 @@ export interface QuickPickItem {
 export interface Notification {
     getMessage(): Promise<string>;
     dismiss(): Promise<void>;
+    takeAction(title: string): Promise<void>;
 }
 
 export interface ModalDialog {
@@ -101,9 +102,18 @@ export interface TerminalView {
     getText(): Promise<string>;
 }
 
+export interface CodeLens {
+    getText(): Promise<string>;
+}
+
+export interface TextEditor {
+    getCodeLenses(): Promise<CodeLens[]>;
+}
+
 export interface EditorView {
     getOpenEditorTitles(): Promise<string[]>;
     closeAllEditors(): Promise<void>;
+    openEditor(title: string): Promise<TextEditor>;
 }
 
 export interface WebView {

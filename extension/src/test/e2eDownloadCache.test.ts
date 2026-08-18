@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { execFileSync, spawn } from 'child_process';
 import * as path from 'path';
 
+import { removeDirectorySafely } from './testHelpers';
 const extensionRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(extensionRoot, '..');
 const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'e2e-download-cache-tests');
@@ -582,7 +583,7 @@ suite('E2E download cache', () => {
         while (createdTestRoots.length > 0) {
             const root = createdTestRoots.pop();
             if (root) {
-                fs.rmSync(root, { recursive: true, force: true });
+                removeDirectorySafely(root);
             }
         }
     });

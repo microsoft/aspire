@@ -160,7 +160,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                     options.Link = new()
                     {
                         Text = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
-                        Href = "https://aka.ms/aspire/api-endpoint-unsecured",
+                        Href = "https://aspire.dev/dashboard/security-considerations/",
                         Target = "_blank"
                     };
                     options.Intent = MessageIntent.Warning;

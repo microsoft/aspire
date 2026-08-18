@@ -600,6 +600,7 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 
 // InteractionProgressOptions represents InteractionProgressOptions.
 type InteractionProgressOptions struct {
+	Title *string `json:"Title,omitempty"`
 	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
 	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
 	Work func(arg ProgressContext) `json:"Work,omitempty"`
@@ -608,6 +609,7 @@ type InteractionProgressOptions struct {
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *InteractionProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
+	if d.Title != nil { m["Title"] = serializeValue(d.Title) }
 	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
 	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
 	if d.Work != nil {
@@ -29319,7 +29321,6 @@ func (o *PromptNotificationOptions) ToMap() map[string]any {
 
 // PromptProgressOptions carries optional parameters for PromptProgress.
 type PromptProgressOptions struct {
-	Title *string `json:"title,omitempty"`
 	Options *InteractionProgressOptions `json:"options,omitempty"`
 	CancellationToken *CancellationToken `json:"-"`
 }
@@ -29327,7 +29328,6 @@ type PromptProgressOptions struct {
 func (o *PromptProgressOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	if o.Title != nil { m["title"] = serializeValue(o.Title) }
 	if o.Options != nil { m["options"] = serializeValue(o.Options) }
 	return m
 }

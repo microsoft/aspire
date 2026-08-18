@@ -508,6 +508,8 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 }
 ```
 
+The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
+
 ## MCP tooling
 
 ### `aspire mcp tools`
