@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents language hosting packages decoupled from Aspire.Hosting internals (PR #18918)",
+  "mergedAt": "2026-08-18T14:03:44Z",
+  "number": 1511,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document new experimental APIs from Aspire.Hosting.Dotnet decoupling (ASPIREPROJECTS001)"
+}

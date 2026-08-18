@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents CLI bundle resolution fix (backport PR #19364)",
+  "mergedAt": "2026-08-18T13:09:10Z",
+  "number": 1496,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document automatic CLI bundle setup recovery"
+}

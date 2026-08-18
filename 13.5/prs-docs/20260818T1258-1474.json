@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents AKS persistent volume support (PR #19264)",
+  "mergedAt": "2026-08-18T12:58:44Z",
+  "number": 1474,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document AddPersistentVolume on AKS environments"
+}

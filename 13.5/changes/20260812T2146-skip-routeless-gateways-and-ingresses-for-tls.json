@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": true,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "`aspire deploy` no longer hangs for ~15 minutes waiting on a Kubernetes Gateway or Ingress that was intentionally skipped for having no routes, and no longer emits a dangling cert-manager `parentRef` or orphaned TLS secret for it; a warning now names what was omitted.",
-  "docsPrs": [],
-  "docsRequired": false,
-  "emoji": "🚦",
+  "docsPrs": [
+    1470
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udea6",
   "firstMergedAt": "2026-08-12T21:46:34Z",
   "lastMergedAt": "2026-08-12T21:46:34Z",
   "name": "Fixed deploy hang on route-less Gateways and Ingresses",

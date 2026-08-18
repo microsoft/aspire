@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents DNX tool manifest support (PR #19315)",
+  "mergedAt": "2026-08-18T13:08:15Z",
+  "number": 1484,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document AspireCliInvocationMode for dotnet run DNX invocation"
+}

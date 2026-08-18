@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents flexible CLI invocation mode with DNX fallback (PR #18850)",
+  "mergedAt": "2026-08-18T13:54:20Z",
+  "number": 1512,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document ASPIRE009/010/011 and restored CLI bundle default"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents fixed mixed-quality staging package discovery (backport PR #19427)",
+  "mergedAt": "2026-08-18T14:11:00Z",
+  "number": 1505,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document mixed-quality staging package discovery in aspire add"
+}

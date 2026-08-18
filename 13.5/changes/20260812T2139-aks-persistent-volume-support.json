@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": true,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "AKS environments now expose `AddPersistentVolume` directly, so workloads targeting AKS can configure and mount persistent storage (backed by an Azure managed disk by default) without reaching into the underlying Kubernetes integration.",
-  "docsPrs": [],
+  "docsPrs": [
+    1474
+  ],
   "docsRequired": true,
-  "emoji": "💾",
+  "emoji": "\ud83d\udcbe",
   "firstMergedAt": "2026-08-12T21:39:43Z",
   "lastMergedAt": "2026-08-12T21:39:43Z",
   "name": "AKS persistent volume support",

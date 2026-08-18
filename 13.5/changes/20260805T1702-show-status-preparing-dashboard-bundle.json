@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "When `aspire dashboard run` takes longer than 200 ms to prepare or extract the dashboard bundle, the CLI now displays a `Preparing dashboard bits...` status message instead of appearing idle.",
-  "docsPrs": [],
-  "docsRequired": false,
-  "emoji": "⏳",
+  "docsPrs": [
+    1508
+  ],
+  "docsRequired": true,
+  "emoji": "\u23f3",
   "firstMergedAt": "2026-08-05T17:02:22Z",
   "lastMergedAt": "2026-08-05T17:02:22Z",
   "name": "Show bundle preparation status in aspire dashboard run",

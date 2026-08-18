@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents PR #17235, merged in a prior milestone; no matching changelog entry",
+  "mergedAt": "2026-08-18T14:20:34Z",
+  "number": 1522,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "excluded",
+  "title": "Document staging channel refusal on daily/local/pr CLI builds"
+}

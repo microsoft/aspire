@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Aspire now supports targeting Azure resources outside the default deployment resource group. You can reference existing resources across subscriptions, resource groups, or at subscription and tenant scope when modeling your Azure infrastructure.",
-  "docsPrs": [],
+  "docsPrs": [
+    1451
+  ],
   "docsRequired": true,
-  "emoji": "🌐",
+  "emoji": "\ud83c\udf10",
   "firstMergedAt": "2026-06-12T16:03:34Z",
   "lastMergedAt": "2026-06-12T16:03:34Z",
   "name": "Azure resource scope support",

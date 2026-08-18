@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents launchUrl/serverReadyAction support (PR #17634)",
+  "mergedAt": "2026-08-18T12:51:19Z",
+  "number": 1459,
+  "runDate": "2026-08-18T18:16:38Z",
+  "status": "included",
+  "title": "[docs] Document project serverReadyAction override in VS Code extension"
+}
