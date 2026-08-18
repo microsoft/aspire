@@ -1575,6 +1575,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             if (directRun is not null)
             {
+                // The direct command line has no "--" separator, so the forwarded-argument boundary
+                // has to be carried alongside it for logging. Clone rather than mutate because the
+                // caller may reuse runOptions for other invocations.
+                var directRunOptions = runOptions.Clone();
+                directRunOptions.AppHostArgumentStartIndex = directRun.AppHostArgumentStartIndex;
+
                 return await _runner.RunAppHostCommandAsync(
                     effectiveAppHostFile,
                     directRun.Command,
@@ -1582,7 +1588,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     directRun.Arguments,
                     directRun.Environment,
                     backchannelCompletionSource,
-                    runOptions,
+                    directRunOptions,
                     cancellationToken);
             }
 
@@ -1813,13 +1819,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         arguments.AddRange(unmatchedTokens);
 
+        // Everything before this index came from MSBuild RunArguments or the launch profile; the
+        // tail is user-supplied AppHost input that can carry connection strings and API keys.
+        var appHostArgumentStartIndex = arguments.Count - unmatchedTokens.Length;
+
         _logger.LogDebug(
             "Launching AppHost directly via {Command} in {WorkingDirectory} with arguments {Arguments}.",
             command,
             workingDirectory.FullName,
-            string.Join(" ", arguments));
+            AppHostArgumentRedactor.RedactFromToString(arguments, appHostArgumentStartIndex));
 
-        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv);
+        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv, appHostArgumentStartIndex);
     }
 
     private async Task<bool> IsDirectLaunchDisabledAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
@@ -2608,5 +2618,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         string Command,
         DirectoryInfo WorkingDirectory,
         string[] Arguments,
-        Dictionary<string, string> Environment);
+        Dictionary<string, string> Environment,
+        int AppHostArgumentStartIndex);
 }

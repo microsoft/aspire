@@ -3,11 +3,15 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
 import { extensionLogOutputChannel } from './logging';
-import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
+import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
 
 const configInfoTimeoutMs = 30_000;
+const cliVersionProbeTimeoutMs = 30_000;
+const maxCliVersionOutputLength = 128;
+const cliVersionPattern = /^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -42,10 +46,39 @@ export async function getConfigInfo(terminalProvider: AspireTerminalProvider): P
     return new ConfigInfoProvider(terminalProvider).getConfigInfo();
 }
 
-interface ConfigInfoOptions {
+export interface ConfigInfoOptions {
     suppressErrors?: boolean;
     forceRefresh?: boolean;
     cliPath?: string;
+    cancellationToken?: vscode.CancellationToken;
+    minimumVersion?: string;
+    /** The resolution scope to use when `cliPath` is not already known. Defaults to the window scope. */
+    target?: CliPathResolutionTarget;
+    /** Internal timeout budget for this config-info invocation. */
+    timeoutMs?: number;
+}
+
+interface CliVersion {
+    major: number;
+    minor: number;
+    patch: number;
+    isPrerelease: boolean;
+}
+
+/**
+ * Working directory for `aspire config info`, chosen from the resolution target.
+ *
+ * The CLI discovers `aspire.config.json` by walking up from its working directory, so the folder it
+ * runs in decides which local settings file the answer describes. Window-scoped callers have no
+ * folder of their own and fall back to the first one, which is the best available guess and matches
+ * how other window-scoped commands behave.
+ */
+function resolveConfigInfoWorkingDirectory(target: CliPathResolutionTarget): string | undefined {
+    if (target.kind === 'workspaceFolder') {
+        return target.workspaceFolder.uri.fsPath;
+    }
+
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
 /**
@@ -54,14 +87,19 @@ interface ConfigInfoOptions {
  * CLI supports: features and capabilities are reported as structured data rather than parsed from
  * (potentially localized) command output.
  *
- * Successful reads and concurrent probes are cached by CLI executable path. This lets callers share
- * one invocation while ensuring that changing `aspire.aspireCliExecutablePath` cannot reuse
- * capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that can't
- * answer, or a transient spawn error, should be retried on the next call.
+ * Successful reads and concurrent probes are cached by CLI executable path and working directory.
+ * This lets callers share one invocation without reusing another workspace folder's local settings
+ * or capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that
+ * can't answer, or a transient spawn error, should be retried on the next call.
+ *
+ * Capability checks can fall back to a minimum CLI version when the token predates structured
+ * capability reporting. Version probes are intentionally not cached: an exact launch must observe
+ * an executable replaced in place rather than reusing stale support data.
  */
 export class ConfigInfoProvider {
     private readonly _cachedConfigInfoByCliPath = new Map<string, ConfigInfo>();
     private readonly _inFlightByCliPath = new Map<string, Promise<ConfigInfo | null>>();
+    private readonly _probeGenerationByCliPath = new Map<string, number>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
@@ -73,56 +111,73 @@ export class ConfigInfoProvider {
      * @param options.suppressErrors When true, failures are logged but not surfaced to the user via
      *   error notifications. Use this for background/best-effort probes (e.g. capability detection)
      *   where a missing or older CLI should degrade silently rather than nag the user.
-     * @param options.forceRefresh When true, bypasses cached and in-flight results for the selected
-     *   CLI path so the executable is queried again.
+     * @param options.forceRefresh When true, runs an invocation-owned probe that bypasses cached
+     *   and shared in-flight work. A failed refresh leaves the last successful cache entry intact.
      * @param options.cliPath The already-resolved CLI executable path. Supplying this guarantees the
      *   probe describes the same executable the caller is about to invoke.
+     * @param options.cancellationToken Cancels this caller's wait. For a force refresh it also
+     *   terminates that invocation-owned CLI process; shared probes continue for other callers.
+     * @param options.target The workspace scope that selects both the CLI and config-info working
+     *   directory. Defaults to the window scope.
      */
     async getConfigInfo(options?: ConfigInfoOptions): Promise<ConfigInfo | null> {
         const suppressErrors = options?.suppressErrors ?? false;
-        const startTime = Date.now();
-        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors);
-        if (!cliPath) {
+        if (options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
 
-        if (options?.forceRefresh) {
-            this._cachedConfigInfoByCliPath.delete(cliPath);
+        const startTime = Date.now();
+        const target = options?.target ?? windowCliPathTarget;
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors, target, options?.cancellationToken);
+        if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
+            return null;
         }
-        else {
-            const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cliPath);
+
+        // `aspire config info` reports the local settings file it discovers from its working
+        // directory, so the answer is per-folder, not per-CLI. Keying the caches by CLI path alone
+        // let one folder's result be served for another in a multi-root workspace - and callers such
+        // as "Open Local Settings" act on `localSettingsPath`, so that opens or creates the wrong file.
+        const workingDirectory = resolveConfigInfoWorkingDirectory(target);
+        const cacheKey = `${cliPath}\u0000${workingDirectory ?? ''}`;
+
+        if (!options?.forceRefresh) {
+            const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cacheKey);
             if (cachedConfigInfo) {
                 return cachedConfigInfo;
             }
         }
 
-        const remainingTimeoutMs = configInfoTimeoutMs - (Date.now() - startTime);
+        const remainingTimeoutMs = (options?.timeoutMs ?? configInfoTimeoutMs) - (Date.now() - startTime);
         if (remainingTimeoutMs <= 0) {
             this._reportTimeout(suppressErrors);
             return null;
         }
 
-        if (!options?.forceRefresh) {
-            const existingProbe = this._inFlightByCliPath.get(cliPath);
-            if (existingProbe) {
-                return await this._awaitProbe(existingProbe, remainingTimeoutMs, suppressErrors);
-            }
-        }
-
-        const probe = this._fetchConfigInfo(cliPath, suppressErrors, remainingTimeoutMs);
-        this._inFlightByCliPath.set(cliPath, probe);
-        try {
-            const result = await probe;
-            if (result && this._inFlightByCliPath.get(cliPath) === probe) {
-                this._cachedConfigInfoByCliPath.set(cliPath, result);
+        if (options?.forceRefresh) {
+            const generation = this._beginProbe(cacheKey);
+            const result = await this._fetchConfigInfo(
+                cliPath,
+                workingDirectory,
+                suppressErrors,
+                remainingTimeoutMs,
+                options.cancellationToken);
+            if (result && this._probeGenerationByCliPath.get(cacheKey) === generation) {
+                this._cachedConfigInfoByCliPath.set(cacheKey, result);
             }
             return result;
         }
-        finally {
-            if (this._inFlightByCliPath.get(cliPath) === probe) {
-                this._inFlightByCliPath.delete(cliPath);
-            }
+
+        const existingProbe = this._inFlightByCliPath.get(cacheKey);
+        if (existingProbe) {
+            return await this._awaitProbe(
+                existingProbe,
+                remainingTimeoutMs,
+                suppressErrors,
+                options?.cancellationToken);
         }
+
+        const probe = this._startSharedProbe(cacheKey, cliPath, workingDirectory, suppressErrors, remainingTimeoutMs);
+        return await this._awaitProbe(probe, undefined, suppressErrors, options?.cancellationToken);
     }
 
     /**
@@ -130,35 +185,227 @@ export class ConfigInfoProvider {
      * tokens are stable, locale-independent identifiers (see {@link ConfigInfo.capabilities}).
      */
     async hasCapability(capability: string, options?: ConfigInfoOptions): Promise<boolean> {
-        const configInfo = await this.getConfigInfo(options);
-        return configInfo?.capabilities?.includes(capability) ?? false;
+        return await this.getCapabilityStatus(capability, options) === 'supported';
     }
 
-    private async _awaitProbe(probe: Promise<ConfigInfo | null>, timeoutMs: number, suppressErrors: boolean): Promise<ConfigInfo | null> {
-        let timeout: ReturnType<typeof setTimeout> | undefined;
-        const timeoutPromise = new Promise<null>(resolve => {
+    /**
+     * Distinguishes a successful probe of an older CLI from a probe that could not complete.
+     * Callers that must honor an explicit capability-dependent choice cannot safely treat both
+     * cases as unsupported.
+     */
+    async getCapabilityStatus(capability: string, options?: ConfigInfoOptions): Promise<CapabilityStatus> {
+        if (!options?.minimumVersion) {
+            const configInfo = await this.getConfigInfo(options);
+            if (!configInfo) {
+                return 'unavailable';
+            }
+
+            return configInfo.capabilities?.includes(capability) ? 'supported' : 'unsupported';
+        }
+
+        const minimumVersion = parseCliVersion(options.minimumVersion);
+        if (!minimumVersion) {
+            extensionLogOutputChannel.warn(`Unable to probe Aspire CLI capability '${capability}': invalid minimum version '${options.minimumVersion}'.`);
+            return 'unavailable';
+        }
+
+        const suppressErrors = options.suppressErrors ?? false;
+        const target = options.target ?? windowCliPathTarget;
+        const cliPath = options.cliPath ?? await this._resolveCliPath(suppressErrors, target, options.cancellationToken);
+        if (!cliPath || options.cancellationToken?.isCancellationRequested) {
+            return 'unavailable';
+        }
+
+        const probeStartTime = Date.now();
+        const probeTimeoutMs = Math.min(options.timeoutMs ?? configInfoTimeoutMs, configInfoTimeoutMs);
+        const configInfo = await this.getConfigInfo({ ...options, cliPath, timeoutMs: probeTimeoutMs });
+        if (configInfo?.capabilities?.includes(capability)) {
+            return 'supported';
+        }
+
+        if (options.cancellationToken?.isCancellationRequested) {
+            return 'unavailable';
+        }
+
+        const remainingTimeoutMs = probeTimeoutMs - (Date.now() - probeStartTime);
+        if (remainingTimeoutMs <= 0) {
+            return 'unavailable';
+        }
+
+        return await this._getCliMinimumVersionStatus(cliPath, minimumVersion, remainingTimeoutMs, options.cancellationToken);
+    }
+
+    private _getCliMinimumVersionStatus(
+        cliPath: string,
+        minimumVersion: CliVersion,
+        timeoutMs: number,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<CapabilityStatus> {
+        return new Promise<CapabilityStatus>((resolve) => {
+            let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let output = '';
+            let outputTooLong = false;
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let cancellation: vscode.Disposable | undefined;
+            const settle = (result: CapabilityStatus) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                cancellation?.dispose();
+                resolve(result);
+            };
+            const reportUnavailable = (error: unknown) => {
+                if (settled) {
+                    return;
+                }
+
+                extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: ${String(error)}`);
+                settle('unavailable');
+            };
+            if (cancellationToken?.isCancellationRequested) {
+                settle('unavailable');
+                return;
+            }
+
             timeout = setTimeout(() => {
-                this._reportTimeout(suppressErrors);
-                resolve(null);
-            }, timeoutMs);
+                settle('unavailable');
+                if (childProcess) {
+                    void terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate timed-out Aspire CLI version probe: ${String(error)}`);
+                    });
+                }
+            }, Math.min(timeoutMs, cliVersionProbeTimeoutMs));
+            cancellation = cancellationToken?.onCancellationRequested(() => {
+                settle('unavailable');
+                if (childProcess) {
+                    void terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate cancelled Aspire CLI version probe: ${String(error)}`);
+                    });
+                }
+            });
+
+            try {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, ['--version'], {
+                    createProcessGroup: true,
+                    stdoutCallback: value => {
+                        if (output.length + value.length > maxCliVersionOutputLength) {
+                            outputTooLong = true;
+                            return;
+                        }
+
+                        output += value;
+                    },
+                    exitCallback: code => {
+                        if (code !== 0 || outputTooLong) {
+                            settle('unavailable');
+                            return;
+                        }
+
+                        const version = parseCliVersion(output);
+                        if (!version) {
+                            settle('unavailable');
+                            return;
+                        }
+
+                        const comparison = compareCliVersions(version, minimumVersion);
+                        // A prerelease at the exact minimum core predates the stable version that
+                        // introduced the option, so treat it as known unsupported. Prerelease/dev
+                        // builds with a higher numeric core remain supported because the feature
+                        // already exists on that later release line.
+                        settle(comparison > 0 || (comparison === 0 && (!version.isPrerelease || minimumVersion.isPrerelease))
+                            ? 'supported'
+                            : 'unsupported');
+                    },
+                    errorCallback: reportUnavailable,
+                    noExtensionVariables: true,
+                });
+            }
+            catch (error) {
+                reportUnavailable(error);
+            }
+        });
+    }
+
+    private _startSharedProbe(
+        cacheKey: string,
+        cliPath: string,
+        workingDirectory: string | undefined,
+        suppressErrors: boolean,
+        timeoutMs: number,
+    ): Promise<ConfigInfo | null> {
+        const generation = this._beginProbe(cacheKey);
+        let probe!: Promise<ConfigInfo | null>;
+        probe = this._fetchConfigInfo(cliPath, workingDirectory, suppressErrors, timeoutMs)
+            .then(result => {
+                if (result && this._probeGenerationByCliPath.get(cacheKey) === generation) {
+                    this._cachedConfigInfoByCliPath.set(cacheKey, result);
+                }
+                return result;
+            })
+            .finally(() => {
+                if (this._inFlightByCliPath.get(cacheKey) === probe) {
+                    this._inFlightByCliPath.delete(cacheKey);
+                }
+            });
+        this._inFlightByCliPath.set(cacheKey, probe);
+        return probe;
+    }
+
+    private _beginProbe(cacheKey: string): number {
+        const generation = (this._probeGenerationByCliPath.get(cacheKey) ?? 0) + 1;
+        this._probeGenerationByCliPath.set(cacheKey, generation);
+        return generation;
+    }
+
+    private async _awaitProbe(
+        probe: Promise<ConfigInfo | null>,
+        timeoutMs: number | undefined,
+        suppressErrors: boolean,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<ConfigInfo | null> {
+        if (cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let cancellation: vscode.Disposable | undefined;
+        const callerCompletion = new Promise<null>(resolve => {
+            if (timeoutMs !== undefined) {
+                timeout = setTimeout(() => {
+                    this._reportTimeout(suppressErrors);
+                    resolve(null);
+                }, timeoutMs);
+            }
+            cancellation = cancellationToken?.onCancellationRequested(() => resolve(null));
         });
 
         try {
-            // This timeout belongs to the caller, not the shared process. A caller that spent most of
-            // its budget resolving the CLI path must be allowed to leave without cancelling the probe
-            // for subscribers that joined later with a fresh budget.
-            return await Promise.race([probe, timeoutPromise]);
+            // Timeout and cancellation belong to this caller, not the shared process. A caller
+            // may leave without terminating work that other subscribers still need.
+            return await Promise.race([probe, callerCompletion]);
         }
         finally {
             if (timeout) {
                 clearTimeout(timeout);
             }
+            cancellation?.dispose();
         }
     }
 
-    private _resolveCliPath(suppressErrors: boolean): Promise<string | null> {
+    private _resolveCliPath(
+        suppressErrors: boolean,
+        target: CliPathResolutionTarget,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<string | null> {
         return new Promise<string | null>((resolve) => {
             let settled = false;
+            let cancellation: vscode.Disposable | undefined;
             const settle = (result: string | null) => {
                 if (settled) {
                     return;
@@ -166,6 +413,7 @@ export class ConfigInfoProvider {
 
                 settled = true;
                 clearTimeout(timeout);
+                cancellation?.dispose();
                 resolve(result);
             };
             const reportError = (error: unknown) => {
@@ -180,9 +428,10 @@ export class ConfigInfoProvider {
                 this._reportTimeout(suppressErrors);
                 settle(null);
             }, configInfoTimeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => settle(null));
 
             try {
-                this._terminalProvider.getAspireCliExecutablePath().then(
+                this._terminalProvider.getAspireCliExecutablePath(target).then(
                     cliPath => settle(cliPath),
                     reportError);
             }
@@ -192,11 +441,18 @@ export class ConfigInfoProvider {
         });
     }
 
-    private _fetchConfigInfo(cliPath: string, suppressErrors: boolean, timeoutMs: number): Promise<ConfigInfo | null> {
+    private _fetchConfigInfo(
+        cliPath: string,
+        workingDirectory: string | undefined,
+        suppressErrors: boolean,
+        timeoutMs: number,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<ConfigInfo | null> {
         return new Promise<ConfigInfo | null>((resolve) => {
             let childProcess: ChildProcessWithoutNullStreams | undefined;
             let settled = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
+            let cancellation: vscode.Disposable | undefined;
             const settle = (result: ConfigInfo | null) => {
                 if (settled) {
                     return;
@@ -206,6 +462,7 @@ export class ConfigInfoProvider {
                 if (timeout) {
                     clearTimeout(timeout);
                 }
+                cancellation?.dispose();
                 resolve(result);
             };
             const reportError = (error: unknown) => {
@@ -216,6 +473,10 @@ export class ConfigInfoProvider {
                 this._reportError(error, suppressErrors);
                 settle(null);
             };
+            if (cancellationToken?.isCancellationRequested) {
+                settle(null);
+                return;
+            }
 
             // The timeout passed here is the remainder of the same 30-second budget that covered
             // executable-path lookup, so a wedged startup probe cannot block callers indefinitely.
@@ -224,11 +485,20 @@ export class ConfigInfoProvider {
                 settle(null);
 
                 if (childProcess) {
-                    terminateCliProcess(childProcess, 'timed-out aspire config info command');
+                    void terminateCliProcess(childProcess, 'timed-out aspire config info command').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate timed-out aspire config info command: ${String(error)}`);
+                    });
                 }
             }, timeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => {
+                settle(null);
+                if (childProcess) {
+                    void terminateCliProcess(childProcess, 'cancelled aspire config info command').catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate cancelled aspire config info command: ${String(error)}`);
+                    });
+                }
+            });
 
-            const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
                 if (settled) {
                     return;
@@ -313,6 +583,35 @@ export class ConfigInfoProvider {
             vscode.window.showErrorMessage(message);
         }
     }
+}
+
+function parseCliVersion(value: string): CliVersion | undefined {
+    // `aspire --version` emits a bare semver-like value, for example:
+    //   13.2.0
+    //   13.2.0-preview.1.12345.6+abcdef
+    // Only the bounded numeric core participates in comparison; any other output is unavailable.
+    const normalized = value.trim();
+    if (normalized.length === 0 || normalized.length > maxCliVersionOutputLength) {
+        return undefined;
+    }
+
+    const match = cliVersionPattern.exec(normalized);
+    if (!match) {
+        return undefined;
+    }
+
+    return {
+        major: Number.parseInt(match[1], 10),
+        minor: Number.parseInt(match[2], 10),
+        patch: Number.parseInt(match[3], 10),
+        isPrerelease: match[4] !== undefined,
+    };
+}
+
+function compareCliVersions(left: CliVersion, right: CliVersion): number {
+    return left.major - right.major ||
+        left.minor - right.minor ||
+        left.patch - right.patch;
 }
 
 export function parseConfigInfoOutput(output: string): ConfigInfo {

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { DebugConfigurationArguments, ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments, parseTree, findNodeAtLocation } from 'jsonc-parser';
@@ -307,18 +307,19 @@ export function mergeEnvironmentVariables(
 }
 
 /**
- * Determines the final arguments array according to launch profile rules
+ * Determines the final debugger arguments according to launch profile rules.
+ * Launch-profile-authored text stays a string, while forwarded run-session tokens stay tokenized.
  * If run session args are present (including empty array), they completely replace launch profile args
  * If run session args are absent/null, launch profile args are used if available
  */
 export function determineArguments(
     baseProfileArgs: string | undefined,
     runSessionArgs: string[] | undefined | null
-): string | undefined {
+): DebugConfigurationArguments | undefined {
     // If run session args are explicitly provided (including empty array), use them
     if (runSessionArgs !== undefined && runSessionArgs !== null) {
-        extensionLogOutputChannel.debug(`Using run session arguments: ${JSON.stringify(runSessionArgs)}`);
-        return runSessionArgs.join(' ');
+        extensionLogOutputChannel.debug(`Using run session arguments (count: ${runSessionArgs.length})`);
+        return [...runSessionArgs];
     }
 
     // If run session args are absent/null, use launch profile args if available
@@ -357,65 +358,4 @@ export function determineWorkingDirectory(
     const projectDir = path.dirname(projectPath);
     extensionLogOutputChannel.debug(`Using default working directory (project directory): ${projectDir}`);
     return projectDir;
-}
-
-interface ServerReadyAction {
-    action: "openExternally";
-    pattern: "\\bNow listening on:\\s+https?://\\S+";
-    uriFormat: string;
-}
-
-export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, launchUrl?: string): ServerReadyAction | undefined {
-    if (!launchBrowser || !applicationUrl) {
-        return undefined;
-    }
-
-    let uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
-
-    if (launchUrl) {
-        uriFormat = resolveLaunchUrl(launchUrl, uriFormat);
-    }
-
-    return {
-        action: "openExternally",
-        pattern: "\\bNow listening on:\\s+https?://\\S+",
-        uriFormat: uriFormat
-    };
-}
-
-function resolveLaunchUrl(launchUrl: string, applicationUrl: string): string {
-    const absoluteLaunchUrl = tryCreateUrl(launchUrl);
-    if (absoluteLaunchUrl) {
-        return getHttpUrlOrFallback(absoluteLaunchUrl, applicationUrl, launchUrl);
-    }
-
-    const resolvedLaunchUrl = tryCreateUrl(launchUrl, applicationUrl);
-    if (resolvedLaunchUrl) {
-        return getHttpUrlOrFallback(resolvedLaunchUrl, applicationUrl, launchUrl);
-    }
-
-    extensionLogOutputChannel.warn(`Failed to resolve launchUrl '${launchUrl}' against applicationUrl '${applicationUrl}'. Falling back to applicationUrl.`);
-    return applicationUrl;
-}
-
-function tryCreateUrl(url: string, base?: string): URL | undefined {
-    try {
-        return base ? new URL(url, base) : new URL(url);
-    } catch {
-        return undefined;
-    }
-}
-
-function getHttpUrlOrFallback(url: URL, fallback: string, launchUrl: string): string {
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
-        if (url.hostname === '*') {
-            extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to wildcard host '*'. Falling back to applicationUrl.`);
-            return fallback;
-        }
-
-        return url.href;
-    }
-
-    extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to unsupported scheme '${url.protocol}'. Falling back to applicationUrl.`);
-    return fallback;
 }

@@ -111,4 +111,62 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
 
         Assert.True(executionFactory.LastProcessInvocationOptions?.KillOnParentExit);
     }
+
+    [Fact]
+    public async Task GetPackageVersionsAsync_ToleratesCredentialProviderOutputAroundPayload()
+    {
+        // Credential-provider diagnostics use an inherited stdout handle, so braced text or JSON can arrive before
+        // the package-search payload and additional output can arrive after it. The diagnostic JSON deliberately
+        // has the expected root array but omits other required bundle-search fields.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = workspace.WorkspaceRoot.FullName,
+            Components = new LayoutComponents
+            {
+                Managed = "managed"
+            }
+        };
+
+        var managedDirectory = workspace.WorkspaceRoot.CreateSubdirectory("managed");
+        var managedPath = layout.GetManagedPath();
+        Assert.NotNull(managedPath);
+        await File.WriteAllTextAsync(managedPath!, string.Empty);
+
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            Layout = layout
+        };
+
+        var pollutedStdout =
+            "    [CredentialProvider]Acquiring token for request {request-42}\n" +
+            """{"packages":[]}""" + "\n" +
+            """{"packages":[{"id":"Aspire.Hosting.Redis","version":"13.3.0","allVersions":["13.3.0","13.2.0"],"source":"nuget.org"}],"totalHits":1}""" +
+            "\n    [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'";
+
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (0, pollutedStdout)
+        };
+
+        var cache = new BundleNuGetPackageCache(
+            bundleService,
+            new LayoutProcessRunner(executionFactory),
+            NullLogger<BundleNuGetPackageCache>.Instance,
+            new TestFeatures());
+
+        var packages = (await cache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting.Redis",
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None)).OrderBy(package => package.Version).ToArray();
+
+        Assert.Collection(
+            packages,
+            package => Assert.Equal("13.2.0", package.Version),
+            package => Assert.Equal("13.3.0", package.Version));
+    }
 }

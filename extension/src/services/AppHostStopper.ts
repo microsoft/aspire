@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { getCliPathTargetForUri } from '../utils/cliPathVariables';
 
 const maxRetainedStderrLength = 16 * 1024;
 
@@ -10,7 +11,7 @@ export async function stopExternalAppHost(
     cancellationToken: vscode.CancellationToken,
 ): Promise<void> {
 
-    const cliPath = await terminalProvider.getAspireCliExecutablePath();
+    const cliPath = await terminalProvider.getAspireCliExecutablePath(getCliPathTargetForUri(vscode.Uri.file(appHostPath)));
     if (cancellationToken.isCancellationRequested) {
         throw new vscode.CancellationError();
     }
@@ -39,13 +40,10 @@ export async function stopExternalAppHost(
                 return;
             }
 
-            if (cliProcess.exitCode !== null || cliProcess.signalCode !== null) {
-                settleCancellation();
-                return;
-            }
-
             termination ??= terminateCliProcess(cliProcess, 'aspire stop');
-            void termination.then(settleCancellation);
+            void termination.then(
+                settleCancellation,
+                error => settle(() => reject(error)));
         };
 
         cancellationRegistration = cancellationToken.onCancellationRequested(() => {
@@ -68,7 +66,7 @@ export async function stopExternalAppHost(
                 },
                 exitCallback: code => {
                     if (cancellationRequested) {
-                        settleCancellation();
+                        terminateForCancellation();
                         return;
                     }
 
@@ -85,7 +83,7 @@ export async function stopExternalAppHost(
                 },
                 errorCallback: error => {
                     if (cancellationRequested) {
-                        settleCancellation();
+                        terminateForCancellation();
                     } else {
                         settle(() => reject(error));
                     }

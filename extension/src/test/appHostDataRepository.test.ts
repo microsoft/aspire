@@ -14,7 +14,9 @@ import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts } from '../loc/strings';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
+import { removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
     stderr = new PassThrough();
@@ -135,6 +137,94 @@ suite('AppHostDataRepository', () => {
         });
         assert.ok(describeCall, `expected a describe stream for ${appHostPath}`);
         return describeCall;
+    }
+
+    async function startTwoFolderDescribeStreams(): Promise<{
+        repository: AppHostDataRepository;
+        selectedDescribe: sinon.SinonSpyCall;
+        peerDescribe: sinon.SinonSpyCall;
+        dispose: () => void;
+    }> {
+        const selectedFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/selected'),
+            name: 'selected',
+            index: 0,
+        };
+        const peerFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/peer'),
+            name: 'peer',
+            index: 1,
+        };
+        const selectedAppHostPath = path.join(selectedFolder.uri.fsPath, 'AppHost.csproj');
+        const peerAppHostPath = path.join(peerFolder.uri.fsPath, 'AppHost.csproj');
+        const workspaceFoldersStub = stubWorkspaceFolders([selectedFolder, peerFolder]);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
+            if (uri.fsPath.startsWith(selectedFolder.uri.fsPath)) {
+                return selectedFolder;
+            }
+            if (uri.fsPath.startsWith(peerFolder.uri.fsPath)) {
+                return peerFolder;
+            }
+            return undefined;
+        });
+        getCliPathStub.callsFake(async target => target?.kind === 'workspaceFolder'
+            ? `/cli/${target.workspaceFolder.name}/aspire`
+            : '/cli/global/aspire');
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discoveryService = {
+            discover: async (workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> => [{
+                path: path.join(workspaceFolder.uri.fsPath, 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+                selected: workspaceFolder.name === selectedFolder.name,
+            }],
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForCondition(() => repository.workspaceAppHostPath === selectedAppHostPath, 'expected selected workspace AppHost');
+        const psCall = spawnStub.getCalls().find(call => {
+            const args = call.args[2] as string[];
+            return args[0] === 'ps' && args.includes('--follow');
+        });
+        assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+        psCall.args[3].lineCallback(JSON.stringify([{
+            appHostPath: selectedAppHostPath,
+            appHostPid: 1,
+        }, {
+            appHostPath: peerAppHostPath,
+            appHostPid: 2,
+        }]));
+        await waitForCondition(() => spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe').length === 2,
+            'expected a describe stream for each AppHost');
+
+        const selectedDescribe = spawnStub.getCalls().find(call => {
+            const args = call.args[2] as string[];
+            return args[0] === 'describe' && args.at(-1) === selectedAppHostPath;
+        });
+        const peerDescribe = spawnStub.getCalls().find(call => {
+            const args = call.args[2] as string[];
+            return args[0] === 'describe' && args.at(-1) === peerAppHostPath;
+        });
+        assert.ok(selectedDescribe);
+        assert.ok(peerDescribe);
+        assert.strictEqual(selectedDescribe.args[1], '/cli/selected/aspire');
+        assert.strictEqual(peerDescribe.args[1], '/cli/peer/aspire');
+
+        return {
+            repository,
+            selectedDescribe,
+            peerDescribe,
+            dispose: () => {
+                repository.dispose();
+                candidateChangeEmitter.dispose();
+                getWorkspaceFolderStub.restore();
+                workspaceFoldersStub.restore();
+            },
+        };
     }
 
     test('activate does not start describe while panel is hidden', async () => {
@@ -1000,6 +1090,104 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('describe resolves the CLI and capabilities from the AppHost URI owner', async () => {
+        const folder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const target = workspaceFolderCliPathTarget(folder);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder')
+            .callsFake(uri => uri.fsPath.startsWith(folder.uri.fsPath) ? folder : undefined);
+        getCliPathStub.callsFake(async resolutionTarget => resolutionTarget?.kind === 'workspaceFolder'
+            ? '/workspace/bin/aspire'
+            : '/global/bin/aspire');
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            await waitForMicrotasks();
+            const describeCall = await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
+
+            assert.strictEqual(getCliPathStub.calledWithExactly(target), true);
+            assert.strictEqual(describeCall.args[1], '/workspace/bin/aspire');
+            assert.strictEqual(getConfigInfoStub.calledWithMatch({
+                suppressErrors: true,
+                cliPath: '/workspace/bin/aspire',
+                target,
+            }), true);
+        } finally {
+            repository.dispose();
+            getWorkspaceFolderStub.restore();
+        }
+    });
+
+    test('describe capabilities are isolated by each AppHost concrete CLI', async () => {
+        const folderA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/a'),
+            name: 'a',
+            index: 0,
+        };
+        const folderB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/b'),
+            name: 'b',
+            index: 1,
+        };
+        const appHostA = path.join(folderA.uri.fsPath, 'AppHost.csproj');
+        const appHostB = path.join(folderB.uri.fsPath, 'AppHost.csproj');
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
+            if (uri.fsPath.startsWith(folderA.uri.fsPath)) {
+                return folderA;
+            }
+            if (uri.fsPath.startsWith(folderB.uri.fsPath)) {
+                return folderB;
+            }
+            return undefined;
+        });
+        getCliPathStub.callsFake(async target => target?.kind === 'workspaceFolder'
+            ? `/cli/${target.workspaceFolder.name}/aspire`
+            : '/cli/global/aspire');
+        getConfigInfoStub.callsFake(async options => ({
+            capabilities: options?.cliPath === '/cli/a/aspire'
+                ? [describeIncludeDisabledCommandsCapability]
+                : [],
+        } as any));
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const psCall = spawnStub.getCalls().find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && args.includes('--follow');
+            });
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+
+            psCall.args[3].lineCallback(JSON.stringify({ appHostPath: appHostA, appHostPid: 1 }));
+            psCall.args[3].lineCallback(JSON.stringify({ appHostPath: appHostB, appHostPid: 2 }));
+            await waitForCondition(() => spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe').length === 2,
+                'expected a describe stream for each AppHost');
+
+            const describeCalls = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe');
+            const describeA = describeCalls.find(call => (call.args[2] as string[]).includes(appHostA));
+            const describeB = describeCalls.find(call => (call.args[2] as string[]).includes(appHostB));
+            assert.ok(describeA);
+            assert.ok(describeB);
+            assert.strictEqual(describeA.args[1], '/cli/a/aspire');
+            assert.strictEqual((describeA.args[2] as string[]).includes('--include-disabled-commands'), true);
+            assert.strictEqual(describeB.args[1], '/cli/b/aspire');
+            assert.strictEqual((describeB.args[2] as string[]).includes('--include-disabled-commands'), false);
+        } finally {
+            repository.dispose();
+            getWorkspaceFolderStub.restore();
+        }
+    });
+
     test('describe omits disabled command flag when CLI does not advertise the capability', async () => {
         // A CLI that responds to `config info` but doesn't list the capability is authoritative:
         // we must not pass the flag at all (no optimistic attempt, no error-text parsing).
@@ -1166,7 +1354,18 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('fetchAppHostsOnce uses ps without resources and describes each AppHost', async () => {
+    test('fetchAppHostsOnce uses window CLI for ps and the AppHost owner CLI for describe', async () => {
+        const folder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const target = workspaceFolderCliPathTarget(folder);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder')
+            .callsFake(uri => uri.fsPath.startsWith(folder.uri.fsPath) ? folder : undefined);
+        getCliPathStub.callsFake(async resolutionTarget => resolutionTarget?.kind === 'workspaceFolder'
+            ? '/workspace/bin/aspire'
+            : '/global/bin/aspire');
         const psProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
         spawnStub.onFirstCall().returns(psProcess);
@@ -1178,6 +1377,8 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--format', 'json', '--nologo']);
+            assert.strictEqual(spawnStub.firstCall.args[1], '/global/bin/aspire');
+            assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
 
             spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
@@ -1192,6 +1393,8 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--format', 'json', '--nologo', '--apphost', '/workspace/AppHost.csproj']);
+            assert.strictEqual(spawnStub.secondCall.args[1], '/workspace/bin/aspire');
+            assert.deepStrictEqual(getCliPathStub.secondCall.args, [target]);
             assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);
 
             spawnStub.secondCall.args[3].stdoutCallback(JSON.stringify({
@@ -1219,6 +1422,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
         } finally {
             repository.dispose();
+            getWorkspaceFolderStub.restore();
         }
     });
 
@@ -1314,7 +1518,18 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('runResourceCommand uses one-shot CLI runner', async () => {
+    test('runResourceCommand uses the trimmed AppHost owner CLI', async () => {
+        const folder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const target = workspaceFolderCliPathTarget(folder);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder')
+            .callsFake(uri => uri.fsPath.startsWith(folder.uri.fsPath) ? folder : undefined);
+        getCliPathStub.callsFake(async resolutionTarget => resolutionTarget?.kind === 'workspaceFolder'
+            ? '/workspace/bin/aspire'
+            : '/global/bin/aspire');
         const resourceProcess = new TestChildProcess();
         spawnStub.returns(resourceProcess);
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1324,6 +1539,8 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'api', 'stop', '--non-interactive', '--apphost', '/workspace/AppHost.csproj']);
+            assert.strictEqual(spawnStub.firstCall.args[1], '/workspace/bin/aspire');
+            assert.deepStrictEqual(getCliPathStub.firstCall.args, [target]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
             assert.deepStrictEqual(spawnStub.firstCall.args[3].env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
 
@@ -1333,6 +1550,7 @@ suite('AppHostDataRepository', () => {
             await runPromise;
         } finally {
             repository.dispose();
+            getWorkspaceFolderStub.restore();
         }
     });
 
@@ -1398,6 +1616,7 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'cache', 'echo-arguments', '--non-interactive', '--', '--message=hello']);
+            assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
 
             spawnStub.firstCall.args[3].stdoutCallback('rendered command value');
             spawnStub.firstCall.args[3].stderrCallback('status: ok');
@@ -1670,9 +1889,9 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('describe optimistically sends disabled command flag when capabilities cannot be read', async () => {
-        // If `config info` can't be read (e.g. a CLI too old to support it) we keep the optimistic
-        // default so newer-but-unprobeable CLIs still get the flag; the no-data fallback protects us.
+    test('describe omits disabled command flag when capabilities cannot be read', async () => {
+        // Only an advertised capability enables the hidden flag. A missing config-info response
+        // cannot establish support for the concrete CLI used by this stream.
         getConfigInfoStub.resolves(null);
 
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1698,7 +1917,7 @@ suite('AppHostDataRepository', () => {
             describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             return describeCall !== undefined;
         }, 'expected a describe stream to start');
-        assert.deepStrictEqual(describeCall!.args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
+        assert.deepStrictEqual(describeCall!.args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--apphost', '/workspace/AppHost.csproj']);
 
         repository.dispose();
     });
@@ -1787,7 +2006,22 @@ suite('AppHostDataRepository', () => {
 
     test('describe reports minimum CLI version when command help is returned', async () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
-        const repository = new AppHostDataRepository(terminalProvider);
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
 
         try {
             repository.activate();
@@ -1833,12 +2067,28 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             executeCommandStub.restore();
+            workspaceFoldersStub.restore();
         }
     });
 
     test('describe reports minimum CLI version when localized command help is returned', async () => {
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
-        const repository = new AppHostDataRepository(terminalProvider);
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
 
         try {
             repository.activate();
@@ -1884,6 +2134,7 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             executeCommandStub.restore();
+            workspaceFoldersStub.restore();
         }
     });
 
@@ -2477,6 +2728,38 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
+        }
+    });
+
+    test('non-selected older CLI does not publish a compatibility error for the selected AppHost', async () => {
+        const context = await startTwoFolderDescribeStreams();
+
+        try {
+            context.peerDescribe.args[3].stderrCallback("Unrecognized command or argument 'describe'.");
+            (context.peerDescribe.returnValue as TestChildProcess).markExited(1);
+            context.peerDescribe.args[3].exitCallback(1);
+
+            assert.strictEqual(context.repository.errorMessage, undefined);
+        } finally {
+            context.dispose();
+        }
+    });
+
+    test('working peer CLI does not clear the selected AppHost compatibility error', async () => {
+        const context = await startTwoFolderDescribeStreams();
+
+        try {
+            context.selectedDescribe.args[3].stderrCallback("Unrecognized command or argument 'describe'.");
+            (context.selectedDescribe.returnValue as TestChildProcess).markExited(1);
+            context.selectedDescribe.args[3].exitCallback(1);
+            const selectedError = context.repository.errorMessage;
+            assert.ok(selectedError?.includes('13.2.0'), selectedError);
+
+            context.peerDescribe.args[3].lineCallback(JSON.stringify({ name: 'peer-resource' }));
+
+            assert.strictEqual(context.repository.errorMessage, selectedError);
+        } finally {
+            context.dispose();
         }
     });
 
@@ -3361,7 +3644,7 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository?.dispose();
             workspaceFoldersStub?.restore();
-            fs.rmSync(workspaceRoot, { recursive: true, force: true });
+            removeDirectorySafely(workspaceRoot);
         }
     });
 
@@ -5725,6 +6008,7 @@ suite('AppHostDataRepository', () => {
     });
 
     test('stubborn describe is force killed', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('linux');
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -5750,6 +6034,7 @@ suite('AppHostDataRepository', () => {
             repository.dispose();
             clock.restore();
             workspaceFoldersStub.restore();
+            platformStub.restore();
         }
     });
 
@@ -5767,16 +6052,19 @@ suite('AppHostDataRepository', () => {
         spawnStub.callsFake((_terminalProvider, _command, args) =>
             args[0] === 'describe' ? childProcess : new TestChildProcess());
         const taskkillCalls: Array<{ command: string; args: string[]; windowsHide: boolean | undefined }> = [];
+        const taskkillProcesses: EventEmitter[] = [];
         spawnProcessStub.callsFake((command: string, args?: readonly string[], options?: nodeChildProcess.SpawnOptions) => {
+            const taskkillProcess = Object.assign(new EventEmitter(), {
+                unref: () => { },
+            });
             taskkillCalls.push({
                 command,
                 args: [...(args ?? [])],
                 windowsHide: options?.windowsHide,
             });
+            taskkillProcesses.push(taskkillProcess);
 
-            return Object.assign(new EventEmitter(), {
-                unref: () => { },
-            }) as nodeChildProcess.ChildProcess;
+            return taskkillProcess as nodeChildProcess.ChildProcess;
         });
         const repository = new AppHostDataRepository(terminalProvider);
 
@@ -5792,9 +6080,15 @@ suite('AppHostDataRepository', () => {
                 args: ['/pid', '4242', '/t'],
                 windowsHide: true,
             }]);
+            assert.strictEqual(taskkillProcesses.length, 1);
             assert.deepStrictEqual(childProcess.killSignals, []);
 
-            await clock.tickAsync(5000);
+            taskkillProcesses[0].emit('close', 0);
+            await waitForMicrotasks();
+
+            // The graceful and forced attempts share one five-second deadline. Escalation begins
+            // after four seconds, reserving the final second for forced taskkill.
+            await clock.tickAsync(4000);
 
             assert.deepStrictEqual(taskkillCalls, [
                 {
@@ -5808,6 +6102,13 @@ suite('AppHostDataRepository', () => {
                     windowsHide: true,
                 },
             ]);
+            assert.strictEqual(taskkillProcesses.length, 2);
+            assert.deepStrictEqual(childProcess.killSignals, []);
+
+            taskkillProcesses[1].emit('close', 0);
+            childProcess.markExited(0);
+            childProcess.emit('close', 0);
+            await waitForMicrotasks();
         } finally {
             repository.dispose();
             clock.restore();
@@ -5891,6 +6192,25 @@ suite('AppHostDataRepository global polling', () => {
         assert.strictEqual(childProcess.killed, true);
 
         repository.dispose();
+    });
+
+    test('global ps follow and one-shot refresh resolve with the window target', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => getCliPathStub.callCount >= 1, 'global ps follow did not resolve the CLI');
+
+            repository.refresh();
+            await waitForCondition(() => getCliPathStub.callCount >= 2, 'global one-shot ps did not resolve the CLI');
+
+            assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
+            assert.deepStrictEqual(getCliPathStub.secondCall.args, [windowCliPathTarget]);
+        } finally {
+            repository.dispose();
+        }
     });
 
     test('switching into global view while ps is already polling clears the loading spinner', async () => {

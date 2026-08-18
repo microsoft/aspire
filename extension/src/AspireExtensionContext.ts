@@ -185,7 +185,7 @@ export class AspireExtensionContext implements vscode.Disposable {
             stopFailures.push(...await this._drainLateDebugSessionStops(true));
         }
         finally {
-            this._forceTerminateCliProcesses();
+            await this._forceTerminateCliProcesses();
             this._disposeCore();
         }
 
@@ -229,10 +229,12 @@ export class AspireExtensionContext implements vscode.Disposable {
         }
 
         if (finalizeShutdown) {
-            // Finalize in the same synchronous turn that observes an empty drain. Returning first
-            // would create one last microtask window where a newly registered session could be
-            // queued after the drain but before shared infrastructure is disposed.
-            this._forceTerminateCliProcesses();
+            await this._forceTerminateCliProcesses();
+            // A session can arrive while process termination is awaited. Drain it before taking
+            // the final synchronous empty-check-and-dispose step.
+            while (this._lateDebugSessionStops.length > 0) {
+                stopFailures.push(...await this._drainLateDebugSessionStops());
+            }
             this._disposeCore();
         }
 
@@ -256,7 +258,7 @@ export class AspireExtensionContext implements vscode.Disposable {
         }
         finally {
             try {
-                debugSession.terminateCliProcessTree({ force: true });
+                await this._terminateCliProcesses([debugSession]);
             }
             finally {
                 debugSession.finalizeForExtensionShutdown();
@@ -275,8 +277,9 @@ export class AspireExtensionContext implements vscode.Disposable {
         void debugSession.requestCliStopForExtensionShutdown().catch(error => {
             extensionLogOutputChannel.warn(`Failed to stop Aspire CLI during final extension teardown: ${error}`);
         });
-        debugSession.terminateCliProcessTree({ force: true });
-        debugSession.finalizeForExtensionShutdown();
+        void debugSession.terminateCliProcessTree({ force: true }).then(
+            () => debugSession.finalizeForExtensionShutdown(),
+            () => debugSession.finalizeForExtensionShutdown());
     }
 
     private async _waitForCliStopRequests(): Promise<void> {
@@ -296,21 +299,39 @@ export class AspireExtensionContext implements vscode.Disposable {
         }
     }
 
-    private _forceTerminateCliProcesses(): void {
+    private async _forceTerminateCliProcesses(): Promise<void> {
+        await this._terminateCliProcesses([...this._aspireDebugSessions]);
+    }
+
+    private async _terminateCliProcesses(sessions: AspireDebugSession[]): Promise<void> {
         // A cooperative stop that resolved, rejected or timed out proves only what happened to the
         // RPC request; the CLI process can still be running. Signal any that are, so deactivation
         // cannot leave an AppHost and its resource processes orphaned.
-        for (const session of [...this._aspireDebugSessions]) {
+        const terminations = Promise.all(sessions.map(async session => {
             try {
                 // Force rather than signal-and-schedule: `terminateCliProcess` escalates to a hard
                 // kill on an `unref`'d timer, and `_deactivateCore` resolves immediately after this
                 // sweep, so the extension host can exit before that timer fires. The cooperative
                 // deadline above was this CLI's grace period; there is no second one.
-                session.terminateCliProcessTree({ force: true });
+                await session.terminateCliProcessTree({ force: true });
             }
             catch (error) {
                 extensionLogOutputChannel.warn(`Failed to terminate the Aspire CLI process during extension deactivation: ${error}`);
             }
+        }));
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const completed = await Promise.race([
+            terminations.then(() => true),
+            new Promise<false>(resolve => {
+                timeout = setTimeout(() => resolve(false), AspireExtensionContext._cliStopTimeoutMs);
+            }),
+        ]);
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        if (!completed) {
+            extensionLogOutputChannel.warn(
+                `Timed out after ${AspireExtensionContext._cliStopTimeoutMs}ms waiting for Aspire CLI process-tree termination; continuing extension teardown.`);
         }
     }
 

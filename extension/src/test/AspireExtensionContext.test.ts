@@ -592,6 +592,65 @@ suite('AspireExtensionContext', () => {
         ]);
     });
 
+    test('deactivation waits for forced CLI process-tree termination before disposing shared infrastructure', async () => {
+        const order: string[] = [];
+        const context = createContext(order);
+        const termination = createDeferred<void>();
+        addSession(
+            context,
+            'session',
+            () => Promise.resolve(),
+            () => order.push('dispose session'),
+            async () => {
+                order.push('terminate session');
+                await termination.promise;
+            });
+
+        const shutdown = deactivateContext(context);
+        await new Promise(resolve => setImmediate(resolve));
+
+        assert.deepStrictEqual(order, ['terminate session']);
+        assert.strictEqual(order.includes('rpc server'), false);
+
+        termination.resolve();
+        await shutdown;
+
+        assert.deepStrictEqual(order, [
+            'terminate session',
+            'dispose session',
+            'rpc server',
+            'dcp server',
+            'terminal provider',
+            'editor command provider',
+        ]);
+    });
+
+    test('deactivation bounds forced CLI process-tree confirmation before disposing shared infrastructure', async () => {
+        const order: string[] = [];
+        const context = createContext(order);
+        const warnStub = sinon.stub(extensionLogOutputChannel, 'warn');
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        addSession(
+            context,
+            'session',
+            () => Promise.resolve(),
+            () => order.push('dispose session'),
+            () => new Promise<void>(() => { }));
+
+        try {
+            const shutdown = deactivateContext(context);
+            await clock.tickAsync(5_000);
+            await shutdown;
+
+            assert.ok(order.indexOf('dispose session') < order.indexOf('rpc server'));
+            sinon.assert.calledWithMatch(warnStub, 'Timed out after 5000ms waiting for Aspire CLI process-tree termination');
+        }
+        finally {
+            clock.restore();
+            warnStub.restore();
+        }
+    });
+
     test('deactivation terminates the CLI process group when the cooperative stop never settles', async () => {
         const order: string[] = [];
         const context = createContext(order);
@@ -648,7 +707,7 @@ suite('AspireExtensionContext', () => {
         const context = createContext(order);
         const cliProcess = createFakeCliProcess(4321);
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(cliProcess);
-        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
         const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = createSpawnedDebugSession(context);
         context.addAspireDebugSession(aspireDebugSession);
@@ -697,6 +756,7 @@ suite('AspireExtensionContext', () => {
             async () => {
                 order.push('stop debug sessions late');
             });
+            await new Promise(resolve => setImmediate(resolve));
 
             assert.deepStrictEqual(context.aspireDebugSessions, []);
             assert.deepStrictEqual(order, [
@@ -734,7 +794,7 @@ function addSession(
     debugSessionId: string,
     stopCli: () => Promise<void>,
     dispose: () => void,
-    terminateCliProcessTree: (options?: { force?: boolean }) => void = () => { },
+    terminateCliProcessTree: (options?: { force?: boolean }) => unknown = () => { },
     stopDebugging: () => Promise<void> = () => Promise.resolve(),
     finalizeForExtensionShutdown: () => void = dispose): void {
     context.addAspireDebugSession({
@@ -743,7 +803,9 @@ function addSession(
         onDidSendDebugConsoleOutput: () => ({ dispose: () => { } }),
         stopDebugging,
         requestCliStopForExtensionShutdown: stopCli,
-        terminateCliProcessTree,
+        terminateCliProcessTree: async (options?: { force?: boolean }) => {
+            await terminateCliProcessTree(options);
+        },
         finalizeForExtensionShutdown,
         dispose,
     } as unknown as AspireDebugSession);

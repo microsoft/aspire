@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { getAppHostTargetVersion, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
+import { removeDirectorySafely } from './testHelpers';
 function candidate(path: string, language: string | null): CandidateAppHostDisplayInfo {
     return { path, language, status: 'buildable' };
 }
@@ -22,7 +23,7 @@ suite('appHostTargetVersion', () => {
     teardown(() => {
         for (const dir of tempDirs) {
             if (existsSync(dir)) {
-                rmSync(dir, { recursive: true, force: true });
+                removeDirectorySafely(dir);
             }
         }
         tempDirs.length = 0;
@@ -30,7 +31,7 @@ suite('appHostTargetVersion', () => {
 
     suiteTeardown(() => {
         if (existsSync(tempParent)) {
-            rmSync(tempParent, { recursive: true, force: true });
+            removeDirectorySafely(tempParent);
         }
     });
 

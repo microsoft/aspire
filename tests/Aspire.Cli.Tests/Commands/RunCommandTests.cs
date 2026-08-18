@@ -14,6 +14,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -922,6 +923,46 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
 
         Assert.False(cliPrefetchStarted);
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedChild_PreservesAppHostArgumentsAfterSingleSeparator()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var expectedAppHostArguments = new[] { "true", "false", string.Empty, "--detach", "--option-shaped" };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--detach",
+            "--apphost", appHostFile.FullName,
+            "--no-build",
+            "--",
+            .. expectedAppHostArguments
+        ]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
+
+        AssertDetachedChildArguments(command, processFactory.LastArguments, expectedAppHostArguments);
     }
 
     [Fact]
@@ -3601,6 +3642,146 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenRunningInExtension_ForwardsExplicitArgumentsInSemanticOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("App Host");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        var relativeCapturePath = Path.Combine("Profile Output", "profile.zip");
+
+        bool? debug = null;
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, dbg, debugSessionOptions) =>
+        {
+            debug = dbg;
+            options = debugSessionOptions;
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--apphost", appHostFile.FullName,
+            "--debug",
+            "--capture-profile",
+            "--detach=false",
+            "--no-build",
+            "--isolated=false",
+            "--format=table",
+            "--wait-for-debugger",
+            "--capture-profile-output", relativeCapturePath,
+            "--non-interactive=false",
+            "--log-level", "Debug",
+            "--start-debug-session",
+            "--capture-profile-delay=1",
+            "--",
+            "--custom-arg", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(debug);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.NotNull(options.Args);
+        Assert.Equal(
+            [
+                "--debug",
+                "--capture-profile",
+                "--no-build",
+                "--isolated", "false",
+                "--wait-for-debugger",
+                "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,
+                "--log-level", "Debug",
+                "--capture-profile-delay", "1",
+                "--",
+                "--custom-arg", "value"
+            ],
+            options.Args);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtensionInLinkedWorktree_DoesNotInferIsolation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--", "--custom-arg", "value"]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--debug", "--", "--custom-arg", "value"], options.Args);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtension_SynthesizesSeparatorBeforeDelimiterFreeAppHostArguments()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--secret", "value"]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--debug", "--", "--secret", "value"], options.Args);
+
+        var childParseResult = command.Parse(["run", .. options.Args]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.True(childParseResult.GetValue(RootCommand.DebugOption));
+        Assert.False(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));
+        Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task DelegatedCommands_RecordTransferStateOnlyAfterSuccessfulHandoff(
+        bool captureProfile,
+        bool handoffSucceeds)
+    {
+        await AssertProfileTransferAsync("run", captureProfile, handoffSucceeds);
+        await AssertProfileTransferAsync("start", captureProfile, handoffSucceeds);
+    }
+
+    [Fact]
     public async Task RunCommand_NonInteractive_SkipsExtensionDelegation()
     {
         // When `aspire start` spawns `aspire run --non-interactive`, the child process
@@ -3803,11 +3984,83 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
+    private async Task AssertProfileTransferAsync(
+        string commandName,
+        bool captureProfile,
+        bool handoffSucceeds)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        ProfileCaptureState? captureState = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, _, _) =>
+        {
+            Assert.NotNull(captureState);
+            Assert.False(captureState.IsTransferred);
+            if (!handoffSucceeds)
+            {
+                throw new InvalidOperationException("Extension handoff failed.");
+            }
+        });
+
+        captureState = provider.GetRequiredService<ProfileCaptureState>();
+        var command = provider.GetRequiredService<RootCommand>();
+        var args = new List<string> { commandName, "--apphost", appHostFile.FullName };
+        if (captureProfile)
+        {
+            args.Add("--capture-profile");
+        }
+
+        var result = command.Parse(args);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(handoffSucceeds, captureState.IsTransferred);
+    }
+
     private static long GetProcessStartTimeUnixMilliseconds(Process process)
     {
         var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(process.Id);
         Assert.NotNull(startTime);
         return startTime.Value;
+    }
+
+    private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)
+    {
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        return appHostFile;
+    }
+
+    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string[] expectedAppHostArguments)
+    {
+        var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
+        var separatorIndex = Array.IndexOf(forwardedArguments, "--");
+        var noBuildIndex = Array.IndexOf(forwardedArguments, "--no-build");
+
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--"));
+        Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
+        Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
+        Assert.Equal(["--no-build", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
+        var childParseResult = command.Parse(["run", .. forwardedArguments[noBuildIndex..]]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
+    }
+
+    private static string[] ExtractForwardedRunArguments(string[] childArguments)
+    {
+        var runIndex = Array.IndexOf(childArguments, "run");
+        Assert.True(runIndex >= 0, "Expected detached child arguments to include the run command.");
+
+        return childArguments[runIndex..];
     }
 
 }

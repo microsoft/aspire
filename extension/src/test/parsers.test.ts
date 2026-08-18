@@ -1,75 +1,19 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { createMockDocument } from './testHelpers';
 import { Parser } from 'web-tree-sitter';
 import { AppHostResourceParser, getParserForDocument, getSupportedLanguageIds, getAllParsers, ParsedResource } from '../editor/parsers/AppHostResourceParser';
 import { __resetTreeSitterForTests, initializeTreeSitter } from '../editor/parsers/treeSitter';
 // Import parsers so they self-register
 import '../editor/parsers/csharpAppHostParser';
+import '../editor/parsers/javaAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
 import '../editor/parsers/rustAppHostParser';
 
 /**
  * Creates a minimal mock TextDocument for parser testing.
  */
-function createMockDocument(content: string, filePath: string): vscode.TextDocument {
-    const lines = content.split('\n');
-    return {
-        uri: vscode.Uri.file(filePath),
-        fileName: filePath,
-        isUntitled: false,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'javascript',
-        version: 1,
-        isDirty: false,
-        isClosed: false,
-        eol: vscode.EndOfLine.LF,
-        lineCount: lines.length,
-        encoding: 'utf-8',
-        save: () => Promise.resolve(false),
-        lineAt: (lineOrPos: number | vscode.Position) => {
-            const lineNum = typeof lineOrPos === 'number' ? lineOrPos : lineOrPos.line;
-            const text = lines[lineNum] || '';
-            return {
-                lineNumber: lineNum,
-                text,
-                range: new vscode.Range(lineNum, 0, lineNum, text.length),
-                rangeIncludingLineBreak: new vscode.Range(lineNum, 0, lineNum + 1, 0),
-                firstNonWhitespaceCharacterIndex: text.search(/\S/),
-                isEmptyOrWhitespace: text.trim().length === 0,
-            } as vscode.TextLine;
-        },
-        offsetAt: (position: vscode.Position) => {
-            let offset = 0;
-            for (let i = 0; i < position.line && i < lines.length; i++) {
-                offset += lines[i].length + 1; // +1 for \n
-            }
-            offset += position.character;
-            return offset;
-        },
-        positionAt: (offset: number) => {
-            let remaining = offset;
-            for (let i = 0; i < lines.length; i++) {
-                if (remaining <= lines[i].length) {
-                    return new vscode.Position(i, remaining);
-                }
-                remaining -= lines[i].length + 1; // +1 for \n
-            }
-            return new vscode.Position(lines.length - 1, lines[lines.length - 1].length);
-        },
-        getText: (range?: vscode.Range) => {
-            if (!range) {
-                return content;
-            }
-            const startOffset = lines.slice(0, range.start.line).reduce((sum, l) => sum + l.length + 1, 0) + range.start.character;
-            const endOffset = lines.slice(0, range.end.line).reduce((sum, l) => sum + l.length + 1, 0) + range.end.character;
-            return content.substring(startOffset, endOffset);
-        },
-        getWordRangeAtPosition: () => undefined,
-        validateRange: (range: vscode.Range) => range,
-        validatePosition: (position: vscode.Position) => position,
-        notebook: undefined as any,
-    } as vscode.TextDocument;
-}
 
 // ============================================================
 // Parser Registry Tests
@@ -86,6 +30,7 @@ suite('AppHostResourceParser registry', () => {
         assert.ok(ids.includes('typescript'), 'Should support typescript');
         assert.ok(ids.includes('javascript'), 'Should support javascript');
         assert.ok(ids.includes('rust'), 'Should support rust');
+        assert.ok(ids.includes('java'), 'Should support java');
     });
 
     test('initializes Tree-sitter once for concurrent callers', async () => {

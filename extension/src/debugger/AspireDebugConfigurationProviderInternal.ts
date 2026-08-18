@@ -5,6 +5,8 @@ import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 const extensionOwnedConfigurationMarker = `__aspireAppHostLaunchServiceConfiguration_${randomUUID()}`;
 const extensionOwnedConfigurationValue = randomUUID();
 const externalLaunchReservationMarker = `__aspireExternalLaunchReservation_${randomUUID()}`;
+const resolvedCliPathMarker = `__aspireResolvedCliPath_${randomUUID()}`;
+const resolvedCliPathScopeMarker = `__aspireResolvedCliPathScope_${randomUUID()}`;
 
 interface ExternalLaunchReservationMarker {
     reservationId: string;
@@ -46,9 +48,39 @@ export function getAspireDebugConfigurationExternalLaunchReservation(configurati
         : undefined;
 }
 
+export function markAspireDebugConfigurationWithResolvedCliPath(configuration: vscode.DebugConfiguration, cliPath: string): void {
+    (configuration as Record<string, unknown>)[resolvedCliPathMarker] = cliPath;
+}
+
+export function getAspireDebugConfigurationResolvedCliPath(configuration: vscode.DebugConfiguration): string | undefined {
+    const cliPath = (configuration as Record<string, unknown>)[resolvedCliPathMarker];
+    return typeof cliPath === 'string' ? cliPath : undefined;
+}
+
+/**
+ * Records which configuration scope the CLI availability gate resolved against.
+ *
+ * The gate runs before VS Code substitutes variables, so a `program` such as
+ * `${workspaceFolder:other}/AppHost.java` — or a relative one — is still opaque and the gate can only
+ * use the initiating folder. Recording the scope lets the substituted resolver notice that the
+ * concrete program belongs to a different folder and re-resolve, instead of launching that folder's
+ * AppHost with another folder's configured CLI.
+ */
+export function markAspireDebugConfigurationWithResolvedCliPathScope(configuration: vscode.DebugConfiguration, scope: string): void {
+    (configuration as Record<string, unknown>)[resolvedCliPathScopeMarker] = scope;
+}
+
+/** @see markAspireDebugConfigurationWithResolvedCliPathScope */
+export function getAspireDebugConfigurationResolvedCliPathScope(configuration: vscode.DebugConfiguration): string | undefined {
+    const scope = (configuration as Record<string, unknown>)[resolvedCliPathScopeMarker];
+    return typeof scope === 'string' ? scope : undefined;
+}
+
 export function stripAspireDebugConfigurationProviderInternalProperties(configuration: vscode.DebugConfiguration): void {
     const configRecord = configuration as Record<string, unknown>;
     delete configRecord[extensionOwnedConfigurationMarker];
     delete configRecord[externalLaunchReservationMarker];
+    delete configRecord[resolvedCliPathMarker];
+    delete configRecord[resolvedCliPathScopeMarker];
     delete configRecord.launchedByExtension;
 }

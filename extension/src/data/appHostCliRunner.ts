@@ -7,6 +7,7 @@ import { aspireCliCommandTimedOut, aspireCommandOutputTruncated } from '../loc/s
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { AspireCliFailedError, AspireCliNotInstalledError } from './appHostCliContracts';
 import { normalizeResourceCommandStatusLine } from './resourceCommandStatusOutput';
+import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
 
 export const oneShotOutputBufferLimit = 64 * 1024;
 
@@ -15,42 +16,52 @@ export interface RunCliCommandOptions {
     stdoutBufferLimit?: number | null;
     cancellationToken?: vscode.CancellationToken;
     env?: { name: string; value: string }[];
+    target?: CliPathResolutionTarget;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
     private static readonly _oneShotCommandTimeoutMs = 30000;
 
-    private _noLogoSupported = true;
+    private _noLogoUnsupportedCliPaths = new Set<string>();
     private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
 
-    withNoLogo(args: string[]): string[] {
-        if (!this._noLogoSupported) {
-            return args;
+    withNoLogo(args: string[], cliPath?: string): string[] {
+        if (cliPath && this._noLogoUnsupportedCliPaths.has(cliPath)) {
+            return removeRootNoLogoOption(args);
         }
 
+        if (args.includes(noLogoOption)) {
+            return args;
+        }
         const appHostIndex = args.indexOf('--apphost');
         const insertIndex = appHostIndex === -1 ? args.length : appHostIndex;
         return [...args.slice(0, insertIndex), noLogoOption, ...args.slice(insertIndex)];
     }
 
+    normalizeNoLogoArgs(cliPath: string, args: string[]): string[] {
+        return this._noLogoUnsupportedCliPaths.has(cliPath)
+            ? removeRootNoLogoOption(args)
+            : args;
+    }
+
     // Returns the args to retry with when the installed CLI does not recognize --nologo, or
     // undefined when this failure is unrelated to --nologo. Has the intentional side effect of
-    // flipping _noLogoSupported to false the first time the unsupported pattern is observed so
-    // subsequent withNoLogo calls stop adding the option for the lifetime of the runner.
+    // recording the exact concrete CLI path the first time the unsupported pattern is observed so
+    // subsequent calls through that executable stop adding the option for the lifetime of the runner.
     //
     // Callers that own their own retry args use the returned value directly; long-lived watch
     // restarters (describe/ps follow) use disableNoLogoForRetry below and intentionally discard
     // the returned args because the watch starter rebuilds args via withNoLogo.
-    tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
+    tryGetNoLogoRetryArgs(cliPath: string, args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
         if (!isNoLogoUnsupportedOutput(args, stdout, stderr)) {
             return undefined;
         }
 
-        if (this._noLogoSupported) {
-            this._noLogoSupported = false;
+        if (!this._noLogoUnsupportedCliPaths.has(cliPath)) {
+            this._noLogoUnsupportedCliPaths.add(cliPath);
             extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying ${operation} without it.`);
         }
 
@@ -61,18 +72,19 @@ export class AppHostCliRunner implements vscode.Disposable {
     // withNoLogo when they restart. These call sites only need to know "did we just disable
     // --nologo support for the rest of this session?" — the recomputed args from
     // tryGetNoLogoRetryArgs would be thrown away.
-    disableNoLogoForRetry(args: string[], stdout: string, stderr: string, operation: string): boolean {
-        return this.tryGetNoLogoRetryArgs(args, stdout, stderr, operation) !== undefined;
+    disableNoLogoForRetry(cliPath: string, args: string[], stdout: string, stderr: string, operation: string): boolean {
+        return this.tryGetNoLogoRetryArgs(cliPath, args, stdout, stderr, operation) !== undefined;
     }
 
     async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
             throw new AspireCliNotInstalledError(String(error));
         });
 
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
         }
+        const invocationArgs = this.normalizeNoLogoArgs(cliPath, args);
 
         return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
             let settled = false;
@@ -105,7 +117,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        terminateCliProcess(cliProcess, command);
+                        void terminateCliProcess(cliProcess, command).catch(error => {
+                            extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                        });
                     }
                 } else {
                     settledBeforeTracking = true;
@@ -123,7 +137,7 @@ export class AppHostCliRunner implements vscode.Disposable {
                 settle(() => reject(new vscode.CancellationError()));
             });
 
-            cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            cliProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
                 createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
@@ -131,7 +145,7 @@ export class AppHostCliRunner implements vscode.Disposable {
                 stderrCallback: (data) => { stderr.append(data); },
                 exitCallback: (code) => {
                     if (code !== 0) {
-                        const retryArgs = this.tryGetNoLogoRetryArgs(args, stdout.value, stderr.value, command);
+                        const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
                         if (retryArgs) {
                             settle(() => {
                                 this.runCliCommand(command, retryArgs, options).then(resolve, reject);
@@ -154,7 +168,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 // never track it, and terminate it if it is somehow still alive (a cancellation or
                 // timeout that raced the spawn would otherwise orphan a live process).
                 if (cliProcess.exitCode === null && !cliProcess.killed) {
-                    terminateCliProcess(cliProcess, command);
+                    void terminateCliProcess(cliProcess, command).catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                    });
                 }
 
                 return;
@@ -166,7 +182,9 @@ export class AppHostCliRunner implements vscode.Disposable {
 
     stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            terminateCliProcess(process, 'one-shot aspire command');
+            void terminateCliProcess(process, 'one-shot aspire command').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate one-shot aspire command: ${String(error)}`);
+            });
         }
         this._oneShotProcesses.clear();
     }
