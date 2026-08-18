@@ -729,7 +729,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             // Replace the current CLI in-place. Package-manager-owned installs that should not
             // be mutated, such as dotnet tool, npm, and Nix, are handled before this path.
-            await ExtractAndUpdateAsync(archivePath, cancellationToken);
+            await ExtractAndUpdateAsync(archivePath, channel, cancellationToken);
 
             return CommandResult.Success();
         }
@@ -745,7 +745,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
+    private async Task ExtractAndUpdateAsync(string archivePath, string channel, CancellationToken cancellationToken)
     {
         // Archive self-update is a same-directory replacement, not an installer that searches
         // for a writable fallback. If the executable is package-manager-owned, installing
@@ -823,9 +823,6 @@ internal sealed class UpdateCommand : BaseCommand
                     throw new InvalidOperationException("New CLI executable failed verification test.");
                 }
 
-                // If we get here, the update was successful, clean up old backups
-                FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
-
                 // The new binary will extract its embedded bundle on first run via EnsureExtractedAsync.
                 // No proactive extraction needed — the payload is inside the new binary's embedded resources,
                 // which are only accessible when that binary is running.
@@ -835,6 +832,15 @@ internal sealed class UpdateCommand : BaseCommand
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, $"Note: {installDir} is not in your PATH. Add it to use the updated CLI globally.");
                 }
+
+                // Shared staging archives can contain a ship-candidate binary deliberately stamped
+                // as stable. Persist the channel selected by this update so the next invocation keeps
+                // using staging instead of falling back to the binary stamp. Write while the executable
+                // backup still exists so a sidecar failure restores the previous CLI.
+                InstallSidecarWriter.UpdateChannel(installDir, channel);
+
+                // If we get here, both the executable and its identity were updated successfully.
+                FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
             }
             catch
             {

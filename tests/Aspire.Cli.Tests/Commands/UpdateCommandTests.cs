@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -1478,6 +1481,80 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown when --channel is provided");
         Assert.Equal("daily", capturedChannel);
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "The self-update archive contains a POSIX shell executable.")]
+    public async Task UpdateCommand_SelfUpdate_PersistsSelectedChannelInInstallSidecar()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var installDirectory = workspace.CreateDirectory("install");
+        var processPath = Path.Combine(installDirectory.FullName, "aspire");
+        await File.WriteAllTextAsync(processPath, "#!/bin/sh\nexit 0\n");
+        SetUnixExecutableMode(processPath);
+
+        var sidecarPath = Path.Combine(installDirectory.FullName, InstallSidecarReader.SidecarFileName);
+        await File.WriteAllTextAsync(
+            sidecarPath,
+            """{"source":"script","channel":"stable","futureField":"preserved"}""");
+
+        var archivePath = await CreateSelfUpdateArchiveAsync(workspace);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            UseProcessPath(options, processPath);
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) => Task.FromResult(archivePath)
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel staging");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllBytesAsync(sidecarPath));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        Assert.Equal("staging", document.RootElement.GetProperty("channel").GetString());
+        Assert.Equal("preserved", document.RootElement.GetProperty("futureField").GetString());
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "The self-update archive contains a POSIX shell executable.")]
+    public async Task UpdateCommand_SelfUpdate_WhenSidecarUpdateFails_RestoresPreviousExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var installDirectory = workspace.CreateDirectory("install");
+        var processPath = Path.Combine(installDirectory.FullName, "aspire");
+        const string originalExecutable = "#!/bin/sh\necho original\n";
+        await File.WriteAllTextAsync(processPath, originalExecutable);
+        SetUnixExecutableMode(processPath);
+
+        var sidecarPath = Path.Combine(installDirectory.FullName, InstallSidecarReader.SidecarFileName);
+        const string malformedSidecar = """{"source":"script","channel":""";
+        await File.WriteAllTextAsync(sidecarPath, malformedSidecar);
+
+        var archivePath = await CreateSelfUpdateArchiveAsync(workspace);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            UseProcessPath(options, processPath);
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) => Task.FromResult(archivePath)
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel staging");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(originalExecutable, await File.ReadAllTextAsync(processPath));
+        Assert.Equal(malformedSidecar, await File.ReadAllTextAsync(sidecarPath));
     }
 
     [Fact]
@@ -3198,6 +3275,51 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         return (exitCode, capturedChannel, promptForSelectionInvoked, interactionService!);
+    }
+
+    private static async Task<string> CreateSelfUpdateArchiveAsync(TemporaryWorkspace workspace)
+    {
+        var contentDirectory = workspace.CreateDirectory("self-update-content");
+        var executablePath = Path.Combine(contentDirectory.FullName, "aspire");
+        await File.WriteAllTextAsync(
+            executablePath,
+            """
+            #!/bin/sh
+            if [ "${1:-}" = "--version" ]; then
+                echo "13.5.0"
+                exit 0
+            fi
+            exit 1
+            """);
+        SetUnixExecutableMode(executablePath);
+
+        var archiveDirectory = workspace.CreateDirectory("self-update-download");
+        var tarPath = Path.Combine(archiveDirectory.FullName, "aspire.tar");
+        TarFile.CreateFromDirectory(contentDirectory.FullName, tarPath, includeBaseDirectory: false);
+
+        var archivePath = Path.Combine(archiveDirectory.FullName, "aspire.tar.gz");
+        await using var tarStream = File.OpenRead(tarPath);
+        await using var archiveStream = File.Create(archivePath);
+        await using (var gzipStream = new GZipStream(archiveStream, CompressionLevel.Fastest, leaveOpen: true))
+        {
+            await tarStream.CopyToAsync(gzipStream);
+        }
+
+        return archivePath;
+    }
+
+    private static void SetUnixExecutableMode(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException();
+        }
+
+        File.SetUnixFileMode(
+            path,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 
     private static string CreateCustomToolPathInstall(string toolPath)

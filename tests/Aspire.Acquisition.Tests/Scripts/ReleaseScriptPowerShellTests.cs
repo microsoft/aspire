@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -175,6 +176,37 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("dev", "daily")]
+    [InlineData("staging", "staging")]
+    [InlineData("release", "stable")]
+    [InlineData("", null)]
+    public async Task WriteInstallSidecar_PersistsQualityChannel(string quality, string? expectedChannel)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"Write-InstallSidecar -InstallPath '{installPath}' -Quality '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        if (expectedChannel is null)
+        {
+            Assert.False(document.RootElement.TryGetProperty("channel", out _));
+        }
+        else
+        {
+            Assert.Equal(expectedChannel, document.RootElement.GetProperty("channel").GetString());
+        }
+    }
+
     [Fact]
     public async Task DefaultInstallPath_MentionsAspireDirectory()
     {
@@ -255,7 +287,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(
             File.Exists(globalConfig),
-            $"Release script must not write {globalConfig}; channel is baked into the CLI binary, not stored globally.");
+            $"Release script must not write {globalConfig}; channel belongs to the install-scoped sidecar.");
 
         // The script should not even plan a global-channel write in its what-if output.
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
@@ -264,11 +296,8 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
     {
-        // Install scripts must not write a global aspire.config.json — the channel
-        // is baked into the CLI binary at build time and read via
-        // IdentityChannelReader. A global channel field would shadow the baked value.
-        // Asserts both -WhatIf stdout shape and absence of the global config file
-        // under MockHome.
+        // Install scripts must not write channel identity to global application config.
+        // The install-scoped sidecar carries it without contaminating unrelated projects.
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
 
@@ -276,7 +305,6 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("\"channel\"", result.Output);
 
         var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(

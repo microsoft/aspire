@@ -789,6 +789,32 @@ function ConvertTo-ChannelName {
     }
 }
 
+function Write-InstallSidecar {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPath,
+        [string]$Quality
+    )
+
+    $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
+    $temporaryPath = "$sidecarPath.$([System.Guid]::NewGuid().ToString('N')).tmp"
+    $payload = '{"source":"script"}'
+    if (-not [string]::IsNullOrWhiteSpace($Quality)) {
+        $channel = ConvertTo-ChannelName -Quality $Quality
+        $payload = "{""source"":""script"",""channel"":""$channel""}"
+    }
+
+    [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
+    try {
+        [System.IO.File]::WriteAllText($temporaryPath, "$payload`n")
+        [System.IO.File]::Move($temporaryPath, $sidecarPath, $true)
+    }
+    finally {
+        [System.IO.File]::Delete($temporaryPath)
+    }
+}
+
 # Simplified installation path determination
 function Get-InstallPath {
     [CmdletBinding()]
@@ -1260,8 +1286,10 @@ function Install-AspireCli {
         # Authorship contract: docs/specs/install-routes.md.
         $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
         if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
-            [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
-            [System.IO.File]::WriteAllText($sidecarPath, "{""source"":""script""}`n")
+            # An explicit version can come from any channel, so retain the archive's
+            # baked identity when there was no quality route to author the channel.
+            $sidecarQuality = if ([string]::IsNullOrWhiteSpace($Version)) { $Quality } else { "" }
+            Write-InstallSidecar -InstallPath $InstallPath -Quality $sidecarQuality
         }
         else {
             Write-Host "What if: Route sidecar would be written to: $sidecarPath"
