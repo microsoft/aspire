@@ -500,6 +500,14 @@ public static class CertManagerExtensions
         CertManagerIssuerResource issuer)
     {
         var environment = certManager.Parent;
+        if (environment.SkipDestroyCleanup)
+        {
+            context.Logger.LogInformation(
+                "Skipping cert-manager cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                environment.Name);
+            return;
+        }
+
         // Match the lowercase normalization used at apply time so we target the same object.
         var k8sIssuerName = issuer.Name.ToKubernetesResourceName();
 

@@ -218,14 +218,20 @@ public partial class AzureKubernetesEnvironmentResource
         var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
             ?? Name;
 
-        await GetAksCredentialsAsync(context, clusterName, savedResourceGroup: null, subscriptionId: null).ConfigureAwait(false);
+        await GetAksCredentialsAsync(
+            context,
+            clusterName,
+            savedResourceGroup: null,
+            subscriptionId: null,
+            verifyClusterExists: false).ConfigureAwait(false);
     }
 
     private async Task GetAksCredentialsAsync(
         PipelineStepContext context,
         string clusterName,
         string? savedResourceGroup,
-        string? subscriptionId)
+        string? subscriptionId,
+        bool verifyClusterExists)
     {
         var getCredsTask = await context.ReportingStep.CreateTaskAsync(
             $"Fetching AKS credentials for {Name}",
@@ -269,6 +275,28 @@ public partial class AzureKubernetesEnvironmentResource
                     .ConfigureAwait(false);
 
                 ValidateAzureResourceName(resourceGroup, "resource group");
+
+                KubernetesEnvironment.SkipDestroyCleanup = false;
+                if (verifyClusterExists &&
+                    !await AksResourceExistsAsync(
+                        azPath,
+                        subscriptionId,
+                        resourceGroup,
+                        clusterName,
+                        RunAzAsync).ConfigureAwait(false))
+                {
+                    KubernetesEnvironment.KubeConfigPath = null;
+                    KubernetesEnvironment.SkipDestroyCleanup = true;
+
+                    context.Logger.LogInformation(
+                        "AKS cluster '{ClusterName}' no longer exists in resource group '{ResourceGroup}'. Skipping cluster cleanup.",
+                        clusterName,
+                        resourceGroup);
+                    await getCredsTask.SucceedAsync(
+                        $"AKS cluster {clusterName} no longer exists; cluster cleanup will be skipped",
+                        context.CancellationToken).ConfigureAwait(false);
+                    return;
+                }
 
                 // Fetch kubeconfig content to stdout using --file - to avoid az CLI
                 // writing credentials with potentially permissive file permissions.
@@ -412,7 +440,12 @@ public partial class AzureKubernetesEnvironmentResource
             resourceGroupName = clusterResourceId.ResourceGroupName!;
         }
 
-        await GetAksCredentialsAsync(context, clusterResourceId.Name, resourceGroupName, subscriptionId).ConfigureAwait(false);
+        await GetAksCredentialsAsync(
+            context,
+            clusterResourceId.Name,
+            resourceGroupName,
+            subscriptionId,
+            verifyClusterExists: true).ConfigureAwait(false);
     }
 
     private static bool HasPersistedAksIdentity(JsonObject deploymentState)
@@ -931,6 +964,27 @@ public partial class AzureKubernetesEnvironmentResource
         return result.StandardOutput;
     }
 
+    internal static async Task<bool> AksResourceExistsAsync(
+        string azPath,
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName,
+        Func<string, string, Task<AzCommandResult>> runAzCommandAsync)
+    {
+        var result = await runAzCommandAsync(
+            azPath,
+            BuildAksResourceExistsArguments(subscriptionId, resourceGroup, clusterName)).ConfigureAwait(false);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"az resource list failed while checking AKS cluster existence " +
+                $"(exit code {result.ExitCode}): {result.StandardError}");
+        }
+
+        return !string.IsNullOrWhiteSpace(result.StandardOutput);
+    }
+
     internal static string BuildGetCredentialsArguments(
         string subscriptionId,
         string resourceGroup,
@@ -939,6 +993,13 @@ public partial class AzureKubernetesEnvironmentResource
 
     internal static string BuildResourceGroupQueryArguments(string subscriptionId, string clusterName)
         => $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"";
+
+    internal static string BuildAksResourceExistsArguments(
+        string subscriptionId,
+        string resourceGroup,
+        string clusterName)
+        => $"resource list --resource-group \"{resourceGroup}\" --resource-type Microsoft.ContainerService/managedClusters " +
+           $"--name \"{clusterName}\" --query [0].id -o tsv --subscription \"{subscriptionId}\"";
 
     /// <summary>
     /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.

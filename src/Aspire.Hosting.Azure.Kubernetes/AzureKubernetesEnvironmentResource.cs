@@ -131,7 +131,17 @@ public partial class AzureKubernetesEnvironmentResource :
             foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
             {
                 kubernetesDestroyStep.DependsOn(getDestroyCredentialsStep);
-                destroyAzureStep.DependsOn(kubernetesDestroyStep);
+
+                // The direct Helm uninstall step is an explicit, no-confirmation alternative to the
+                // aggregate destroy step. It needs isolated credentials when targeted directly, but
+                // Azure cleanup must not schedule both alternatives and uninstall the release twice.
+                if (!string.Equals(
+                    kubernetesDestroyStep.Name,
+                    HelmDeploymentEngine.GetHelmUninstallStepName(k8sEnv.Name),
+                    StringComparison.Ordinal))
+                {
+                    destroyAzureStep.DependsOn(kubernetesDestroyStep);
+                }
             }
         }));
     }

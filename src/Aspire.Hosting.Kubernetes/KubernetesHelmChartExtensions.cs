@@ -115,12 +115,6 @@ public static partial class KubernetesHelmChartExtensions
                     DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
                     Tags = [HelmDeploymentEngine.GetKubernetesDestroyTag(environment.Name)]
                 };
-                // The uninstall path shells out to `helm uninstall`, so it must observe the same
-                // Helm CLI / version preflight as the deploy path. Without this dep, a missing or
-                // too-old Helm during teardown would surface as the raw spawn / unknown-flag error
-                // the env-wide `check-helm-prereqs-{env}` step exists to convert into an actionable
-                // message. Install is already covered transitively via `helm-deploy-{env}`.
-                uninstallStep.DependsOn($"check-helm-prereqs-{environment.Name}");
                 uninstallStep.RequiredBy(WellKnownPipelineSteps.Destroy);
                 steps.Add(uninstallStep);
             }
@@ -393,6 +387,14 @@ public static partial class KubernetesHelmChartExtensions
         string defaultReleaseName,
         string defaultNamespace)
     {
+        if (environment.SkipDestroyCleanup)
+        {
+            context.Logger.LogInformation(
+                "Skipping Helm chart cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                environment.Name);
+            return;
+        }
+
         var logger = context.Services.GetRequiredService<ILogger<KubernetesHelmChartResource>>();
         var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
@@ -407,6 +409,12 @@ public static partial class KubernetesHelmChartExtensions
         // (e.g., the user opted in to destroy after deploying without it). This is best-effort.
         var releaseName = !string.IsNullOrEmpty(savedReleaseName) ? savedReleaseName : defaultReleaseName;
         var @namespace = !string.IsNullOrEmpty(savedNamespace) ? savedNamespace : defaultNamespace;
+
+        // Keep the preflight inside the action so AKS destroy can skip cleanup for a cluster
+        // that no longer exists without requiring Helm on the machine.
+        await HelmVersionValidator.EnsureMinimumVersionAsync(
+            helmRunner,
+            context.CancellationToken).ConfigureAwait(false);
 
         logger.LogInformation(
             "Uninstalling Helm release '{ReleaseName}' for chart '{ChartName}' from namespace '{Namespace}'.",

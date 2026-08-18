@@ -235,10 +235,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             "Direct dependencies: aks-get-credentials-for-destroy-aks, destroy-prereq",
             GetDirectDependencies(diagnosticLines, "destroy-helm-aks"));
         Assert.Equal(
-            "Direct dependencies: aks-get-credentials-for-destroy-aks, check-helm-prereqs-aks, cm-issuer-delete-letsencrypt, destroy-prereq",
+            "Direct dependencies: aks-get-credentials-for-destroy-aks",
+            GetDirectDependencies(diagnosticLines, "helm-uninstall-aks"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, cm-issuer-delete-letsencrypt, destroy-prereq",
             GetDirectDependencies(diagnosticLines, "helm-uninstall-cert-manager-chart"));
         Assert.Equal(
-            "Direct dependencies: aks-get-credentials-for-destroy-aks, check-helm-prereqs-aks, destroy-prereq",
+            "Direct dependencies: aks-get-credentials-for-destroy-aks, destroy-prereq",
             GetDirectDependencies(diagnosticLines, "helm-uninstall-podinfo"));
         Assert.Equal(
             "Direct dependencies: aks-get-credentials-for-destroy-aks, destroy-prereq",
@@ -292,7 +295,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         {
             CommandResultFactory = arguments =>
             {
-                if (!arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
+                if (!arguments.StartsWith("uninstall podinfo ", StringComparison.OrdinalIgnoreCase))
                 {
                     return (0, null);
                 }
@@ -397,6 +400,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             "Direct dependencies: aks-get-credentials-for-destroy-west, destroy-prereq",
             GetDirectDependencies(diagnosticLines, "destroy-helm-west"));
         Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-east",
+            GetDirectDependencies(diagnosticLines, "helm-uninstall-east"));
+        Assert.Equal(
+            "Direct dependencies: aks-get-credentials-for-destroy-west",
+            GetDirectDependencies(diagnosticLines, "helm-uninstall-west"));
+        Assert.Equal(
             "Direct dependencies: destroy-helm-east, destroy-helm-west, destroy-prereq",
             GetDirectDependencies(diagnosticLines, "destroy-azure-azure-environment"));
     }
@@ -432,8 +441,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
                 ["subscription"] = "00000000-5555-6666-7777-888888888888"
             }.ToJsonString()
         });
-        string? azArguments = null;
-        var azCommandCount = 0;
+        var azArguments = new List<string>();
 
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
@@ -446,8 +454,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
         aks.Resource.AzCommandRunnerForTesting = (_, arguments, _) =>
         {
-            azCommandCount++;
-            azArguments = arguments;
+            azArguments.Add(arguments);
             return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
                 0,
                 "apiVersion: v1",
@@ -468,10 +475,13 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         await using var app = builder.Build();
         await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(1, azCommandCount);
         Assert.Equal(
-            "aks get-credentials --resource-group \"cluster-resource-group\" --name \"aks-physical-name\" --file - " +
-            "--subscription \"00000000-5555-6666-7777-888888888888\"",
+            [
+                "resource list --resource-group \"cluster-resource-group\" --resource-type Microsoft.ContainerService/managedClusters " +
+                "--name \"aks-physical-name\" --query [0].id -o tsv --subscription \"00000000-5555-6666-7777-888888888888\"",
+                "aks get-credentials --resource-group \"cluster-resource-group\" --name \"aks-physical-name\" --file - " +
+                "--subscription \"00000000-5555-6666-7777-888888888888\""
+            ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
     }
@@ -500,7 +510,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
                 }
             }.ToJsonString()
         });
-        string? azArguments = null;
+        var azArguments = new List<string>();
 
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
@@ -519,7 +529,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
         aks.Resource.AzCommandRunnerForTesting = (_, arguments, _) =>
         {
-            azArguments = arguments;
+            azArguments.Add(arguments);
             return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
                 0,
                 "apiVersion: v1",
@@ -539,8 +549,12 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(
-            $"aks get-credentials --resource-group \"{clusterResourceGroup}\" --name \"{clusterName}\" --file - " +
-            $"--subscription \"{clusterSubscriptionId}\"",
+            [
+                $"resource list --resource-group \"{clusterResourceGroup}\" --resource-type Microsoft.ContainerService/managedClusters " +
+                $"--name \"{clusterName}\" --query [0].id -o tsv --subscription \"{clusterSubscriptionId}\"",
+                $"aks get-credentials --resource-group \"{clusterResourceGroup}\" --name \"{clusterName}\" --file - " +
+                $"--subscription \"{clusterSubscriptionId}\""
+            ],
             azArguments);
         Assert.Empty(aks.Resource.Outputs);
     }
@@ -659,6 +673,140 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             reporter.CompletedSteps,
             step => step is ("destroy-azure-azure-environment", _, CompletionState.Completed));
         Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+    }
+
+    [Fact]
+    public async Task DirectAzureDestroySkipsClusterCleanupWhenPersistedAksNoLongerExists()
+    {
+        const string subscriptionId = "00000000-5555-6666-7777-888888888888";
+        const string resourceGroup = "cluster-resource-group";
+        const string clusterName = "deleted-aks";
+        using var workspace = TemporaryWorkspace.Create(output);
+        var reporter = new TestPipelineActivityReporter(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Outputs"] = new JsonObject
+            {
+                ["id"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}"
+                }
+            }.ToJsonString()
+        });
+        stateManager.SetSection("Helm:aks", new JsonObject
+        {
+            ["ReleaseName"] = "same-name-as-ambient-release",
+            ["Namespace"] = "default"
+        });
+        var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
+        var azArguments = new List<string>();
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "destroy-azure-azure-environment");
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
+        aks.Resource.AzCommandRunnerForTesting = (_, arguments, _) =>
+        {
+            azArguments.Add(arguments);
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
+                0,
+                string.Empty,
+                string.Empty));
+        };
+        aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            [
+                $"resource list --resource-group \"{resourceGroup}\" --resource-type Microsoft.ContainerService/managedClusters " +
+                $"--name \"{clusterName}\" --query [0].id -o tsv --subscription \"{subscriptionId}\""
+            ],
+            azArguments);
+        Assert.False(fakeHelm.WasUninstallCalled);
+        Assert.False(fakeHelm.WasVersionCalled);
+        Assert.Contains(
+            reporter.CompletedSteps,
+            step => step is ("destroy-azure-azure-environment", _, CompletionState.Completed));
+        Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.True(aks.Resource.KubernetesEnvironment.SkipDestroyCleanup);
+    }
+
+    [Fact]
+    public async Task DirectMainHelmUninstallUsesPersistedAksCredentials()
+    {
+        const string subscriptionId = "00000000-5555-6666-7777-888888888888";
+        const string resourceGroup = "cluster-resource-group";
+        const string clusterName = "aks-physical-name";
+        using var workspace = TemporaryWorkspace.Create(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Outputs"] = new JsonObject
+            {
+                ["id"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}"
+                }
+            }.ToJsonString()
+        });
+        var fakeHelm = new FakeHelmRunner();
+        var azArguments = new List<string>();
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "helm-uninstall-aks");
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.Resource.KubernetesEnvironment.Annotations.Add(
+            new HelmReleaseNameAnnotation(ReferenceExpression.Create($"main-release")));
+        aks.Resource.KubernetesEnvironment.Annotations.Add(
+            new KubernetesNamespaceAnnotation(ReferenceExpression.Create($"main-namespace")));
+        aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
+        aks.Resource.AzCommandRunnerForTesting = (_, arguments, _) =>
+        {
+            azArguments.Add(arguments);
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
+                0,
+                arguments.StartsWith("resource list", StringComparison.Ordinal)
+                    ? $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}"
+                    : "apiVersion: v1",
+                string.Empty));
+        };
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            [
+                $"resource list --resource-group \"{resourceGroup}\" --resource-type Microsoft.ContainerService/managedClusters " +
+                $"--name \"{clusterName}\" --query [0].id -o tsv --subscription \"{subscriptionId}\"",
+                $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file - " +
+                $"--subscription \"{subscriptionId}\""
+            ],
+            azArguments);
+        var kubeConfigPath = Assert.IsType<string>(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+        Assert.Equal(
+            $"uninstall main-release --namespace main-namespace --ignore-not-found --kubeconfig \"{kubeConfigPath}\"",
+            Assert.Single(
+                fakeHelm.Arguments,
+                arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
@@ -880,6 +1028,23 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         Assert.Equal(
             "az aks get-credentials failed (exit code 1): subscription not found",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AksResourceExistsThrowsWhenAzureCliQueryFails()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureKubernetesEnvironmentResource.AksResourceExistsAsync(
+                "/usr/bin/az",
+                "00000000-0000-0000-0000-000000000001",
+                "deployment-rg",
+                "deployment-aks",
+                (path, arguments) => Task.FromResult(
+                    new AzureKubernetesEnvironmentResource.AzCommandResult(1, "", "authentication failed"))));
+
+        Assert.Equal(
+            "az resource list failed while checking AKS cluster existence (exit code 1): authentication failed",
             exception.Message);
     }
 
