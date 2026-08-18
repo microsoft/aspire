@@ -4572,7 +4572,7 @@ node-forge@1.4.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-forge/-/node-forge-1.4.0.tgz"
   integrity sha1-HHt9i9wtB4c59YKH1YnZA6EbL8I=
 
-node-gyp-build@^4.8.4:
+node-gyp-build@^4.8.2, node-gyp-build@^4.8.4:
   version "4.8.4"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/node-gyp-build/-/node-gyp-build-4.8.4.tgz"
   integrity sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==
@@ -6167,6 +6167,14 @@ tree-sitter-c-sharp@0.23.5:
   dependencies:
     node-addon-api "^8.2.2"
     node-gyp-build "^4.8.4"
+
+tree-sitter-java@0.23.5:
+  version "0.23.5"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tree-sitter-java/-/tree-sitter-java-0.23.5.tgz#fb150fdaa9c852b3d71ba3144109008ac6a47ac2"
+  integrity sha512-Yju7oQ0Xx7GcUT01mUglPP+bYfvqjNCGdxqigTnew9nLGoII42PNVP3bHrYeMxswiCRM0yubWmN5qk+zsg0zMA==
+  dependencies:
+    node-addon-api "^8.2.2"
+    node-gyp-build "^4.8.2"
 
 tree-sitter-rust@0.24.0:
   version "0.24.0"

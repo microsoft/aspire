@@ -57,9 +57,9 @@ internal class PackagingService : IPackagingService
     //   overrideCliIdentityChannel        - forces the identity used for staging-feed decisions
     //                                       (validated against the known channel set). Set to
     //                                       `staging` to exercise the staging-identity darc path.
-    //   overrideCliInformationalVersion   - forces the AssemblyInformationalVersion that the SHA
-    //                                       derivation and version-shape (quality) checks read,
-    //                                       e.g. `13.4.0-preview.1.26280.6+<full-commit-hash>`.
+    //   overrideCliInformationalVersion   - forces the AssemblyInformationalVersion used to derive
+    //                                       the SHA-specific feed URL, e.g.
+    //                                       `13.4.0-preview.1.26280.6+<full-commit-hash>`.
     //
     // NOTE: These only route to a feed; they do not create one. They are typically useful only
     // once the darc-pub-microsoft-aspire-<sha> feed actually exists for the specific commit/version
@@ -86,11 +86,6 @@ internal class PackagingService : IPackagingService
     private readonly IConfiguration _configuration;
     private readonly ILogger<PackagingService> _logger;
     private readonly Func<string?> _processPathProvider;
-    // Predicate used by staging-channel synthesis to decide whether the running CLI is built
-    // from a stable-shaped version (no semver prerelease tag). Defaults to inspecting the
-    // current Aspire.Cli assembly's InformationalVersion; tests inject a deterministic value
-    // because the version baked into the test-host assembly varies by build configuration.
-    private readonly Func<bool> _isStableShapedCliVersion;
     // Provides the running CLI's AssemblyInformationalVersion (which carries the +<commitHash>
     // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging
     // feed). Defaults to reading the Aspire.Cli assembly; tests inject a deterministic value
@@ -112,7 +107,6 @@ internal class PackagingService : IPackagingService
         IConfiguration configuration,
         ILogger<PackagingService> logger,
         Func<string?>? processPathProvider = null,
-        Func<bool>? isStableShapedCliVersion = null,
         Func<string?>? cliInformationalVersionProvider = null)
     {
         _executionContext = executionContext;
@@ -121,7 +115,6 @@ internal class PackagingService : IPackagingService
         _configuration = configuration;
         _logger = logger;
         _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
-        _isStableShapedCliVersion = isStableShapedCliVersion ?? IsStableShapedCliVersionDefault;
         _cliInformationalVersionProvider = cliInformationalVersionProvider ?? GetCliInformationalVersionDefault;
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
     }
@@ -201,26 +194,15 @@ internal class PackagingService : IPackagingService
             //     The user picked staging deliberately; they get the broadest matching window.
             //   - `stagingFeatureEnabled` only (no other staging signal): Stable. Preserves the
             //     pre-existing behavior of the staging feature flag.
-            //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging):
-            //     follows the CLI build's version shape so the eligible version window matches the
-            //     packages the build actually shipped.
-            //       * Stable-shaped (e.g. "13.4.0", produced during release stabilization when
-            //         StabilizePackageVersion=true) → Stable, so resolution prefers the stable-shaped
-            //         packages on the darc feed (the #17527 scenario).
-            //       * Prerelease-shaped (e.g. "13.4.0-preview.1.123") → Both, so prerelease-tagged
-            //         packages on the darc feed remain eligible.
+            //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging): Both.
+            //     A single official staging build can publish stable-shaped packages and deliberately
+            //     prerelease-only integrations from the same SHA-specific feed. Restricting a
+            //     stable-shaped staging CLI to Stable hides those integrations from broad discovery.
+            //     See https://github.com/microsoft/aspire/issues/19423.
             PackageChannelQuality defaultQuality;
             if (stagingIdentityChannel)
             {
-                // When the running CLI's identity itself is staging, the synthesized channel's
-                // quality MUST follow the CLI build's version shape regardless of how synthesis
-                // was triggered. `init` and many other commands pass requestedChannelName=staging
-                // when identity is staging, so checking `stagingChannelRequested` first would
-                // short-circuit this path and re-introduce the #17527 version-filtering mismatch on
-                // stabilizing builds.
-                defaultQuality = _isStableShapedCliVersion()
-                    ? PackageChannelQuality.Stable
-                    : PackageChannelQuality.Both;
+                defaultQuality = PackageChannelQuality.Both;
             }
             else if (stagingChannelConfigured || stagingChannelRequested)
             {
@@ -343,35 +325,6 @@ internal class PackagingService : IPackagingService
 
         var packagesDirectory = new DirectoryInfo(Path.Combine(installPrefix.FullName, "hives", identityChannel, "packages"));
         return packagesDirectory.Exists ? packagesDirectory : null;
-    }
-
-    // Returns true when the running CLI's identity version is stable-shaped (no semver prerelease
-    // tag). Used by the staging-channel synthesis to route stabilizing builds to the SHA-derived
-    // darc feed instead of the shared dotnet9 daily feed. Reads CliExecutionContext.IdentitySdkVersion
-    // so ASPIRE_CLI_VERSION / sidecar overrides drive the routing, not the physical binary version.
-    private bool IsStableShapedCliVersionFromIdentity()
-    {
-        var version = _executionContext.IdentitySdkVersion;
-        return !string.IsNullOrEmpty(version) && !version.Contains('-');
-    }
-
-    // Default version-shape predicate. Honors the overrideCliInformationalVersion diagnostic
-    // override (so a locally built CLI can present as stable- or prerelease-shaped for staging
-    // validation) before falling back to the resolved identity version (which already reflects
-    // ASPIRE_CLI_VERSION / the install sidecar).
-    private bool IsStableShapedCliVersionDefault()
-    {
-        var overrideVersion = _configuration[OverrideCliInformationalVersionConfigKey];
-        if (!string.IsNullOrEmpty(overrideVersion))
-        {
-            // Stable-shaped == no semver prerelease tag. Strip build metadata (+<hash>) first so a
-            // commit hash that happens to contain '-' can't be misread as a prerelease tag. Example:
-            //   "13.4.0-preview.1.26280.6+abcd-ef12" -> version part "13.4.0-preview.1.26280.6" -> prerelease
-            //   "13.4.0+abcd-ef12"                   -> version part "13.4.0"                   -> stable
-            return !StripBuildMetadata(overrideVersion).Contains('-');
-        }
-
-        return IsStableShapedCliVersionFromIdentity();
     }
 
     // Default informational-version provider. Honors the overrideCliInformationalVersion diagnostic

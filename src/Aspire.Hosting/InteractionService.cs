@@ -284,7 +284,7 @@ internal class InteractionService : IInteractionService
         }
     }
 
-    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
     {
         EnsureServiceAvailable();
 
@@ -295,7 +295,7 @@ internal class InteractionService : IInteractionService
         {
             options ??= ProgressInteractionOptions.CreateDefault();
 
-            var newState = new Interaction(title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            var newState = new Interaction(options.Title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);

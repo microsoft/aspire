@@ -797,9 +797,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while resources are being downloaded...",
-                    "Downloading resources",
                     new ProgressInteractionOptions
                     {
+                        Title = "Downloading resources",
                         PrimaryButtonText = "Cancel",
                         Work = async ctx =>
                         {
@@ -826,7 +826,6 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while resources are being downloaded...",
-                    title: null,
                     options: new ProgressInteractionOptions
                     {
                         Work = async ctx =>
@@ -856,7 +855,7 @@ internal static class InteractionCommands
 
                 var progressTask = interactionService.PromptProgressAsync(
                     "This dialog has no cancel button. It will close automatically.",
-                    "Processing",
+                    new ProgressInteractionOptions { Title = "Processing" },
                     cancellationToken: cts.Token);
 
                 // Simulate background work, then close the dialog.
@@ -878,9 +877,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while data is being loaded...",
-                    "Loading",
                     new ProgressInteractionOptions
                     {
+                        Title = "Loading",
                         Work = async ctx =>
                         {
                             await Task.Delay(10000, ctx.CancellationToken);
@@ -924,9 +923,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
-                    "Deploying to Azure",
                     new ProgressInteractionOptions
                     {
+                        Title = "Deploying to Azure",
                         PrimaryButtonText = "Abort deployment",
                         EnableMessageMarkdown = true,
                         Work = async ctx =>
@@ -949,9 +948,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Building and pushing container images to registry. This will take approximately 30 seconds.",
-                    "Building container images",
                     new ProgressInteractionOptions
                     {
+                        Title = "Building container images",
                         PrimaryButtonText = "Cancel build"
                     },
                     commandContext.CancellationToken);

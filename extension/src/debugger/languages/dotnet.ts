@@ -8,7 +8,7 @@ import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, LaunchOptions, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
@@ -17,14 +17,17 @@ import {
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction,
     LaunchProfileCommandName,
     LaunchProfile,
+    LaunchSettings,
     expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
-import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { resolveCliPath } from '../../utils/cliPath';
+import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
+import { deleteEnvironmentVariable, getEnvironmentWithoutE2EBridgeVariables, setEnvironmentVariable } from '../../utils/environment';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -67,48 +70,52 @@ export class DotNetService implements IDotNetService {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
             const args = ['build', projectFile];
-            const buildProcess = spawn('dotnet', args, {
-                // The .NET SDK searches for global.json from the process working directory, not the
-                // project argument. Run from the project directory so extension and CLI builds select
-                // the same SDK and repository configuration.
-                cwd: path.dirname(projectFile),
-                env: createAspireCliPathProcessEnvironment()
-            });
 
-            let stdoutOutput = '';
-            let stderrOutput = '';
+            void (async () => {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                const buildProcess = spawn('dotnet', args, {
+                    // The .NET SDK searches for global.json from the process working directory, not the
+                    // project argument. Run from the project directory so extension and CLI builds select
+                    // the same SDK and repository configuration.
+                    cwd: path.dirname(projectFile),
+                    env: createResolvedAspireCliPathProcessEnvironment(cliPath)
+                });
 
-            // Stream stdout in real-time
-            buildProcess.stdout?.on('data', (data: Buffer) => {
-                const output = data.toString();
-                stdoutOutput += output;
-                this.writeToDebugConsole(output, 'stdout');
-            });
+                let stdoutOutput = '';
+                let stderrOutput = '';
 
-            // Stream stderr in real-time
-            buildProcess.stderr?.on('data', (data: Buffer) => {
-                const output = data.toString();
-                stderrOutput += output;
-                this.writeToDebugConsole(output, 'stderr');
-            });
+                // Stream stdout in real-time
+                buildProcess.stdout?.on('data', (data: Buffer) => {
+                    const output = data.toString();
+                    stdoutOutput += output;
+                    this.writeToDebugConsole(output, 'stdout');
+                });
 
-            buildProcess.on('error', (err) => {
-                extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
-                reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
-            });
+                // Stream stderr in real-time
+                buildProcess.stderr?.on('data', (data: Buffer) => {
+                    const output = data.toString();
+                    stderrOutput += output;
+                    this.writeToDebugConsole(output, 'stderr');
+                });
 
-            buildProcess.on('close', (code) => {
-                if (code === 0) {
-                    // if build succeeds, simply return. otherwise throw to trigger error handling
-                    if (stderrOutput) {
-                        reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                buildProcess.on('error', (err) => {
+                    extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
+                    reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
+                });
+
+                buildProcess.on('close', (code) => {
+                    if (code === 0) {
+                        // if build succeeds, simply return. otherwise throw to trigger error handling
+                        if (stderrOutput) {
+                            reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                        } else {
+                            resolve();
+                        }
                     } else {
-                        resolve();
+                        reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
                     }
-                } else {
-                    reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
-                }
-            });
+                });
+            })().catch(reject);
         });
     }
 
@@ -122,10 +129,11 @@ export class DotNetService implements IDotNetService {
             '-property:GenerateFullPaths=true'
         ];
         try {
+            const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
             const { stdout } = await this.execFileAsync('dotnet', args, {
                 cwd: path.dirname(projectFile),
                 encoding: 'utf8',
-                env: createAspireCliPathProcessEnvironment()
+                env: createResolvedAspireCliPathProcessEnvironment(cliPath)
             });
             const output = stdout.trim();
             if (!output) {
@@ -139,20 +147,21 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetRunApiOutput(projectPath: string, environment?: NodeJS.ProcessEnv): Promise<string> {
-        let childProcess: ChildProcessWithoutNullStreams;
+        const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectPath)));
+        let childProcess: ChildProcessWithoutNullStreams | undefined;
 
-        return new Promise<string>(async (resolve, reject) => {
+        return new Promise<string>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                childProcess?.kill();
+                reject(new Error('Timeout while waiting for dotnet run-api response'));
+            }, 10_000);
+
             try {
-                const timeout = setTimeout(() => {
-                    childProcess?.kill();
-                    reject(new Error('Timeout while waiting for dotnet run-api response'));
-                }, 10_000);
-
                 extensionLogOutputChannel.info('dotnet run-api - starting process');
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: createAspireCliPathProcessEnvironment({ ...process.env, ...environment }),
+                    env: createResolvedAspireCliPathProcessEnvironment(cliPath, { ...process.env, ...environment }),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
@@ -176,9 +185,10 @@ export class DotNetService implements IDotNetService {
                 childProcess.stdin.write(message + os.EOL);
                 childProcess.stdin.end();
             } catch (e) {
+                clearTimeout(timeout);
                 reject(e);
             }
-        }).finally(() => childProcess.removeAllListeners());
+        }).finally(() => childProcess?.removeAllListeners());
     }
 }
 
@@ -372,8 +382,7 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
 function configureDotNetRunDebugConfiguration(
     debugConfiguration: AspireResourceExtendedDebugConfiguration,
     args: string[] | string,
-    baseProfileEnvironmentVariables: { [key: string]: string } | undefined,
-    runSessionEnvironmentVariables: EnvVar[],
+    environment: NodeJS.ProcessEnv,
     processWorkingDirectory?: string): void {
     debugConfiguration.program = 'dotnet';
     debugConfiguration.args = args;
@@ -385,11 +394,97 @@ function configureDotNetRunDebugConfiguration(
     debugConfiguration.executablePath = undefined;
     debugConfiguration.noDebug = true;
     debugConfiguration.cwd = processWorkingDirectory ?? debugConfiguration.cwd;
-    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-        baseProfileEnvironmentVariables,
-        debugConfiguration.env,
-        runSessionEnvironmentVariables
-    ));
+    debugConfiguration.env = environment;
+}
+
+function createProjectEnvironment(
+    launchSettings: LaunchSettings | null,
+    baseProfile: LaunchProfile | null,
+    profileName: string | null,
+    disableLaunchProfile: boolean,
+    debugConfigurationEnvironment: { [key: string]: string } | undefined,
+    runSessionEnvironment: EnvVar[],
+    launchOptions: LaunchOptions,
+    runApiEnvironment?: { [key: string]: string }
+): NodeJS.ProcessEnv {
+    if (!launchOptions.isApphost) {
+        return Object.fromEntries(mergeEnvironmentVariables(
+            baseProfile?.environmentVariables,
+            debugConfigurationEnvironment,
+            runSessionEnvironment,
+            runApiEnvironment
+        ));
+    }
+
+    const environment = getEnvironmentWithoutE2EBridgeVariables();
+    const { profile: defaultProfile, profileName: defaultProfileName } = determineDefaultLaunchProfile(launchSettings);
+    applyEnvironmentVariables(environment, runApiEnvironment, defaultProfile, defaultProfileName);
+    for (const envVar of runSessionEnvironment) {
+        if (!isDefaultLaunchProfileEnvironmentVariable(envVar.name, envVar.value, defaultProfile, defaultProfileName)) {
+            setEnvironmentVariable(environment, envVar.name, envVar.value);
+        }
+    }
+
+    // Older CLIs send one flattened AppHost environment that can include the SDK default profile's
+    // values. Filter only entries whose names and values match that profile before applying the profile
+    // selected by launch.json. This preserves inherited values and explicit CLI overrides using the same keys.
+    // See https://github.com/microsoft/aspire/issues/19387.
+    if (disableLaunchProfile) {
+        deleteEnvironmentVariable(environment, 'DOTNET_LAUNCH_PROFILE');
+    }
+
+    if (baseProfile?.applicationUrl) {
+        setEnvironmentVariable(environment, 'ASPNETCORE_URLS', baseProfile.applicationUrl);
+    }
+    applyEnvironmentVariables(environment, baseProfile?.environmentVariables);
+    applyEnvironmentVariables(environment, launchOptions.debugSession.configuration?.debuggers?.['project']?.env);
+
+    // The AppHost uses DOTNET_LAUNCH_PROFILE to determine which launch profile to use for project resources.
+    // The dotnet CLI sets it (see https://github.com/dotnet/sdk/pull/35029), so replicate that behavior before
+    // applying the explicit AppHost environment, which is the final override layer.
+    if (profileName) {
+        setEnvironmentVariable(environment, 'DOTNET_LAUNCH_PROFILE', profileName);
+    }
+
+    applyEnvironmentVariables(environment, launchOptions.debugSession.configuration?.debuggers?.['apphost']?.env);
+
+    return environment;
+}
+
+function applyEnvironmentVariables(
+    environment: NodeJS.ProcessEnv,
+    variables: { [key: string]: string } | undefined,
+    defaultProfile?: LaunchProfile | null,
+    defaultProfileName?: string | null
+): void {
+    for (const [name, value] of Object.entries(variables ?? {})) {
+        if (!isDefaultLaunchProfileEnvironmentVariable(name, value, defaultProfile, defaultProfileName)) {
+            setEnvironmentVariable(environment, name, value);
+        }
+    }
+}
+
+function isDefaultLaunchProfileEnvironmentVariable(
+    name: string,
+    value: string | undefined,
+    defaultProfile: LaunchProfile | null | undefined,
+    defaultProfileName: string | null | undefined
+): boolean {
+    if (!defaultProfile) {
+        return false;
+    }
+
+    const namesEqual = (candidate: string) =>
+        process.platform === 'win32' ? candidate.toLowerCase() === name.toLowerCase() : candidate === name;
+
+    for (const [profileVariableName, profileVariableValue] of Object.entries(defaultProfile.environmentVariables ?? {})) {
+        if (namesEqual(profileVariableName) && profileVariableValue === value) {
+            return true;
+        }
+    }
+
+    return (namesEqual('ASPNETCORE_URLS') && defaultProfile.applicationUrl === value)
+        || (namesEqual('DOTNET_LAUNCH_PROFILE') && defaultProfileName === value);
 }
 
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
@@ -427,12 +522,18 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 throw new Error(invalidLaunchConfiguration(projectPath));
             }
 
-            // For apphost, read launch profile settings from debugConfiguration (from launch.json)
-            // For resources, read from launchConfig (from payload)
+            // AppHost-specific launch profile settings override generic project settings. prepareDebugSession
+            // applies resource-type settings last, so resolve these directly from launch.json instead.
+            const projectDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['project'];
+            const appHostDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['apphost'];
             const effectiveLaunchConfig: ProjectLaunchConfiguration = launchOptions.isApphost ? {
                 ...launchConfig,
-                disable_launch_profile: debugConfiguration.disableLaunchProfile,
-                launch_profile: debugConfiguration.launchProfile
+                disable_launch_profile: appHostDebuggerSettings?.disableLaunchProfile
+                    ?? projectDebuggerSettings?.disableLaunchProfile
+                    ?? debugConfiguration.disableLaunchProfile,
+                launch_profile: appHostDebuggerSettings?.launchProfile
+                    ?? projectDebuggerSettings?.launchProfile
+                    ?? debugConfiguration.launchProfile
             } : launchConfig;
 
             const { profile: baseProfile, profileName } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
@@ -447,12 +548,21 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             debugConfiguration.executablePath = baseProfile?.executablePath;
             debugConfiguration.checkForDevCert = baseProfile?.useSSL;
 
-            // The apphost's application URL is the Aspire dashboard URL. We already get the dashboard login URL later on,
-            // so avoid generating a serverReadyAction for the apphost and manually open the browser ourselves.
-            // For project resources, launch settings supply a default only when debugger settings did not provide one.
-            if (!launchOptions.isApphost && debugConfiguration.serverReadyAction === undefined) {
-                debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, baseProfile?.launchUrl);
-            }
+            // `launchBrowser` from launchSettings.json is deliberately not honoured here. Every project that
+            // reaches this callback is started by the app host, and the app host owns its endpoints: it
+            // assigns ports and can front the project with a proxy, so the `applicationUrl` on disk is
+            // routinely not where the resource actually listens. The Aspire dashboard resource is the
+            // extreme case, because the app host both replaces its URLs and puts a login token on the real
+            // address, so honouring the profile opened a stale port and an unauthenticated page.
+            //
+            // The run-session payload carries no endpoint data, so the extension cannot correct the URL.
+            // The CLI resolves this by ignoring the setting outright — `LaunchProfile.LaunchBrowser` is
+            // parsed but never read anywhere in Aspire.Hosting or Aspire.Cli, so `aspire run` opens nothing
+            // for a project resource and leaves URLs to the dashboard. Matching that keeps the two front
+            // ends consistent instead of having VS Code open a URL the CLI never would.
+            //
+            // A serverReadyAction the user configured explicitly in launch.json is still respected; it is
+            // read from `debugConfiguration` above and never overwritten here.
 
             // TODO: Remove this block — the dashboard no longer recognizes ASPIRE_DASHBOARD_AI_DISABLED.
             // See https://github.com/microsoft/aspire/issues/18751
@@ -490,11 +600,14 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                     // Fall back to launch profile args if run session args were empty
                     debugConfiguration.args = expandEnvironmentVariables(baseProfile.commandLineArgs);
                 }
-                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                    baseProfile?.environmentVariables,
+                debugConfiguration.env = createProjectEnvironment(
+                    launchSettings,
+                    baseProfile,
+                    profileName,
+                    effectiveLaunchConfig.disable_launch_profile === true,
                     debugConfiguration.env,
-                    env
-                ));
+                    env,
+                    launchOptions);
             }
             else if (!isFileBasedProject) {
                 const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
@@ -510,14 +623,20 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         vscode.window.showInformationMessage(fallbackMessage);
                     }
 
-                    configureDotNetRunDebugConfiguration(debugConfiguration, createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args), baseProfile?.environmentVariables, env);
+                    configureDotNetRunDebugConfiguration(
+                        debugConfiguration,
+                        createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args),
+                        createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions));
                 } else {
                     debugConfiguration.program = outputPath;
-                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                        baseProfile?.environmentVariables,
+                    debugConfiguration.env = createProjectEnvironment(
+                        launchSettings,
+                        baseProfile,
+                        profileName,
+                        effectiveLaunchConfig.disable_launch_profile === true,
                         debugConfiguration.env,
-                        env
-                    ));
+                        env,
+                        launchOptions);
                 }
             }
             else {
@@ -560,8 +679,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                             /* skipBuild */ !shouldBuildProject,
                             runWorkingDirectory,
                             /* suppressCliRunHook */ launchOptions.isApphost),
-                        baseProfile?.environmentVariables,
-                        env,
+                        createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions),
                         projectDirectory);
                 }
                 else {
@@ -597,20 +715,16 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         ...collectProfileDotnetHostEnvVarNames(baseProfile)
                     ]);
 
-                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                        baseProfile?.environmentVariables,
+                    debugConfiguration.env = createProjectEnvironment(
+                        launchSettings,
+                        baseProfile,
+                        profileName,
+                        effectiveLaunchConfig.disable_launch_profile === true,
                         debugConfiguration.env,
                         env,
-                        pickRuntimeHostEnvironment(runApiConfig.env, profileDefinedRuntimeHostNames)
-                    ));
+                        launchOptions,
+                        pickRuntimeHostEnvironment(runApiConfig.env, profileDefinedRuntimeHostNames));
                 }
-            }
-
-            // Set DOTNET_LAUNCH_PROFILE
-            // The apphost uses DOTNET_LAUNCH_PROFILE to determine which launch profile to use for project resources. The dotnet CLI sets this environment
-            // variable (see https://github.com/dotnet/sdk/pull/35029), we need to replicate the behavior by setting it ourselves.
-            if (launchOptions.isApphost && profileName) {
-                debugConfiguration.env['DOTNET_LAUNCH_PROFILE'] = profileName;
             }
 
             if (!launchOptions.isApphost && debugConfiguration.noDebug !== true) {

@@ -39,6 +39,15 @@ interface ExternalAppHostRun {
 const startToolName = 'aspire_apphost_start';
 const stopToolName = 'aspire_apphost_stop';
 
+test('matches Windows AppHost process paths case-insensitively', () => {
+    assert.strictEqual(
+        commandLineContainsAppHostPath(
+            'aspire.exe run --start-debug-session --apphost c:\\Users\\runner\\workspace\\AppHost.csproj',
+            'C:\\Users\\runner\\workspace\\AppHost.csproj',
+            'win32'),
+        true);
+});
+
 suite('Aspire AppHost lifecycle language model tools E2E', function () {
     this.timeout(900000);
 
@@ -419,9 +428,19 @@ async function findAppHostProcessIds(appHostPath: string): Promise<number[]> {
         : await listPosixProcesses();
 
     return processes
-        .filter(entry => entry.commandLine.includes('--start-debug-session') && entry.commandLine.includes(appHostPath))
+        .filter(entry => entry.commandLine.includes('--start-debug-session') && commandLineContainsAppHostPath(entry.commandLine, appHostPath))
         .map(entry => entry.pid)
         .sort((left, right) => left - right);
+}
+
+function commandLineContainsAppHostPath(commandLine: string, appHostPath: string, platform = process.platform): boolean {
+    if (platform === 'win32') {
+        // Windows can normalize drive-letter casing independently between workspace
+        // discovery and Win32_Process command lines (`c:\...` versus `C:\...`).
+        return commandLine.toLowerCase().includes(appHostPath.toLowerCase());
+    }
+
+    return commandLine.includes(appHostPath);
 }
 
 async function listPosixProcesses(): Promise<{ pid: number; commandLine: string }[]> {

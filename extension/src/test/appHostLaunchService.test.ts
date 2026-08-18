@@ -11,6 +11,7 @@ import { appHostLifecycleBusy } from '../loc/strings';
 import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
 interface RecordedEvent {
@@ -128,7 +129,20 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.noDebug, false);
         assert.strictEqual(config.step, undefined);
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
+        assert.strictEqual(config.resolvedCliPath, 'aspire');
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'user-selection');
+    });
+
+    test('launch reuses an already-verified CLI path', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const target = workspaceFolderCliPathTarget(folder);
+
+        await service.launch('/repo/AppHost.csproj', 'do', false, undefined, target, '/repo/bin/aspire');
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(config.resolvedCliPath, '/repo/bin/aspire');
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
     });
 
     test('lifecycle-owned launch does not replace an existing workspace default', async () => {
@@ -161,6 +175,33 @@ suite('AppHostLaunchService', () => {
         }
         finally {
             showErrorMessageStub.restore();
+        }
+    });
+
+    test('CLI availability probe resolves the target from the AppHost path workspace folder', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(folder);
+
+        try {
+            await service.launch('/repo/AppHost.csproj', 'run', true);
+
+            assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
+        }
+    });
+
+    test('CLI availability probe falls back to the window target when no folder owns the AppHost path', async () => {
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+
+        try {
+            await service.launch('/outside/AppHost.csproj', 'run', true);
+
+            assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
         }
     });
 

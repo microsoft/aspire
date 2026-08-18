@@ -29,7 +29,9 @@ import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './exten
 import { createE2eStateFileBridge } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
-import { initializeCliPathEnvironmentSync } from './utils/cliPathEnvironment';
+import { CliPathEnvironmentSynchronizer } from './utils/cliPathEnvironment';
+import { CliPathRejectionNotifier } from './utils/cliPathRejectionNotifier';
+import { cliPathResolver } from './utils/cliPath';
 import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
 import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
@@ -49,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
   });
 
-  const terminalProvider = new AspireTerminalProvider(context.subscriptions);
+  const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver);
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -58,9 +60,16 @@ export async function activate(context: vscode.ExtensionContext) {
   // the extension (https://github.com/microsoft/aspire/issues/18073). Start
   // resolution before other activation work, then await it before returning so
   // the first user-initiated terminal already inherits AspireCliPath.
-  const cliPathEnvironmentInitialization = initializeCliPathEnvironmentSync(context.environmentVariableCollection, context.subscriptions, undefined, () => {
-    terminalProvider.invalidateSharedAspireTerminal();
-  }).catch(error => {
+  const cliPathEnvironmentSynchronizer = new CliPathEnvironmentSynchronizer(
+    context.environmentVariableCollection,
+    cliPathResolver,
+    context.subscriptions,
+    target => terminalProvider.invalidateSharedAspireTerminal(target));
+  context.subscriptions.push(cliPathEnvironmentSynchronizer);
+  // A rejected configured CLI path otherwise only appears in the output channel, which hides the
+  // fact that commands are running a different CLI than the one the user pinned.
+  context.subscriptions.push(new CliPathRejectionNotifier());
+  const cliPathEnvironmentInitialization = cliPathEnvironmentSynchronizer.initialize().catch(error => {
     extensionLogOutputChannel.warn(`Initial Aspire CLI path resolution failed: ${String(error)}`);
   });
 
@@ -192,7 +201,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register Aspire MCP server definition provider so the Aspire MCP server
   // appears automatically in VS Code's MCP tools list for Aspire workspaces.
-  const mcpProvider = new AspireMcpServerDefinitionProvider();
+  const mcpProvider = new AspireMcpServerDefinitionProvider(cliPathResolver);
   if (typeof vscode.lm?.registerMcpServerDefinitionProvider === 'function') {
     context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('aspire-mcp-server', mcpProvider));
     context.subscriptions.push(mcpProvider);

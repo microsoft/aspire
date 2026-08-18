@@ -39,6 +39,18 @@ export interface AppHostResourceParser {
      * Returns the 0-based line of the start of the statement, or `undefined` if not found.
      */
     findBuilderStatementLine?(document: vscode.TextDocument): Promise<number | undefined>;
+
+    /**
+     * Narrows a set of document offsets to those that are part of executable code, dropping any that
+     * fall inside a comment or a string literal.
+     *
+     * Some editor affordances are driven by a textual scan rather than by {@link parseResources},
+     * because the signal they look for is an argument to an arbitrary chained call rather than a
+     * resource declaration. Passing the scan's offsets through here keeps a commented-out or quoted
+     * example from being treated as real code. Offsets are filtered as a batch so the document is
+     * parsed once.
+     */
+    filterActiveOffsets?(document: vscode.TextDocument, offsets: readonly number[]): Promise<number[]>;
 }
 
 const _parsers: AppHostResourceParser[] = [];
@@ -90,6 +102,7 @@ function extensionToLanguageId(ext: string): string | undefined {
         case '.cjs':
         case '.js': return 'javascript';
         case '.rs': return 'rust';
+        case '.java': return 'java';
         default: return undefined;
     }
 }

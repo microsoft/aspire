@@ -107,13 +107,12 @@ internal static class InteractionExports
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
         string message,
-        string? title = null,
         InteractionProgressOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(interactionService);
 
-        var result = await interactionService.PromptProgressAsync(message, title, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptProgressAsync(message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return BoolInteractionResult.From(result);
     }
 
@@ -748,6 +747,11 @@ internal sealed class InteractionInputsDialogOptions
 internal sealed class InteractionProgressOptions
 {
     /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// Gets or sets the primary button text (e.g. "Cancel").
     /// </summary>
     public string? PrimaryButtonText { get; init; }
@@ -768,6 +772,7 @@ internal sealed class InteractionProgressOptions
     {
         return new ProgressInteractionOptions
         {
+            Title = Title,
             PrimaryButtonText = PrimaryButtonText,
             EnableMessageMarkdown = EnableMessageMarkdown,
             Work = Work,

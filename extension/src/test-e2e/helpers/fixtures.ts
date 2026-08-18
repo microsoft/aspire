@@ -321,6 +321,19 @@ export function getCliWrapperInvocationCount(invocationLogPath: string): number 
         .length;
 }
 
+export async function waitForCliWrapperInvocation(invocationLogPath: string, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (getCliWrapperInvocationCount(invocationLogPath) > 0) {
+            return;
+        }
+
+        await delay(500);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for an Aspire CLI wrapper invocation in ${invocationLogPath}.`);
+}
+
 export function touchPrimaryAppHostProject(): void {
     fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
 }

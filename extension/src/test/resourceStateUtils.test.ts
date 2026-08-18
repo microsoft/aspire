@@ -6,6 +6,7 @@ import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDire
 import type { ResourceJson, AppHostDisplayInfo } from '../data/AppHostDataRepository';
 import { ResourceState } from '../editor/resourceConstants';
 
+import { removeDirectorySafely } from './testHelpers';
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     return {
         name: 'my-service',
@@ -49,7 +50,7 @@ function createSymlinkedWorkspace(): {
         canonicalDirectory,
         linkedDirectory,
         dispose() {
-            fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+            removeDirectorySafely(tempDirectory);
         },
     };
 }
@@ -232,7 +233,7 @@ suite('matchesAppHostPathOrDirectory', () => {
             if (loopCreated) {
                 fs.unlinkSync(loopPath);
             }
-            fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+            removeDirectorySafely(tempDirectory);
         }
     });
 

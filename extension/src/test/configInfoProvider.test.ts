@@ -10,6 +10,7 @@ import * as cliModule from '../utils/process/cliProcess';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 suite('configInfoProvider tests', () => {
     teardown(() => sinon.restore());
@@ -127,6 +128,101 @@ suite('configInfoProvider tests', () => {
         assert.strictEqual(workingDirectory, workspaceFolder.uri.fsPath);
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
         assert.strictEqual(spawnStub.firstCall.args[3]?.noExtensionVariables, true);
+    });
+
+    test('getConfigInfo runs in the targeted folder rather than the first one', async () => {
+        const folderA: vscode.WorkspaceFolder = { uri: vscode.Uri.file('/repo/a'), name: 'a', index: 0 };
+        const folderB: vscode.WorkspaceFolder = { uri: vscode.Uri.file('/repo/b'), name: 'b', index: 1 };
+        sinon.stub(vscode.workspace, 'workspaceFolders').value([folderA, folderB]);
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let workingDirectory: string | undefined;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            workingDirectory = options?.workingDirectory;
+            options?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/repo/b/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+            }));
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+
+        // `aspire config info` reports the local settings file it discovers from its working
+        // directory, so running in folder A answers questions about folder A no matter which folder
+        // the caller named. "Open Local Settings" would then open, or create, the wrong file.
+        const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo({
+            target: workspaceFolderCliPathTarget(folderB),
+        });
+
+        assert.ok(configInfo);
+        assert.strictEqual(workingDirectory, folderB.uri.fsPath);
+        assert.strictEqual(configInfo.localSettingsPath, '/repo/b/aspire.config.json');
+    });
+
+    test('getConfigInfo does not serve one folder result to another folder from cache', async () => {
+        const folderA: vscode.WorkspaceFolder = { uri: vscode.Uri.file('/repo/a'), name: 'a', index: 0 };
+        const folderB: vscode.WorkspaceFolder = { uri: vscode.Uri.file('/repo/b'), name: 'b', index: 1 };
+        sinon.stub(vscode.workspace, 'workspaceFolders').value([folderA, folderB]);
+        const terminalProvider = {
+            // One CLI serves both folders, which is the common case and the reason a cache keyed only
+            // by CLI path conflates them.
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            options?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: `${options?.workingDirectory}/aspire.config.json`,
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+            }));
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+
+        const provider = new ConfigInfoProvider(terminalProvider);
+        const a = await provider.getConfigInfo({ target: workspaceFolderCliPathTarget(folderA) });
+        const b = await provider.getConfigInfo({ target: workspaceFolderCliPathTarget(folderB) });
+
+        assert.strictEqual(a?.localSettingsPath, `${folderA.uri.fsPath}/aspire.config.json`);
+        assert.strictEqual(b?.localSettingsPath, `${folderB.uri.fsPath}/aspire.config.json`);
+    });
+
+    test('getConfigInfo forwards options.target to terminalProvider.getAspireCliExecutablePath', async () => {
+        const workspaceFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/repo/a'),
+            name: 'a',
+            index: 0,
+        };
+        const target = workspaceFolderCliPathTarget(workspaceFolder);
+        const getAspireCliExecutablePathStub = sinon.stub().resolves('/repo/a/bin/aspire');
+        const terminalProvider = {
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            options?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/repo/a/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+            }));
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const configInfo = await provider.getConfigInfo({ target });
+
+        assert.ok(configInfo);
+        assert.ok(getAspireCliExecutablePathStub.calledOnceWith(target));
     });
 
     test('getConfigInfo retries without nologo when an older CLI rejects it', async () => {

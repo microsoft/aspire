@@ -185,6 +185,22 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.rs'));
     });
 
+    // A Java-only workspace contains no project file the other activation events match: no .csproj,
+    // and `.aspire/` only exists once a restore has already run. Without an explicit Java event the
+    // extension never activates on a fresh clone, so the AppHost never appears in the Aspire view
+    // and none of the editor features register. Both casings are listed because `workspaceContains`
+    // globs are case-sensitive on Linux and macOS, and Java ties the file name to the class name:
+    // `aspire init` writes `AppHost.java` while the lowercase spelling matches the other languages.
+    test('Java AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/AppHost.java'), 'aspire init writes AppHost.java');
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.java'), 'lowercase matches the other languages');
+        // Maven and Gradle AppHosts nest the source under the standard layout rather than the root.
+        assert.ok(activationEvents.includes('workspaceContains:**/src/main/java/AppHost.java'));
+    });
+
     test('FSharp and Visual Basic AppHost projects activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];

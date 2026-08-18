@@ -6,6 +6,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { stopExternalAppHost } from '../services/AppHostStopper';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 suite('AppHostStopper', () => {
     test('waits for aspire stop to exit successfully', async () => {
@@ -37,6 +38,69 @@ suite('AppHostStopper', () => {
         }
         finally {
             spawnStub.restore();
+        }
+    });
+
+    test('resolves the CLI using the target derived from the AppHost path workspace folder', async () => {
+        const childState = createTestChildProcess();
+        const child = childState as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
+        sinon.stub(nodeChildProcess, 'spawn').returns(child);
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(folder);
+        const getAspireCliExecutablePathStub = sinon.stub().resolves('/repo/bin/aspire');
+        const terminalProvider = {
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: async () => { },
+        } as unknown as AspireTerminalProvider;
+
+        try {
+            const stopping = stopExternalAppHost(
+                terminalProvider,
+                '/repo/AppHost/AppHost.csproj',
+                new vscode.CancellationTokenSource().token);
+            await new Promise(resolve => setImmediate(resolve));
+
+            assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+
+            childState.exitCode = 0;
+            child.emit('close', 0);
+            await stopping;
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
+            (nodeChildProcess.spawn as sinon.SinonStub).restore();
+        }
+    });
+
+    test('resolves the CLI using the window target when no folder owns the AppHost path', async () => {
+        const childState = createTestChildProcess();
+        const child = childState as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
+        sinon.stub(nodeChildProcess, 'spawn').returns(child);
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        const getAspireCliExecutablePathStub = sinon.stub().resolves('/usr/local/bin/aspire');
+        const terminalProvider = {
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: async () => { },
+        } as unknown as AspireTerminalProvider;
+
+        try {
+            const stopping = stopExternalAppHost(
+                terminalProvider,
+                '/outside/AppHost/AppHost.csproj',
+                new vscode.CancellationTokenSource().token);
+            await new Promise(resolve => setImmediate(resolve));
+
+            assert.ok(getAspireCliExecutablePathStub.calledOnceWith(windowCliPathTarget));
+
+            childState.exitCode = 0;
+            child.emit('close', 0);
+            await stopping;
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
+            (nodeChildProcess.spawn as sinon.SinonStub).restore();
         }
     });
 

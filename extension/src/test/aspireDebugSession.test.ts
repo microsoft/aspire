@@ -4,15 +4,17 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { delimiter as pathDelimiter, dirname, join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { createWorkspaceFolder, fsPathOf, removeDirectorySafely } from './testHelpers';
 import * as cliModule from '../utils/process/cliProcess';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
-import { AspireResourceExtendedDebugConfiguration, RustLaunchConfiguration } from '../dcp/types';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { AspireResourceExtendedDebugConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
@@ -64,7 +66,7 @@ suite('AspireDebugSession tests', () => {
         __resetCommonPropertiesForTests();
         for (const dir of tempDirs) {
             if (existsSync(dir)) {
-                rmSync(dir, { recursive: true, force: true });
+                removeDirectorySafely(dir);
             }
         }
         tempDirs.length = 0;
@@ -156,6 +158,89 @@ suite('AspireDebugSession tests', () => {
         finally {
             spawnStub.restore();
         }
+    });
+
+    function createSessionWithConfiguration(
+        configuration: Record<string, unknown>,
+        getAspireCliExecutablePath: sinon.SinonStub,
+    ): AspireDebugSession {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            configuration,
+        } as unknown as vscode.DebugSession;
+
+        return new AspireDebugSession(
+            parentDebugSession,
+            { onNewConnection: () => ({ dispose: () => { } }) } as any,
+            { recordAppHostProcessExit: () => { } } as any,
+            { getAspireCliExecutablePath, createEnvironment: () => ({}) } as any,
+            () => { });
+    }
+
+    test('spawnAspireCommand resolves the CLI using the target derived from the AppHost path', async () => {
+        sinon.stub(cliModule, 'spawnCliProcess').returns(createFakeCliProcess(4330));
+        const folder = createWorkspaceFolder('workspace', '/workspace');
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+            uri.fsPath === fsPathOf('/workspace/AppHost.csproj') ? folder : undefined);
+        const getAspireCliExecutablePath = sinon.stub().resolves('/workspace/aspire');
+        const aspireDebugSession = createSessionWithConfiguration({ program: '/workspace/AppHost.csproj' }, getAspireCliExecutablePath);
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.ok(getAspireCliExecutablePath.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+    });
+
+    test('spawnAspireCommand uses the CLI path verified by the launch service', async () => {
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').returns(createFakeCliProcess(4334));
+        const getAspireCliExecutablePath = sinon.stub().resolves('/second/aspire');
+        const aspireDebugSession = createSessionWithConfiguration({
+            program: '/workspace/AppHost.csproj',
+            resolvedCliPath: '/verified/aspire',
+        }, getAspireCliExecutablePath);
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.strictEqual(getAspireCliExecutablePath.called, false);
+        assert.strictEqual(spawnStub.firstCall.args[1], '/verified/aspire');
+    });
+
+    test('spawnAspireCommand prefers the resolved AppHost path over the configured program', async () => {
+        sinon.stub(cliModule, 'spawnCliProcess').returns(createFakeCliProcess(4331));
+        const folder = createWorkspaceFolder('other', '/other');
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+            uri.fsPath === fsPathOf('/other/Program.cs') ? folder : undefined);
+        const getAspireCliExecutablePath = sinon.stub().resolves('/other/aspire');
+        const aspireDebugSession = createSessionWithConfiguration({
+            program: '/workspace',
+            [appHostTelemetryTargetPathConfigKey]: '/other/Program.cs',
+        }, getAspireCliExecutablePath);
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.ok(getAspireCliExecutablePath.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+    });
+
+    test('spawnAspireCommand falls back to the working directory target when no AppHost path is configured', async () => {
+        sinon.stub(cliModule, 'spawnCliProcess').returns(createFakeCliProcess(4332));
+        const folder = createWorkspaceFolder('workspace', '/workspace');
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+            uri.fsPath === fsPathOf('/workspace') ? folder : undefined);
+        const getAspireCliExecutablePath = sinon.stub().resolves('/workspace/aspire');
+        const aspireDebugSession = createSessionWithConfiguration({}, getAspireCliExecutablePath);
+
+        await aspireDebugSession.spawnAspireCommand(['run'], '/workspace', false, 'aspire run');
+
+        assert.ok(getAspireCliExecutablePath.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+    });
+
+    test('spawnAspireCommand uses the window target when no AppHost path or working directory is available', async () => {
+        sinon.stub(cliModule, 'spawnCliProcess').returns(createFakeCliProcess(4333));
+        const getAspireCliExecutablePath = sinon.stub().resolves('aspire');
+        const aspireDebugSession = createSessionWithConfiguration({}, getAspireCliExecutablePath);
+
+        await aspireDebugSession.spawnAspireCommand(['run'], undefined, false, 'aspire run');
+
+        assert.ok(getAspireCliExecutablePath.calledOnceWith(windowCliPathTarget));
     });
 
     test('terminateCliProcessTree signals a running CLI process and still collects an exited one', () => {
@@ -1476,6 +1561,79 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(stopDebuggingStub.callCount, 4);
     });
 
+    test('stopDebugging reserves budget for the AppHost stop when a resource adapter never acknowledges', async () => {
+        // A debug adapter suspended at a breakpoint does not acknowledge stopDebugging() until its
+        // runtime resumes, so it consumes whatever budget it is given. When every phase shared one
+        // deadline, that left the AppHost stop with 0ms: it timed out immediately, the AppHost
+        // process kept running, and its resources stayed in the Call Stack pane after the debug
+        // session disappeared. The reserve exists so the AppHost and parent stops still land.
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.java',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'java',
+            name: 'AppHost',
+            configuration: { type: 'java', request: 'launch', name: 'AppHost' },
+        };
+        const suspendedResourceDebugSession = {
+            id: 'suspended-resource-session',
+            type: 'java',
+            name: 'catalog',
+            configuration: { type: 'java', request: 'attach', name: 'catalog' },
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+
+        const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            if (session === (suspendedResourceDebugSession as unknown as vscode.DebugSession)) {
+                // Never settles, exactly like an adapter stopped at a breakpoint.
+                return new Promise<void>(() => { });
+            }
+
+            if (session === (appHostDebugSession as unknown as vscode.DebugSession)) {
+                // Deliberately non-instant. A stop that resolves in the same microtask would win the
+                // race even against a 0ms budget, so the test would pass without the reserve.
+                await new Promise<void>(resolve => setTimeout(resolve, 50));
+            }
+        });
+
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        (aspireDebugSession as any)._appHostDebugSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession as unknown as vscode.DebugSession,
+            stopSession: () => vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession),
+        };
+        (aspireDebugSession as any)._resourceDebugSessions = [
+            {
+                id: suspendedResourceDebugSession.id,
+                session: suspendedResourceDebugSession as unknown as vscode.DebugSession,
+                stopSession: () => vscode.debug.stopDebugging(suspendedResourceDebugSession as unknown as vscode.DebugSession),
+            },
+        ];
+
+        // The suspended resource still times out, and that failure has to reach the caller.
+        await assert.rejects(() => aspireDebugSession.stopDebugging());
+
+        assert.strictEqual((aspireDebugSession as any)._appHostStopped, true, 'AppHost stop must be confirmed even when a resource adapter never acknowledges');
+        assert.strictEqual((aspireDebugSession as any)._parentStopped, true, 'Aspire parent stop must be confirmed even when a resource adapter never acknowledges');
+        assert.ok(stopDebuggingStub.calledWith(appHostDebugSession as unknown as vscode.DebugSession));
+        assert.ok(stopDebuggingStub.calledWith(parentDebugSession as unknown as vscode.DebugSession));
+    });
+
     test('stopDebugging still stops the Aspire parent session when AppHost stop fails', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -2006,7 +2164,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const shutdown = aspireDebugSession.stopDebugging();
         await clock.tickAsync(10_001);
 
-        await assert.rejects(shutdown, /Timed out after 10 seconds waiting for debug session 'Resource' to start/);
+        await assert.rejects(shutdown, /Timed out after 6 seconds waiting for debug session 'Resource' to start/);
 
         resolveStart!(true);
         startSessionCallback?.(resourceDebugSession as unknown as vscode.DebugSession);
@@ -2223,15 +2381,17 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         ];
 
         const stopPromise = aspireDebugSession.stopDebugging();
-        // Just short of the budget the shutdown is still waiting on the resource, so nothing else
-        // has been stopped yet: the ordering is honoured right up to the deadline.
-        await clock.tickAsync(9_000);
+        // Just short of the resource budget the shutdown is still waiting on the resource, so nothing
+        // else has been stopped yet: the ordering is honoured right up to the resource deadline.
+        await clock.tickAsync(5_000);
         assert.strictEqual(stopDebuggingStub.callCount, 0, 'The AppHost must not be stopped while a resource stop is still within budget');
 
         await clock.tickAsync(2_000);
 
         await assert.rejects(stopPromise, (err: Error) => {
-            assert.strictEqual(err.message, debugSessionStopTimedOut('Wedged resource', 10));
+            // Six, not ten: the resource phase runs against the reserved deadline so the AppHost and
+            // parent stops still have a usable budget after a wedged resource consumes its own.
+            assert.strictEqual(err.message, debugSessionStopTimedOut('Wedged resource', 6));
             return true;
         });
         // Giving up on the resource must not abandon the rest of the shutdown - the AppHost and the
@@ -2280,8 +2440,14 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const stopPromise = aspireDebugSession.stopDebugging();
         await clock.tickAsync(10_001);
 
-        await assert.rejects(stopPromise, (err: Error) => {
-            assert.strictEqual(err.message, debugSessionStopTimedOut('AppHost', 1));
+        await assert.rejects(stopPromise, (err: AggregateError) => {
+            // Both phases time out, and the budgets they report are the point of this test. The
+            // resource is bounded at the reserved deadline rather than the whole budget, which is
+            // what leaves the AppHost a real four seconds instead of the one second it used to get
+            // after a slow resource had taken everything else.
+            assert.deepStrictEqual(
+                (err.errors as Error[]).map(error => error.message),
+                [debugSessionStopTimedOut('Slow resource', 6), debugSessionStopTimedOut('AppHost', 4)]);
             return true;
         });
         clock.restore();
@@ -2490,7 +2656,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         const firstStop = aspireDebugSession.stopDebugging();
         await clock.tickAsync(10_001);
-        await assert.rejects(firstStop, /Timed out after 10 seconds waiting for debug session 'Resource' to stop/);
+        await assert.rejects(firstStop, /Timed out after 6 seconds waiting for debug session 'Resource' to stop/);
 
         const retry = aspireDebugSession.stopDebugging();
         await Promise.resolve();
@@ -3310,6 +3476,229 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(debuggerExtension.resourceType, 'rust');
     });
 
+    test('launches a Java AppHost with the Java debugger', async () => {
+        const appHostPath = join(makeTempDir(), 'AppHost.java');
+        writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'vscjava.vscode-java-debug'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'java',
+            request: 'launch',
+            name: 'Java AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        });
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        // The CLI sends the launcher it would have run itself, so the classpath the build tool staged is
+        // already resolved and the adapter never has to reproduce it. Those entries are relative to the
+        // AppHost directory, because that is the working directory the CLI runs `java` from.
+        const classPath = ['target/classes', 'target/aspire-deps/*'].join(pathDelimiter);
+
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['java', '-Xmx512m', '-cp', classPath, 'AppHost', '--example-argument'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const launchConfig = createDebugSessionConfiguration.firstCall.args[1] as JavaLaunchConfiguration;
+        const appHostArgs = createDebugSessionConfiguration.firstCall.args[2];
+        const debuggerExtension = createDebugSessionConfiguration.firstCall.args[5];
+
+        // Absolute, not the relative entries the CLI sent: the adapter does not resolve classPaths
+        // against the launch configuration's cwd, so relative entries are looked up somewhere else
+        // entirely and the JVM starts without the AppHost class on its classpath.
+        assert.deepStrictEqual(launchConfig, {
+            type: 'java',
+            main_class: 'AppHost',
+            class_paths: [
+                join(dirname(appHostPath), 'target', 'classes'),
+                join(dirname(appHostPath), 'target', 'aspire-deps', '*')
+            ],
+            working_directory: dirname(appHostPath),
+            vm_args: ['-Xmx512m'],
+        });
+        assert.deepStrictEqual(appHostArgs, ['--example-argument']);
+        assert.strictEqual(debuggerExtension.resourceType, 'java');
+    });
+
+    test('omits vm_args from a Java AppHost launch when the command carries none', async () => {
+        const appHostPath = join(makeTempDir(), 'AppHost.java');
+        writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'vscjava.vscode-java-debug'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'java',
+            request: 'launch',
+            name: 'Java AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        });
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['java', '-cp', 'target/classes', 'AppHost'],
+            [],
+            true,
+            { forceBuild: false });
+
+        const launchConfig = createDebugSessionConfiguration.firstCall.args[1] as JavaLaunchConfiguration;
+
+        // An empty vm_args array is not the same as no vm_args to the Java adapter, and build_tool is
+        // deliberately absent because the classpath is supplied explicitly.
+        assert.deepStrictEqual(launchConfig, {
+            type: 'java',
+            main_class: 'AppHost',
+            class_paths: [join(dirname(appHostPath), 'target', 'classes')],
+            working_directory: dirname(appHostPath),
+        });
+    });
+
+    test('reports the missing Java debugger extension rather than an unsupported debug type', async () => {
+        const appHostPath = join(makeTempDir(), 'AppHost.java');
+        writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        const startAndGetDebugSession = sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['java', '-cp', 'target/classes', 'AppHost'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(startAndGetDebugSession.called, false);
+        const message = showErrorMessage.firstCall.args[0] as string;
+        assert.ok(
+            message.includes('vscjava.vscode-java-debug'),
+            `expected an actionable install message, got ${message}`);
+    });
+
+    test('reports an unrecognised Java AppHost command instead of guessing a launch', async () => {
+        const appHostPath = join(makeTempDir(), 'AppHost.java');
+        writeFileSync(appHostPath, '');
+        sinon.stub(vscode.extensions, 'getExtension').callsFake((extensionId: string) =>
+            extensionId === 'vscjava.vscode-java-debug'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            {} as any,
+            () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        const startAndGetDebugSession = sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+
+        // A wrapper invocation has no main class to hand the adapter, and guessing one would start a JVM
+        // with the wrong arguments.
+        await aspireDebugSession.startAppHost(
+            appHostPath,
+            ['./mvnw', 'exec:java'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(startAndGetDebugSession.called, false);
+        const message = showErrorMessage.firstCall.args[0] as string;
+        assert.ok(
+            message.includes('./mvnw exec:java'),
+            `expected the command to be echoed back, got ${message}`);
+    });
+
     test('an AppHost restart is aborted and forces CLI cleanup when resource shutdown fails', async () => {
         let restartHandler: ((debugSessionId: string) => boolean) | undefined;
         let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;
@@ -3721,6 +4110,45 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.deepStrictEqual(loggableConfig.env, { SECRET_TOKEN: 'env-secret' });
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
+    });
+
+    test('redacts Java vmArgs and classPaths by default', () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'java',
+            name: 'catalog',
+            request: 'launch',
+            // A JVM system property is the ordinary way a secret reaches a Java process, and the
+            // extension log persists to disk.
+            vmArgs: ['-Xmx512m', '-Dspring.datasource.password=hunter2'],
+            classPaths: ['/Users/someone/src/private-project/target/classes'],
+        } as AspireResourceExtendedDebugConfiguration;
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, false);
+
+        assert.strictEqual(loggableConfig.vmArgs, '<redacted>');
+        assert.strictEqual(loggableConfig.classPaths, '<redacted: 1 entry>');
+        const serialized = JSON.stringify(loggableConfig);
+        assert.ok(!serialized.includes('hunter2'));
+        assert.ok(!serialized.includes('/Users/someone'));
+    });
+
+    test('includes Java vmArgs and classPaths when debug configuration logging is enabled', () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'java',
+            name: 'catalog',
+            request: 'launch',
+            vmArgs: ['-Xmx512m'],
+            classPaths: ['/Users/someone/src/project/target/classes', '/deps/a.jar'],
+        } as AspireResourceExtendedDebugConfiguration;
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, true);
+
+        assert.deepStrictEqual(loggableConfig.vmArgs, ['-Xmx512m']);
+        assert.deepStrictEqual(loggableConfig.classPaths, ['/Users/someone/src/project/target/classes', '/deps/a.jar']);
     });
 
     test('redacts sensitive debugger environments even when environment logging is enabled', () => {

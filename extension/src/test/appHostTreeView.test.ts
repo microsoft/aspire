@@ -22,7 +22,9 @@ import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard,
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { lsJsonStreamCapability } from '../types/configInfo';
+import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
+import { removeDirectorySafely } from './testHelpers';
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
         name: 'my-service',
@@ -190,7 +192,7 @@ function createShellProof(): ShellProof {
             assert.strictEqual(fs.existsSync(resourceMarkerPath), false, 'resource payload should not execute');
         },
         dispose(): void {
-            fs.rmSync(directory, { recursive: true, force: true });
+            removeDirectorySafely(directory);
         },
     };
 }
@@ -2634,10 +2636,17 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     });
 
     test('workspace resource commands use the AppHost that owns the resource', async () => {
-        const commands: AspireSubcommand[] = [];
+        const commands: Array<{ command: AspireSubcommand; options: unknown }> = [];
         const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';
         const otherHostPath = '/repo/samples/Store/AppHost.csproj';
+        const otherFolder = {
+            uri: vscode.Uri.file('/repo/samples'),
+            name: 'samples',
+            index: 1,
+        };
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) => uri.fsPath.startsWith(`${otherFolder.uri.fsPath}${path.sep}`) ? otherFolder : undefined);
+        const otherTarget = workspaceFolderCliPathTarget(otherFolder);
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -2660,7 +2669,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => 'aspire',
             createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
+            sendAspireCommandToAspireTerminal: (command: AspireSubcommand, _showTerminal?: boolean, _additionalArgs?: string[], options?: unknown) => commands.push({ command, options }),
         } as unknown as AspireTerminalProvider;
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
 
@@ -2676,11 +2685,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         // Logs and terminal still go through the terminal; restart now runs over the hidden CLI
         // backchannel and must target the AppHost that owns the resource.
         assert.deepStrictEqual(commands, [
-            ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
-            ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
+            {
+                command: ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
+                options: { target: otherTarget },
+            },
+            {
+                command: ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
+                options: { terminalTarget: 'editor', target: otherTarget },
+            },
         ]);
         assert.deepStrictEqual(runResourceCommandCalls, [['cache-b', otherHostPath, 'restart', []]]);
         provider.dispose();
+        getWorkspaceFolderStub.restore();
     });
 
     test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', async () => {

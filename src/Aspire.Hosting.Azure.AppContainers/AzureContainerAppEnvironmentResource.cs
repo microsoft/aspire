@@ -212,6 +212,17 @@ public class AzureContainerAppEnvironmentResource :
                 continue;
             }
 
+            // This step is reachable from two pipeline executions: it is RequiredBy "before-start"
+            // (so it runs during AppHost startup) and it is also part of the publish/deploy DAG.
+            // Adding a second DeploymentTargetAnnotation on the second pass makes
+            // ResourceExtensions.GetDeploymentTargetAnnotation throw on the ambiguity, so the step has
+            // to be idempotent. Skipping early also avoids building the container app twice, which
+            // would append duplicate environment variables to the resource.
+            if (r.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == this))
+            {
+                continue;
+            }
+
             var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
             // Capture information about the container registry used by the
