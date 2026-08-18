@@ -94,7 +94,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task LinkedWorktreeInfersIsolationAndPrimaryStopLeavesItRunning()
+    public async Task LinkedWorktreeExplicitIsolationAndPrimaryStopLeavesItRunning()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -139,14 +139,14 @@ public sealed class StartStopTests(ITestOutputHelper output)
         Exception? primaryFailure = null;
         try
         {
-            // Both starts intentionally omit --isolated. The linked checkout must infer it, while
-            // this single container keeps ~/.aspire/backchannels shared for structured discovery.
+            // Direct CLI launches intentionally remain explicit-only. Isolate the linked checkout
+            // while this single container keeps ~/.aspire/backchannels shared for structured discovery.
             await auto.AspireStartAsync(counter);
             await auto.RunCommandAsync(
                 $"git worktree add {AspireCliShellCommandHelpers.QuoteBashArg(linkedWorktreeRelativePath)} -b linked-worktree",
                 counter);
             await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(linkedCheckout)}", counter);
-            await auto.AspireStartAsync(counter);
+            await auto.AspireStartAsync(counter, isolated: true);
 
             await auto.RunCommandAsync(
                 $"aspire ps --format json > {AspireCliShellCommandHelpers.QuoteBashArg(bothInstancesContainerPath)}",

@@ -267,7 +267,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var expectedPath = Path.Combine("AppHost", "AppHost.csproj");
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
-        Assert.DoesNotContain(GetDisplayedText(interactionService, statusMessages), message => message.Contains(".worktrees", StringComparison.Ordinal));
+        Assert.False(File.Exists(primaryConnection.SocketPath));
+        Assert.True(File.Exists(nestedConnection.SocketPath));
     }
 
     [Fact]
