@@ -186,9 +186,14 @@ def resolve_target_branch(
         )
 
     target_branch = canonical_target or raw_target
+    target_source = (
+        "canonical create_pull_request"
+        if canonical_target is not None
+        else "raw create_pull_request"
+    )
     if target_branch != notification_target:
         raise SafeOutputTargetError(
-            "Canonical create_pull_request target branch "
+            f"{target_source.capitalize()} target branch "
             f"{target_branch} does not match notify_source_pr target_branch "
             f"{notification_target}."
         )

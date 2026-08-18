@@ -101,7 +101,7 @@ def _validate_drafted_base_contract(
         )
 
     try:
-        canonical_base = resolve_target_branch(
+        resolved_base = resolve_target_branch(
             payload,
             expected_source_pr_number,
             raw_safe_outputs,
@@ -113,10 +113,10 @@ def _validate_drafted_base_contract(
     except SafeOutputTargetError as error:
         raise OutcomeValidationError(str(error)) from error
 
-    if actual_base != canonical_base:
+    if actual_base != resolved_base:
         raise OutcomeValidationError(
-            f"Drafted PR base branch {actual_base} does not match canonical "
-            f"create_pull_request target branch {canonical_base}."
+            f"Drafted PR base branch {actual_base} does not match resolved "
+            f"create_pull_request target branch {resolved_base}."
         )
 
 

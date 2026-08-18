@@ -200,7 +200,7 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             OutcomeValidationError,
-            "Drafted PR base branch main does not match canonical "
+            "Drafted PR base branch main does not match resolved "
             "create_pull_request target branch release/13.5",
         ):
             validate_outcome(
@@ -459,7 +459,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         self.assertTrue(outcome["allow_comment"])
         self.assertFalse(outcome["allow_sme_review"])
         self.assertEqual("invalid", outcome["render_kind"])
-        self.assertIn("does not match canonical", outcome["diagnostic"])
+        self.assertIn("does not match resolved", outcome["diagnostic"])
 
     def test_skipped_without_pr_allows_success_comment(self) -> None:
         outcome = build_side_effect_outcome(

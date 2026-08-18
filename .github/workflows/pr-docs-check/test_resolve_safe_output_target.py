@@ -132,7 +132,8 @@ class ResolveTargetBranchTests(unittest.TestCase):
     def test_create_and_notification_conflict_fails(self) -> None:
         with self.assertRaisesRegex(
             SafeOutputTargetError,
-            "does not match notify_source_pr target_branch",
+            "Canonical create_pull_request target branch main "
+            "does not match notify_source_pr target_branch release/13.5",
         ):
             resolve_target_branch(
                 payload(
@@ -159,7 +160,8 @@ class ResolveTargetBranchTests(unittest.TestCase):
     def test_raw_and_notification_conflict_fails(self) -> None:
         with self.assertRaisesRegex(
             SafeOutputTargetError,
-            "does not match notify_source_pr target_branch",
+            "Raw create_pull_request target branch release/13.5 "
+            "does not match notify_source_pr target_branch main",
         ):
             resolve_target_branch(
                 payload(
