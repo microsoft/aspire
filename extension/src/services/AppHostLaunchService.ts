@@ -32,6 +32,8 @@ export interface AppHostLaunchIsolation {
     readonly option: boolean | undefined;
 }
 
+type AppHostLaunchIsolationPolicy = 'explicit-only' | 'linked-worktree-default';
+
 export interface PreparedAppHostLaunchArguments {
     readonly args: string[] | undefined;
     readonly isolation: AppHostLaunchIsolation;
@@ -601,7 +603,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // establish a missing default, but must not replace an existing workspace choice.
         const launchToken = this.trackPendingRun(appHostPath, command);
         try {
-            return await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token, isolated);
+            return await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token, isolated, undefined, undefined, 'linked-worktree-default');
         }
         catch (error) {
             this._pendingRunPathByToken.delete(launchToken);
@@ -622,6 +624,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         token: vscode.CancellationToken,
         cliPath?: string,
         isolated: boolean | undefined = getRootIsolatedCliArg(args),
+        isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
     ): Promise<PreparedAppHostLaunchArguments> {
         if (command !== 'run') {
             return {
@@ -630,7 +633,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             };
         }
 
-        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath);
+        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath, isolationPolicy);
         return {
             args: ensureIsolatedCliArg(args, launchIsolation.option),
             isolation: launchIsolation,
@@ -647,9 +650,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         isolated: boolean | undefined,
         token: vscode.CancellationToken,
         cliPath?: string,
+        isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
     ): Promise<AppHostLaunchIsolation> {
         throwIfCancelled(token);
-        const inferredIsolation = isLinkedGitWorktree(appHostPath);
+        const inferredIsolation = isolationPolicy === 'linked-worktree-default' && isLinkedGitWorktree(appHostPath);
         const effective = isolated ?? inferredIsolation;
         const needsCapability = effective || isolated === false;
         if (!needsCapability) {
@@ -700,6 +704,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         isolated: boolean | undefined,
         target?: CliPathResolutionTarget,
         cliPath?: string,
+        isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
     ): Promise<AppHostLaunchIsolation | undefined> {
         // Reserve before the first await. The awaits below (telemetry, the CLI gate) run
         // before `startDebugging`, so reserving later would leave a window in which a
@@ -774,7 +779,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         abortIfCancelled();
         if (executionSuppressed) {
             await releaseReservationOnFailure(
-                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, isolated));
+                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, isolated, isolationPolicy));
             this.clearMatchingLaunching(appHostPath, reservationId);
             sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
@@ -804,7 +809,8 @@ export class AppHostLaunchService implements vscode.Disposable {
                 config.args,
                 token,
                 resolvedCliPath,
-                isolated);
+                isolated,
+                isolationPolicy);
             if (launchPreparation.args === undefined) {
                 delete config.args;
             }
