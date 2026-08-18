@@ -200,9 +200,14 @@ export async function findCliOnPath(options: CliPathLookupOptions = {}): Promise
     const candidateExists = options.fileExists ?? fileExists;
     if (platform !== 'win32') {
         for (const pathEntry of pathValue.split(path.posix.delimiter)) {
-            // Empty and relative POSIX PATH entries are resolved against the extension host's
-            // current directory, matching executable lookup while still producing an absolute pin.
-            const candidate = path.posix.resolve(pathEntry || '.', 'aspire');
+            // The extension probes candidates with `--version` before workspace trust is checked.
+            // Ignore entries that could resolve through the Extension Host's workspace-controlled cwd.
+            const directory = pathEntry.trim();
+            if (!directory || !path.posix.isAbsolute(directory)) {
+                continue;
+            }
+
+            const candidate = path.posix.join(directory, 'aspire');
             if (await candidateExists(candidate) && await tryExecute(candidate)) {
                 return candidate;
             }
