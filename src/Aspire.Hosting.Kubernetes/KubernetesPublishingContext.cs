@@ -185,21 +185,25 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task AppendResourceContextToHelmValuesAsync(IResource resource, KubernetesResource resourceContext)
     {
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Parameters, HelmExtensions.ParametersKey).ConfigureAwait(false);
+        var parameterItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ParametersKey,
+            (resourceContext.Parameters, "condition parameter"));
 
         // Embedded parameters need values.yaml entries for their Helm references, but they must
         // not become additional environment variables in the generated ConfigMap or Secret.
         var configItems = MergeHelmValueMappings(
             resource,
             HelmExtensions.ConfigKey,
-            resourceContext.EnvironmentVariables,
-            resourceContext.AdditionalConfigValues);
+            (resourceContext.EnvironmentVariables, "environment value"),
+            (resourceContext.AdditionalConfigValues, "embedded parameter"));
         var secretItems = MergeHelmValueMappings(
             resource,
             HelmExtensions.SecretsKey,
-            resourceContext.Secrets,
-            resourceContext.AdditionalSecretValues);
+            (resourceContext.Secrets, "environment value"),
+            (resourceContext.AdditionalSecretValues, "embedded parameter"));
 
+        await AddValuesToHelmSectionAsync(resource, parameterItems, HelmExtensions.ParametersKey).ConfigureAwait(false);
         await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
         await AddValuesToHelmSectionAsync(resource, secretItems, HelmExtensions.SecretsKey).ConfigureAwait(false);
     }
@@ -207,23 +211,15 @@ internal sealed class KubernetesPublishingContext(
     private static Dictionary<string, KubernetesResource.HelmValue> MergeHelmValueMappings(
         IResource resource,
         string helmKey,
-        IReadOnlyDictionary<string, KubernetesResource.HelmValue> environmentValues,
-        IReadOnlyDictionary<string, KubernetesResource.HelmValue> embeddedParameters)
+        params (IReadOnlyDictionary<string, KubernetesResource.HelmValue> Values, string OriginKind)[] mappingGroups)
     {
         var resourceKey = resource.Name.ToHelmValuesSectionName();
         var result = new Dictionary<string, KubernetesResource.HelmValue>(StringComparer.Ordinal);
         var origins = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        AddMappings(environmentValues, "environment value");
-        AddMappings(embeddedParameters, "embedded parameter");
-
-        return result;
-
-        void AddMappings(
-            IReadOnlyDictionary<string, KubernetesResource.HelmValue> mappings,
-            string originKind)
+        foreach (var (values, originKind) in mappingGroups)
         {
-            foreach (var (key, value) in mappings)
+            foreach (var (key, value) in values)
             {
                 var valuesKey = value.ValuesKey ?? key.ToHelmValuesSectionName();
                 var origin = $"{originKind} '{key}'";
@@ -252,6 +248,8 @@ internal sealed class KubernetesPublishingContext(
                     "so each value has a unique Helm path.");
             }
         }
+
+        return result;
     }
 
     private async Task AddValuesToHelmSectionAsync(

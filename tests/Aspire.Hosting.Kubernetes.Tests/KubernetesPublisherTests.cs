@@ -932,6 +932,32 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_EmbeddedParametersWithSameNormalizedValuesPathReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var dashedHost = builder.AddParameter("api-host", "dashed-host", publishValueAsDefault: true);
+        var underscoredHost = new ParameterResource("api_host", _ => "underscored-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{dashedHost}/{underscoredHost}");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both embedded parameter 'api-host' and embedded parameter 'api_host' " +
+            "to Helm values path 'config.myapp.api_host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
     public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1138,7 +1164,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
-        builder.AddKubernetesEnvironment("env");
+        var environment = builder.AddKubernetesEnvironment("env");
 
         // Use a real ParameterResource as the condition with a known default value.
         var enableTls = builder.AddParameter("enable-tls", "True", publishValueAsDefault: true);
@@ -1157,6 +1183,12 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         app.Run();
+
+        Assert.Contains(environment.Resource.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
 
         var expectedFiles = new[]
         {

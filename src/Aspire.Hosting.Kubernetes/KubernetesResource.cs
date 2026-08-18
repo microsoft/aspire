@@ -653,12 +653,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         var formattedName = conditionParam.Name.ToHelmValuesSectionName();
         var paramExpression = formattedName.ToHelmParameterExpression(TargetResource.Name);
 
-        if (!Parameters.ContainsKey(formattedName))
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        Parameters.TryAdd(conditionParam.Name, new HelmValue(paramExpression, conditionParam)
         {
-            Parameters[formattedName] = conditionParam.Default is null || conditionParam.Secret
-                ? new HelmValue(paramExpression, (string?)null)
-                : new HelmValue(paramExpression, conditionParam);
-        }
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = true
+        });
 
         // Ensure parameter values referenced in branches are populated in values.yaml.
         AllocateBranchParameters(expr.WhenTrue!);
@@ -699,9 +700,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// </summary>
     private void AllocateAdditionalParameter(ParameterResource parameter, HelmValue helmValue)
     {
-        var key = parameter.Name.ToHelmValuesSectionName();
         var values = parameter.Secret ? AdditionalSecretValues : AdditionalConfigValues;
-        values.TryAdd(key, helmValue);
+
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        values.TryAdd(parameter.Name, helmValue);
     }
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)

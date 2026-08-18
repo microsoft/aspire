@@ -1618,6 +1618,51 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConditionalParameterWithoutDefault_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Configuration["Parameters:enable-tls"] = bool.TrueString;
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var enableTls = builder.AddParameter("enable-tls");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
+                    enableTls.Resource,
+                    bool.TrueString,
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
     public async Task DeferredValueProvider_EndToEnd_PublishAndResolve()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
