@@ -2457,31 +2457,66 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private string ResolveParameterMappingName(AtsCapabilityInfo capability, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
     {
-        var methodName = GetMethodParametersName(capability.MethodName);
         var signature = CreateParameterMappingSignature(requiredParameters, optionalParameters);
 
-        if (!_parameterMappingSignatures.TryGetValue(methodName, out var existingSignature))
-        {
-            return methodName;
-        }
-
-        if (AreParameterMappingSignaturesEqual(existingSignature, signature))
-        {
-            return methodName;
-        }
-
         // Capabilities can share a projected method name while accepting different parameter shapes.
-        // Reusing the method-name TypedDict in that case makes one capability type-check against
-        // another capability's required/optional keys, so fall back to the capability ID.
-        var capabilityName = GetMethodParametersName(GetCapabilityName(capability.CapabilityId));
-        if (_parameterMappingSignatures.TryGetValue(capabilityName, out var existingCapabilitySignature)
-            && !AreParameterMappingSignaturesEqual(existingCapabilitySignature, signature))
+        // Reusing one TypedDict in that case makes one capability type-check against another
+        // capability's required/optional keys, so try progressively more specific names and take
+        // the first that is either free or already holds an identical shape.
+        var methodName = GetMethodParametersName(capability.MethodName);
+        if (IsParameterMappingNameAvailable(methodName, signature))
         {
-            throw new InvalidOperationException(
-                $"Parameter mapping '{capabilityName}' for capability '{capability.CapabilityId}' conflicts with an existing incompatible parameter shape.");
+            return methodName;
         }
 
-        return capabilityName;
+        var capabilityName = GetMethodParametersName(GetCapabilityName(capability.CapabilityId));
+        if (IsParameterMappingNameAvailable(capabilityName, signature))
+        {
+            return capabilityName;
+        }
+
+        // A capability declared with a bare [AspireExport] gets a capability ID whose trailing
+        // segment is its method name, so the capability-ID candidate above degenerates to the
+        // method-name candidate that just failed. The declaring namespace is then the only
+        // remaining information that distinguishes it. This is not exotic: withDataVolume is
+        // bare-exported by many integration packages with differing optional parameters, so any
+        // AppHost referencing two such packages reaches this point.
+        var namespaceQualifiedName = GetNamespaceQualifiedParameterMappingName(capability);
+        if (IsParameterMappingNameAvailable(namespaceQualifiedName, signature))
+        {
+            return namespaceQualifiedName;
+        }
+
+        // Two capabilities can share both a namespace and a method name only when one of them
+        // renames the other's method, so this is a last resort rather than a normal outcome.
+        // Generation must still produce a usable SDK, so keep widening instead of failing.
+        for (var disambiguator = 2; ; disambiguator++)
+        {
+            var candidate = FormattableString.Invariant($"{namespaceQualifiedName}{disambiguator}");
+            if (IsParameterMappingNameAvailable(candidate, signature))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private bool IsParameterMappingNameAvailable(string name, ParameterMappingSignature signature)
+    {
+        return !_parameterMappingSignatures.TryGetValue(name, out var existingSignature)
+            || AreParameterMappingSignaturesEqual(existingSignature, signature);
+    }
+
+    private static string GetNamespaceQualifiedParameterMappingName(AtsCapabilityInfo capability)
+    {
+        // Capability IDs are "<declaring namespace>/<capability name>", for example
+        // "Aspire.Hosting.Azure.Storage/withDataVolume". Dots are stripped because the result is a
+        // Python identifier: that yields AspireHostingAzureStorageDataVolumeParameters.
+        var capabilityId = capability.CapabilityId;
+        var separatorIndex = capabilityId.LastIndexOf('/');
+        var declaringNamespace = separatorIndex >= 0 ? capabilityId[..separatorIndex] : string.Empty;
+
+        return declaringNamespace.Replace(".", string.Empty, StringComparison.Ordinal)
+            + GetMethodParametersName(GetCapabilityName(capabilityId));
     }
 
     private static bool AreParameterMappingSignaturesEqual(ParameterMappingSignature left, ParameterMappingSignature right)
