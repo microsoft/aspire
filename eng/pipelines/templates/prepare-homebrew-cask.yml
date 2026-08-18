@@ -46,7 +46,7 @@ steps:
       # source-build prep needs — the cask URL points at a github.com release
       # that doesn't exist yet at prep time. The full LiveRelease audit + real
       # brew install runs later in the homebrew-validate-release.yml GitHub
-      # workflow, which fires on release: [released] after the release manager
+      # workflow, which fires on release: [published] after the release manager
       # publishes the draft GitHub release.
       args=(
         --version "$(CliVersion)"

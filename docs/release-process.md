@@ -32,7 +32,7 @@ The Aspire release process uses these main automation components:
    - Commits the Nix manifest update to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, then creates or updates the PR.
    - Normally dispatched automatically by the AzDO pipeline; it can also be run manually as a fallback after the GitHub release assets are live.
 5. **GitHub Actions workflow** (`.github/workflows/homebrew-validate-release.yml`)
-   - Triggered when the release manager publishes the draft (i.e. `release: [released]`).
+   - Triggered when the release manager publishes the draft (i.e. `release: [published]`).
    - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
 6. **GitHub Actions workflow** (`.github/workflows/extension-release.yml`)
    - Prepares a VS Code extension release PR.
@@ -438,7 +438,7 @@ GitHub release-notes-generate.lock.yml (dispatched by release-github-tasks.yml
 GitHub release-update-support-mdx.lock.yml (triggered on `release: published`)
   -> opens draft PR on microsoft/aspire.dev
 
-GitHub homebrew-validate-release.yml (triggered on `release: released`)
+GitHub homebrew-validate-release.yml (triggered on `release: published`)
   -> generates aspire.rb from the just-published aspire-cli-osx-* assets
   -> runs `brew audit --cask --online --signing` + brew install/uninstall
 ```

@@ -16,7 +16,7 @@
 #
 # The release manager publishes the prepared draft release manually as the
 # final step. Homebrew cask validation runs post-publish in
-# .github/workflows/homebrew-validate-release.yml (on release: [released]).
+# .github/workflows/homebrew-validate-release.yml (on release: [published]).
 #
 # For full documentation, see: docs/release-process.md
 
@@ -2373,7 +2373,7 @@ extends:
       # Homebrew cask validation against the live GitHub release used to
       # run as a fourth job in this stage. It now lives in
       # .github/workflows/homebrew-validate-release.yml and runs on the
-      # `release: [released]` event, i.e. only once the release manager
+      # `release: [published]` event, i.e. only once the release manager
       # publishes the draft and the asset URLs become public. See that
       # workflow for details.
       #

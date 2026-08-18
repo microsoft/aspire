@@ -32,7 +32,7 @@ OUTPUT_DIR=""
 # that want the full upstream-CI-equivalent audit + brew install/uninstall must
 # do so against an already-published cask via validate-cask-artifact.sh
 # directly, as the homebrew-validate-release.yml GitHub workflow does on
-# release: [released].
+# release: [published].
 VALIDATION_MODE="LiveArchives"
 
 while [[ $# -gt 0 ]]; do

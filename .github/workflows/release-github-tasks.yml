@@ -192,10 +192,10 @@ jobs:
       # --- App token and checkout (shared by all subsequent steps) ----------
       # Mint the aspire-repo-bot App installation token. Used by every step
       # that needs to fire a downstream event (release create, PR create,
-      # branch push). Using the App token instead of the default GITHUB_TOKEN
-      # causes the `release: released` event to actually trigger
-      # release-notes-generate.lock.yml (events fired by GITHUB_TOKEN do not
-      # cascade into other workflow runs).
+      # branch push) and to dispatch release-notes-generate. Using the App
+      # token instead of the default GITHUB_TOKEN is what lets those actions
+      # cascade into other workflow runs (events fired by GITHUB_TOKEN do not
+      # trigger further workflows).
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
@@ -715,9 +715,9 @@ jobs:
           3. Confirm the \`aspire-cli-*\` archives are attached.
           4. Click **Publish release**.
 
-          Publishing the draft fires \`release: [published]\` and (for stable releases)
-          \`release: [released]\`, which triggers downstream workflows such as
-          \`release-update-support-mdx\` and \`homebrew-validate-release\`.
+          Publishing the draft fires \`release: [published]\`, which triggers
+          downstream workflows such as \`release-update-support-mdx\` and
+          \`homebrew-validate-release\`.
 
           ## Details
           - **Tag**: v${{ inputs.release_version }}

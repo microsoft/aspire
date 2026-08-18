@@ -38,7 +38,7 @@ on:
         required: true
         type: string
 
-# Avoid double-validating the same tag if both the `release: released`
+# Avoid double-validating the same tag if both the `release: published`
 # event and a manual workflow_dispatch fire near each other.
 concurrency:
   group: homebrew-validate-${{ github.event.release.tag_name || github.event.inputs.release_version }}
@@ -114,8 +114,9 @@ jobs:
           # public github.com/.../releases/download/v<version>/... URL,
           # then renders eng/homebrew/aspire.rb.template with the
           # resulting hashes. This depends on the release assets being
-          # public, which is why this workflow runs on release: [released]
-          # rather than [created]/[published-on-a-draft].
+          # public, which is why this workflow runs on release: [published]
+          # (when the human publishes the draft) rather than at
+          # draft-creation time, when the asset URLs don't resolve yet.
           #
           # NOTE (@radical, please review): the old AzDO HomebrewValidateJob
           # consumed the cask file emitted by the source build directly

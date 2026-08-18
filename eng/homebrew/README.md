@@ -78,7 +78,7 @@ what `brew install` fetches from the GitHub release URL.
 
 `.github/workflows/homebrew-validate-release.yml` runs `validate-cask-artifact.sh`
 in LiveRelease mode after the release manager publishes the draft GitHub
-release (it triggers on `release: [released]`). This is the first point
+release (it triggers on `release: [published]`). This is the first point
 at which the cask's `url` (a `v#{version}` GitHub release-asset URL)
 actually resolves; the source-build prepare stage can only validate
 offline because the GitHub release for the version being built does not
@@ -143,7 +143,7 @@ cask URL points at validation time:
 
 | Mode | Cask URL resolves? | Audit args | Used by |
 |---|---|---|---|
-| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online --signing` + `brew install`/`brew uninstall` | `.github/workflows/homebrew-validate-release.yml`, on `release: [released]` after the human publishes the draft |
+| `LiveRelease` | Yes — points at a live GitHub release | `brew audit --cask --online --signing` + `brew install`/`brew uninstall` | `.github/workflows/homebrew-validate-release.yml`, on `release: [published]` after the human publishes the draft |
 | `LiveArchives` | Not yet — release for `v#{version}` hasn't been published | `brew audit --cask --no-signing` (no `--online`) | `azure-pipelines.yml` Homebrew Cask job; `.github/workflows/tests.yml`; `dogfood.sh` PR validation |
 
 Common to both modes:
