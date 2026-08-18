@@ -463,9 +463,13 @@ function expandDebugConfigurationArguments(argumentsValue: DebugConfigurationArg
     }
 
     if (Array.isArray(argumentsValue)) {
-        return argumentsValue.map(argument => expandEnvironmentVariables(argument));
+        // Run-session arguments are already serialized argv tokens. Expanding them here would
+        // reinterpret literal `$(NAME)` and `%NAME%` values that the AppHost intended to receive.
+        return [...argumentsValue];
     }
 
+    // Launch-profile arguments are authored as one command-line string and Visual Studio expands
+    // their environment-variable references before starting an Executable profile.
     return expandEnvironmentVariables(argumentsValue);
 }
 

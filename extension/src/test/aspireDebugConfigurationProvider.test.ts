@@ -57,6 +57,7 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         args: string[] | undefined,
         token: vscode.CancellationToken,
         cliPath?: string,
+        _target?: import('../utils/cliPathVariables').CliPathResolutionTarget,
     ): Promise<{ args: string[] | undefined }> {
         this.prepared.push({
             appHostPath,

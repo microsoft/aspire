@@ -2274,7 +2274,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('project Executable profile expands forwarded array args per element without flattening tokens', async () => {
+    test('project Executable profile preserves forwarded array args without expanding tokens', async () => {
         const fs = require('fs');
         const path = require('path');
 
@@ -2323,7 +2323,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
             assert.strictEqual(debugConfig.program, 'dotnet');
-            assert.deepStrictEqual(debugConfig.args, ['--custom', 'value with spaces', '', 'literal "quote"', backslashPath]);
+            assert.deepStrictEqual(debugConfig.args, forwardedArgs);
         } finally {
             delete process.env[spacesEnvVarName];
             delete process.env[pathEnvVarName];

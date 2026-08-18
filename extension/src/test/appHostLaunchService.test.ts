@@ -71,13 +71,13 @@ function createAppHostDirectory(...entries: readonly string[]): string {
 class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
     readonly calls: Array<{
         capability: string;
-        options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string } | undefined;
+        options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget } | undefined;
     }> = [];
     capabilityStatus: CapabilityStatus = 'supported';
 
     async getCapabilityStatus(
         capability: string,
-        options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string },
+        options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget },
     ): Promise<CapabilityStatus> {
         this.calls.push({ capability, options });
         return capability === isolatedLaunchCapability ? this.capabilityStatus : 'unsupported';
@@ -91,7 +91,9 @@ interface LaunchArgumentPreparer {
         args: string[] | undefined,
         token: vscode.CancellationToken,
         cliPath?: string,
+        target?: import('../utils/cliPathVariables').CliPathResolutionTarget,
         isolated?: boolean,
+        isolationPolicy?: 'explicit-only' | 'linked-worktree-default',
     ): Promise<{
         args: string[] | undefined;
         isolation: {
@@ -419,6 +421,7 @@ suite('AppHostLaunchService', () => {
                 cliPath: '/path/bin/aspire',
                 cancellationToken: cancellation.token,
                 minimumVersion: '13.2.0',
+                target: windowCliPathTarget,
             },
         }]);
     });
@@ -542,6 +545,23 @@ suite('AppHostLaunchService', () => {
             args: ['--isolated'],
             isolation: { effective: true, option: true },
         });
+    });
+
+    test('launch argument capability probes use the target workspace folder', async () => {
+        const folder = { name: 'target', index: 1, uri: vscode.Uri.file('/repo/target') } as vscode.WorkspaceFolder;
+        const target = workspaceFolderCliPathTarget(folder);
+
+        await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/target/AppHost.csproj',
+            'run',
+            ['--isolated'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire',
+            target);
+
+        assert.strictEqual(
+            (capabilityProvider.calls.at(-1)?.options as { target?: typeof target } | undefined)?.target,
+            target);
     });
 
     test('launch includes step when doStep is provided', async () => {

@@ -24,6 +24,7 @@ export interface AppHostLaunchCapabilityProvider {
         cliPath?: string;
         cancellationToken?: vscode.CancellationToken;
         minimumVersion?: string;
+        target?: CliPathResolutionTarget;
     }): Promise<CapabilityStatus>;
 }
 
@@ -623,6 +624,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         args: string[] | undefined,
         token: vscode.CancellationToken,
         cliPath?: string,
+        target: CliPathResolutionTarget = getCliPathTargetForUri(vscode.Uri.file(appHostPath)),
         isolated: boolean | undefined = getRootIsolatedCliArg(args),
         isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
     ): Promise<PreparedAppHostLaunchArguments> {
@@ -633,7 +635,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             };
         }
 
-        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath, isolationPolicy);
+        const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath, isolationPolicy, target);
         return {
             args: ensureIsolatedCliArg(args, launchIsolation.option),
             isolation: launchIsolation,
@@ -651,6 +653,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         token: vscode.CancellationToken,
         cliPath?: string,
         isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
+        target: CliPathResolutionTarget = getCliPathTargetForUri(vscode.Uri.file(appHostPath)),
     ): Promise<AppHostLaunchIsolation> {
         throwIfCancelled(token);
         const inferredIsolation = isolationPolicy === 'linked-worktree-default' && isLinkedGitWorktree(appHostPath);
@@ -666,6 +669,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             cliPath,
             cancellationToken: token,
             minimumVersion: isolatedLaunchMinimumVersion,
+            target,
         });
         throwIfCancelled(token);
         if (supportStatus === 'supported') {
@@ -779,7 +783,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         abortIfCancelled();
         if (executionSuppressed) {
             await releaseReservationOnFailure(
-                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, isolated, isolationPolicy));
+                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, target, isolated, isolationPolicy));
             this.clearMatchingLaunching(appHostPath, reservationId);
             sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
@@ -809,6 +813,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                 config.args,
                 token,
                 resolvedCliPath,
+                target,
                 isolated,
                 isolationPolicy);
             if (launchPreparation.args === undefined) {

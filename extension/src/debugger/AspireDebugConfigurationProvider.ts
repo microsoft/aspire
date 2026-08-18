@@ -37,6 +37,7 @@ export interface ExternalLaunchReservation {
         args: string[] | undefined,
         token: vscode.CancellationToken,
         cliPath?: string,
+        target?: CliPathResolutionTarget,
     ): Promise<{ args: string[] | undefined }>;
 }
 
@@ -190,7 +191,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                         command,
                         Array.isArray(config.args) ? [...config.args] : undefined,
                         cancellationToken,
-                        cliPath);
+                        cliPath,
+                        getCliPathTargetForUri(vscode.Uri.file(launchTargetPath)));
                 }
                 catch (error) {
                     if (existingExternalReservation) {
