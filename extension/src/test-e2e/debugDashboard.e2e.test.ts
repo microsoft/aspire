@@ -217,6 +217,8 @@ suite('Aspire debug dashboard E2E', function () {
                 30000,
                 beforeDebugLaunch);
             await waitForDebugConsoleOutput('publish completed successfully', appHostPath, 120000);
+            const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
+            assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected completed publish log guidance to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
             await waitForExtensionState(
                 file =>
                     file.state.debugSessions.length === 1 &&

@@ -5,7 +5,7 @@ import { compareAppHostIdentity, getAppHostIdentityKeyInfo, isAppHostPathWithinD
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
-import { CliPathResolutionTarget, getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, getCliPathTargetKey } from '../utils/cliPathVariables';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { markAspireDebugConfigurationAsExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
@@ -658,6 +658,8 @@ export class AppHostLaunchService implements vscode.Disposable {
             command,
             noDebug,
             doStep,
+            cliPath,
+            cliTargetKey: target ? getCliPathTargetKey(target) : undefined,
             executionSuppressed,
         });
         abortIfCancelled();

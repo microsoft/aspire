@@ -23,6 +23,7 @@ import { ResourceItem } from '../views/treeItems/resourceItems';
 import { ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
+import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 let atomicWriteSequence = 0;
 
@@ -818,6 +819,26 @@ export async function executeE2eControlCommand(
       const folders = getE2eWorkspaceFolderEntries(command.folders);
       markStarted();
       return await setE2eWorkspaceFolders(folders);
+    }
+    case 'setWorkspaceFolderCliPath': {
+      const folderPath = getE2eWorkspacePath(command.folderPath);
+      const cliPath = getE2eRunPath(command.cliPath);
+      const workspaceFolder = vscode.workspace.workspaceFolders?.find(folder => isSamePath(folder.uri.fsPath, folderPath));
+      if (!workspaceFolder) {
+        throw new Error(`Aspire extension E2E setWorkspaceFolderCliPath requires an exact open workspace folder: ${folderPath}`);
+      }
+
+      markStarted();
+      const targetKey = getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder));
+      const cliPaths = getE2eWorkspaceFolderCliPaths();
+      cliPaths[targetKey] = cliPath;
+      process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = JSON.stringify(cliPaths);
+      return { targetKey, cliPath };
+    }
+    case 'clearWorkspaceFolderCliPaths': {
+      markStarted();
+      delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+      return undefined;
     }
     case 'stopOwnedDebugSessionProcesses': {
       markStarted();
@@ -1654,6 +1675,27 @@ function getE2eCommandArguments(args: unknown): readonly unknown[] {
   return args;
 }
 
+function getE2eWorkspaceFolderCliPaths(): Record<string, string> {
+  const value = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+    }
+  }
+  catch {
+    return {};
+  }
+
+  return {};
+}
+
 function getE2eWorkspacePath(filePath: unknown): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
     throw new Error('Aspire extension E2E workspace path arguments must be absolute paths.');
@@ -2112,6 +2154,8 @@ function cloneDebugLaunchEvent(event: AppHostLaunchRequestedEvent, sequence: num
     command: event.command,
     noDebug: event.noDebug,
     doStep: event.doStep,
+    cliPath: event.cliPath,
+    cliTargetKey: event.cliTargetKey,
     executionSuppressed: event.executionSuppressed,
   };
 }

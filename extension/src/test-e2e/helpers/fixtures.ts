@@ -92,6 +92,15 @@ export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: 
     return status.result as Array<{ name: string; uri: string; fileName: string }>;
 }
 
+export async function setWorkspaceFolderCliPathForE2E(folderPath: string, cliPath: string): Promise<{ targetKey: string; cliPath: string }> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolderCliPath', folderPath, cliPath });
+    return status.result as { targetKey: string; cliPath: string };
+}
+
+export async function clearWorkspaceFolderCliPathsForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'clearWorkspaceFolderCliPaths' });
+}
+
 export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
     await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
 }

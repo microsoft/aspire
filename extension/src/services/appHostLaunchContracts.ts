@@ -7,6 +7,8 @@ export interface AppHostLaunchRequestedEvent {
     command: AspireCommandType;
     noDebug: boolean;
     doStep?: string;
+    cliPath?: string;
+    cliTargetKey?: string;
     executionSuppressed: boolean;
 }
 

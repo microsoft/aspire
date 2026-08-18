@@ -8,10 +8,10 @@ import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } fro
 import { appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { appHostLifecycleBusy } from '../loc/strings';
-import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchSession } from '../services/AppHostLaunchService';
+import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchRequestedEvent, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
-import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
 interface RecordedEvent {
@@ -143,6 +143,19 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(resolveCliPathStub.called, false);
         assert.strictEqual(config.resolvedCliPath, '/repo/bin/aspire');
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
+    });
+
+    test('launch request event records the verified CLI path and target', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const target = workspaceFolderCliPathTarget(folder);
+        const events: AppHostLaunchRequestedEvent[] = [];
+        service.onDidRequestLaunch(event => events.push(event));
+
+        await service.launch('/repo/AppHost.csproj', 'do', true, 'deploy', target, '/repo/bin/aspire');
+
+        assert.strictEqual(events.length, 1);
+        assert.strictEqual(events[0].cliPath, '/repo/bin/aspire');
+        assert.strictEqual(events[0].cliTargetKey, getCliPathTargetKey(target));
     });
 
     test('lifecycle-owned launch does not replace an existing workspace default', async () => {

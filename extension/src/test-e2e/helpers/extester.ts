@@ -4,6 +4,7 @@ const extester = require(extesterModulePath);
 export interface WebDriver {
     wait<T>(condition: () => Promise<T | boolean> | T | boolean, timeout?: number, message?: string): Promise<T>;
     executeScript<T>(script: string, ...args: unknown[]): Promise<T>;
+    findElements(locator: Locator): Promise<WebElement[]>;
     actions(): {
         sendKeys(...keys: string[]): { perform(): Promise<void> };
     };
@@ -14,6 +15,10 @@ export interface Locator {
 
 export interface WebElement {
     getText(): Promise<string>;
+    isDisplayed(): Promise<boolean>;
+    findElements(locator: Locator): Promise<WebElement[]>;
+    click(): Promise<void>;
+    sendKeys(...keys: string[]): Promise<void>;
 }
 
 export interface VSBrowserInstance {

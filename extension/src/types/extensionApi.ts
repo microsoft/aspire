@@ -240,6 +240,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'setWorkspaceFolders'; folders: readonly { folderPath: string; name?: string }[] }
+    | { name: 'setWorkspaceFolderCliPath'; folderPath: string; cliPath: string }
+    | { name: 'clearWorkspaceFolderCliPaths' }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'addWorkspaceFolder'; folderPath: string }
