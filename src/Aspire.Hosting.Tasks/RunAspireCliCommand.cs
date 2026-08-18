@@ -57,6 +57,11 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     [Output]
     public string? FailureMessage { get; set; }
 
+    /// <summary>
+    /// Overrides process termination for tests that must keep a process alive after termination is requested.
+    /// </summary>
+    internal Func<Process, bool>? TestTerminateProcess { get; set; }
+
     public override bool Execute()
     {
         if (string.IsNullOrWhiteSpace(FileName))
@@ -99,7 +104,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
         {
             TimedOut = true;
             var processExited = false;
-            if (TerminateProcess(process))
+            if (TestTerminateProcess?.Invoke(process) ?? TerminateProcess(process))
             {
                 processExited = process.WaitForExit(ProcessTerminationTimeoutMilliseconds);
                 if (!processExited)
