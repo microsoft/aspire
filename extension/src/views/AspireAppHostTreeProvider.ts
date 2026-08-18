@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { resolvePipelineStep } from '../utils/pipelineStep';
 import { compareResourceCommands } from '../utils/resourceDisplay';
 import {
     pidDescription,
@@ -68,6 +69,7 @@ import {
 } from './treeItems';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
+type AppHostActionElement = AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem;
 
 function isSamePath(left: string, right: string): boolean {
     return isSameFileSystemEntry(left, right);
@@ -879,6 +881,59 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             }
             throw err;
         }
+    }
+
+    async deployAppHost(element: AppHostActionElement): Promise<void> {
+        await this._launchAppHostAction(element, 'deploy', false);
+    }
+
+    async publishAppHost(element: AppHostActionElement): Promise<void> {
+        await this._launchAppHostAction(element, 'publish', false);
+    }
+
+    async runPipelineStepAppHost(element: AppHostActionElement): Promise<void> {
+        await this._launchPipelineStep(element, true);
+    }
+
+    async debugPipelineStepAppHost(element: AppHostActionElement): Promise<void> {
+        await this._launchPipelineStep(element, false);
+    }
+
+    private async _launchAppHostAction(
+        element: AppHostActionElement,
+        command: 'deploy' | 'publish',
+        noDebug: boolean,
+    ): Promise<void> {
+        const appHostPath = this._getAppHostPath(element);
+        if (!appHostPath) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+        await this._launchService.launch(appHostPath, command, noDebug, undefined, target, cliPath);
+    }
+
+    private async _launchPipelineStep(element: AppHostActionElement, noDebug: boolean): Promise<void> {
+        const appHostPath = this._getAppHostPath(element);
+        if (!appHostPath) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+
+        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+        const step = await resolvePipelineStep(this._terminalProvider, target, cliPath);
+        if (step === undefined) {
+            return;
+        }
+
+        await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, target, cliPath);
+    }
+
+    private _getAppHostPath(element: AppHostActionElement): string | undefined {
+        return element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
     }
 
     notifyAppHostStopping(appHostPath: string, markStopping = true): void {

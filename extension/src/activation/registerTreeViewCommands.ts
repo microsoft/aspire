@@ -6,22 +6,15 @@ import { registerInstrumentedCommand } from './instrumentedCommand';
 
 type TreeElementCommandInvoker = (provider: AspireAppHostTreeProvider, element: any) => unknown;
 
-type AppHostActionTreeProvider = AspireAppHostTreeProvider & {
-  deployAppHost(element: any): unknown;
-  publishAppHost(element: any): unknown;
-  runPipelineStepAppHost(element: any): unknown;
-  debugPipelineStepAppHost(element: any): unknown;
-};
-
 const treeElementCommands: ReadonlyArray<readonly [commandId: string, invoke: TreeElementCommandInvoker]> = [
   ['aspire-vscode.openDashboard', (p, e) => p.openDashboard(e)],
   ['aspire-vscode.openDashboardToSide', (p, e) => p.openDashboardToSide(e)],
   ['aspire-vscode.openAppHostSource', (p, e) => p.openAppHostSource(e)],
   ['aspire-vscode.stopAppHost', (p, e) => p.stopAppHost(e)],
-  ['aspire-vscode.deployAppHost', (p, e) => (p as AppHostActionTreeProvider).deployAppHost(e)],
-  ['aspire-vscode.publishAppHost', (p, e) => (p as AppHostActionTreeProvider).publishAppHost(e)],
-  ['aspire-vscode.runPipelineStepAppHost', (p, e) => (p as AppHostActionTreeProvider).runPipelineStepAppHost(e)],
-  ['aspire-vscode.debugPipelineStepAppHost', (p, e) => (p as AppHostActionTreeProvider).debugPipelineStepAppHost(e)],
+  ['aspire-vscode.deployAppHost', (p, e) => p.deployAppHost(e)],
+  ['aspire-vscode.publishAppHost', (p, e) => p.publishAppHost(e)],
+  ['aspire-vscode.runPipelineStepAppHost', (p, e) => p.runPipelineStepAppHost(e)],
+  ['aspire-vscode.debugPipelineStepAppHost', (p, e) => p.debugPipelineStepAppHost(e)],
   ['aspire-vscode.stopResource', (p, e) => p.stopResource(e)],
   ['aspire-vscode.startResource', (p, e) => p.startResource(e)],
   ['aspire-vscode.restartResource', (p, e) => p.restartResource(e)],
