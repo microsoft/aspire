@@ -11,6 +11,7 @@ import { createWorkspaceFolder, fsPathOf, removeDirectorySafely } from './testHe
 import * as cliModule from '../utils/process/cliProcess';
 import * as cliPathModule from '../utils/cliPath';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
+import * as appHostTargetVersionModule from '../utils/appHostTargetVersion';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration, markDebugConfigurationEnvironmentSensitive } from '../debugger/AspireDebugSession';
 import { AspireDebugConfigurationProvider } from '../debugger/AspireDebugConfigurationProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -300,6 +301,116 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(
             startMessage,
             'Starting AppHost for project: /workspace/AppHost.csproj with argument count: 2');
+    });
+
+    const pidOnlyScenarios: { name: string; environment: NodeJS.ProcessEnv; expectedEnvironment: NodeJS.ProcessEnv }[] = [
+        {
+            name: 'legacy CLI',
+            environment: createLegacyOrphanEnvironment({
+                aspire_cli_started: '1735689601',
+                CUSTOM_VARIABLE: 'custom-value',
+            }),
+            expectedEnvironment: createLegacyOrphanEnvironment({
+                ASPIRE_CLI_STARTED: '',
+                aspire_cli_started: '',
+                CUSTOM_VARIABLE: 'custom-value',
+            }),
+        },
+        {
+            name: 'current CLI',
+            environment: createLegacyOrphanEnvironment({
+                ASPIRE_CLI_STARTED_STABLE: '1735689600000',
+            }),
+            expectedEnvironment: createLegacyOrphanEnvironment({
+                ASPIRE_CLI_STARTED: '',
+                ASPIRE_CLI_STARTED_STABLE: '1735689600000',
+            }),
+        },
+    ];
+
+    for (const scenario of pidOnlyScenarios) {
+        test(`uses PID-only orphan detection when an owned ${scenario.name} launches a pre-13.5 AppHost`, async () => {
+            const finalEnvironment = await launchAppHostForLegacyOrphanDetection({
+                environment: scenario.environment,
+            });
+
+            assert.deepStrictEqual(finalEnvironment, scenario.expectedEnvironment);
+        });
+    }
+
+    const preserveScenarios: { name: string; options: LegacyOrphanDetectionLaunchOptions }[] = [
+        {
+            name: 'the AppHost is 13.5',
+            options: {
+                appHostVersion: '13.5.0',
+                environment: createLegacyOrphanEnvironment({
+                    ASPIRE_CLI_STARTED_STABLE: '1735689600000',
+                }),
+            },
+        },
+        {
+            name: 'the AppHost version is unknown',
+            options: {
+                appHostPath: '/workspace/Unknown.AppHost.csproj',
+                environment: createLegacyOrphanEnvironment(),
+            },
+        },
+        {
+            name: 'the reported PID is not the owned CLI',
+            options: {
+                ownedCliPid: 456,
+                environment: createLegacyOrphanEnvironment(),
+            },
+        },
+        {
+            name: 'the platform is not Linux',
+            options: {
+                platform: 'win32',
+                environment: createLegacyOrphanEnvironment(),
+            },
+        },
+        {
+            name: 'the owned CLI has been signaled',
+            options: {
+                signalCode: 'SIGTERM',
+                environment: createLegacyOrphanEnvironment(),
+            },
+        },
+    ];
+
+    for (const scenario of preserveScenarios) {
+        test(`preserves the legacy CLI start time when ${scenario.name}`, async () => {
+            const finalEnvironment = await launchAppHostForLegacyOrphanDetection(scenario.options);
+
+            assert.deepStrictEqual(finalEnvironment, scenario.options.environment);
+        });
+    }
+
+    test('preserves the legacy CLI start time when the owned CLI exits during AppHost version resolution', async () => {
+        const launch = prepareLegacyOrphanDetectionLaunch();
+        let signalVersionResolutionStarted!: () => void;
+        const versionResolutionStarted = new Promise<void>(resolve => signalVersionResolutionStarted = resolve);
+        let resolveTargetVersion!: (version: string | undefined) => void;
+        const targetVersion = new Promise<string | undefined>(resolve => resolveTargetVersion = resolve);
+        sinon.stub(appHostTargetVersionModule, 'getAppHostTargetVersion').callsFake(async () => {
+            signalVersionResolutionStarted();
+            return await targetVersion;
+        });
+
+        const startAppHost = launch.aspireDebugSession.startAppHost(
+            launch.appHostPath,
+            ['run'],
+            [],
+            true,
+            { forceBuild: false });
+        await versionResolutionStarted;
+        Object.defineProperty(launch.cliProcess, 'exitCode', { value: 0 });
+        resolveTargetVersion('13.4.6');
+        await startAppHost;
+
+        assert.deepStrictEqual(
+            launch.startAndGetDebugSession.firstCall.args[0].env,
+            launch.environment);
     });
 
     test('does not forward CLI options to the AppHost debugger without a separator', async () => {
@@ -5186,6 +5297,76 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
             await clock.tickAsync(10);
         }
+    }
+
+    interface LegacyOrphanDetectionLaunchOptions {
+        platform?: NodeJS.Platform;
+        appHostVersion?: string;
+        appHostPath?: string;
+        environment?: NodeJS.ProcessEnv;
+        ownedCliPid?: number;
+        signalCode?: NodeJS.Signals;
+    }
+
+    interface PreparedLegacyOrphanDetectionLaunch {
+        appHostPath: string;
+        aspireDebugSession: AspireDebugSession;
+        cliProcess: ChildProcessWithoutNullStreams & { kill: sinon.SinonStub };
+        environment: NodeJS.ProcessEnv;
+        startAndGetDebugSession: sinon.SinonStub;
+    }
+
+    function createLegacyOrphanEnvironment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+        return {
+            ASPIRE_CLI_PID: '123',
+            ASPIRE_CLI_STARTED: '1735689600',
+            ...overrides,
+        };
+    }
+
+    function prepareLegacyOrphanDetectionLaunch(options: LegacyOrphanDetectionLaunchOptions = {}): PreparedLegacyOrphanDetectionLaunch {
+        sinon.stub(process, 'platform').value(options.platform ?? 'linux');
+        const appHostPath = options.appHostPath ?? join(makeTempDir(), 'AppHost.csproj');
+        if (options.appHostPath === undefined) {
+            writeFileSync(appHostPath, `<Project Sdk="Aspire.AppHost.Sdk/${options.appHostVersion ?? '13.4.6'}" />`);
+        }
+
+        const environment = options.environment ?? createLegacyOrphanEnvironment();
+        sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+            env: { ...environment },
+        } as AspireResourceExtendedDebugConfiguration);
+        const cliProcess = createFakeCliProcess(options.ownedCliPid ?? 123);
+        if (options.signalCode !== undefined) {
+            Object.defineProperty(cliProcess, 'signalCode', { value: options.signalCode });
+        }
+
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession as any)._cliProcess = cliProcess;
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        const startAndGetDebugSession = sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+        return {
+            appHostPath,
+            aspireDebugSession,
+            cliProcess,
+            environment,
+            startAndGetDebugSession,
+        };
+    }
+
+    async function launchAppHostForLegacyOrphanDetection(options: LegacyOrphanDetectionLaunchOptions): Promise<NodeJS.ProcessEnv | undefined> {
+        const launch = prepareLegacyOrphanDetectionLaunch(options);
+        await launch.aspireDebugSession.startAppHost(
+            launch.appHostPath,
+            ['run'],
+            [],
+            true,
+            { forceBuild: false });
+        return launch.startAndGetDebugSession.firstCall.args[0].env;
     }
 
     function createSessionForSpawn(

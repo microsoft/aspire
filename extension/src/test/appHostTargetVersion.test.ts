@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getAppHostTargetVersion, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
+import { getAppHostTargetVersion, requiresLegacyCliPidOnlyOrphanDetection, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 import { removeDirectorySafely } from './testHelpers';
@@ -44,6 +44,17 @@ suite('appHostTargetVersion', () => {
         writeFileSync(appHostPath, `<Project Sdk="Aspire.AppHost.Sdk/${version}" />`);
         return appHostPath;
     }
+
+    test('identifies only pre-13.5 AppHosts for legacy PID-only orphan detection', () => {
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('8.2.1'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.4.6'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.0-preview.1'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.0'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.1-preview.1'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('14.0.0'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('unknown'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(undefined), false);
+    });
 
     test('summarizes candidate target versions from project files', async () => {
         const dir = makeTempDir();

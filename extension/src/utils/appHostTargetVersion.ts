@@ -15,6 +15,18 @@ const semverLikeVersionRegex = /^\d{1,3}\.\d{1,4}\.\d{1,4}(?:-[0-9A-Za-z][0-9A-Z
 
 export type AppHostTargetVersionSummary = typeof noAppHostsVersion | typeof unknownVersion | typeof multipleVersions | string;
 
+export function requiresLegacyCliPidOnlyOrphanDetection(version: string | undefined): boolean {
+    if (!version || !semverLikeVersionRegex.test(version)) {
+        return false;
+    }
+
+    const [coreVersion, prerelease] = version.split('-', 2);
+    const [major, minor, patch] = coreVersion.split('.').map(Number);
+    return major < 13 ||
+        (major === 13 && (minor < 5 ||
+            (minor === 5 && patch === 0 && prerelease !== undefined)));
+}
+
 export async function summarizeAppHostTargetVersions(candidates: readonly CandidateAppHostDisplayInfo[]): Promise<AppHostTargetVersionSummary> {
     if (candidates.length === 0) {
         return noAppHostsVersion;
