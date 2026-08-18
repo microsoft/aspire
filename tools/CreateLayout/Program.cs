@@ -185,8 +185,8 @@ internal sealed class LayoutBuilder : IDisposable
             throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
         }
 
-        var managedDir = Path.Combine(_outputPath, "managed");
-        Directory.CreateDirectory(managedDir);
+        var dashboardDir = Path.Combine(_outputPath, "dashboard");
+        Directory.CreateDirectory(dashboardDir);
 
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         var dashboardExeName = isWindows ? "Aspire.Dashboard.exe" : "Aspire.Dashboard";
@@ -196,15 +196,15 @@ internal sealed class LayoutBuilder : IDisposable
             throw new InvalidOperationException($"Native AOT Dashboard executable not found at {dashboardExePath}");
         }
 
-        File.Copy(dashboardExePath, Path.Combine(managedDir, dashboardExeName), overwrite: true);
+        File.Copy(dashboardExePath, Path.Combine(dashboardDir, dashboardExeName), overwrite: true);
 
         var wwwrootPath = Path.Combine(dashboardPublishPath, "wwwroot");
         if (Directory.Exists(wwwrootPath))
         {
-            CopyDirectory(wwwrootPath, Path.Combine(managedDir, "wwwroot"));
+            CopyDirectory(wwwrootPath, Path.Combine(dashboardDir, "wwwroot"));
         }
 
-        Log("  Copied Native AOT Dashboard to managed/");
+        Log("  Copied Native AOT Dashboard to dashboard/");
     }
 
     private Task CopyDcpAsync()

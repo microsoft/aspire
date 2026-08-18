@@ -246,7 +246,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryInferLayout(string layoutPath)
     {
-        // New layout: a single bundle/ link whose target contains managed/ and dcp/.
+        // New layout: a single bundle/ link whose target contains managed/, dashboard/, and dcp/.
         var bundlePath = Path.Combine(layoutPath, BundleDiscovery.BundleDirectoryName);
         var bundleManagedPath = Path.Combine(bundlePath, BundleDiscovery.ManagedDirectoryName);
         var bundleDcpPath = Path.Combine(bundlePath, BundleDiscovery.DcpDirectoryName);
@@ -272,6 +272,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                     Components = new LayoutComponents
                     {
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
+                        Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
                     }
                 };

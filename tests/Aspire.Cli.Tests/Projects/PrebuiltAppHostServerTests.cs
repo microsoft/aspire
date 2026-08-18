@@ -2827,6 +2827,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         var layoutRoot = workspace.CreateDirectory("layout");
         var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        layoutRoot.CreateSubdirectory(BundleDiscovery.DashboardDirectoryName);
         File.WriteAllText(
             Path.Combine(
                 managedDirectory.FullName,
@@ -2947,9 +2948,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layout = CreateBundleLayout(workspace);
-        var managedDirectory = Assert.IsType<string>(layout.GetComponentPath(LayoutComponent.Managed));
+        var dashboardDirectory = Assert.IsType<string>(layout.GetComponentPath(LayoutComponent.Dashboard));
         var dashboardPath = Path.Combine(
-            managedDirectory,
+            dashboardDirectory,
             BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
         File.WriteAllText(dashboardPath, string.Empty);
         var server = CreatePrebuiltAppHostServer(workspace, layout: layout);

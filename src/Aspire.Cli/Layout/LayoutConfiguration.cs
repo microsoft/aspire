@@ -14,6 +14,8 @@ public enum LayoutComponent
     Cli,
     /// <summary>Developer Control Plane.</summary>
     Dcp,
+    /// <summary>Dashboard executable and static assets.</summary>
+    Dashboard,
     /// <summary>Unified managed binary (server, NuGet, terminal host).</summary>
     Managed
 }
@@ -63,6 +65,7 @@ public sealed class LayoutConfiguration
         {
             LayoutComponent.Cli => Components.Cli,
             LayoutComponent.Dcp => Components.Dcp,
+            LayoutComponent.Dashboard => Components.Dashboard,
             LayoutComponent.Managed => Components.Managed,
             _ => null
         };
@@ -96,17 +99,29 @@ public sealed class LayoutConfiguration
     /// <returns>The path to the Dashboard executable.</returns>
     public string? GetDashboardPath()
     {
+        var dashboardDir = GetComponentPath(LayoutComponent.Dashboard);
+        if (dashboardDir is not null)
+        {
+            var dashboardPath = Path.Combine(
+                dashboardDir,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+            if (File.Exists(dashboardPath))
+            {
+                return dashboardPath;
+            }
+        }
+
         var managedDir = GetComponentPath(LayoutComponent.Managed);
         if (managedDir is null)
         {
             return null;
         }
 
-        var dashboardPath = Path.Combine(
+        var legacyDashboardPath = Path.Combine(
             managedDir,
             BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
 
-        return File.Exists(dashboardPath) ? dashboardPath : GetManagedPath();
+        return File.Exists(legacyDashboardPath) ? legacyDashboardPath : GetManagedPath();
     }
 }
 
@@ -124,6 +139,11 @@ public sealed class LayoutComponents
     /// Path to Developer Control Plane.
     /// </summary>
     public string? Dcp { get; set; } = BundleDiscovery.DcpDirectoryName;
+
+    /// <summary>
+    /// Path to the Dashboard executable and static assets directory.
+    /// </summary>
+    public string? Dashboard { get; set; } = BundleDiscovery.DashboardDirectoryName;
 
     /// <summary>
     /// Path to the unified managed binary directory.

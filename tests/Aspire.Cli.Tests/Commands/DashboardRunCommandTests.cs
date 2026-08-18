@@ -617,7 +617,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
-    private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
+    private (IServiceCollection Services, string ExecutablePath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
         TestInteractionService? interactionService = null,
         TestBundleService? bundleService = null,
@@ -628,16 +628,22 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(managedDir);
         var managedPath = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName("aspire-managed"));
         File.WriteAllText(managedPath, "fake");
-        var dashboardPath = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        var dashboardDir = Path.Combine(layoutDir, BundleDiscovery.DashboardDirectoryName);
+        var dashboardPath = Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
         if (useNativeDashboard)
         {
+            Directory.CreateDirectory(dashboardDir);
             File.WriteAllText(dashboardPath, "fake native dashboard");
         }
 
         var layout = new LayoutConfiguration
         {
             LayoutPath = layoutDir,
-            Components = new LayoutComponents { Managed = "managed" }
+            Components = new LayoutComponents
+            {
+                Dashboard = BundleDiscovery.DashboardDirectoryName,
+                Managed = BundleDiscovery.ManagedDirectoryName
+            }
         };
         bundleService ??= new TestBundleService(isBundle: true);
         bundleService.Layout = layout;

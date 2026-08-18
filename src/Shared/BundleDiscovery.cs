@@ -89,8 +89,13 @@ internal static class BundleDiscovery
     public const string ManagedDirectoryName = "managed";
 
     /// <summary>
+    /// Directory name for the Dashboard executable and static assets in the bundle layout.
+    /// </summary>
+    public const string DashboardDirectoryName = "dashboard";
+
+    /// <summary>
     /// Directory name for the single top-level reparse point that links to the
-    /// active versioned bundle directory. Components (<c>managed/</c> and <c>dcp/</c>)
+    /// active versioned bundle directory. Components (<c>managed/</c>, <c>dashboard/</c>, and <c>dcp/</c>)
     /// are resolved as subdirectories of this link target.
     /// </summary>
     public const string BundleDirectoryName = "bundle";

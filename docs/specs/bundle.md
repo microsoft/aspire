@@ -158,7 +158,9 @@ aspire-{version}-{platform}/
 │                                       # (includes native certificate management)
 │
 ├── managed/
-│   ├── aspire-managed[.exe]            # Self-contained server/NuGet/terminal executable
+│   └── aspire-managed[.exe]            # Self-contained server/NuGet/terminal executable
+│
+├── dashboard/
 │   ├── Aspire.Dashboard[.exe]          # Native AOT Dashboard
 │   └── wwwroot/                        # Dashboard static assets
 │
@@ -166,10 +168,10 @@ aspire-{version}-{platform}/
 │   ├── dcp[.exe]                       # Native executable
 │   └── ...
 │
-└── (no more runtime/, dashboard/, aspire-server/, tools/ directories)
+└── (no more runtime/, aspire-server/, tools/ directories)
 ```
 
-The managed bundle directory contains two executable boundaries: the Native AOT Dashboard and the self-contained `aspire-managed` host for server, NuGet, and terminal operations.
+The bundle keeps the Native AOT Dashboard and its static assets separate from the self-contained `aspire-managed` host used for server, NuGet, and terminal operations.
 
 **Total Bundle Size:**
 - **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
@@ -297,7 +299,7 @@ The parent directory check supports the installed layout where the CLI binary li
 |----------|-------------|---------|
 | `ASPIRE_LAYOUT_PATH` | Root of the bundle | `/opt/aspire` |
 | `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
-| `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the Native AOT Dashboard | `/opt/aspire/managed/Aspire.Dashboard` |
+| `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the Native AOT Dashboard | `/opt/aspire/dashboard/Aspire.Dashboard` |
 | `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
 | `ASPIRE_HOME` | Default Aspire state root and fallback bundle extraction root when no install-route sidecar selects an install-owned location | `/home/user/.aspire` |
 | `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
@@ -723,7 +725,9 @@ The bundle installs components as siblings under `~/.aspire/`, with the CLI bina
 ├── .aspire-bundle-version  # Version marker (hex FNV-1a hash, written after extraction)
 │
 ├── managed/
-│   ├── aspire-managed      # Subcommands: server | nuget | terminalhost
+│   └── aspire-managed      # Subcommands: server | nuget | terminalhost
+│
+├── dashboard/
 │   ├── Aspire.Dashboard    # Native AOT Dashboard
 │   └── wwwroot/            # Dashboard static assets
 │
