@@ -241,6 +241,166 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         Assert.False(client.ClientOptions.LimitToEndpoint);
     }
 
+    [Theory]
+    [InlineData("client")]
+    [InlineData("keyed-client")]
+    [InlineData("container")]
+    [InlineData("keyed-container")]
+    [InlineData("database")]
+    [InlineData("keyed-database")]
+    public void LegacyClientOptionsCallbackIsApplied(string registrationType)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        const string connectionName = "cosmos";
+        var connectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=fake;Database=testdb;Container=testcontainer;";
+        var clientOptionsCallbackCount = 0;
+
+        PopulateConfiguration(builder.Configuration, connectionString);
+
+        Action<CosmosClientOptions> configureClientOptions = _ => clientOptionsCallbackCount++;
+
+        switch (registrationType)
+        {
+            case "client":
+                builder.AddAzureCosmosClient(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-client":
+                builder.AddKeyedAzureCosmosClient(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "container":
+                builder.AddAzureCosmosContainer(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-container":
+                builder.AddKeyedAzureCosmosContainer(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "database":
+                builder.AddAzureCosmosDatabase(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-database":
+                builder.AddKeyedAzureCosmosDatabase(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            default:
+                throw new InvalidOperationException();
+        }
+
+        Assert.Equal(0, clientOptionsCallbackCount);
+
+        using var host = builder.Build();
+
+        _ = registrationType switch
+        {
+            "client" => (object)host.Services.GetRequiredService<CosmosClient>(),
+            "keyed-client" => host.Services.GetRequiredKeyedService<CosmosClient>(connectionName),
+            "container" => host.Services.GetRequiredService<Container>(),
+            "keyed-container" => host.Services.GetRequiredKeyedService<Container>(connectionName),
+            "database" => host.Services.GetRequiredService<Database>(),
+            "keyed-database" => host.Services.GetRequiredKeyedService<Database>(connectionName),
+            _ => throw new InvalidOperationException()
+        };
+
+        Assert.Equal(1, clientOptionsCallbackCount);
+    }
+
+    [Theory]
+    [InlineData("client", false)]
+    [InlineData("client", true)]
+    [InlineData("keyed-client", false)]
+    [InlineData("keyed-client", true)]
+    [InlineData("container", false)]
+    [InlineData("container", true)]
+    [InlineData("keyed-container", false)]
+    [InlineData("keyed-container", true)]
+    [InlineData("database", false)]
+    [InlineData("database", true)]
+    [InlineData("keyed-database", false)]
+    [InlineData("keyed-database", true)]
+    public void ProviderAwareClientOptionsCallbackResolvesServices(
+        string registrationType,
+        bool configureSettings)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        const string connectionName = "cosmos";
+        const string applicationName = "ConfiguredFromServices";
+        var connectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=fake;Database=testdb;Container=testcontainer;";
+        var clientOptionsCallbackCount = 0;
+        var configureSettingsCallbackCount = 0;
+
+        PopulateConfiguration(builder.Configuration, connectionString);
+        builder.Services.AddSingleton(applicationName);
+
+        Action<MicrosoftAzureCosmosSettings> configureSettingsCallback = settings =>
+        {
+            settings.DisableTracing = true;
+            configureSettingsCallbackCount++;
+        };
+        Action<IServiceProvider, CosmosClientOptions> configureClientOptionsCallback = (serviceProvider, clientOptions) =>
+        {
+            clientOptions.ApplicationName = serviceProvider.GetRequiredService<string>();
+            clientOptionsCallbackCount++;
+        };
+
+        switch (registrationType, configureSettings)
+        {
+            case ("client", false):
+                builder.AddAzureCosmosClient(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("client", true):
+                builder.AddAzureCosmosClient(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            case ("keyed-client", false):
+                builder.AddKeyedAzureCosmosClient(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("keyed-client", true):
+                builder.AddKeyedAzureCosmosClient(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            case ("container", false):
+                builder.AddAzureCosmosContainer(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("container", true):
+                builder.AddAzureCosmosContainer(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            case ("keyed-container", false):
+                builder.AddKeyedAzureCosmosContainer(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("keyed-container", true):
+                builder.AddKeyedAzureCosmosContainer(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            case ("database", false):
+                builder.AddAzureCosmosDatabase(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("database", true):
+                builder.AddAzureCosmosDatabase(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            case ("keyed-database", false):
+                builder.AddKeyedAzureCosmosDatabase(connectionName, configureSettings: null, configureClientOptions: configureClientOptionsCallback);
+                break;
+            case ("keyed-database", true):
+                builder.AddKeyedAzureCosmosDatabase(connectionName, configureSettingsCallback, configureClientOptionsCallback);
+                break;
+            default:
+                throw new InvalidOperationException();
+        }
+
+        Assert.Equal(configureSettings ? 1 : 0, configureSettingsCallbackCount);
+        Assert.Equal(0, clientOptionsCallbackCount);
+
+        using var host = builder.Build();
+
+        var client = registrationType switch
+        {
+            "client" => host.Services.GetRequiredService<CosmosClient>(),
+            "keyed-client" => host.Services.GetRequiredKeyedService<CosmosClient>(connectionName),
+            "container" => host.Services.GetRequiredService<Container>().Database.Client,
+            "keyed-container" => host.Services.GetRequiredKeyedService<Container>(connectionName).Database.Client,
+            "database" => host.Services.GetRequiredService<Database>().Client,
+            "keyed-database" => host.Services.GetRequiredKeyedService<Database>(connectionName).Client,
+            _ => throw new InvalidOperationException()
+        };
+
+        Assert.EndsWith($"/{applicationName}", client.ClientOptions.ApplicationName);
+        Assert.Equal(1, clientOptionsCallbackCount);
+    }
+
     [Fact]
     public void AddAzureCosmosContainer_DoesNoReuseExistingClient()
     {
@@ -468,6 +628,43 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
 
         // With the same client
         Assert.Same(container2.Database.Client, container1.Database.Client);
+    }
+
+    [Fact]
+    public async Task AddAzureCosmosDatabase_ProviderAwareOptionsCreatesOneSharedClientConcurrently()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        const string connectionName = "cosmos";
+        const string applicationName = "ConfiguredFromServices";
+        var connectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=fake;Database=testdb;";
+        var clientOptionsCallbackCount = 0;
+
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>($"ConnectionStrings:{connectionName}", connectionString),
+            new KeyValuePair<string, string?>("ConnectionStrings:container1", $"{connectionString}Container=container1;"),
+            new KeyValuePair<string, string?>("ConnectionStrings:container2", $"{connectionString}Container=container2;")
+        ]);
+        builder.Services.AddSingleton(applicationName);
+
+        builder.AddAzureCosmosDatabase(connectionName, configureSettings: null, configureClientOptions: (serviceProvider, clientOptions) =>
+        {
+            clientOptions.ApplicationName = serviceProvider.GetRequiredService<string>();
+            Interlocked.Increment(ref clientOptionsCallbackCount);
+        })
+            .AddKeyedContainer("container1")
+            .AddKeyedContainer("container2");
+
+        using var host = builder.Build();
+
+        var containerTasks = Enumerable.Range(0, 20)
+            .Select(index => Task.Run(() => host.Services.GetRequiredKeyedService<Container>($"container{index % 2 + 1}")))
+            .ToArray();
+        var containers = await Task.WhenAll(containerTasks);
+        var client = containers[0].Database.Client;
+
+        Assert.All(containers, container => Assert.Same(client, container.Database.Client));
+        Assert.EndsWith($"/{applicationName}", client.ClientOptions.ApplicationName);
+        Assert.Equal(1, clientOptionsCallbackCount);
     }
 
     [Fact]

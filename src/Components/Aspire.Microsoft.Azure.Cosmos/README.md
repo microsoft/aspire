@@ -108,6 +108,17 @@ You can also setup the [CosmosClientOptions](https://learn.microsoft.com/dotnet/
 builder.AddAzureCosmosClient("cosmosConnectionName", configureClientOptions: clientOptions => clientOptions.ApplicationName = "myapp");
 ```
 
+The client options callback can also receive the application's `IServiceProvider`. This allows options such as custom request handlers to be resolved from dependency injection:
+
+```csharp
+builder.Services.AddSingleton<MyRequestHandler>();
+builder.AddAzureCosmosClient(
+    "cosmosConnectionName",
+    configureSettings: null,
+    configureClientOptions: (serviceProvider, clientOptions) =>
+        clientOptions.CustomHandlers.Add(serviceProvider.GetRequiredService<MyRequestHandler>()));
+```
+
 ## AppHost extensions
 
 In your AppHost project, install the Aspire Azure CosmosDB Hosting library with [NuGet](https://www.nuget.org):
