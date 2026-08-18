@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Skills bundle's archive integrity checks now use SHA-512, aligning it with the digest already used by the CLI acquisition scripts. The experimental remote-fetch preview toggle is also hidden from aspire config output and generated VS Code schemas.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-08-17T22:25:24Z",
+  "lastMergedAt": "2026-08-17T22:25:24Z",
+  "name": "Aspire Skills bundle integrity checks use SHA-512",
+  "owner": "IEvangelist",
+  "prs": [
+    19448
+  ]
+}

@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Two previously experimental APIs have been promoted to stable: `ContainerAppExtensions.ConfigureCustomDomain` (ASPIREACADOMAINS001) and `CompletionState` (ASPIREPIPELINES001). Consumers can now use these APIs without suppressing their respective experimental diagnostics.",
-  "docsPrs": [],
+  "docsPrs": [
+    1507
+  ],
   "docsRequired": true,
   "emoji": "🎓",
   "firstMergedAt": "2026-08-05T15:18:11Z",

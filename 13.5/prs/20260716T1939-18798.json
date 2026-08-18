@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes DCP rejecting boot-relative monitor timestamps on Linux",
+  "mergedAt": "2026-07-16T19:39:07Z",
+  "number": 18798,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "Fix DCP monitor timestamp serialization"
+}

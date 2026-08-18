@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19007, matched to graduate experimental APIs changelog entry",
+  "mergedAt": "2026-08-17T17:22:02Z",
+  "number": 1507,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[docs] Update docs for graduated experimental APIs (ConfigureCustomDomain, CompletionState)"
+}

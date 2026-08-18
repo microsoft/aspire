@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dependency security remediation, no user-facing product change",
+  "mergedAt": "2026-07-16T20:23:49Z",
+  "number": 18804,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "[auto-sec] consolidate aspire security dependency remediations"
+}

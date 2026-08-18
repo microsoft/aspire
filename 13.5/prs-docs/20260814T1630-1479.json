@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #18992, matched to TerminalOptions changelog entry",
+  "mergedAt": "2026-08-14T16:30:40Z",
+  "number": 1479,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[docs] Document WithTerminal Columns/Rows validation"
+}

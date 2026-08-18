@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site UI fix, not documentation of an Aspire product change",
+  "mergedAt": "2026-08-14T15:56:38Z",
+  "number": 1490,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "Harden CustomSelect against a stale open-time scroll dismissing the menu"
+}

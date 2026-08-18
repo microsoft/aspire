@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #18980, matched to Foundry hosted agent protocol changelog entry",
+  "mergedAt": "2026-08-17T19:43:27Z",
+  "number": 1475,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[docs] Document asHostedAgentWithProtocol for polyglot hosted agents"
+}

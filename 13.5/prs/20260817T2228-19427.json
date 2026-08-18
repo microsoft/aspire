@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19426; fixes polyglot staging package discovery",
+  "mergedAt": "2026-08-17T22:28:31Z",
+  "number": 19427,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Fix mixed-quality staging package discovery"
+}

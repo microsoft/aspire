@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19374; extends existing K8s persistent volume entry",
+  "mergedAt": "2026-08-15T18:21:23Z",
+  "number": 19401,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Set a default fsGroup for Kubernetes persistent volumes"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Reconciliation back-merge with no net file changes, not user-facing",
+  "mergedAt": "2026-07-14T21:54:13Z",
+  "number": 18773,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "Merge release/13.4 back into main (reconciliation, no net changes)"
+}

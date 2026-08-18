@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #19382; extends existing progress dialog API entry",
+  "mergedAt": "2026-08-17T22:37:06Z",
+  "number": 19424,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Move progress prompt title to options"
+}

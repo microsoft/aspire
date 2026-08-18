@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Backport of #19303; SHA-512 integrity for skills bundle",
+  "mergedAt": "2026-08-17T22:25:24Z",
+  "number": 19448,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Use SHA-512 for Aspire Skills bundle integrity checks and hide the remote-fetch preview toggle"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire agent init, generated JavaScript Dockerfiles, and shipped starter templates now default to the public npm registry again instead of an internal Azure Artifacts mirror, fixing install failures caused by the mirror returning 401 for uncached transitive dependencies. The Dockerfile registry remains overridable via --build-arg NPM_REGISTRY.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-08-15T20:06:36Z",
+  "lastMergedAt": "2026-08-15T20:06:36Z",
+  "name": "Fixed npm registry hard-coded to internal feed",
+  "owner": "IEvangelist",
+  "prs": [
+    19417
+  ]
+}

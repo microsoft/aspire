@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Backport of #19388; restores public npm registry default",
+  "mergedAt": "2026-08-15T20:06:36Z",
+  "number": 19417,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Fix npm registry hard-coded to internal dnceng feed (#19370)"
+}

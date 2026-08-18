@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire start detached launches on Linux and macOS now start the child CLI and AppHost in a fresh process group/session using DCP's fork-process helper, so the detached app survives cleanup of the original launcher's process group instead of being torn down with it.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-07-17T20:43:07Z",
+  "lastMergedAt": "2026-07-17T20:43:07Z",
+  "name": "Fixed detached CLI launches being killed with the launcher process group on Unix",
+  "owner": "danegsta",
+  "prs": [
+    18678
+  ]
+}

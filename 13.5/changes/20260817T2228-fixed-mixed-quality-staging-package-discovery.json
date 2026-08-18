@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "On stable-shaped staging CLI builds, TypeScript (and other polyglot) AppHosts can now discover build-matched prerelease-only integrations, such as Azure Kubernetes, from the same SHA-specific feed that C# AppHosts already used. Previously those integrations were filtered out and unavailable via aspire add for TypeScript AppHosts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-08-17T22:28:31Z",
+  "lastMergedAt": "2026-08-17T22:28:31Z",
+  "name": "Fixed mixed-quality staging package discovery for polyglot AppHosts",
+  "owner": "mitchdenny",
+  "prs": [
+    19427
+  ]
+}

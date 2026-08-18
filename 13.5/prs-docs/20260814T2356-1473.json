@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #18981, matched to DotnetProjectResource namespace changelog entry",
+  "mergedAt": "2026-08-14T23:56:35Z",
+  "number": 1473,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[docs] Document DotnetProjectResource namespace move to Aspire.Hosting.Dotnet"
+}

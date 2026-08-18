@@ -1,14 +1,17 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": true,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The misleading TerminalOptions.Shell property (which never had any effect) has been removed from the public API. Additionally, TerminalOptions.Columns and TerminalOptions.Rows now validate that values are positive at AppHost model construction time, preventing silent errors at runtime.",
-  "docsPrs": [],
+  "docsPrs": [
+    1478,
+    1479
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udda5\ufe0f",
+  "emoji": "🖥️",
   "firstMergedAt": "2026-08-04T23:05:13Z",
   "lastMergedAt": "2026-08-04T23:05:28Z",
   "name": "TerminalOptions breaking changes and validation improvements",

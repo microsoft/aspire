@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine dependency version bump",
+  "mergedAt": "2026-07-17T19:02:16Z",
+  "number": 18811,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "Update dotnet/extensions dependencies to 10.8.0"
+}

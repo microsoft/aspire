@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes detached CLI launches being killed with launcher process group",
+  "mergedAt": "2026-07-17T20:43:07Z",
+  "number": 18678,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "Use DCP fork-process for Unix detached start"
+}

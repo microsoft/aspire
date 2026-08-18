@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The ASPIRE010 MSBuild warning now includes its documentation link directly in the console-visible warning text, since MSBuild's HelpLink metadata isn't rendered in terminal output.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-08-15T18:00:34Z",
+  "lastMergedAt": "2026-08-15T18:00:34Z",
+  "name": "Surfaced ASPIRE010 help link inline in warning text",
+  "owner": "joperezr",
+  "prs": [
+    19415
+  ]
+}

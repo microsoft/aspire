@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19412; CI test matrix enumeration fix, not user-facing",
+  "mergedAt": "2026-08-17T22:29:50Z",
+  "number": 19418,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "[release/13.5] Fix deployment E2E test matrix enumeration"
+}

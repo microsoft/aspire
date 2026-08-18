@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Internal Homebrew tap CI validation fix, not user-facing",
+  "mergedAt": "2026-07-17T23:37:08Z",
+  "number": 18820,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "Fix Homebrew cask validation with generated tap templates"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Backport of #19375; surfaces ASPIRE010 doc link in console warning text",
+  "mergedAt": "2026-08-15T18:00:34Z",
+  "number": 19415,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Surface ASPIRE010 help link inline in warning text"
+}

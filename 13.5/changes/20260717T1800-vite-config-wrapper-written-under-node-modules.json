@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The generated Vite HTTPS config wrapper is now written under the app's nearest node_modules directory instead of node_modules/.bin, fixing failures in Yarn or npm workspace monorepos where dependencies are hoisted and .bin may not exist.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-07-17T18:00:08Z",
+  "lastMergedAt": "2026-07-17T18:00:08Z",
+  "name": "Fixed Vite HTTPS config wrapper path in hoisted node_modules",
+  "owner": "danegsta",
+  "prs": [
+    15857
+  ]
+}

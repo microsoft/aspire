@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dependency security remediation, no user-facing product change",
+  "mergedAt": "2026-07-14T22:02:33Z",
+  "number": 18735,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate npm security remediations (vite, Angular, undici, hono, protobufjs, and more)"
+}

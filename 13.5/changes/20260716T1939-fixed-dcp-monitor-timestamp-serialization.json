@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Container and executable resources with parent-process lifetime could fail to start on Linux because DCP rejected boot-relative monitor timestamps that didn't match the six-digit MicroTime format it requires. Monitor timestamps are now always serialized with fixed-width fractional seconds.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🕒",
+  "firstMergedAt": "2026-07-16T19:39:07Z",
+  "lastMergedAt": "2026-07-16T19:39:07Z",
+  "name": "Fixed DCP monitor timestamp serialization",
+  "owner": "danegsta",
+  "prs": [
+    18798
+  ]
+}

@@ -5,17 +5,18 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "A new PromptProgressAsync API on IInteractionService lets AppHost code display a non-dismissable progress dialog in the dashboard during long-running operations, with optional cancel support. CommandOptions also gains a CommandProgressOptions property so resource commands can automatically show a progress dialog while they execute.",
+  "description": "A new PromptProgressAsync API on IInteractionService lets AppHost code display a non-dismissable progress dialog in the dashboard during long-running operations, with optional cancel support. CommandOptions also gains a CommandProgressOptions property so resource commands can automatically show a progress dialog while they execute. The API shape was refined before shipping so message stays the only required positional argument, with title moved into ProgressInteractionOptions (and the polyglot InteractionProgressOptions) for consistency across C#, TypeScript, Python, Java, Go, and Rust.",
   "docsPrs": [
     1347
   ],
   "docsRequired": true,
   "emoji": "⏳",
   "firstMergedAt": "2026-06-29T06:14:32Z",
-  "lastMergedAt": "2026-06-29T06:14:32Z",
+  "lastMergedAt": "2026-08-17T22:37:06Z",
   "name": "Progress dialog API for AppHost commands and IInteractionService",
   "owner": "JamesNK",
   "prs": [
-    18493
+    18493,
+    19424
   ]
 }

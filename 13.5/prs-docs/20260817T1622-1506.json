@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site content fix, not matched to a specific changelog entry",
+  "mergedAt": "2026-08-17T16:22:03Z",
+  "number": 1506,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "Fix WithTerminal columns default"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Publishing a DotnetProjectResource, which doesn't yet support publish, now surfaces an actionable error instead of silently failing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-08-15T18:06:42Z",
+  "lastMergedAt": "2026-08-15T18:06:42Z",
+  "name": "Actionable error when publishing DotnetProjectResource",
+  "owner": "karolz-ms",
+  "prs": [
+    19399
+  ]
+}

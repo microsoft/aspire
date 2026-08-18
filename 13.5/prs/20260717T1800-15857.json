@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes Vite wrapper path failing in hoisted node_modules setups",
+  "mergedAt": "2026-07-17T18:00:08Z",
+  "number": 15857,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "Write Vite HTTPS config wrapper to node_modules/.aspire instead of node_modules/.bin"
+}

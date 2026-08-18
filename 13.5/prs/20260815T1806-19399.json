@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #19190; actionable error instead of silent failure",
+  "mergedAt": "2026-08-15T18:06:42Z",
+  "number": 19399,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "included",
+  "title": "[release/13.5] Report actionable errors when DotnetProjectResource is published"
+}

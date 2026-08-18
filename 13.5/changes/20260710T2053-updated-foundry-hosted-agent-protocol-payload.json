@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The Foundry hosted agent deployment protocol payload was updated to the latest Foundry API shape, with `protocol_versions` and container image placed under `container_configuration.image`. Backward compatibility is preserved: the existing `asHostedAgent` polyglot signature retains Responses protocol 2.0.0 defaults, while a new `asHostedAgentWithProtocol` form supports explicit protocol selection.",
-  "docsPrs": [],
+  "docsPrs": [
+    1475
+  ],
   "docsRequired": true,
   "emoji": "🔄",
   "firstMergedAt": "2026-07-10T20:53:08Z",

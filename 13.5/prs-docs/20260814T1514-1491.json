@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-repo CI maintenance",
+  "mergedAt": "2026-08-14T15:14:35Z",
+  "number": 1491,
+  "runDate": "2026-08-18T00:11:52Z",
+  "status": "excluded",
+  "title": "ci: auto-resolve data/content conflicts in release-branch merge"
+}
