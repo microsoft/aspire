@@ -443,6 +443,76 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
     }
 
+    [Fact]
+    public async Task DirectAzureDestroySkipsClusterCleanupForNeverDeployedAksEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var reporter = new TestPipelineActivityReporter(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "destroy-azure-azure-environment");
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            ["destroy-azure-azure-environment", "destroy-prereq"],
+            reporter.CreatedSteps
+                .Where(step => step.Contains("destroy", StringComparison.Ordinal) ||
+                    step.StartsWith("helm-uninstall-", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal));
+        Assert.Contains(
+            reporter.CompletedSteps,
+            step => step is ("destroy-azure-azure-environment", _, CompletionState.Completed));
+        Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+    }
+
+    [Fact]
+    public async Task DirectKubernetesCleanupFailsForNeverDeployedAksEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var reporter = new TestPipelineActivityReporter(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "helm-uninstall-same-name-as-ambient-release");
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Equal(
+            "Step 'aks-get-credentials-for-destroy-aks' failed: " +
+            "No Azure deployment state was found for AKS environment 'aks'. " +
+            "Cluster cleanup cannot run without an isolated kubeconfig.",
+            reporter.CompletionMessage);
+        Assert.Equal(
+            ["aks-get-credentials-for-destroy-aks", "destroy-prereq"],
+            reporter.CreatedSteps
+                .Where(step => step.Contains("destroy", StringComparison.Ordinal) ||
+                    step.StartsWith("helm-uninstall-", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal));
+        Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
+    }
+
     private static string GetDirectDependencies(List<string> diagnosticLines, string stepName)
     {
         var targetLine = diagnosticLines.IndexOf($"If targeting '{stepName}':");

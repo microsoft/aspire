@@ -99,26 +99,34 @@ public partial class AzureKubernetesEnvironmentResource :
                 .AcquireSectionAsync($"Azure:Deployments:{Name}")
                 .ConfigureAwait(false);
 
-            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Remove all of
-            // its tagged cluster cleanup from the aggregate destroy target rather than allowing those
-            // commands to fall back to the caller's ambient Kubernetes context. Explicitly targeting
-            // one of those cleanup steps still runs through the credential prerequisite and fails.
-            var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
-            if (deploymentStateSection.Data.Count == 0 &&
-                string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
-            {
-                foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
-                {
-                    kubernetesDestroyStep.RequiredBySteps.RemoveAll(
-                        static stepName => string.Equals(stepName, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal));
-                }
-
-                return;
-            }
-
             var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().Single();
             var destroyAzureStep = context.GetSteps(azureEnvironment)
                 .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
+
+            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Remove all of
+            // its tagged cluster cleanup from the aggregate destroy target, and do not add it as a
+            // prerequisite when targeting Azure cleanup directly. Explicitly targeting one of those
+            // Kubernetes cleanup steps still runs through the credential prerequisite and fails rather
+            // than allowing the command to fall back to the caller's ambient Kubernetes context.
+            var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
+            if (deploymentStateSection.Data.Count == 0)
+            {
+                if (string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
+                {
+                    foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
+                    {
+                        kubernetesDestroyStep.RequiredBySteps.RemoveAll(
+                            static stepName => string.Equals(stepName, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal));
+                    }
+
+                    return;
+                }
+
+                if (string.Equals(targetStep, destroyAzureStep.Name, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
 
             foreach (var kubernetesDestroyStep in kubernetesDestroySteps)
             {
