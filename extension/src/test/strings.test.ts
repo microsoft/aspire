@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as locStrings from '../loc/strings';
-import { launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
+import { defaultConfigurationNameForWorkspaceFolder, launchingWithAppHost, launchingWithDirectory } from '../loc/strings';
 import { collapseWhitespace, escapeCodicons, formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
@@ -134,6 +134,18 @@ suite('utils/strings tests', () => {
 });
 
 suite('loc/strings tests', () => {
+    test('formats and registers workspace-specific default configuration names', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(
+            defaultConfigurationNameForWorkspaceFolder('src', 'file:///workspace/repo-with-apphost'),
+            'Aspire: Launch default AppHost (src: file:///workspace/repo-with-apphost)');
+        assert.strictEqual(
+            packageNls['aspire-vscode.strings.defaultConfigurationNameForWorkspaceFolder'],
+            'Aspire: Launch default AppHost ({0}: {1})');
+    });
+
 	test('formats launch messages with the session type', () => {
 		assert.deepStrictEqual(
 			[

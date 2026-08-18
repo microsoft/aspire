@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -13,6 +13,8 @@ import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchSer
 import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationResolvedCliPath, getAspireDebugConfigurationResolvedCliPathScope, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from './AspireDebugConfigurationProviderInternal';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
+
+const legacyDynamicConfigurationOwnerWorkspaceStateKey = 'aspire.debugger.legacyDynamicConfigurationOwnerUri';
 
 /**
  * The part of `AppHostLaunchService` this provider needs to make a `launch.json`/F5
@@ -42,9 +44,12 @@ export interface ExternalLaunchReservation {
 }
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+    private _legacyDynamicConfigurationOwnerUri: string | undefined;
+
     constructor(
         private readonly _appHostDiscoveryService: AppHostDiscoveryService,
         private readonly _launchReservation: ExternalLaunchReservation,
+        private readonly _workspaceState: vscode.Memento,
         private readonly _triggerKind: vscode.DebugConfigurationProviderTriggerKind = vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
     }
 
@@ -55,25 +60,20 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const activeEditorFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
         if (activeEditorFolder?.uri.toString() !== folder.uri.toString()) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const candidate = await this.tryFindCandidateForEditorFile(activeEditor.document.uri.fsPath, folder);
         if (!candidate) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
-        return [this.withProvidedSelectionOrigin({
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: getDebugTargetForCandidate(candidate)
-        })];
+        return this.createProvidedConfigurations(folder, getDebugTargetForCandidate(candidate));
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
@@ -296,19 +296,46 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
     }
 
-    private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
-        return this.withProvidedSelectionOrigin({
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: folder.uri.fsPath
-        });
+    private createDefaultConfigurations(folder: vscode.WorkspaceFolder): Promise<vscode.DebugConfiguration[]> {
+        return this.createProvidedConfigurations(folder, folder.uri.fsPath);
     }
 
-    private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
-        return this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
-            ? { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }
-            : config;
+    private async createProvidedConfigurations(folder: vscode.WorkspaceFolder, program: string): Promise<vscode.DebugConfiguration[]> {
+        const isDynamic = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic;
+        const config: vscode.DebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: isDynamic
+                ? await this.getDynamicConfigurationName(folder)
+                : defaultConfigurationName,
+            program
+        };
+
+        if (!isDynamic) {
+            return [config];
+        }
+
+        return [{ ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }];
+    }
+
+    private async getDynamicConfigurationName(folder: vscode.WorkspaceFolder): Promise<string> {
+        let ownerUri = this._legacyDynamicConfigurationOwnerUri
+            ?? this._workspaceState.get<string>(legacyDynamicConfigurationOwnerWorkspaceStateKey);
+        if (ownerUri === undefined) {
+            // Keep the first folder's shipped configuration name across workspace changes. VS Code
+            // does not hide dynamic configurations through `presentation.hidden`, so ownership must
+            // be persisted instead of returning a compatibility alias that becomes a duplicate.
+            ownerUri = vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? folder.uri.toString();
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+            await this._workspaceState.update(legacyDynamicConfigurationOwnerWorkspaceStateKey, ownerUri);
+        }
+        else {
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+        }
+
+        return ownerUri === folder.uri.toString()
+            ? defaultConfigurationName
+            : defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
     }
 
     /**

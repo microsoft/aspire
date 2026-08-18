@@ -239,6 +239,31 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
     await item.select();
 }
 
+export async function chooseActiveQuickPickAtIndex(index: number, timeoutMs = 30000): Promise<void> {
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return await InputBox.create();
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
+    let visibleLabels: string[] = [];
+    const item = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const picks = await input.getQuickPicks();
+            visibleLabels = await Promise.all(picks.map(pick => pick.getLabel()));
+            return picks[index] ?? false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for quick pick index ${index}. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
+    await item.select();
+}
+
 export async function getActiveQuickPickLabels(timeoutMs = 30000): Promise<string[]> {
     const input = await VSBrowser.instance.driver.wait(async () => {
         try {

@@ -3944,6 +3944,10 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 preparedCliPaths.push(cliPath);
                 return { args };
             },
+        }, {
+            get: () => undefined,
+            update: async () => { },
+            keys: () => [],
         });
         const checkedConfig = await provider.resolveDebugConfiguration(undefined, restartedConfig);
         assert.strictEqual(checkedConfig, restartedConfig);

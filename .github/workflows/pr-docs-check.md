@@ -217,16 +217,33 @@ safe-outputs:
                 f"found {len(create_items)}."
             )
 
-        base_branch = create_items[0].get("base")
+        # gh-aw v0.86.2 records the supported tool input as:
+        #   {"type":"create_pull_request","base":"release/13.5",...}
+        # Older outputs record the normalized value as "base_branch" instead.
+        create_item = create_items[0]
+        has_base = "base" in create_item
+        has_base_branch = "base_branch" in create_item
+        base = create_item.get("base")
+        base_branch = create_item.get("base_branch")
+        if has_base and not isinstance(base, str):
+            raise SystemExit("Canonical create_pull_request base is invalid.")
+        if has_base_branch and not isinstance(base_branch, str):
+            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+        if has_base and has_base_branch and base != base_branch:
+            raise SystemExit(
+                "Canonical create_pull_request base and base_branch disagree."
+            )
+
+        target_branch = base if has_base else base_branch
         if (
-            not isinstance(base_branch, str)
-            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
+            not isinstance(target_branch, str)
+            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", target_branch)
             is None
         ):
-            raise SystemExit("Canonical create_pull_request base is invalid.")
+            raise SystemExit("Canonical create_pull_request target branch is invalid.")
 
         with open(sys.argv[1], "a", encoding="utf-8") as github_output:
-            github_output.write(f"branch={base_branch}\n")
+            github_output.write(f"branch={target_branch}\n")
         PY
   create-pull-request:
     title-prefix: "[docs] "
