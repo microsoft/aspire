@@ -11,6 +11,7 @@ import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
 
+import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
     return {
         document: {
@@ -41,7 +42,9 @@ suite('AspireEditorCommandProvider', () => {
         activeEditorStub = sinon.stub(vscode.window, 'activeTextEditor').get(() => activeEditor);
         workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) => {
-            if (uri.fsPath.startsWith(tempDir)) {
+            // VS Code lowercases the drive letter in fsPath, so the raw mkdtemp path does not
+            // prefix-match its own URI on Windows. Normalise both sides through Uri.file.
+            if (uri.fsPath.startsWith(vscode.Uri.file(tempDir).fsPath)) {
                 return { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
             }
 
@@ -69,7 +72,7 @@ suite('AspireEditorCommandProvider', () => {
         getWorkspaceFolderStub.restore();
         workspaceFoldersStub.restore();
         activeEditorStub.restore();
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeDirectorySafely(tempDir);
     });
 
     test('returns containing project file when active editor is SDK-style AppHost Program.cs', async () => {

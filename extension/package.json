@@ -49,6 +49,9 @@
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
     "workspaceContains:**/apphost.rs",
+    "workspaceContains:**/AppHost.java",
+    "workspaceContains:**/apphost.java",
+    "workspaceContains:**/src/main/java/AppHost.java",
     "onCommand:aspire-vscode.installCli",
     "onCommand:aspire-vscode.verifyCliInstalled",
     "onLanguageModelTool:aspire_apphost_start",
@@ -974,7 +977,8 @@
           "type": "boolean",
           "default": false,
           "description": "%configuration.aspire.registerMcpServerInWorkspace%",
-          "scope": "window"
+          "scope": "window",
+          "restricted": true
         },
         "aspire.appHostsPollingInterval": {
           "type": "number",
@@ -1158,6 +1162,7 @@
     "jsonc-parser": "3.3.1",
     "node-forge": "1.4.0",
     "tree-sitter-c-sharp": "0.23.5",
+    "tree-sitter-java": "0.23.5",
     "tree-sitter-rust": "0.24.0",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",

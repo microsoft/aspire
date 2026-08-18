@@ -16,6 +16,7 @@
 
 ### Fixes
 
+- Remember the selected AppHost folder when debugging multi-root workspaces ([#19342](https://github.com/microsoft/aspire/issues/19342)).
 - Make C# Dev Kit Hot Reload discoverable while debugging ([#19067](https://github.com/microsoft/aspire/pull/19067)).
 - Keep launch-configuration AppHost targets out of the workspace default list ([#19126](https://github.com/microsoft/aspire/pull/19126)).
 - Honor `ASPIRE_HOME` for deployment state ([#19244](https://github.com/microsoft/aspire/pull/19244)).

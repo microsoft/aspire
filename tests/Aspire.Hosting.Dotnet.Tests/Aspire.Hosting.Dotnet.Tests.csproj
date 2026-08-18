@@ -18,6 +18,7 @@
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
   </ItemGroup>
 

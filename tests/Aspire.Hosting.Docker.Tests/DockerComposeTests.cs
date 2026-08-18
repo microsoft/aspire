@@ -915,6 +915,40 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         Assert.Null(projectK8sResource.GetDeploymentTargetAnnotation(dockerCompose.Resource));
     }
 
+    [Fact]
+    public async Task RunningTheDeploymentTargetHooksTwiceLeavesOneTargetPerEnvironment()
+    {
+        // The prepare-deployment-target step declares RequiredBySteps = [BeforeStart], so it runs once in
+        // the BeforeStart pipeline and again in the publish DAG. Without a guard the second pass adds a
+        // second DeploymentTargetAnnotation, and GetDeploymentTargetAnnotation then throws on the
+        // ambiguity, which fails every publish that goes through both paths.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var dockerCompose = builder.AddDockerComposeEnvironment("docker-compose");
+
+        builder.AddContainer("containerdocker", "nginx")
+            .WithHttpEndpoint(port: 9090, targetPort: 80, name: "http")
+            .WithComputeEnvironment(dockerCompose);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var containerDockerResource = model.Resources.First(r => r.Name == "containerdocker");
+
+        Assert.Single(containerDockerResource.Annotations.OfType<DeploymentTargetAnnotation>());
+
+        var target = containerDockerResource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(dockerCompose.Resource, target.ComputeEnvironment);
+
+        // The surviving target must still be the configured one rather than a bare second pass.
+        var service = Assert.IsType<DockerComposeServiceResource>(target.DeploymentTarget);
+        Assert.Same(containerDockerResource, service.TargetResource);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 

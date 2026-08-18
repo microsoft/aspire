@@ -25,6 +25,7 @@ import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHost
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 
+import { removeDirectorySafely } from './testHelpers';
 interface LaunchCall {
     appHostPath: string;
     command: string;
@@ -341,8 +342,8 @@ suite('AppHost lifecycle language model tools', () => {
         service.dispose();
         workspaceFoldersStub.restore();
         isTrustedStub.restore();
-        fs.rmSync(workspaceRoot, { recursive: true, force: true });
-        fs.rmSync(outsideRoot, { recursive: true, force: true });
+        removeDirectorySafely(workspaceRoot);
+        removeDirectorySafely(outsideRoot);
     });
 
     suite('manifest and localization', () => {
@@ -588,7 +589,7 @@ suite('AppHost lifecycle language model tools', () => {
                 assert.strictEqual(launchService.launchCalls.length, 0);
             }
             finally {
-                fs.rmSync(secondRoot, { recursive: true, force: true });
+                removeDirectorySafely(secondRoot);
             }
         });
 
@@ -642,7 +643,7 @@ suite('AppHost lifecycle language model tools', () => {
                 assert.strictEqual(launchService.launchCalls.length, 0);
             }
             finally {
-                fs.rmSync(secondRoot, { recursive: true, force: true });
+                removeDirectorySafely(secondRoot);
             }
         });
 
@@ -663,7 +664,7 @@ suite('AppHost lifecycle language model tools', () => {
                 assert.strictEqual(launchService.launchCalls.length, 0);
             }
             finally {
-                fs.rmSync(secondRoot, { recursive: true, force: true });
+                removeDirectorySafely(secondRoot);
             }
         });
 
@@ -684,7 +685,7 @@ suite('AppHost lifecycle language model tools', () => {
                 assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: true }]);
             }
             finally {
-                fs.rmSync(secondRoot, { recursive: true, force: true });
+                removeDirectorySafely(secondRoot);
             }
         });
 
@@ -1501,7 +1502,7 @@ suite('AppHost lifecycle language model tools', () => {
                 assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: secondAppHost, command: 'run', noDebug: false }]);
             }
             finally {
-                fs.rmSync(secondRoot, { recursive: true, force: true });
+                removeDirectorySafely(secondRoot);
             }
         });
 

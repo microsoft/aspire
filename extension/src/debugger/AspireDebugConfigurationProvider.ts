@@ -1,16 +1,20 @@
 import * as vscode from 'vscode';
-import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName } from '../loc/strings';
+import * as path from 'path';
+import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { compareAppHostIdentity } from '../utils/appHostIdentity';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
+import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
-import { getAspireDebugConfigurationExternalLaunchReservation, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation } from './AspireDebugConfigurationProviderInternal';
+import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationResolvedCliPath, getAspireDebugConfigurationResolvedCliPathScope, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from './AspireDebugConfigurationProviderInternal';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
+
+const legacyDynamicConfigurationOwnerWorkspaceStateKey = 'aspire.debugger.legacyDynamicConfigurationOwnerUri';
 
 /**
  * The part of `AppHostLaunchService` this provider needs to make a `launch.json`/F5
@@ -24,9 +28,12 @@ export interface ExternalLaunchReservation {
 }
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+    private _legacyDynamicConfigurationOwnerUri: string | undefined;
+
     constructor(
         private readonly _appHostDiscoveryService: AppHostDiscoveryService,
         private readonly _launchReservation: ExternalLaunchReservation,
+        private readonly _workspaceState: vscode.Memento,
         private readonly _triggerKind: vscode.DebugConfigurationProviderTriggerKind = vscode.DebugConfigurationProviderTriggerKind.Dynamic) {
     }
 
@@ -37,35 +44,39 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const activeEditorFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
         if (activeEditorFolder?.uri.toString() !== folder.uri.toString()) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
         const candidate = await this.tryFindCandidateForEditorFile(activeEditor.document.uri.fsPath, folder);
         if (!candidate) {
-            return [this.createDefaultConfiguration(folder)];
+            return this.createDefaultConfigurations(folder);
         }
 
-        return [this.withProvidedSelectionOrigin({
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: getDebugTargetForCandidate(candidate)
-        })];
+        return this.createProvidedConfigurations(folder, getDebugTargetForCandidate(candidate));
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
         if (!aspireConfig.skipCliAvailabilityCheck) {
-            const result = await checkCliAvailableOrRedirect('debug_gate');
+            const program = typeof config.program === 'string' ? config.program : undefined;
+            const programFolder = program && path.isAbsolute(program) && !program.includes('${')
+                ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program))
+                : undefined;
+            const target = programFolder
+                ? workspaceFolderCliPathTarget(programFolder)
+                : folder ? workspaceFolderCliPathTarget(folder) : windowCliPathTarget;
+            const result = await checkCliAvailableOrRedirect('debug_gate', target);
             if (!result.available) {
                 return undefined; // Cancel the debug session
             }
+            markAspireDebugConfigurationWithResolvedCliPath(config, result.cliPath);
+            markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(target));
         }
 
         if (!config.type) {
@@ -102,6 +113,13 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         // property. A launch.json can spell `launchedByExtension`, but it cannot know the
         // per-activation value that makes the property authoritative.
         const launchedByExtension = isAspireDebugConfigurationExtensionOwned(config);
+        const resolvedCliPath = await this.reresolveCliPathForSubstitutedProgram(config);
+        if (resolvedCliPath !== undefined) {
+            aspireConfig.resolvedCliPath = resolvedCliPath;
+        }
+        else if (!launchedByExtension) {
+            delete aspireConfig.resolvedCliPath;
+        }
         const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
         if (launchedByExtension) {
             markAspireDebugConfigurationAsExtensionOwned(config);
@@ -220,19 +238,94 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
     }
 
-    private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
-        return this.withProvidedSelectionOrigin({
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: folder.uri.fsPath
-        });
+    private createDefaultConfigurations(folder: vscode.WorkspaceFolder): Promise<vscode.DebugConfiguration[]> {
+        return this.createProvidedConfigurations(folder, folder.uri.fsPath);
     }
 
-    private withProvidedSelectionOrigin(config: vscode.DebugConfiguration): vscode.DebugConfiguration {
-        return this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic
-            ? { ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }
-            : config;
+    private async createProvidedConfigurations(folder: vscode.WorkspaceFolder, program: string): Promise<vscode.DebugConfiguration[]> {
+        const isDynamic = this._triggerKind === vscode.DebugConfigurationProviderTriggerKind.Dynamic;
+        const config: vscode.DebugConfiguration = {
+            type: 'aspire',
+            request: 'launch',
+            name: isDynamic
+                ? await this.getDynamicConfigurationName(folder)
+                : defaultConfigurationName,
+            program
+        };
+
+        if (!isDynamic) {
+            return [config];
+        }
+
+        return [{ ...config, [appHostSelectionOriginConfigKey]: 'default-discovery' }];
+    }
+
+    private async getDynamicConfigurationName(folder: vscode.WorkspaceFolder): Promise<string> {
+        let ownerUri = this._legacyDynamicConfigurationOwnerUri
+            ?? this._workspaceState.get<string>(legacyDynamicConfigurationOwnerWorkspaceStateKey);
+        if (ownerUri === undefined) {
+            // Keep the first folder's shipped configuration name across workspace changes. VS Code
+            // does not hide dynamic configurations through `presentation.hidden`, so ownership must
+            // be persisted instead of returning a compatibility alias that becomes a duplicate.
+            ownerUri = vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? folder.uri.toString();
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+            await this._workspaceState.update(legacyDynamicConfigurationOwnerWorkspaceStateKey, ownerUri);
+        }
+        else {
+            this._legacyDynamicConfigurationOwnerUri = ownerUri;
+        }
+
+        return ownerUri === folder.uri.toString()
+            ? defaultConfigurationName
+            : defaultConfigurationNameForWorkspaceFolder(folder.name, folder.uri.toString());
+    }
+
+    /**
+     * Returns the CLI path the session should launch with, re-resolving when variable substitution
+     * revealed that the program belongs to a workspace folder other than the one the availability gate
+     * used.
+     *
+     * `resolveDebugConfiguration` runs before VS Code substitutes variables, so a `program` such as
+     * `${workspaceFolder:other}/AppHost.java`, or a relative one, is still opaque there and the gate
+     * can only fall back to the initiating folder. Without this the target folder's AppHost would be
+     * launched with the initiating folder's `aspire.cliPath` — in a multi-root workspace that is
+     * frequently a different CLI build entirely, and the mismatch is silent.
+     */
+    private async reresolveCliPathForSubstitutedProgram(config: vscode.DebugConfiguration): Promise<string | undefined> {
+        const gatedCliPath = getAspireDebugConfigurationResolvedCliPath(config);
+        if (gatedCliPath === undefined) {
+            // No gate ran (an extension-owned launch, or the check was skipped), so there is nothing
+            // to correct.
+            return undefined;
+        }
+
+        const program = typeof config.program === 'string' ? config.program : undefined;
+        if (!program || !path.isAbsolute(program) || program.includes('${')) {
+            return gatedCliPath;
+        }
+
+        const programFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
+        if (!programFolder) {
+            return gatedCliPath;
+        }
+
+        const target = workspaceFolderCliPathTarget(programFolder);
+        if (getCliPathTargetKey(target) === getAspireDebugConfigurationResolvedCliPathScope(config)) {
+            // Same scope the gate already used, so re-resolving would only repeat work and risk a
+            // second availability prompt.
+            return gatedCliPath;
+        }
+
+        const result = await checkCliAvailableOrRedirect('debug_gate', target);
+        if (!result.available) {
+            // Keep the gated path rather than cancelling: the gate already proved a usable CLI, and the
+            // session is better served by that one than by failing outright.
+            return gatedCliPath;
+        }
+
+        markAspireDebugConfigurationWithResolvedCliPath(config, result.cliPath);
+        markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(target));
+        return result.cliPath;
     }
 
     private isWorkspaceFolderRoot(program: string, folder: vscode.WorkspaceFolder | undefined): boolean {

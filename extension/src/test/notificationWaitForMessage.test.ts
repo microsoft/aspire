@@ -15,11 +15,13 @@ interface NotificationExtesterStubModule {
     };
     resetNotificationWaitState(): void;
     setEditorPolls(editorPolls: Array<string[] | Error>): void;
+    setCodeLensPolls(codeLensPolls: Array<string[] | Error>): void;
     setNotificationPolls(notificationPolls: Array<NotificationLike[] | Error>): void;
     setTerminalPolls(terminalPolls: Array<string | Error>): void;
 }
 
 interface VscodeHelpersModule {
+    waitForCodeLensText(fileName: string, expectedText: string, timeoutMs?: number): Promise<string[]>;
     waitForEditorTitle(expectedText: string, timeoutMs?: number): Promise<string>;
     waitForNotificationMessage(expectedText: string, timeoutMs?: number): Promise<NotificationLike>;
     waitForTerminalChannel(expectedText: string, timeoutMs?: number): Promise<string>;
@@ -134,7 +136,39 @@ suite('waitForNotificationMessage', () => {
                 error.message.includes('Open editor titles:'),
         );
     });
+
+    test('waits for the tab to exist and for the provider to produce lenses', async () => {
+        const { stub, vscode } = loadNotificationWaitModules();
+
+        // openResources returns before VS Code creates the tab, so openEditor throws; once it exists the
+        // provider has usually not produced anything yet, so the first read is empty.
+        stub.setCodeLensPolls([
+            new Error('No editor with title AppHost.java'),
+            [],
+            ['Run | Debug — these bypass Aspire'],
+        ]);
+
+        const texts = await vscode.waitForCodeLensText('AppHost.java', 'bypass Aspire', 5000);
+
+        assert.deepStrictEqual(texts, ['Run | Debug — these bypass Aspire']);
+    });
+
+    test('reports the lenses it did see when none ever match', async () => {
+        const { stub, vscode } = loadNotificationWaitModules();
+
+        stub.setCodeLensPolls([['Run', 'Debug']]);
+
+        await assert.rejects(
+            vscode.waitForCodeLensText('AppHost.java', 'bypass Aspire', 5000),
+            error => error instanceof Error
+                && error.message.includes("Timed out waiting for a CodeLens containing 'bypass Aspire'")
+                && error.message.includes('CodeLenses:')
+                && error.message.includes('Run')
+                && error.message.includes('Debug'),
+        );
+    });
 });
+
 
 function loadNotificationWaitModules(): {
     stub: NotificationExtesterStubModule;

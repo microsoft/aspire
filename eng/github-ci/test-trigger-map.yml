@@ -343,6 +343,7 @@ affected_project_rules:
       - Aspire.AppHost.Sdk
       - Aspire.Hosting.CodeGeneration.*
       - Aspire.Hosting.Go
+      - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Python
       - Aspire.Hosting.Rust

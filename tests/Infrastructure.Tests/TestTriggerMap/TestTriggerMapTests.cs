@@ -369,7 +369,8 @@ public sealed class TestTriggerMapTests
         // This list is hand-maintained intent (like EveryJobTargetResolvesToExistingWorkflowOrJob's
         // job-id mapping): a new gated job must be added here too. The check is substring containment,
         // so it catches a job NOT referencing its own var; it intentionally tolerates extra vars -- the
-        // extension jobs additionally OR-in run_extension_e2e for need-propagation.
+        // extension jobs additionally OR-in run_extension_e2e because extension_e2e_tests needs the
+        // VSIX and the corepack bootstrap they produce.
         var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
 
         var bindings = new[]

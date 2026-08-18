@@ -111,4 +111,56 @@ public sealed class CommandSpec
     /// These are merged with any environment variables provided by the caller.
     /// </summary>
     public Dictionary<string, string>? EnvironmentVariables { get; init; }
+
+    /// <summary>
+    /// Gets an optional incremental-build check. When set, the command is skipped if its stamp file
+    /// is newer than every declared input. Null means the command always runs.
+    /// </summary>
+    public CommandUpToDateCheck? UpToDateCheck { get; init; }
+}
+
+/// <summary>
+/// Declares the inputs and stamp file that let the CLI skip a command whose work is already done.
+/// </summary>
+/// <remarks>
+/// This exists for compilers that have no incremental mode of their own. <c>javac</c> given an
+/// explicit list of source files recompiles all of them every time, so an AppHost that has not
+/// changed still pays a full compile of the generated SDK on every launch. Toolchains that are
+/// already incremental (<c>cargo</c>, for instance) do not need this.
+/// </remarks>
+public sealed class CommandUpToDateCheck
+{
+    /// <summary>
+    /// Gets the inputs to compare against the stamp file, relative to the working directory unless
+    /// absolute. Supports the same placeholders as <see cref="CommandSpec.Args" />.
+    /// </summary>
+    /// <remarks>
+    /// An entry is either a file, a directory, or a directory suffixed with <c>/**</c>. A plain
+    /// directory is scanned one level deep; only the <c>/**</c> form recurses. That distinction is
+    /// what keeps the check cheap: the AppHost directory can be declared as an input for the sources
+    /// that sit beside the AppHost without walking sibling trees such as <c>node_modules</c>.
+    /// Entries that do not exist are ignored, so a spec can name a path that only some layouts have.
+    /// </remarks>
+    public required string[] Inputs { get; init; }
+
+    /// <summary>
+    /// Gets the file extensions, including the leading dot, that identify input files.
+    /// Null or empty means every file found under <see cref="Inputs" /> counts.
+    /// </summary>
+    /// <remarks>
+    /// Restricting by extension is what keeps a command's own outputs from invalidating it when they
+    /// land beside its inputs — <c>.class</c> files written next to the <c>.java</c> files they were
+    /// compiled from, for example.
+    /// </remarks>
+    public string[]? FileExtensions { get; init; }
+
+    /// <summary>
+    /// Gets the file, relative to the working directory unless absolute, written after the command
+    /// succeeds and compared against the inputs on the next launch.
+    /// </summary>
+    /// <remarks>
+    /// Place this with the command's outputs so that deleting them — <c>mvn clean</c>, or removing the
+    /// class output directory — also invalidates the check.
+    /// </remarks>
+    public required string StampFile { get; init; }
 }

@@ -36,6 +36,23 @@ const requestedTempRoot = verifyExtesterFeedOnly ? '' : process.env.ASPIRE_EXTEN
 // why `prepareRunDirectories` is a function rather than a module-scope block.
 const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';
 const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);
+// Java specs need the Java language server and the Java debug adapter (neither of which Aspire
+// ships) and a Java workspace in place of the scaffolded C# one, so they cannot share a run with
+// the other specs. Which specs are running is the whole requirement, so it is read off them rather
+// than from an opt-in variable: as an opt-in, both Java shards ran in CI with nothing setting it,
+// skipped every test, and reported green.
+//
+// ASPIRE_EXTENSION_E2E_ENABLE_JAVA remains as an explicit override for running a Java spec through
+// a glob, or for forcing the Java workspace off while debugging the runner.
+const enableJavaE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA
+  ? process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA === 'true'
+  : matchedTestSpecs.length > 0 && matchedTestSpecs.every(isJavaSpecPath);
+// redhat.java supplies the language server, which is what produces workspace diagnostics and the
+// classpath the debug adapter launches against. vscjava.vscode-java-debug supplies the `java` debug
+// adapter the Aspire debugger delegates to, and vscjava.vscode-java-dependency is a hard activation
+// dependency of it. capabilities.ts only advertises the `java` capability - which is what makes the
+// CLI hand the AppHost launch back to the extension - when the first two are both installed.
+const REQUIRED_JAVA_EXTENSION_IDS = ['redhat.java', 'vscjava.vscode-java-debug', 'vscjava.vscode-java-dependency'];
 const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
 if (!extesterVersion) {
   throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
@@ -57,9 +74,23 @@ const shortRunRoot = verifyExtesterFeedOnly ? '' : fs.mkdtempSync(path.join(temp
 const isolatedAspireHome = path.join(shortRunRoot, 'aspire-home');
 const storageDir = path.join(shortRunRoot, 'storage');
 const extensionsDir = path.join(shortRunRoot, 'extensions');
+// A single-file Java AppHost is restored and launched by the CLI's AppHost server. In a dev build
+// that server resolves Aspire packages through the repository's own NuGet configuration, so a
+// workspace under the OS temp directory fails with "No code generator found for language: Java"
+// (and, with an isolated ASPIRE_HOME, "No Aspire AppHost server is available"). The Java workspace
+// therefore lives inside the repository.
+//
+// It deliberately is not one of the gitignored scratch directories: `aspire ls` skips ignored
+// paths, so an AppHost under `.test-workspaces/` is discovered as zero candidates. It also sits
+// under `extension/` rather than the repository root, because an AppHost at the root fails code
+// generation with "No code generator found for language: Java". The runner deletes this directory
+// at the start and end of every run.
+const javaScratchWorkspaceRoot = path.join(extensionRoot, 'java-e2e-workspace');
 const workspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT
   ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT)
-  : path.join(shortRunRoot, 'workspace');
+  : enableJavaE2E
+    ? javaScratchWorkspaceRoot
+    : path.join(shortRunRoot, 'workspace');
 const workspaceMarkerFile = path.join(workspaceRoot, '.aspire-extension-e2e-workspace');
 const storageDiagnosticsDir = path.join(diagnosticsStorageRoot, shardName, runId);
 const workspaceDiagnosticsDir = path.join(extensionRoot, '.test-workspaces', shardName, runId);
@@ -275,9 +306,21 @@ function logE2eConfiguration() {
   console.log(`  download cache: ${downloadCacheRoot}`);
   console.log(`  current CLI regressions: ${process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'skipped' : 'included'}`);
   console.log(`  Azure Functions: ${enableAzureFunctionsE2E ? 'enabled' : 'disabled'}`);
+  console.log(`  Java: ${enableJavaE2E ? 'enabled' : 'disabled'}`);
   console.log(`  results: ${path.relative(extensionRoot, resultsDir)}`);
   console.log(`  storage diagnostics: ${path.relative(extensionRoot, storageDiagnosticsDir)}`);
   console.log(`  workspace diagnostics: ${path.relative(extensionRoot, workspaceDiagnosticsDir)}`);
+}
+
+/**
+ * Reports whether a compiled spec file belongs to the Java suites.
+ *
+ * Naming is the contract: every Java spec is `java*.e2e.test.js`, which is also what the workflow's
+ * `java-*` shards point at. Matching on the file name rather than a hard-coded list means a new
+ * Java spec is picked up by adding the shard, with nothing else to remember.
+ */
+function isJavaSpecPath(specPath) {
+  return path.basename(specPath).toLowerCase().startsWith('java');
 }
 
 function logStep(name) {
@@ -546,11 +589,17 @@ async function main() {
     prepareRunDirectories();
     logE2eConfiguration();
 
-    const cliPath = isolateCliPath(resolveCliPath());
+    const bundledCliPath = resolveCliPath();
+    // A dev-build CLI resolves its AppHost server and code generators relative to its own location,
+    // so a copy under the temp root cannot run a single-file Java AppHost - it fails with "No code
+    // generator found for language: Java". Java runs therefore use the CLI in place. Nothing in the
+    // Java spec writes to the CLI directory, and cleanup only ever invokes `aspire stop`.
+    const cliPath = enableJavaE2E ? bundledCliPath : isolateCliPath(bundledCliPath);
     cliPathForCleanup = cliPath;
     validateCliPath(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
+    copyJavaPlaygroundIntoWorkspace(bundledCliPath);
     restoreWorkspaceFixture();
     const vsixPath = process.env.ASPIRE_EXTENSION_E2E_VSIX
       ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_VSIX)
@@ -578,6 +627,9 @@ async function main() {
       ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT: workspaceRoot,
       ASPIRE_EXTENSION_E2E_STATE_FILE: stateFile,
       ASPIRE_EXTENSION_E2E_CONTROL_FILE: controlFile,
+      // The state and control files live at a stable per-shard path, so both sides stamp this to
+      // ignore an extension host left behind by an earlier run that is still polling them.
+      ASPIRE_EXTENSION_E2E_RUN_ID: runId,
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
@@ -620,12 +672,19 @@ async function main() {
     console.log(`Extension E2E download cache ${downloadCache.cacheHit ? 'hit' : 'populated'}: ${downloadCache.cacheDirectory}`);
     projectDownloadCache(downloadCache, storageDir);
 
+    // Installed before any VSIX because the fallback path copies unpacked extension directories in.
+    // VS Code only scans the extensions directory while extensions.json is absent; once install-vsix
+    // has written that file it is the authoritative list, and a directory that is not in it is
+    // ignored and then removed. Copying after the first install therefore silently installs nothing.
+    installJavaExtensions(extestEnv);
+
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
     for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
       logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
       run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
     }
+    assertJavaExtensionsRegistered();
 
     recording = startRecording();
     try {
@@ -662,7 +721,11 @@ async function main() {
 
     if (cleanupErrors.length > 0) {
       cleanupFailed = true;
-      const cleanupFailure = new AggregateError(cleanupErrors, 'One or more E2E cleanup steps failed.');
+      // Node prints an AggregateError without its `errors`, so a cleanup failure would otherwise
+      // reach CI as a bare "one or more steps failed" with nothing naming the step that broke.
+      const cleanupFailure = new AggregateError(
+        cleanupErrors,
+        `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
       if (testFailure) {
         console.error(cleanupFailure);
       }
@@ -786,8 +849,322 @@ function resolveAzureFunctionsVsixPaths() {
   ];
 }
 
-function resolveRequiredVsixPath(environmentVariable) {
-  const configuredPath = process.env[environmentVariable];
+/**
+ * Copies the Java Spring Boot playground into the run's workspace.
+ *
+ * The playground cannot be used as the workspace root directly, because `prepareWorkspaceFixture`
+ * deletes and rewrites whatever it is pointed at. Copying also keeps each run reproducible: the
+ * generated SDK, the Gradle build output, and the language server's own `bin/` all start absent, so
+ * a test asserting that build inputs were not copied into the output directory is measuring this
+ * run rather than whatever a previous local build left behind.
+ */
+function copyJavaPlaygroundIntoWorkspace(bundledCliPath) {
+  if (!enableJavaE2E) {
+    return;
+  }
+
+  const source = path.join(repoRoot, 'playground', 'JavaSpringBoot');
+  if (!fs.existsSync(source)) {
+    throw new Error(`The Java E2E specs require the Java playground at ${source}.`);
+  }
+
+  assertWorkspaceRootIsNotGitIgnored();
+
+  // `.aspire/` is generated rather than checked in, so it has to exist before the copy: it is what
+  // the AppHost's `import aspire.*` statements resolve against, and the generated sources are the
+  // very thing the diagnostics test measures.
+  ensureJavaAppHostSdkGenerated(bundledCliPath, source);
+
+  logStep('Copying the Java Spring Boot playground into the E2E workspace');
+  fs.cpSync(source, workspaceRoot, {
+    recursive: true,
+    // Anything the language server or a build produced locally would defeat the point of a clean
+    // run, and `bin/` in particular is what one of the tests asserts about. `.aspire/` is kept
+    // deliberately - it holds the generated SDK under test.
+    filter: sourcePath => !/[\\/](?:\.gradle|build|bin|target|node_modules)(?:[\\/]|$)/.test(sourcePath),
+  });
+
+  // The scaffolded settings point at the isolated CLI copy, which the Java AppHost needs just as
+  // much as the C# one. Merge rather than replace so that stays in effect.
+  const settingsPath = path.join(workspaceRoot, '.vscode', 'settings.json');
+  const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
+
+  // A Gradle import that fetches wrapper distributions and toolchains on demand takes far longer
+  // than the language server's default readiness window, and an unimported project reports every
+  // Aspire import as unresolved.
+  settings['java.import.gradle.wrapper.enabled'] = true;
+  settings['java.configuration.updateBuildConfiguration'] = 'automatic';
+  // The language server keeps its project metadata, and therefore its compiler output, in its own
+  // workspace storage by default. That hides the directories the "does not copy build inputs" spec
+  // asserts about: with nothing under the project's own bin/, the spec passes without ever
+  // observing what the build produced. Putting the metadata back at the project root is what makes
+  // that assertion able to fail.
+  settings['java.import.generatesMetadataFilesAtProjectRoot'] = true;
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
+
+  // The scaffolded C# fixture cannot coexist with a repository-internal workspace: it inherits the
+  // repository's central package management and fails to restore with NU1507. The Java spec never
+  // uses it, so remove it and unpin the pinned AppHost so discovery finds the Java AppHost.
+  for (const scaffolded of ['AspireE2E.AppHost', 'AspireE2E.Worker']) {
+    fs.rmSync(path.join(workspaceRoot, scaffolded), { recursive: true, force: true });
+  }
+
+  fs.rmSync(path.join(workspaceRoot, 'aspire.config.json'), { force: true });
+}
+
+/**
+ * Fails when the Java workspace root is excluded by a .gitignore rule.
+ *
+ * The Java workspace has to live inside the repository (see the note on `javaScratchWorkspaceRoot`),
+ * which puts it within reach of the repository's own ignore rules. That matters because `aspire ls`
+ * discovers AppHosts from `git ls-files` when it is run inside a work tree: an ignored workspace
+ * yields zero files, so `aspire ls` reports no candidates at all and every Java spec fails in its
+ * `before all` hook with nothing pointing at the cause. Adding `extension/java-e2e-workspace/` to
+ * .gitignore to keep `git status` tidy is exactly the well-intentioned change that breaks this, so
+ * name the cause here instead of leaving it to be rediscovered from an empty candidate list.
+ */
+function assertWorkspaceRootIsNotGitIgnored() {
+  const result = spawnSync('git', ['check-ignore', '-q', workspaceRoot], {
+    cwd: repoRoot,
+    shell: false,
+    encoding: 'utf8',
+  });
+
+  // git check-ignore exits 0 when the path is ignored, 1 when it is not, and >1 on error. Treat an
+  // error (no git, not a work tree) as "not ignored": the CLI falls back to a filesystem scan under
+  // the same conditions, so there is nothing to warn about.
+  if (result.status === 0) {
+    throw new Error(
+      `The Java E2E workspace root ${workspaceRoot} is excluded by a .gitignore rule. `
+      + '`aspire ls` discovers AppHosts from `git ls-files`, so an ignored workspace reports zero '
+      + 'AppHost candidates and every Java spec fails while waiting for one. Remove the ignore rule '
+      + 'covering this directory.');
+  }
+}
+
+/**
+ * Makes sure the playground's generated Aspire Java SDK exists before it is copied.
+ *
+ * `aspire restore` is run in the playground itself rather than in the copied workspace because the
+ * generator assemblies resolve relative to the repository's package feed; the same command run
+ * against a copy under a temporary directory fails to discover the Java code generator.
+ */
+function ensureJavaAppHostSdkGenerated(bundledCliPath, playgroundRoot) {
+  const appHostDirectory = path.join(playgroundRoot, 'JavaSpringBoot.AppHost.Java');
+  const generatedModules = path.join(appHostDirectory, '.aspire', 'modules');
+  if (fs.existsSync(generatedModules) && fs.readdirSync(generatedModules).length > 0) {
+    return;
+  }
+
+  logStep('Generating the Aspire Java SDK in the playground');
+  const result = spawnSync(bundledCliPath, ['restore'], {
+    cwd: appHostDirectory,
+    shell: false,
+    encoding: 'utf8',
+    timeout: 600000,
+  });
+
+  if (result.error) {
+    throw new Error(`Unable to run 'aspire restore' in ${appHostDirectory}: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`'aspire restore' failed in ${appHostDirectory} with code ${result.status ?? `signal ${result.signal ?? 'unknown'}`}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+}
+
+/**
+ * Puts the Java language server and debug adapter into the run's extensions directory.
+ *
+ * The extension advertises the `java` capability only when both are installed, and the CLI only
+ * hands a Java AppHost back to the extension to launch when that capability is advertised, so
+ * without these the AppHost still runs and no breakpoint in it can ever bind.
+ */
+function installJavaExtensions(extestEnv) {
+  if (!enableJavaE2E) {
+    return;
+  }
+
+  const configuredVsixPaths = resolveJavaVsixPaths();
+  if (configuredVsixPaths.length > 0) {
+    for (const vsixPath of configuredVsixPaths) {
+      logStep(`Installing ${path.basename(vsixPath)}`);
+      run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 600000 });
+    }
+  }
+  else {
+    copyLocallyInstalledJavaExtensions();
+  }
+}
+
+/**
+ * Resolves the Java extension VSIXes the run was given, if any.
+ *
+ * CI downloads them from the marketplace and passes them here, because a hosted runner has no VS
+ * Code profile to borrow them from. The value is a list rather than one variable per extension
+ * because the set is an implementation detail of what redhat.java and the debug adapter need from
+ * each other, and that set has changed before.
+ */
+function resolveJavaVsixPaths() {
+  const configured = process.env.ASPIRE_EXTENSION_E2E_JAVA_VSIX;
+  if (!configured) {
+    return [];
+  }
+
+  return configured
+    .split(path.delimiter)
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0)
+    .map(entry => {
+      const resolvedPath = path.resolve(entry);
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`ASPIRE_EXTENSION_E2E_JAVA_VSIX points to a missing file: ${resolvedPath}`);
+      }
+
+      validateVsix(resolvedPath);
+      return resolvedPath;
+    });
+}
+
+/**
+ * Falls back to the Java extensions already installed in a developer's VS Code.
+ *
+ * They are installed as already-unpacked directories rather than VSIXes. VS Code treats every
+ * immediate subdirectory of --extensions-dir that has a package.json as an installed extension, so
+ * copying is equivalent to `install-vsix` and avoids a marketplace download in a run that is
+ * otherwise offline. ASPIRE_EXTENSION_E2E_JAVA_EXTENSIONS_DIR names the directory holding them.
+ *
+ * Without that variable both the stable and Insiders extension directories are searched, and the
+ * first one holding every required extension wins. A developer with the Extension Pack for Java in
+ * Insiders only would otherwise be told the extensions are missing while they are plainly
+ * installed, which is a confusing way to fail a run that has already spent minutes downloading.
+ */
+function copyLocallyInstalledJavaExtensions() {
+  const configuredRoot = process.env.ASPIRE_EXTENSION_E2E_JAVA_EXTENSIONS_DIR;
+  const candidateRoots = configuredRoot
+    ? [path.resolve(configuredRoot)]
+    : [path.join(os.homedir(), '.vscode', 'extensions'), path.join(os.homedir(), '.vscode-insiders', 'extensions')];
+
+  const searched = [];
+  let sourceRoot;
+  let available = [];
+  for (const candidateRoot of candidateRoots) {
+    if (!fs.existsSync(candidateRoot)) {
+      searched.push(`${candidateRoot} (not found)`);
+      continue;
+    }
+
+    const entries = fs.readdirSync(candidateRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name);
+    // Directory names carry a version, and platform-specific builds add a target triple, so match
+    // on the `<publisher>.<name>-` prefix rather than an exact name.
+    if (REQUIRED_JAVA_EXTENSION_IDS.every(identifier => entries.some(name => name.startsWith(`${identifier}-`)))) {
+      sourceRoot = candidateRoot;
+      available = entries;
+      break;
+    }
+
+    searched.push(`${candidateRoot} (missing ${REQUIRED_JAVA_EXTENSION_IDS.filter(identifier => !entries.some(name => name.startsWith(`${identifier}-`))).join(', ')})`);
+  }
+
+  if (!sourceRoot) {
+    throw new Error(`The Java E2E specs require ${REQUIRED_JAVA_EXTENSION_IDS.join(', ')} to be installed. Searched: ${searched.join('; ')}. Install the Extension Pack for Java, set ASPIRE_EXTENSION_E2E_JAVA_EXTENSIONS_DIR to a directory that has them, or pass VSIXes through ASPIRE_EXTENSION_E2E_JAVA_VSIX.`);
+  }
+
+  for (const identifier of REQUIRED_JAVA_EXTENSION_IDS) {
+    // Directory names carry a version, and platform-specific builds add a target triple, so match
+    // on the `<publisher>.<name>-` prefix rather than an exact name.
+    const directoryName = available.find(name => name.startsWith(`${identifier}-`));
+    if (!directoryName) {
+      throw new Error(`The Java E2E specs require ${identifier} to be installed under ${sourceRoot}. Found: ${available.join(', ') || '(none)'}`);
+    }
+
+    const source = path.join(sourceRoot, directoryName);
+    assertExtensionSupportsVsCodeVersion(source, directoryName);
+
+    logStep(`Installing ${directoryName}`);
+    fs.cpSync(source, path.join(extensionsDir, directoryName), { recursive: true, verbatimSymlinks: true });
+  }
+}
+
+/**
+ * Fails the run when the extensions directory does not end up holding every Java extension.
+ *
+ * Both install paths can appear to succeed without producing what the specs need: a VSIX for the
+ * wrong extension installs cleanly, and a copied directory is ignored outright unless VS Code scans
+ * it before extensions.json exists. Either way the specs would launch, find no `java` capability,
+ * and fail minutes later with a timeout that says nothing about the missing extension.
+ *
+ * extensions.json is what VS Code loads from, so it is the only check that distinguishes an
+ * extension that is present on disk from one that will actually activate.
+ */
+function assertJavaExtensionsRegistered() {
+  if (!enableJavaE2E) {
+    return;
+  }
+
+  const manifestPath = path.join(extensionsDir, 'extensions.json');
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(`VS Code did not write ${manifestPath}, so no extension is registered for the run.`);
+  }
+
+  let registered;
+  try {
+    registered = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  }
+  catch (error) {
+    throw new Error(`Unable to read the installed extension list at ${manifestPath}: ${error.message}`);
+  }
+
+  const registeredIds = registered
+    .map(entry => entry?.identifier?.id)
+    .filter(Boolean);
+
+  for (const identifier of REQUIRED_JAVA_EXTENSION_IDS) {
+    const entry = registered.find(candidate => candidate?.identifier?.id?.toLowerCase() === identifier.toLowerCase());
+    if (!entry) {
+      throw new Error(`${identifier} is not registered in ${manifestPath}, so VS Code will not load it. Registered: ${registeredIds.join(', ') || '(none)'}`);
+    }
+
+    assertExtensionSupportsVsCodeVersion(path.join(extensionsDir, entry.relativeLocation), entry.relativeLocation);
+  }
+
+  console.log(`Java extensions registered for the run: ${REQUIRED_JAVA_EXTENSION_IDS.join(', ')}.`);
+}
+
+/**
+ * Fails fast when a copied extension declares an engine range the pinned VS Code cannot satisfy.
+ *
+ * VS Code silently refuses to activate an incompatible extension, which would surface much later as
+ * an empty diagnostics list that looks like a passing test.
+ */
+function assertExtensionSupportsVsCodeVersion(extensionDirectory, directoryName) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(extensionDirectory, 'package.json'), 'utf8'));
+  const engine = manifest.engines?.vscode;
+  if (typeof engine !== 'string' || engine === '*') {
+    return;
+  }
+
+  const minimum = engine.match(/^\^?(\d+)\.(\d+)\.(\d+)$/);
+  if (!minimum) {
+    return;
+  }
+
+  const required = [Number(minimum[1]), Number(minimum[2]), Number(minimum[3])];
+  const actual = vscodeVersion.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((actual[i] ?? 0) > required[i]) {
+      return;
+    }
+
+    if ((actual[i] ?? 0) < required[i]) {
+      throw new Error(`${directoryName} requires VS Code ${engine} but the E2E run is pinned to ${vscodeVersion}.`);
+    }
+  }
+}
+
+function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = process.env[environmentVariable];
   if (!configuredPath) {
     throw new Error(`${environmentVariable} is required when ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true.`);
   }
@@ -930,6 +1307,11 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
 
 function restoreWorkspaceFixture() {
   if (process.env.ASPIRE_EXTENSION_E2E_SKIP_RESTORE_PREWARM === 'true') {
+    return;
+  }
+
+  // The Java run deletes the C# fixture projects, so there is nothing here to prewarm.
+  if (enableJavaE2E) {
     return;
   }
 
@@ -1257,6 +1639,16 @@ function getAspireCliEnvironment(extraEnv = {}) {
     DOTNET_NOLOGO: '1',
     MSBUILDTERMINALLOGGER: 'false',
     features__updateNotificationsEnabled: 'false',
+    // A single-file Java AppHost is started by the CLI's AppHost server, which the CLI locates
+    // either from an installed bundle or, in dev mode, from the Aspire repository root. The E2E
+    // workspace CLI copy has no bundle, so without this the CLI fails with "No Aspire AppHost
+    // server is available". Java support is also still experimental, and `aspire ls` silently
+    // omits Java AppHosts unless both feature flags are on - the isolated ASPIRE_HOME has neither.
+    ...(enableJavaE2E ? {
+      ASPIRE_REPO_ROOT: repoRoot,
+      features__polyglotSupportEnabled: 'true',
+      features__experimentalPolyglot__java: 'true',
+    } : {}),
     ...extraEnv,
   };
 }
@@ -1481,13 +1873,50 @@ function assertWorkspaceRootSafeForDeletion() {
     return;
   }
 
+  // The Java run deliberately places its workspace inside the repository rather than the temp root,
+  // so that the CLI resolves packages the way it does for the playground. The marker-file check
+  // still applies, so this is not a weakening of the delete guard.
+  if (isSamePath(resolvedWorkspaceRoot, resolveExistingPathForSafety(javaScratchWorkspaceRoot))) {
+    assertWorkspaceRootCarriesMarker();
+    return;
+  }
+
   if (process.env.ASPIRE_EXTENSION_E2E_ALLOW_EXTERNAL_WORKSPACE_ROOT_CLEANUP !== 'true') {
     throw new Error(`ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT must be under the runner temp root unless ASPIRE_EXTENSION_E2E_ALLOW_EXTERNAL_WORKSPACE_ROOT_CLEANUP=true is set. Refusing to delete ${workspaceRoot}.`);
   }
 
-  if (fs.existsSync(workspaceRoot) && !fs.existsSync(workspaceMarkerFile)) {
-    throw new Error(`Refusing to delete external E2E workspace root without marker file ${workspaceMarkerFile}.`);
+  assertWorkspaceRootCarriesMarker();
+}
+
+/**
+ * Refuses to delete a workspace root that holds content the runner did not create.
+ *
+ * An empty directory is accepted because it cannot hold anything worth protecting, and because
+ * `prepareWorkspaceFixture` creates the directory before it writes the marker: a run interrupted in
+ * that window, or one that failed before writing the marker, otherwise leaves a markerless
+ * directory that blocks every later run with no way to recover but manual deletion.
+ */
+function assertWorkspaceRootCarriesMarker() {
+  if (isWorkspaceRootOwnedByRunner()) {
+    return;
   }
+
+  throw new Error(
+    `Refusing to delete external E2E workspace root without marker file ${workspaceMarkerFile}. `
+    + `Delete ${workspaceRoot} manually if it is not yours, then re-run.`);
+}
+
+/**
+ * Reports whether the workspace root is the runner's to delete: absent, marked by a previous run,
+ * or empty. Both the pre-run fixture reset and the post-run cleanup consult this, so a developer
+ * directory that happens to sit at the workspace path survives a run intact.
+ */
+function isWorkspaceRootOwnedByRunner() {
+  if (!fs.existsSync(workspaceRoot) || fs.existsSync(workspaceMarkerFile)) {
+    return true;
+  }
+
+  return fs.readdirSync(workspaceRoot).length === 0;
 }
 
 function resolveExistingPathForSafety(value) {
@@ -1771,6 +2200,16 @@ function cleanupTemporaryRunRoot() {
   if (process.env.ASPIRE_EXTENSION_E2E_KEEP_STORAGE === 'true') {
     console.log(`Keeping Aspire VS Code E2E temporary root: ${shortRunRoot}`);
     return;
+  }
+
+  // The Java workspace lives inside the repository and is deliberately not gitignored, so leaving it
+  // behind would show up as untracked changes and could be committed by accident.
+  //
+  // Only remove it when the runner owns it. `prepareWorkspaceFixture` refuses to delete a workspace
+  // root that holds content the runner did not create, and deleting it here regardless would defeat
+  // that guard and destroy a developer's directory that happens to sit at this path.
+  if (enableJavaE2E && workspaceRoot === javaScratchWorkspaceRoot && isWorkspaceRootOwnedByRunner()) {
+    removePathWithoutFollowingLinks(javaScratchWorkspaceRoot, { recursive: true, force: true });
   }
 
   // The storage directory under this root holds the projected VS Code and ChromeDriver artifacts,

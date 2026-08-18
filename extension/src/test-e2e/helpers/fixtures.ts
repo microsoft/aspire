@@ -87,6 +87,15 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolders', folders }, { timeoutMs: 30000 });
+    return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
+export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
+    await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
+}
+
 export async function snapshotClipboardForE2E(): Promise<void> {
     await executeE2eControlCommand({ name: 'snapshotClipboard' });
 }
@@ -310,6 +319,19 @@ export function getCliWrapperInvocationCount(invocationLogPath: string): number 
         .split(/\r?\n/)
         .filter(line => line.length > 0)
         .length;
+}
+
+export async function waitForCliWrapperInvocation(invocationLogPath: string, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (getCliWrapperInvocationCount(invocationLogPath) > 0) {
+            return;
+        }
+
+        await delay(500);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for an Aspire CLI wrapper invocation in ${invocationLogPath}.`);
 }
 
 export function touchPrimaryAppHostProject(): void {
@@ -1007,7 +1029,7 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function removePath(targetPath: string, options: fs.RmOptions): void {
+export function removePath(targetPath: string, options: fs.RmOptions): void {
     const maxAttempts = process.platform === 'win32' ? 40 : 1;
     for (let attempt = 1; ; attempt++) {
         try {

@@ -24,6 +24,8 @@ export type Capability =
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
+    | 'java' // Support for running Java projects
+    | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
     | 'azure-functions'; // Support for running Azure Functions projects
 
 export type Capabilities = Capability[];
@@ -88,6 +90,19 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
+// The Java debug adapter cannot launch anything on its own: it resolves main classes, the
+// classpath and project metadata through the redhat.java language server, which is why
+// vscjava.vscode-java-debug declares redhat.java as an extension dependency and both ship together
+// in the "Extension Pack for Java". java.ts also calls the redhat.java API directly to refresh the
+// project configuration, so advertise Java support only when both are present.
+// https://github.com/microsoft/vscode-java-debug#requirements
+export const javaLanguageExtensionId = 'redhat.java';
+export const javaDebugExtensionId = 'vscjava.vscode-java-debug';
+
+export function isJavaInstalled(extensionInstalled: (extensionId: string) => boolean = isExtensionInstalled) {
+    return extensionInstalled(javaLanguageExtensionId) && extensionInstalled(javaDebugExtensionId);
+}
+
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
@@ -136,6 +151,11 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
     if (isMauiInstalled()) {
         capabilities.push("maui");
         capabilities.push("ms-dotnettools.dotnet-maui");
+    }
+
+    if (isJavaInstalled()) {
+        capabilities.push("java");
+        capabilities.push(javaDebugExtensionId);
     }
 
     return capabilities;
