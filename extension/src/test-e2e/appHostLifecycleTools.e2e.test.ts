@@ -8,7 +8,8 @@ import { runProcess, terminateProcessTree } from './helpers/process';
 import { getProcessEntry, listProcessEntries, type ProcessEntry } from './helpers/processArguments';
 import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
-import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, commandLineArgumentEquals, getExpectedLinkedAppHostCliProcessArguments } from '../test/helpers/processArguments';
+import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
+import { getCmdShimSpawnCommand, shouldWrapWithCmd } from '../utils/cmdShimCommand';
 
 interface LifecycleToolResult {
     tool: string;
@@ -486,7 +487,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
             }
         });
 
-        test('Aspire CLI start-debug-session preserves exact linked-worktree AppHost argv', async () => {
+        test('Aspire CLI start-debug-session forwards exact linked-worktree AppHost argv without inferred root isolation', async () => {
             assert.ok(fixture);
             const diagnosticsDirectory = ensureDiagnosticsDir();
             const argvEvidencePath = path.join(diagnosticsDirectory, 'apphost-direct-cli-argv-live.json');
@@ -541,12 +542,11 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     appHostPath: fixture.appHostPath,
                 });
                 assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the direct CLI process: ${JSON.stringify(processInfo)}`);
-                const cliProcess = await waitForExactLinkedAppHostCliProcess(
+                const cliProcess = await waitForLinkedAppHostCliProcess(
                     processInfo.cliPid,
-                    getCliPath(),
                     fixture.appHostPath,
-                    appHostArguments,
-                    180000);
+                    180000,
+                    false);
                 const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
                 assert.deepStrictEqual(appHostArgv, appHostArguments);
 
@@ -579,7 +579,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
             }
         });
 
-        test('launch.json F5 isolates a linked worktree and preserves exact .NET AppHost argv twice', async () => {
+        test('launch.json F5 preserves exact linked-worktree .NET AppHost argv twice without inferred root isolation', async () => {
             assert.ok(fixture);
             const diagnosticsDirectory = ensureDiagnosticsDir();
             const argvEvidencePath = path.join(diagnosticsDirectory, 'apphost-f5-argv-live.json');
@@ -657,12 +657,14 @@ suite('Aspire AppHost lifecycle E2E', function () {
                         cliWrapperPath,
                         fixture.appHostPath,
                         appHostArguments,
-                        180000);
+                        180000,
+                        false);
                     const cliInvocations = waitForCliFallbackAndLaunchInvocations(
                         cliInvocationLogPath,
                         invocationCountBeforeLaunch,
                         fixture.appHostPath,
-                        appHostArguments);
+                        appHostArguments,
+                        false);
                     const extensionLog = await waitForLinkedAppHostSpawnLog(fixture.appHostPath, 60000);
                     const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
                     assert.deepStrictEqual(appHostArgv, appHostArguments);
@@ -915,12 +917,17 @@ function restoreLaunchJson(launchJsonPath: string, originalLaunchJson: string | 
     fs.writeFileSync(launchJsonPath, originalLaunchJson);
 }
 
-async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: string, timeoutMs: number): Promise<ProcessEntry> {
+async function waitForLinkedAppHostCliProcess(
+    cliPid: number,
+    appHostPath: string,
+    timeoutMs: number,
+    expectRootIsolation = true,
+): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            assertLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, getCliPath());
+            assertLinkedAppHostCliLaunchExpectation(cliProcess.arguments, appHostPath, getCliPath(), expectRootIsolation);
             return cliProcess;
         }
 
@@ -930,19 +937,62 @@ async function waitForLinkedAppHostCliProcess(cliPid: number, appHostPath: strin
     throw new Error(`Timed out after ${timeoutMs}ms waiting for Aspire CLI process ${cliPid} to launch ${appHostPath}.`);
 }
 
+function assertLinkedAppHostCliLaunchExpectation(
+    argumentsList: readonly string[],
+    appHostPath: string,
+    cliPath: string,
+    expectRootIsolation: boolean,
+    platform = process.platform,
+): void {
+    if (expectRootIsolation) {
+        assertLinkedAppHostCliLaunch(argumentsList, appHostPath, cliPath, platform);
+        return;
+    }
+
+    const formattedArguments = JSON.stringify(argumentsList);
+    assert.ok(
+        argumentsList.length > 0 && commandLineArgumentEquals(argumentsList[0], cliPath, platform),
+        `Expected the current E2E CLI '${cliPath}' as argv[0] in: ${formattedArguments}`);
+
+    const runIndex = argumentsList.indexOf('run', 1);
+    assert.ok(runIndex > 0, `Expected exact 'run' after the CLI path in: ${formattedArguments}`);
+
+    const isolatedIndex = argumentsList.indexOf('--isolated', runIndex + 1);
+    assert.strictEqual(isolatedIndex, -1, `Did not expect inferred root '--isolated' after 'run' in: ${formattedArguments}`);
+    assert.strictEqual(
+        argumentsList.some(argument => argument === '--isolated=false'),
+        false,
+        `Did not expect any root '--isolated=false' after 'run' in: ${formattedArguments}`);
+
+    const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session', runIndex + 1);
+    assert.ok(startDebugSessionIndex > runIndex, `Expected exact '--start-debug-session' after 'run' in: ${formattedArguments}`);
+
+    const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
+    assert.ok(appHostIndex > startDebugSessionIndex, `Expected exact '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
+    assert.ok(
+        appHostIndex + 1 < argumentsList.length &&
+        commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),
+        `Expected exact --apphost path '${appHostPath}' immediately after '--apphost' in: ${formattedArguments}`);
+}
+
 async function waitForExactLinkedAppHostCliProcess(
     cliPid: number,
     cliPath: string,
     appHostPath: string,
     appHostArguments: readonly string[],
     timeoutMs: number,
+    expectRootIsolation = true,
 ): Promise<ProcessEntry> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         const cliProcess = await getProcessEntry(cliPid);
         if (cliProcess) {
-            if (process.platform === 'win32' && /\.cmd$/i.test(cliPath)) {
-                const expectedArguments = getExpectedLinkedAppHostCliProcessArguments(cliPath, appHostPath, appHostArguments);
+            if (shouldWrapWithCmd(cliPath)) {
+                const expectedArguments = getExpectedLinkedAppHostCliProcessArguments(
+                    cliPath,
+                    appHostPath,
+                    appHostArguments,
+                    expectRootIsolation);
                 assert.ok(
                     cliProcess.arguments.length >= 5 &&
                     cliProcess.arguments.slice(0, 5).every((argument, index) =>
@@ -953,7 +1003,12 @@ async function waitForExactLinkedAppHostCliProcess(
                     `Expected the raw cmd.exe command line to contain ${JSON.stringify(expectedArguments[5])}, got ${JSON.stringify(cliProcess.commandLine)}.`);
             }
             else {
-                assertExactLinkedAppHostCliLaunch(cliProcess.arguments, appHostPath, cliPath, appHostArguments);
+                assertExactLinkedAppHostCliLaunch(
+                    cliProcess.arguments,
+                    appHostPath,
+                    cliPath,
+                    appHostArguments,
+                    expectRootIsolation);
             }
             return cliProcess;
         }
@@ -968,15 +1023,17 @@ function waitForCliFallbackAndLaunchInvocations(
     invocationLogPath: string,
     invocationCountBeforeLaunch: number,
     appHostPath: string,
-    appHostArguments: readonly string[]
+    appHostArguments: readonly string[],
+    expectRootIsolation = true,
 ): string[][] {
     const invocations = getCliWrapperInvocations(invocationLogPath).slice(invocationCountBeforeLaunch);
-    const expectedRunInvocation = getExpectedLinkedAppHostCliArguments(appHostPath, appHostArguments);
+    const expectedRunInvocation = getExpectedLinkedAppHostCliArguments(appHostPath, appHostArguments, expectRootIsolation);
     const runInvocations = invocations.filter(invocation => invocation[0] === 'run');
     assert.strictEqual(runInvocations.length, 1, `Expected one run invocation, got ${JSON.stringify(runInvocations)}.`);
     assert.strictEqual(runInvocations[0].length, expectedRunInvocation.length);
+    const appHostPathIndex = expectedRunInvocation.indexOf(appHostPath);
     assert.ok(runInvocations[0].every((argument, index) =>
-        index === 5
+        index === appHostPathIndex
             ? commandLineArgumentEquals(argument, expectedRunInvocation[index])
             : argument === expectedRunInvocation[index]));
 
@@ -990,10 +1047,14 @@ function waitForCliFallbackAndLaunchInvocations(
     return invocations;
 }
 
-function getExpectedLinkedAppHostCliArguments(appHostPath: string, appHostArguments: readonly string[]): string[] {
+function getExpectedLinkedAppHostCliArguments(
+    appHostPath: string,
+    appHostArguments: readonly string[],
+    expectRootIsolation = true,
+): string[] {
     return [
         'run',
-        '--isolated',
+        ...(expectRootIsolation ? ['--isolated'] : []),
         '--start-debug-session',
         '--nologo',
         '--apphost',
@@ -1001,6 +1062,49 @@ function getExpectedLinkedAppHostCliArguments(appHostPath: string, appHostArgume
         '--',
         ...appHostArguments,
     ];
+}
+
+function getExpectedLinkedAppHostCliProcessArguments(
+    cliPath: string,
+    appHostPath: string,
+    appHostArguments: readonly string[],
+    expectRootIsolation = true,
+): string[] {
+    const cliArguments = getExpectedLinkedAppHostCliArguments(appHostPath, appHostArguments, expectRootIsolation);
+    if (shouldWrapWithCmd(cliPath)) {
+        const spawnCommand = getCmdShimSpawnCommand(cliPath, cliArguments);
+        return [spawnCommand.command, ...spawnCommand.args];
+    }
+
+    return [cliPath, ...cliArguments];
+}
+
+function assertExactLinkedAppHostCliLaunch(
+    argumentsList: readonly string[],
+    appHostPath: string,
+    cliPath: string,
+    appHostArguments: readonly string[],
+    expectRootIsolation = true,
+    platform = process.platform,
+): void {
+    const expectedArguments = getExpectedLinkedAppHostCliProcessArguments(
+        cliPath,
+        appHostPath,
+        appHostArguments,
+        expectRootIsolation);
+    const appHostPathIndex = expectedArguments.indexOf(appHostPath);
+    const pathArgumentIndexes = shouldWrapWithCmd(cliPath)
+        ? [0]
+        : [0, appHostPathIndex];
+    const argumentsMatch = argumentsList.length === expectedArguments.length &&
+        argumentsList.every((argument, index) =>
+            pathArgumentIndexes.includes(index)
+                ? commandLineArgumentEquals(argument, expectedArguments[index], platform)
+                : argument === expectedArguments[index]);
+
+    assert.ok(
+        argumentsMatch,
+        `Expected exact Aspire CLI argv ${JSON.stringify(expectedArguments)}, got ${JSON.stringify(argumentsList)}.`);
 }
 
 async function waitForAppHostArgvEvidence(evidencePath: string, timeoutMs: number): Promise<string[]> {

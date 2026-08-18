@@ -255,7 +255,7 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(config.args, ['--isolated']);
     });
 
-    test('prepareLaunchArguments infers root isolation when only app args specify isolated', async () => {
+    test('prepareLaunchArguments does not infer root isolation when only app args specify isolated', async () => {
         const directory = createAppHostDirectory('AppHost.csproj');
         fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
         writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
@@ -269,20 +269,17 @@ suite('AppHostLaunchService', () => {
             cancellation.token,
             '/path/bin/aspire');
 
-        assert.deepStrictEqual(prepared, {
-            args: ['--isolated', '--', '--isolated', 'false'],
-            isolation: { effective: true, option: true },
-        });
-        assert.deepStrictEqual(capabilityProvider.calls, [{
-            capability: isolatedLaunchCapability,
-            options: {
-                suppressErrors: true,
-                forceRefresh: true,
-                cliPath: '/path/bin/aspire',
-                cancellationToken: cancellation.token,
-                minimumVersion: '13.2.0',
-            },
-        }]);
+        const rootArguments = prepared.args?.[0] === '--'
+            ? undefined
+            : prepared.args?.slice(0, prepared.args?.indexOf('--'));
+        const appHostArguments = prepared.args?.[0] === '--'
+            ? prepared.args
+            : prepared.args?.slice(prepared.args.indexOf('--'));
+
+        assert.strictEqual(rootArguments, undefined);
+        assert.deepStrictEqual(appHostArguments, ['--', '--isolated', 'false']);
+        assert.deepStrictEqual(prepared.isolation, { effective: false, option: undefined });
+        assert.deepStrictEqual(capabilityProvider.calls, []);
     });
 
     test('prepareLaunchArguments preserves explicit root isolated false', async () => {
