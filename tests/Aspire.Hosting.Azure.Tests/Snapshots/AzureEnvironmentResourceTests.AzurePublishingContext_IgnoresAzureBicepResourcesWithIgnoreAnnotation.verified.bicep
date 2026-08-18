@@ -6,6 +6,8 @@ param location string
 
 param principalId string
 
+param principalType string
+
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
   location: location
@@ -25,7 +27,7 @@ module included_storage_roles 'included-storage-roles/included-storage-roles.bic
   params: {
     location: location
     included_storage_outputs_name: included_storage.outputs.name
-    principalType: ''
+    principalType: principalType
     principalId: principalId
   }
 }

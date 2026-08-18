@@ -23,6 +23,10 @@ internal sealed partial class FileDeploymentStateManager(
     IHostEnvironment hostEnvironment,
     IOptions<PipelineOptions> pipelineOptions) : DeploymentStateManagerBase<FileDeploymentStateManager>(logger)
 {
+    private readonly JsonObject _migratedState = [];
+    private readonly HashSet<string> _migratedSectionNames = new(StringComparer.Ordinal);
+    private bool _isMigratingLegacyState;
+
     // Regex pattern matching only alphanumeric characters, underscores, and hyphens
     [GeneratedRegex(@"^[a-zA-Z0-9_-]+$")]
     private static partial Regex ValidEnvironmentNameRegex();
@@ -51,20 +55,43 @@ internal sealed partial class FileDeploymentStateManager(
     /// <inheritdoc/>
     protected override string? GetStatePath()
     {
-        // Use PathSha256 for deployment state to disambiguate projects with the same name in different locations
-        var appHostSha = configuration["AppHost:PathSha256"];
+        var currentStatePath = GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+        if (currentStatePath is null || File.Exists(currentStatePath))
+        {
+            return currentStatePath;
+        }
+
+        if (pipelineOptions.Value.ClearCache)
+        {
+            return currentStatePath;
+        }
+
+        var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+        if (legacyStatePath is not null && File.Exists(legacyStatePath))
+        {
+            _isMigratingLegacyState = true;
+            return legacyStatePath;
+        }
+
+        return currentStatePath;
+    }
+
+    private string? GetCanonicalStatePath() => GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+
+    private string? GetStatePath(string? appHostSha, string environmentName)
+    {
         if (string.IsNullOrEmpty(appHostSha))
         {
             return null;
         }
 
-        var environment = hostEnvironment.EnvironmentName.ToLowerInvariant();
+        var environment = environmentName.ToLowerInvariant();
 
         // Validate the environment name to ensure it only contains safe characters
         // and guard against path traversal attacks
         if (!IsValidEnvironmentName(environment))
         {
-            throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", "EnvironmentName");
+            throw new ArgumentException($"The environment name '{environment}' contains invalid characters. Environment names must only contain alphanumeric characters, underscores, and hyphens ([a-zA-Z0-9_-]+).", nameof(environmentName));
         }
 
         var aspireHome = configuration[KnownConfigNames.AspireHome];
@@ -85,7 +112,20 @@ internal sealed partial class FileDeploymentStateManager(
     }
 
     /// <inheritdoc/>
-    protected override async Task SaveStateToStorageAsync(JsonObject state, CancellationToken cancellationToken)
+    protected override JsonNode? GetSectionState(JsonObject? state, string sectionName)
+    {
+        if (_isMigratingLegacyState &&
+            (_migratedSectionNames.Contains(sectionName) ||
+             _migratedSectionNames.Any(name => name.StartsWith($"{sectionName}:", StringComparison.Ordinal))))
+        {
+            return TryGetNestedPropertyValue(_migratedState, sectionName);
+        }
+
+        return base.GetSectionState(state, sectionName);
+    }
+
+    /// <inheritdoc/>
+    protected override async Task SaveStateToStorageAsync(JsonObject state, string? sectionName, CancellationToken cancellationToken)
     {
         try
         {
@@ -95,14 +135,26 @@ internal sealed partial class FileDeploymentStateManager(
                 return;
             }
 
-            var deploymentStatePath = GetStatePath();
+            var deploymentStatePath = GetCanonicalStatePath();
             if (deploymentStatePath is null)
             {
                 logger.LogWarning("Cannot save deployment state: AppHostSha is not configured");
                 return;
             }
 
-            var flattenedSecrets = JsonFlattener.FlattenJsonObject(state);
+            var stateToSave = state;
+            if (_isMigratingLegacyState && sectionName is not null)
+            {
+                // Source/polyglot AppHosts historically shared one directory-scoped state file.
+                // Persist only sections this AppHost has actually updated so sibling AppHosts
+                // remain available in the legacy file and cannot be mistaken for stale resources.
+                var sectionData = TryGetNestedPropertyValue(state, sectionName) as JsonObject;
+                SetNestedPropertyValue(_migratedState, sectionName, sectionData?.DeepClone().AsObject());
+                _migratedSectionNames.Add(sectionName);
+                stateToSave = _migratedState;
+            }
+
+            var flattenedSecrets = JsonFlattener.FlattenJsonObject(stateToSave);
             var deploymentStateDirectory = Path.GetDirectoryName(deploymentStatePath)!;
             if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
             {

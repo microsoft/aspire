@@ -419,7 +419,75 @@ public class DeploymentStateManagerTests : IDisposable
             stateManager.StateFilePath);
     }
 
-    private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null)
+    [Fact]
+    public async Task SourceAppHostStateMigratesFromLegacyPathOnSave()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var legacySection = await legacyStateManager.AcquireSectionAsync("Migration");
+        legacySection.Data["legacy"] = true;
+        await legacyStateManager.SaveSectionAsync(legacySection);
+        var legacyPath = legacyStateManager.StateFilePath;
+
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+        var migratedSection = await migratingStateManager.AcquireSectionAsync("Migration");
+        Assert.True(migratedSection.Data["legacy"]?.GetValue<bool>());
+
+        migratedSection.Data["current"] = true;
+        await migratingStateManager.SaveSectionAsync(migratedSection);
+
+        var currentPath = migratingStateManager.StateFilePath;
+        Assert.NotEqual(legacyPath, currentPath);
+        Assert.True(File.Exists(currentPath));
+        Assert.True(File.Exists(legacyPath));
+
+        var currentStateManager = CreateFileDeploymentStateManager(currentSha);
+        var currentSection = await currentStateManager.AcquireSectionAsync("Migration");
+        Assert.True(currentSection.Data["legacy"]?.GetValue<bool>());
+        Assert.True(currentSection.Data["current"]?.GetValue<bool>());
+        await migratingStateManager.ClearAllStateAsync();
+        await legacyStateManager.ClearAllStateAsync();
+    }
+
+    [Fact]
+    public async Task SourceAppHostMigrationPersistsOnlyUpdatedSections()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var firstSha = Guid.NewGuid().ToString("N");
+        var secondSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var firstLegacySection = await legacyStateManager.AcquireSectionAsync("Azure:Sandboxes:first");
+        firstLegacySection.Data["SandboxId"] = "first-sandbox";
+        await legacyStateManager.SaveSectionAsync(firstLegacySection);
+        var secondLegacySection = await legacyStateManager.AcquireSectionAsync("Azure:Sandboxes:second");
+        secondLegacySection.Data["SandboxId"] = "second-sandbox";
+        await legacyStateManager.SaveSectionAsync(secondLegacySection);
+
+        var firstStateManager = CreateFileDeploymentStateManager(firstSha, legacySha);
+        var firstSection = await firstStateManager.AcquireSectionAsync("Azure:Sandboxes:first");
+        firstSection.Data["Migrated"] = true;
+        await firstStateManager.SaveSectionAsync(firstSection);
+
+        var firstCanonicalStateManager = CreateFileDeploymentStateManager(firstSha);
+        var migratedFirstSection = await firstCanonicalStateManager.AcquireSectionAsync("Azure:Sandboxes:first");
+        var inheritedSecondSection = await firstCanonicalStateManager.AcquireSectionAsync("Azure:Sandboxes:second");
+        Assert.Equal("first-sandbox", migratedFirstSection.Data["SandboxId"]?.GetValue<string>());
+        Assert.True(migratedFirstSection.Data["Migrated"]?.GetValue<bool>());
+        Assert.Empty(inheritedSecondSection.Data);
+
+        var migratedParentSection = await firstStateManager.AcquireSectionAsync("Azure:Sandboxes");
+        Assert.Equal(["first"], migratedParentSection.Data.Select(static pair => pair.Key));
+
+        var secondStateManager = CreateFileDeploymentStateManager(secondSha, legacySha);
+        var secondSection = await secondStateManager.AcquireSectionAsync("Azure:Sandboxes:second");
+        Assert.Equal("second-sandbox", secondSection.Data["SandboxId"]?.GetValue<string>());
+
+        await firstStateManager.ClearAllStateAsync();
+        await legacyStateManager.ClearAllStateAsync();
+    }
+
+    private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null, string? legacySha = null)
     {
         // Use a unique SHA per test by default to avoid test interference,
         // but allow tests to share state by passing the same SHA
@@ -427,6 +495,7 @@ public class DeploymentStateManagerTests : IDisposable
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AppHost:PathSha256"] = sha ?? Guid.NewGuid().ToString("N"),
+                ["AppHost:LegacyPathSha256"] = legacySha,
                 [KnownConfigNames.AspireHome] = _aspireHome.FullName
             })
             .Build();

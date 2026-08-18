@@ -25,4 +25,20 @@ internal interface IAcrLoginService
         string tenantId,
         TokenCredential credential,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets an ACR refresh token using Azure credentials.
+    /// </summary>
+    /// <param name="registryEndpoint">The ACR endpoint (e.g., "myregistry.azurecr.io").</param>
+    /// <param name="tenantId">The Azure tenant ID.</param>
+    /// <param name="credential">The Azure credential to use for authentication.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The refresh token and username to use for ACR token authentication.</returns>
+    Task<AcrRefreshToken> GetRefreshTokenAsync(
+        string registryEndpoint,
+        string tenantId,
+        TokenCredential credential,
+        CancellationToken cancellationToken = default);
 }
+
+internal sealed record AcrRefreshToken(string Username, string Token);
