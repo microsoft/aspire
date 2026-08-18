@@ -1,8 +1,8 @@
 {
   "id": "dnceng-nuget-flat2-download-timeout",
   "type": "infra-failure",
-  "title": "dnceng NuGet flat2 package downloads time out (no data received for 60000ms)",
-  "error_pattern": "Failed to download package '<pkg>' from 'https://pkgs.dev.azure.com/dnceng/.../_packaging/.../nuget/v3/flat2/.../*.nupkg'. An error occurred while sending the request. The download of '...' timed out because no data was received for 60000ms. The operation has timed out.",
+  "title": "dnceng NuGet flat2 package downloads fail/time out during template restore",
+  "error_pattern": "Failed to download package 'Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.8.0.30' from 'https://pkgs.dev.azure.com/dnceng/9ee6d478-d288-47f7-aacc-f6e6d082ae6d/_packaging/45bacae2-5efb-47c8-91e5-8ec20c22b4f8/nuget/v3/flat2/microsoft.extensions.diagnostics.healthchecks.abstractions/8.0.30/microsoft.extensions.diagnostics.healthchecks.abstractions.8.0.30.nupkg' during dotnet restore of a newly created template project.",
   "occurrences": [
     {
       "run_id": 31269165475,
@@ -10,6 +10,13 @@
       "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (ubuntu-latest)",
       "pr_number": 19139,
       "observed_at": "2026-08-08T18:15:07Z"
+    },
+    {
+      "run_id": 32093154322,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32093154322",
+      "job": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 1424,
+      "observed_at": "2026-08-18T04:42:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19167"

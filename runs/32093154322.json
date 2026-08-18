@@ -1,0 +1,63 @@
+{
+  "run_id": 32093154322,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32093154322",
+  "analyzed_at": "2026-08-18T04:42:50Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 1424,
+    "title": null,
+    "author": null,
+    "state": null,
+    "head_branch": null,
+    "base_branch": null,
+    "url": "https://github.com/microsoft/aspire/pull/1424"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "id": 95590886735,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32093154322/job/95590886735",
+      "classification": "flaky-test",
+      "reason": "Test failures are caused by a failure to download 'Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.8.0.30' from the dnceng NuGet flat2 feed during template restore. This is an external package feed availability issue, not caused by PR changes.",
+      "failed_steps": ["Run nuget dependent tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "id": 95591505425,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32093154322/job/95591505425",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 on the 'Run extension E2E tests' step; job logs were unavailable for further diagnosis. This matches a recurring pattern of flaky VS Code extension E2E shards failing intermittently and unrelated to PR content.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net8, tfm: Net8, error: null)",
+      "job": "Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : `dotnet new aspire-apphost  -o \"new_build_aspire_mstest_mycida4a_2hg.AppHost\" -f net8.0` . Output: ... Failed to download package 'Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.8.0.30' from 'https://pkgs.dev.azure.com/dnceng/9ee6d478-d288-47f7-aacc-f6e6d082ae6d/_packaging/45bacae2-5efb-47c8-91e5-8ec20c22b4f8/nuget/v3/flat2/microsoft.extensions.diagnostics.healthchecks.abstractions/8.0.30/microsoft.extensions.diagnostics.healthchecks.abstractions.8.0.30.",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(String id, String template, ITestOutputHelper testOutput, BuildEnvironment buildEnvironment, String extraArgs, Nullable`1 targetFramework, Boolean addEndpointsHook, String overrideRootDir) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 128\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(String templateName, String extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, String error) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 35",
+      "classification": "flaky",
+      "reason": "Package download failure from the dnceng Azure DevOps NuGet flat2 feed, an external infrastructure dependency unrelated to any PR code changes."
+    },
+    {
+      "name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net10, tfm: Net8, error: null)",
+      "job": "Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : `dotnet new aspire-apphost  -o \"new_build_aspire_mstest_p035vhzq_ghd.AppHost\" -f net8.0` . Output: ... Failed to download package 'Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.8.0.30' from 'https://pkgs.dev.azure.com/dnceng/9ee6d478-d288-47f7-aacc-f6e6d082ae6d/_packaging/45bacae2-5efb-47c8-91e5-8ec20c22b4f8/nuget/v3/flat2/microsoft.extensions.diagnostics.healthchecks.abstractions/8.0.30/microsoft.extensions.diagnostics.healthchecks.abstractions.8.0.30.",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(String id, String template, ITestOutputHelper testOutput, BuildEnvironment buildEnvironment, String extraArgs, Nullable`1 targetFramework, Boolean addEndpointsHook, String overrideRootDir) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 128\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(String templateName, String extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, String error) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 35",
+      "classification": "flaky",
+      "reason": "Package download failure from the dnceng Azure DevOps NuGet flat2 feed, an external infrastructure dependency unrelated to any PR code changes."
+    },
+    {
+      "name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net11WithAllSupportedRuntimes, tfm: Net8, error: null)",
+      "job": "Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException : `dotnet new aspire-apphost  -o \"new_build_aspire_mstest_tgm3u11m_xlm.AppHost\" -f net8.0` . Output: ... Failed to download package 'Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.8.0.30' from 'https://pkgs.dev.azure.com/dnceng/9ee6d478-d288-47f7-aacc-f6e6d082ae6d/_packaging/45bacae2-5efb-47c8-91e5-8ec20c22b4f8/nuget/v3/flat2/microsoft.extensions.diagnostics.healthchecks.abstractions/8.0.30/microsoft.extensions.diagnostics.healthchecks.abstractions.8.0.30.",
+      "stack_trace": "at Aspire.Templates.Tests.AspireProject.CreateNewTemplateProjectAsync(String id, String template, ITestOutputHelper testOutput, BuildEnvironment buildEnvironment, String extraArgs, Nullable`1 targetFramework, Boolean addEndpointsHook, String overrideRootDir) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 128\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(String templateName, String extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, String error) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 35",
+      "classification": "flaky",
+      "reason": "Package download failure from the dnceng Azure DevOps NuGet flat2 feed, an external infrastructure dependency unrelated to any PR code changes."
+    }
+  ],
+  "causes": ["dnceng-nuget-flat2-download-timeout", "vscode-e2e-java-apphost-flaky"]
+}

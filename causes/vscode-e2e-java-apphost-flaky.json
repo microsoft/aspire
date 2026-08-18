@@ -1,8 +1,8 @@
 {
   "id": "vscode-e2e-java-apphost-flaky",
   "type": "flaky-test",
-  "title": "Flaky: VS Code extension E2E (Linux, java-apphost) shard fails with generic exit code 1, unrelated to PR changes",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Linux, java-apphost)' shard.",
+  "title": "Flaky: VS Code extension E2E (Linux, java-apphost-debug-startup-timeout) shard fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)' shard.",
   "occurrences": [
     {
       "run_id": 32091076460,
@@ -10,6 +10,13 @@
       "job": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
       "pr_number": 1424,
       "observed_at": "2026-08-18T03:51:54Z"
+    },
+    {
+      "run_id": 32093154322,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32093154322",
+      "job": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 1424,
+      "observed_at": "2026-08-18T04:42:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19457"
