@@ -123,8 +123,8 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.4" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.4" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-rc.5-26219.1" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.5-26219.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />

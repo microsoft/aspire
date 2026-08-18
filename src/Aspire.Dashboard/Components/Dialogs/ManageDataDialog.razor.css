@@ -19,12 +19,51 @@
 }
 
 ::deep .fluent-data-grid {
-    --datagrid-hover-color: color-mix(in srgb, var(--accent-fill-rest) 8%, var(--dialog-background-color));
+    --datagrid-hover-color: color-mix(in srgb, var(--colorBrandBackground) 8%, var(--colorNeutralBackground1));
 }
 
-::deep .fluent-data-grid-row[row-type='sticky-header'] .column-header {
+::deep .fluent-data-grid-row[row-type='sticky-header'] > th {
     background-color: var(--dialog-background-color);
-    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    border-bottom: 1px solid var(--colorNeutralStroke3);
+}
+
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button::part(control),
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button::part(control),
+.button-container ::deep fluent-button,
+.button-container ::deep fluent-button::part(control) {
+    border-radius: 6px;
+}
+
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button {
+    color: var(--colorNeutralForeground1);
+}
+
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button::part(control) {
+    border-color: var(--colorBrandBackground);
+}
+
+::deep .fluent-data-grid > thead > tr > th {
+    padding: 4px 1px;
+}
+
+::deep .fluent-data-grid > thead > tr > th:first-child {
+    padding-inline-start: 0;
+}
+
+::deep .fluent-data-grid > tbody > tr > td {
+    padding: 4px 16px;
+}
+
+.button-container ::deep fluent-button,
+.button-container ::deep fluent-button::part(control) {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 14px;
+    background-color: var(--colorNeutralBackground2);
+    font-weight: var(--fontWeightRegular);
 }
 
 .button-container {
@@ -35,6 +74,6 @@
 
 .error-message {
     color: var(--error);
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--fontSizeBase200);
     margin-top: 8px;
 }

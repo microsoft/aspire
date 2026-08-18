@@ -6,7 +6,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -131,16 +130,14 @@ public partial class TextVisualizerDialog : ComponentBase
         return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
     }
 
-    public static async Task<IDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
+    public static async Task<DashboardDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
     {
         var width = options.DialogService.IsDesktop ? "75vw" : "100vw";
         var parameters = new DialogParameters
         {
             Title = options.ValueDescription,
             Width = $"min(1000px, {width})",
-            TrapFocus = true,
             Modal = true,
-            PreventScroll = true,
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(

@@ -31,7 +31,6 @@ class ResourceGraph {
     constructor(resourcesInterop, graphIcons) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
-        this.openContextMenu = false;
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
@@ -122,7 +121,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("width", "17.5")
             .attr("height", "17.5")
-            .attr("fill", "var(--fill-color)");
+            .attr("fill", "var(--colorNeutralBackground1)");
 
         highlightedPattern
             .append("line")
@@ -130,7 +129,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("x2", "0")
             .attr("y2", "17.5")
-            .attr("stroke", "var(--neutral-fill-secondary-hover)")
+            .attr("stroke", "var(--colorNeutralBackground2Hover)")
             .attr("stroke-width", "15");
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
@@ -695,11 +694,7 @@ class ResourceGraph {
     }
 
     unHoverNode = (event) => {
-        // Don't unhover the selected node when the context menu is open.
-        // This is done to keep the node selected until the context menu is closed.
-        if (!this.openContextMenu) {
-            this.updateNodeHighlights(null);
-        }
+        this.updateNodeHighlights(null);
     };
 
     nodeEquals(resource1, resource2) {

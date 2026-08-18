@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD_COMPONENT_TESTS</DefineConstants>
     <!--
       CS8002: Referenced assembly does not have a strong name

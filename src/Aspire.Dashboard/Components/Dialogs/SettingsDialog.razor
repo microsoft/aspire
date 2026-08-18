@@ -10,30 +10,27 @@
                               @bind-Value="@_currentSetting"
                               @bind-Value:after="ThemeChangedAsync"
                               Orientation="Orientation.Vertical">
-                <FluentRadio Value="@ThemeManager.ThemeSettingSystem">@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]</FluentRadio>
-                <FluentRadio Value="@ThemeManager.ThemeSettingLight">@Loc[nameof(Dialogs.SettingsDialogLightTheme)]</FluentRadio>
-                <FluentRadio Value="@ThemeManager.ThemeSettingDark">@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]</FluentRadio>
+                <FluentRadio Value="@ThemeManager.ThemeSettingSystem" Label="@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]" />
+                <FluentRadio Value="@ThemeManager.ThemeSettingLight" Label="@Loc[nameof(Dialogs.SettingsDialogLightTheme)]" />
+                <FluentRadio Value="@ThemeManager.ThemeSettingDark" Label="@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]" />
             </FluentRadioGroup>
         </div>
 
         <div class="input-container">
-            @* Fluent's Label renders a standalone <label> that it does NOT associate with the
-               underlying <fluent-select> combobox, so the combobox has no programmatic accessible
+                @* Fluent's Label renders a standalone <label> that it does NOT associate with the
+                    underlying <fluent-dropdown> combobox, so the combobox has no programmatic accessible
                name and fails axe's aria-input-field-name (WCAG 4.1.2). Pin the name explicitly with
                aria-label so assistive tech announces the control; the visible Label stays for sighted
                users. See AccessibilityTests.DashboardDialog_HasNoSeriousOrCriticalWcagViolations. *@
-            <FluentSelect
-                TOption="CultureInfo"
+            <FluentSelect TOption="CultureInfo" TValue="CultureInfo"
                 ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
-                OptionValue="@(c => c!.Name)"
-                OptionText="@(c => c!.NativeName.Humanize())"
-                ValueChanged="@ValueChanged"
-                @bind-SelectedOption="@_selectedUiCulture"
-                @bind-SelectedOption:after="@OnLanguageChanged"
+                OptionText="@(c => c?.NativeName.Humanize())"
+                @bind-Value="@_selectedUiCulture"
+                @bind-Value:after="@OnLanguageChanged"
                 Class="language-select"/>
 
             <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>
@@ -47,7 +44,7 @@
                               Orientation="Orientation.Vertical">
                 @foreach (var format in Enum.GetValues<TimeFormat>())
                 {
-                    <FluentRadio Value="@format">@FormatTimeFormatOption(format)</FluentRadio>
+                    <FluentRadio Value="@format" Label="@FormatTimeFormatOption(format)" />
                 }
             </FluentRadioGroup>
         </div>
@@ -55,10 +52,10 @@
         <div>
             <span class="setting-title">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
             <div>
-                <FluentButton IconStart="@(new Icons.Regular.Size16.Settings())"
-                              OnClick="LaunchManageDataAsync"
+                <FluentButton OnClick="LaunchManageDataAsync"
                               Title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
                               aria-label="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Slot="start" Color="Color.Primary" />
                     @Loc[nameof(Dialogs.ManageDataManageButtonText)]
                 </FluentButton>
             </div>

@@ -1,0 +1,138 @@
+.dashboard-message-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 6px;
+    background-color: var(--messagebar-info-background-color);
+    column-gap: 8px;
+    color: var(--messagebar-foreground-color);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+}
+
+.dashboard-message-bar:not(.intent-warning, .intent-error, .intent-success) {
+    border-color: var(--messagebar-info-border-color);
+}
+
+.dashboard-message-bar.intent-warning {
+    border-color: var(--messagebar-warning-border-color);
+    background-color: var(--messagebar-warning-background-color);
+}
+
+.dashboard-message-bar.intent-error {
+    border-color: var(--messagebar-error-border-color);
+    background-color: var(--messagebar-error-background-color);
+}
+
+.dashboard-message-bar.intent-success {
+    border-color: var(--messagebar-success-border-color);
+    background-color: var(--messagebar-success-background-color);
+}
+
+.dashboard-message-bar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+}
+
+.dashboard-message-bar.intent-warning .dashboard-message-bar-icon ::deep svg {
+    fill: #e85e36 !important;
+}
+
+.dashboard-message-bar.intent-info .dashboard-message-bar-icon ::deep svg {
+    fill: var(--info) !important;
+}
+
+.dashboard-message-bar-content {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding-block: 10px;
+}
+
+.dashboard-message-bar-content > strong {
+    padding-inline-end: 4px;
+    font-weight: var(--fontWeightSemibold);
+}
+
+.dashboard-message-bar-content > a {
+    margin-inline-start: 5px;
+}
+
+.dashboard-message-bar-message {
+    display: inline;
+}
+
+.dashboard-message-bar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+::deep .dashboard-message-bar-actions fluent-button {
+    height: 24px;
+    min-height: 24px;
+    padding-inline: 14px;
+    border-color: transparent;
+    border-radius: 6px;
+    background-color: transparent;
+    font-size: var(--fontSizeBase200);
+}
+
+::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss) {
+    color: var(--colorNeutralForeground1);
+    background:
+        padding-box linear-gradient(var(--messagebar-action-background), var(--messagebar-action-background)),
+        border-box var(--messagebar-action-border);
+}
+
+::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):hover {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-hover-background), var(--messagebar-action-hover-background)),
+        border-box var(--messagebar-action-hover-border);
+}
+
+::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):active {
+    background:
+        padding-box linear-gradient(var(--messagebar-action-pressed-background), var(--messagebar-action-pressed-background)),
+        border-box var(--messagebar-action-pressed-border);
+}
+
+::deep .dashboard-message-bar-actions fluent-button:not(.dashboard-message-bar-dismiss):focus-visible {
+    outline-offset: -2px;
+}
+
+::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
+    flex: 0 0 16px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    height: 16px;
+    min-height: 16px;
+    padding: 0;
+}
+
+::deep .dashboard-message-bar-dismiss svg {
+    display: block;
+    height: 16px;
+}
+
+@media (max-width: 767px) {
+    .dashboard-message-bar {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .dashboard-message-bar-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
+}

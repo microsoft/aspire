@@ -31,15 +31,19 @@
             }
             else
             {
-                <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                              Class="toolbar-search"
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Name="resources-search"
                               AutoComplete="off"
                               @bind-Value="PageViewModel.TextFilter"
-                              slot="end"
                               Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
-                              @bind-Value:after="HandleSearchFilterChangedAsync" />
+                              @bind-Value:after="HandleSearchFilterChangedAsync">
+                    <StartTemplate>
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                    </StartTemplate>
+                </FluentTextInput>
 
                 <DesktopToolbarDivider />
 
@@ -64,17 +68,13 @@
 
         <MainSection>
             <FluentPopover AnchorId="resourceFilterButton"
-                           @bind-Open="_isFilterPopupVisible"
-                           AutoFocus="true"
-                           FixedPlacement="true"
+                           @bind-Opened="_isFilterPopupVisible"
                            Class="resources-filter-popup">
-                <Body>
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-                </Body>
+                <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
+                                 ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
+                                 ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                 OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
+                                 OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
             </FluentPopover>
 
             <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
@@ -95,27 +95,24 @@
                                 <div class="resource-tabs-header-row">
                                     <FluentTabs Class="resources-tab-header"
                                                 ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")"
-                                                OnTabChange="@OnTabChangeAsync"
+                                                ActiveTabChanged="@OnTabChangeAsync"
                                                 Orientation="@(ViewportInformation.IsUltraLowWidth ? Orientation.Vertical : Orientation.Horizontal)"
                                                 Size="null">
-                                        <FluentTab LabelClass="tab-label"
+                                        <FluentTab HeaderClass="tab-label"
                                                    Id="@($"tab-{ResourceViewKind.Table}")"
-                                                   Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
-                                                   Icon="@(new Icons.Regular.Size24.Table())"
-                                                   fixed>
+                                                   Header="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
+                                                   IconStart="@(new Icons.Regular.Size24.Table())">
                                         </FluentTab>
-                                        <FluentTab LabelClass="tab-label"
+                                        <FluentTab HeaderClass="tab-label"
                                                    Id="@($"tab-{ResourceViewKind.Parameters}")"
-                                                   Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
-                                                   Icon="@(new Icons.Regular.Size24.Key())"
-                                                   fixed>
+                                                   Header="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
+                                                   IconStart="@(new Icons.Regular.Size24.Key())">
                                         </FluentTab>
-                                        <FluentTab LabelClass="tab-label"
+                                        <FluentTab HeaderClass="tab-label"
                                                    Id="@($"tab-{ResourceViewKind.Graph}")"
                                                    aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphAccessibleLabel)]"
-                                                   Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
-                                                   Icon="@(new Icons.Regular.Size24.ShareAndroid())"
-                                                   fixed>
+                                                   Header="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
+                                                   IconStart="@(new Icons.Regular.Size24.ShareAndroid())">
                                         </FluentTab>
                                     </FluentTabs>
 
@@ -123,7 +120,7 @@
                                        instead of taking their own toolbar band. On mobile they live in the filter drawer. *@
                                     @if (ViewportInformation.IsDesktop)
                                     {
-                                        <div class="resource-tabs-toolbar" role="group" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+                                        <div class="resource-tabs-toolbar filter-toolbar" role="group" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
                                             @GetDesktopFilterControls()
                                         </div>
                                     }
@@ -131,24 +128,24 @@
                             }
                             <div id="@ScrollContainerId" class="resources-grid-container" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                                    <FluentDataGrid @ref="_dataGrid"
-                                                    ColumnResizeLabels="@_resizeLabels"
-                                                    ColumnSortLabels="@_sortLabels"
+                                    <AspireFluentDataGrid @ref="_dataGrid"
                                                     HeaderCellAsButtonWithMenu="true"
                                                     ResizeType="DataGridResizeType.Discrete"
                                                     Virtualize="true"
-                                                    GenerateHeader="GenerateHeaderOption.Sticky"
+                                                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                     ItemSize="46"
                                                     OverscanCount="100"
                                                     ItemsProvider="@GetData"
                                                     ResizableColumns="true"
                                                     ResizeColumnOnAllRows="false"
+                                                    ColumnOrder="@_manager.ColumnOrder"
                                                     GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                     RowClass="@(r => GetRowClass(r.Resource))"
                                                     Loading="!_loadingTcs.Task.IsCompleted"
                                                     ShowHover="true"
                                                     TGridItem="ResourceGridViewModel"
                                                     ItemKey="@(r => r.Resource.Name)"
+                                                    OnSortChanged="OnDataGridSortChangedAsync"
                                                     OnRowClick="@(r => r.ExecuteOnDefault(d => ShowResourceDetailsAsync(d.Resource, focusElementId: ScrollContainerId)))"
                                                     Class="main-grid enable-row-click">
                                         <ChildContent>
@@ -163,8 +160,8 @@
                                                     <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                                         @if (context.Children.Count > 0)
                                                         {
-                                                            <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                                            <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="ButtonAppearance.Transparent" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
+                                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                                             </FluentButton>
                                                         }
                                                     </span>
@@ -177,7 +174,7 @@
                                             <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
                                                 <StartTimeColumnDisplay Resource="@context.Resource" />
                                             </AspireTemplateColumn>
-                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" IsDefaultSortColumn="true" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)" />
+                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)" />
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
@@ -230,9 +227,9 @@
                                             </AspireTemplateColumn>
                                         </ChildContent>
                                         <EmptyContent>
-                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
+                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" Color="Color.Primary" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
                                         </EmptyContent>
-                                    </FluentDataGrid>
+                                    </AspireFluentDataGrid>
                                 </GridColumnManager>
                             </div>
                             @if (!_hideResourceGraph)
@@ -241,38 +238,30 @@
                                     <svg class="resource-graph">
                                     </svg>
                                     <div class="resource-graph-controls">
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Default"
                                                       Class="graph-zoom-in"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
                                         </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Default"
                                                       Class="graph-zoom-out"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
                                         </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
+                                        <FluentButton Appearance="ButtonAppearance.Default"
                                                       Class="graph-reset"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Accent" />
+                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
                                         </FluentButton>
                                     </div>
                                 </div>
                             }
                         </div>
                     </div>
-                    @* FluentMenu unconditionally stamps aria-expanded on its Anchor element (see
-                       FluentMenu.razor.js). This is a cursor-positioned context menu (ShowContextMenuAsync
-                       opens it at the click coordinates), so the anchor is only an id reference, never a
-                       visible trigger. Point it at a hidden, non-focusable element kept out of the
-                       accessibility tree so the stamped aria-expanded doesn't land on the role-less visible
-                       summary <div> (axe aria-allowed-attr) and AT users don't meet a non-operable control. *@
-                    <button id="resources-summary-layout-id" type="button" style="display: none;"></button>
-                    <FluentOverlay Visible="_contextMenuOpen" VisibleChanged="ContextMenuOpenChangedAsync" OnClose="ContextMenuClosedAsync" Transparent="true" FullScreen="true" />
-                    <AspireMenu Open="_contextMenuOpen" OpenChanged="ContextMenuOpenChangedAsync" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" />
+                        <AspireMenu Open="_contextMenuOpen" OpenChanged="ContextMenuOpenChangedAsync" @ref="_contextMenu" Anchor="resources-context-menu-anchor" Anchored="false" Items="_contextMenuItems" />
                 </Summary>
                 <Details>
                     <ResourceDetails Resource="context"
@@ -301,20 +290,25 @@
     // element ids unique while allowing the tabs row and fallback toolbar to share the same control.
     private RenderFragment GetDesktopFilterControls()
     {
-        return @<text>
-            <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+        return @<div class="toolbar-end">
+            <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                          Class="toolbar-search"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
                           AutoComplete="off"
                           @bind-Value="PageViewModel.TextFilter"
-                          slot="end"
-                          @bind-Value:after="HandleSearchFilterChangedAsync" />
+                          @bind-Value:after="HandleSearchFilterChangedAsync">
+                <StartTemplate>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                </StartTemplate>
+            </FluentTextInput>
 
             <DesktopToolbarDivider />
 
-            <FluentButton id="resourceFilterButton" slot="end"
-                          Appearance="@(NoFiltersSet ? Appearance.Stealth : Appearance.Accent)"
+            <FluentButton id="resourceFilterButton"
+                          Class="toolbar-button"
+                          Appearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
                           IconEnd="@(new Icons.Regular.Size20.Filter())"
                           @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
                           Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
@@ -322,13 +316,13 @@
 
             @if (HasViewOptionsMenu())
             {
-                <AspireMenuButton ButtonAppearance="Appearance.Stealth"
+                <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                  ButtonClass="toolbar-button"
                                   Icon="@(new Icons.Regular.Size20.Options())"
                                   ItemsProvider="@(() => _resourcesMenuItems)"
                                   RestoreFocusOnItemClick="true"
-                                  Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
-                                  slot="end" />
+                                  Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
             }
-        </text>;
+        </div>;
     }
 }

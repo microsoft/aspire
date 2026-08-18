@@ -1,18 +1,93 @@
+// Fluent menu items invoke their primary action for activation events originating anywhere in the
+// item, including interactive content in the end slot. Customize the registered element class so
+// every instance leaves secondary-action activation to the nested button.
+const customElementsDefine = customElements.define.bind(customElements);
+const fluentDropdownStyleSheet = new CSSStyleSheet();
+fluentDropdownStyleSheet.replaceSync(`
+    .control {
+        background-color: var(--colorNeutralBackground1);
+        border: 1px solid var(--colorNeutralStroke1);
+        box-shadow: none !important;
+    }
 
-// To avoid Flash of Unstyled Content, the body is hidden by default with
-// the before-upgrade CSS class. Here we'll find the first web component
-// and wait for it to be upgraded. When it is, we'll remove that class
-// from the body.
-const firstUndefinedElement = document.body.querySelector(":not(:defined)");
+    .control:hover {
+        border-color: var(--colorNeutralStroke1Hover);
+    }
 
-if (firstUndefinedElement) {
-    customElements.whenDefined(firstUndefinedElement.localName).then(() => {
-        document.body.classList.remove("before-upgrade");
-    });
-} else {
-    // In the event this code doesn't run until after they've all been upgraded
-    document.body.classList.remove("before-upgrade");
-}
+    .control:active {
+        border-color: var(--colorNeutralStroke1Pressed);
+    }
+
+    :host(:where(:focus-within)) .control {
+        outline: 2px solid var(--colorBrandStroke1);
+        outline-offset: 0;
+    }
+
+    .control::before, .control::after {
+        display: none;
+    }
+`);
+
+let isDropdownCustomized = false;
+let isMenuItemCustomized = false;
+
+customElements.define = function (name, constructor, options) {
+    if (name === "fluent-dropdown") {
+        const connectedCallback = constructor.prototype.connectedCallback;
+
+        constructor.prototype.connectedCallback = function () {
+            connectedCallback.call(this);
+
+            // Fluent v5 doesn't expose the dropdown control as a CSS part, so add the
+            // application's border recipe directly to the component's shadow root.
+            if (!this.shadowRoot.adoptedStyleSheets.includes(fluentDropdownStyleSheet)) {
+                this.shadowRoot.adoptedStyleSheets.push(fluentDropdownStyleSheet);
+            }
+        };
+
+        isDropdownCustomized = true;
+    }
+
+    if (name === "fluent-menu-item") {
+        const secondaryActionCustomized = Symbol("secondaryActionCustomized");
+        const connectedCallback = constructor.prototype.connectedCallback;
+
+        constructor.prototype.connectedCallback = function () {
+            if (!this[secondaryActionCustomized]) {
+                for (const handlerName of ["handleMenuItemClick", "handleMenuItemKeyDown"]) {
+                    const handler = this[handlerName];
+                    this[handlerName] = event => {
+                        const isSecondaryAction = event.composedPath().some(element =>
+                            element instanceof HTMLElement &&
+                            element.classList.contains("aspire-menu-secondary-action"));
+
+                        if (isSecondaryAction) {
+                            if (handlerName === "handleMenuItemKeyDown") {
+                                event.stopPropagation();
+                            }
+
+                            return false;
+                        }
+
+                        return handler.call(this, event);
+                    };
+                }
+
+                this[secondaryActionCustomized] = true;
+            }
+
+            connectedCallback.call(this);
+        };
+
+        isMenuItemCustomized = true;
+    }
+
+    customElementsDefine(name, constructor, options);
+
+    if (isDropdownCustomized && isMenuItemCustomized) {
+        delete customElements.define;
+    }
+};
 
 function isElementTagName(element, tagName) {
     return element.tagName.toLowerCase() === tagName;
@@ -200,6 +275,13 @@ window.copyText = function (text) {
 
 function isActiveElementInput() {
     const currentElement = document.activeElement;
+
+    // Fluent v5 renders the dropdown's focusable control as a light-DOM button. Treat the control
+    // and popup options as input elements so global shortcuts don't run while a dropdown is active.
+    if (currentElement.closest("fluent-dropdown")) {
+        return true;
+    }
+
     const tagName = currentElement.tagName.toLowerCase();
 
     // fluent components may have shadow roots that contain inputs
@@ -209,8 +291,7 @@ function isActiveElementInput() {
 function isInputElement(element, isRoot, isShadowRoot) {
     const tag = element.tagName.toLowerCase();
     // comes from https://developer.mozilla.org/en-US/docs/Web/API/Element/input_event
-    // fluent-select does not use <select /> element
-    if (tag === "input" || tag === "textarea" || tag === "select" || tag === "fluent-select") {
+    if (tag === "input" || tag === "textarea" || tag === "select" || tag === "fluent-dropdown") {
         return true;
     }
 
@@ -451,12 +532,12 @@ const AUTOFIT_MIN_WIDTH = 48;      // never collapse a column to nothing
 
 function autoFitGridColumn(handle) {
     const grid = handle.closest("table.fluent-data-grid");
-    const header = handle.closest(".column-header");
+    const header = handle.closest("th[cell-type='columnheader']");
     if (!grid || !header) {
         return;
     }
 
-    const headers = Array.from(grid.querySelectorAll(".column-header"));
+    const headers = Array.from(grid.querySelectorAll("th[cell-type='columnheader']"));
     const columnIndex = headers.indexOf(header);
     if (columnIndex < 0) {
         return;
@@ -511,11 +592,11 @@ function autoFitGridColumn(handle) {
     setTimeout(cleanup, 500);
 }
 
-// Register a global double-click listener for grid resize handles. The handle class is
-// "resize-handle" in current Fluent UI Blazor; "col-width-draghandle" is matched too for resilience
-// against a rename. closest() with a descendant selector confirms the handle is inside a grid.
+// Register a global double-click listener for grid resize handles. Fluent UI v5 marks its
+// dynamically created handle with actual-resize-handle; keep the v4 class selectors so the
+// listener remains compatible with dashboard assets from older Fluent UI versions.
 document.addEventListener("dblclick", function (e) {
-    const handle = e.target.closest?.(".fluent-data-grid .resize-handle, .fluent-data-grid .col-width-draghandle");
+    const handle = e.target.closest?.(".fluent-data-grid [actual-resize-handle], .fluent-data-grid .resize-handle, .fluent-data-grid .col-width-draghandle");
     if (handle) {
         // Prevent the double-click from selecting the header text while we resize.
         e.preventDefault();

@@ -12,6 +12,27 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     margin-left: 10px;
+    font-family: var(--aspire-font-display);
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 32px;
+}
+
+::deep .main-toolbar.filter-toolbar .toolbar-select,
+::deep .main-toolbar.filter-toolbar .toolbar-select > fluent-dropdown {
+    width: 250px;
+}
+
+::deep .metrics-content .fluent-data-grid > thead > tr > th {
+    padding: 4px 1px;
+}
+
+::deep .metrics-content .fluent-data-grid > thead > tr > th:first-child {
+    padding-inline-start: 0;
+}
+
+::deep .metrics-content .fluent-data-grid > tbody > tr > td {
+    padding: 4px 16px;
 }
 
 /* Metrics chart SVG */
@@ -24,18 +45,57 @@
 }
 
 ::deep .metrics-chart {
+    --metrics-chart-horizontal-offset: 20px;
+
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
         "header"
-        "chart";
+        "chart"
+        "footer";
+    height: 100%;
+    min-height: 0;
     width: 100%;
-    gap: calc(var(--design-unit) * 4px);
+    gap: var(--spacingHorizontalL);
+}
+
+::deep .metrics-chart > .fluent-tabs {
+    display: block;
+    align-items: initial;
+    width: calc(100% + var(--metrics-chart-horizontal-offset));
+    min-height: 0;
+    overflow: auto;
+    gap: 0;
+    margin-left: calc(-1 * var(--metrics-chart-horizontal-offset));
+    padding: 0 0 0 var(--metrics-chart-horizontal-offset);
+    border: 0;
+    border-radius: 0;
+}
+
+::deep .metrics-chart > .fluent-tabs > fluent-tablist {
+    width: fit-content;
+    min-height: 40px;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+}
+
+::deep .metrics-chart > .fluent-tabs > .fluent-tab-panel {
+    width: 100%;
+    margin-top: 10px;
+    padding: 0 6px;
+}
+
+::deep .metrics-chart fluent-tab {
+    padding-inline: 10px;
 }
 
 @media (min-width: 768px) {
     ::deep .metrics-chart {
-        padding-left: 40px;
+        --metrics-chart-horizontal-offset: 40px;
+
+        padding-left: var(--metrics-chart-horizontal-offset);
     }
 }
 
@@ -44,10 +104,19 @@
     overflow-x: hidden;
 }
 
+::deep .metrics-chart-footer {
+    grid-area: footer;
+    margin-bottom: var(--spacingVerticalL);
+}
+
 ::deep .metrics-chart-header h3 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-family: var(--aspire-font-display);
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 32px;
 }
 
 ::deep .metrics-chart-container {
@@ -55,8 +124,8 @@
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    row-gap: calc(var(--design-unit) * 4px);
-    column-gap: calc(var(--design-unit) * 4px);
+    row-gap: var(--spacingVerticalL);
+    column-gap: var(--spacingHorizontalL);
 }
 
 ::deep .metrics-filters-container {
@@ -67,48 +136,68 @@
     margin-bottom: 15px;
 }
 
-::deep .fluent-popover-content {
-    overflow-wrap: normal;
-    word-break: normal;
-    max-height: 300px;
-    overflow-y: auto;
-    max-width: 400px;
-    min-width: 100px;
-    overflow-x: hidden;
-}
-
-::deep .fluent-popover-content div[part="header"] {
+::deep .metrics-filters-section h5 {
+    font-family: var(--aspire-font-display);
     font-size: 16px;
-    line-height: normal;
-    margin-bottom: 8px;
+    font-weight: 500;
+    line-height: 22px;
 }
 
 ::deep .metrics-tree {
     min-width: auto;
-    margin-right: 3px;
+}
+
+::deep .metrics-tree fluent-tree-item::part(positioning-region) {
+    height: 29px;
+}
+
+::deep .metrics-tree fluent-tree-item::part(content) {
+    min-width: 0;
+}
+
+::deep .metrics-tree fluent-tree-item.nested::part(positioning-region) {
+    padding-inline-start: 20px;
+}
+
+::deep .metrics-tree fluent-tree-item[selected]::part(positioning-region),
+::deep .metrics-tree fluent-tree-item::part(positioning-region):hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .metrics-tree fluent-tree-item [part="text"] {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .metrics-tree fluent-tree-item[selected] {
+    position: relative;
+}
+
+::deep .metrics-tree fluent-tree-item[selected]::after {
+    position: absolute;
+    left: 2px;
+    top: 7.5px;
+    width: 3px;
+    height: 14px;
+    content: "";
+    background-color: var(--colorBrandBackground);
 }
 
 ::deep .metrics-content {
+    height: 100%;
+    min-height: 0;
     /* Match left padding of the page header */
-    margin-left: calc(var(--design-unit)* 4.5px);
+    margin-left: 18px;
 }
 
 ::deep .plotly-chart-container {
     width: 100%;
     max-width: 650px;
     aspect-ratio: 13 / 9;
-}
-
-@media (min-width: 768px) {
-    ::deep .plotly-chart-container {
-        margin-left: -40px;
-    }
-}
-
-@media (max-width: 768px) {
-    ::deep .plotly-chart-container {
-        margin-left: -20px;
-    }
+    margin-left: calc(-1 * var(--metrics-chart-horizontal-offset));
 }
 
 ::deep .metric-info-icon {

@@ -300,6 +300,6 @@ internal static class TelemetryTestHelpers
             DateTimeOffset.Now,
             DateTimeOffset.Now.AddYears(1));
 
-        return new X509Certificate2(certificate.Export(X509ContentType.Pfx));
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null);
     }
 }

@@ -7,17 +7,16 @@
     background: transparent;
 }
 
-.text-visualizer-container ::deep.button-container {
+.button-container {
     display: flex;
     width: 100%;
-    margin-top: auto;
 }
 
-.text-visualizer-container ::deep.text-visualizer-unmask-content {
+.button-container ::deep.text-visualizer-unmask-content {
     margin-left: 0;
 }
 
-.text-visualizer-container ::deep.button-container-right {
+.button-container-right {
     display: flex;
     gap: 8px;
     margin-left: auto;

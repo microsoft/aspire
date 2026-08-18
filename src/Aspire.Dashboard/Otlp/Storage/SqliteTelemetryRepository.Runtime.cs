@@ -6,7 +6,6 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
@@ -46,9 +45,9 @@ public sealed partial class SqliteTelemetryRepository
     }
 
     public bool HasDisplayedMaxLogLimitMessage { get; set; }
-    public Message? MaxLogLimitMessage { get; set; }
+    public DashboardMessageBarReference? MaxLogLimitMessage { get; set; }
     public bool HasDisplayedMaxTraceLimitMessage { get; set; }
-    public Message? MaxTraceLimitMessage { get; set; }
+    public DashboardMessageBarReference? MaxTraceLimitMessage { get; set; }
 
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount()
     {

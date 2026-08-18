@@ -291,9 +291,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddHostedService<DashboardDataSourceInitializer>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
-        builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
+        builder.Services.TryAddScoped<IDashboardClient, SelectedDashboardClient>();
 
-        builder.Services.TryAddSingleton<INotificationService, NotificationService>();
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Model.INotificationService, Aspire.Dashboard.Model.NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
@@ -371,6 +371,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
+        builder.Services.AddScoped<DashboardMessageBarService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();
@@ -475,7 +476,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
             {
-                var client = context.RequestServices.GetRequiredService<DashboardClient>();
+                var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
                 {
                     context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);

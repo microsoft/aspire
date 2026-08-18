@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -59,10 +60,18 @@ public sealed class InputViewModel
             {
                 input.Value = optionsVM[0].Id;
             }
+
+            SelectedOption = SelectOptions.FirstOrDefault(option => option.Id == input.Value);
+            if (SelectedOption is null && input.AllowCustomChoice && !string.IsNullOrEmpty(input.Value))
+            {
+                SelectedOption = new SelectViewModel<string> { Id = input.Value, Name = input.Value };
+            }
         }
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    public SelectViewModel<string>? SelectedOption { get; set; }
 
     /// <summary>
     /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
@@ -97,10 +106,11 @@ public sealed class InputViewModel
         return filteredValues;
     }
 
-    public string? Value
+    [AllowNull]
+    public string Value
     {
         get => Input.Value;
-        set => Input.Value = value;
+        set => Input.Value = value ?? string.Empty;
     }
 
     // Used when binding to FluentCheckbox.
@@ -110,7 +120,7 @@ public sealed class InputViewModel
         set => Input.Value = value ? "true" : "false";
     }
 
-    // Used when binding to FluentNumberField.
+    // Used when binding to FluentNumberInput.
     public int? NumberValue
     {
         get => int.TryParse(Input.Value, CultureInfo.InvariantCulture, out var result) ? result : null;

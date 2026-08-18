@@ -578,12 +578,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 runtimeOptions = new
                 {
-                    tfm = "net8.0",
+                    tfm = "net9.0",
                     rollForward = "Major",
                     frameworks = new[]
                     {
-                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
-                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                        new { name = "Microsoft.NETCore.App", version = "9.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "9.0.0" }
                     },
                     configProperties = new
                     {
@@ -622,7 +622,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
             Assert.Equal(dashboardDll, args[3]);
 
-            // Verify that the custom runtime config has been updated with current framework versions
+            // Verify that an older AppHost doesn't downgrade the dashboard's framework versions.
             var customConfigContent = File.ReadAllText((string)args[2]);
             var customConfig = JsonSerializer.Deserialize<JsonElement>(customConfigContent);
 
@@ -630,8 +630,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             var netCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.NETCore.App");
             var aspNetCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.AspNetCore.App");
 
-            Assert.Equal("8.0.0", netCoreFramework.GetProperty("version").GetString());
-            Assert.Equal("8.0.0", aspNetCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("9.0.0", netCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("9.0.0", aspNetCoreFramework.GetProperty("version").GetString());
         }
         finally
         {
@@ -640,6 +640,16 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 Directory.Delete(tempDir, recursive: true);
             }
         }
+    }
+
+    [Theory]
+    [InlineData("8.0.0", "9.0.0", "9.0.0")]
+    [InlineData("9.0.0", "8.0.0", "9.0.0")]
+    public void GetLatestFrameworkVersion_UsesLatestVersion(string dashboardVersion, string appHostVersion, string expectedVersion)
+    {
+        var version = DashboardEventHandlers.GetLatestFrameworkVersion(dashboardVersion, appHostVersion);
+
+        Assert.Equal(expectedVersion, version);
     }
 
     [Fact]

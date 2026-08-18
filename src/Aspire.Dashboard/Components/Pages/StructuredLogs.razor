@@ -52,27 +52,26 @@
                     <div class="logs-summary-layout">
                         @if (ViewportInformation.IsDesktop)
                         {
-                            <FluentToolbar Class="main-toolbar telemetry-toolbar">
+                            <div class="main-toolbar filter-toolbar" role="toolbar">
                                 @GetFilterToolbar()
-                            </FluentToolbar>
+                            </div>
                         }
 
                         <div id="@ScrollContainerId" class="logs-grid-container continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]">
                             <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                                <FluentDataGrid @ref="_dataGrid"
-                                                ColumnResizeLabels="@_resizeLabels"
-                                                ColumnSortLabels="@_sortLabels"
+                                <AspireFluentDataGrid @ref="_dataGrid"
                                                 HeaderCellAsButtonWithMenu="true"
                                                 ResizeType="DataGridResizeType.Discrete"
                                                 Virtualize="true"
                                                 RowClass="@GetRowClass"
-                                                GenerateHeader="GenerateHeaderOption.Sticky"
+                                                GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                 ItemSize="46"
                                                 OverscanCount="100"
                                                 ResizableColumns="true"
                                                 ResizeColumnOnAllRows="false"
                                                 ItemsProvider="@GetData"
                                                 TGridItem="LogSummary"
+                                                ColumnOrder="@_manager.ColumnOrder"
                                                 GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                 ShowHover="true"
                                                 ItemKey="@(r => r.InternalId)"
@@ -117,9 +116,9 @@
                                         </AspireTemplateColumn>
                                     </ChildContent>
                                     <EmptyContent>
-                                        <FluentIcon Icon="Icons.Regular.Size24.SlideTextSparkle" />&nbsp;@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]
+                                        <FluentIcon Icon="Icons.Regular.Size24.SlideTextSparkle" Color="Color.Primary" />&nbsp;@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]
                                     </EmptyContent>
-                                </FluentDataGrid>
+                                </AspireFluentDataGrid>
                             </GridColumnManager>
                         </div>
                     </div>
@@ -157,56 +156,65 @@
                                    OnPausedChanged="@PauseManager.SetStructuredLogsPaused"
                                    SelectedResource="@PageViewModel.SelectedResource" />
 
-            <FluentSearch @bind-Value="_filter"
-                          @bind-Value:after="HandleAfterFilterBindAsync"
-                          Name="structured-logs-search"
-                          AutoComplete="off"
-                          Immediate="true"
-                          ImmediateDelay="@FluentUIExtensions.InputDelay"
-                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]"
-                          slot="end" />
+            <div class="toolbar-end">
+                <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_filter"
+                              Class="toolbar-search"
+                              @bind-Value:after="HandleAfterFilterBindAsync"
+                              Name="structured-logs-search"
+                              AutoComplete="off"
+                              Immediate="true"
+                              ImmediateDelay="@FluentUIExtensions.InputDelay"
+                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                              title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]">
+                    <StartTemplate>
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                    </StartTemplate>
+                </FluentTextInput>
 
-            <DesktopToolbarDivider />
+                <DesktopToolbarDivider />
 
-            <LogLevelSelect slot="end"
-                            @bind-LogLevel="@PageViewModel.SelectedLogLevel"
-                            LogLevels="@_logLevels"
-                            HandleSelectedLogLevelChangedAsync="@HandleSelectedLogLevelChangedAsync" />
+                <LogLevelSelect
+                                @bind-LogLevel="@PageViewModel.SelectedLogLevel"
+                                LogLevels="@_logLevels"
+                                HandleSelectedLogLevelChangedAsync="@HandleSelectedLogLevelChangedAsync" />
 
-            <DesktopToolbarDivider />
+                <DesktopToolbarDivider />
 
-            @if (ViewModel.Filters.Count == 0)
-            {
-                if (ViewportInformation.IsDesktop)
+                @if (ViewModel.Filters.Count == 0)
                 {
-                    <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
-                }
-            }
-            else
-            {
-                <div slot="end">
-                    <FluentCounterBadge HorizontalPosition="70" Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
-                    </FluentCounterBadge>
-                </div>
-            }
-
-            <DesktopToolbarDivider />
-
-            <FluentButton slot="end" Appearance="Appearance.Stealth"
-                          aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]"
-                          OnClick="() => OpenFilterAsync(null)">
-                @if (ViewportInformation.IsDesktop)
-                {
-                    <FluentIcon Value="@(new Icons.Regular.Size20.Filter())"/>
+                    if (ViewportInformation.IsDesktop)
+                    {
+                        <span>@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
+                    }
                 }
                 else
                 {
-                    <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())"/>
-                    @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                    <div>
+                        <FluentCounterBadge Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                            <AnchorContent>
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                            </AnchorContent>
+                        </FluentCounterBadge>
+                    </div>
                 }
-            </FluentButton>
+
+                <DesktopToolbarDivider />
+
+                <FluentButton Appearance="ButtonAppearance.Default"
+                              Class="@(ViewportInformation.IsDesktop ? "toolbar-button" : null)"
+                              aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]"
+                              OnClick="() => OpenFilterAsync(null)">
+                    @if (ViewportInformation.IsDesktop)
+                    {
+                        <FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary"/>
+                    }
+                    else
+                    {
+                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary"/>
+                        @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                    }
+                </FluentButton>
+            </div>
         </text>;
     }
 }

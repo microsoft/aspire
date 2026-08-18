@@ -1,0 +1,24 @@
+@using Aspire.Dashboard.Model.Interaction
+
+<FluentDialogBody>
+    <ChildContent>
+        @((MarkupString)Content.MarkupMessage)
+    </ChildContent>
+
+    <ActionTemplate>
+        <footer class="interaction-dialog-actions">
+            @if (!string.IsNullOrEmpty(Dialog.Options.Footer.PrimaryAction.Label))
+            {
+                <FluentButton Appearance="ButtonAppearance.Primary" Class="aspire-button" OnClick="@SubmitAsync">
+                    @Dialog.Options.Footer.PrimaryAction.Label
+                </FluentButton>
+            }
+            @if (!string.IsNullOrEmpty(Dialog.Options.Footer.SecondaryAction.Label))
+            {
+                <FluentButton Appearance="ButtonAppearance.Default" Class="aspire-button" OnClick="@CancelAsync">
+                    @Dialog.Options.Footer.SecondaryAction.Label
+                </FluentButton>
+            }
+        </footer>
+    </ActionTemplate>
+</FluentDialogBody>

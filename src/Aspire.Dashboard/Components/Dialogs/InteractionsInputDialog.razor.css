@@ -6,14 +6,20 @@
     width: 100%;
 }
 
-.interaction-input-dialog .interaction-input ::deep fluent-text-field,
-.interaction-input-dialog .interaction-input ::deep fluent-select,
-.interaction-input-dialog .interaction-input ::deep fluent-combobox,
+.interaction-input-dialog .interaction-input ::deep fluent-text-input,
+.interaction-input-dialog .interaction-input ::deep fluent-dropdown,
 .interaction-input-dialog .interaction-input ::deep .uploaded-files-list,
-.interaction-input-dialog .interaction-input ::deep label {
+.interaction-input-dialog .interaction-input ::deep .interaction-input-label {
     width: 75%;
     /* Prevent long select/combox controls from extending outside the dialog. This can happen when there is very long placeholder text */
     max-width: 500px;
+}
+
+.interaction-input-dialog .interaction-input ::deep .interaction-input-label {
+    font-size: 13.5px;
+    font-weight: var(--fontWeightMedium);
+    line-height: var(--lineHeightBase300);
+    margin-bottom: 4px;
 }
 
 .interaction-input-dialog .interaction-input ::deep .uploaded-files-list {
@@ -29,7 +35,7 @@
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--fontSizeBase200);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description p,
@@ -48,10 +54,6 @@
     background-color: transparent;
 }
 
-.interaction-input-dialog .interaction-input ::deep fluent-checkbox {
-    margin-top: 4px;
-}
-
-.interaction-input-dialog .interaction-input ::deep fluent-text-field::part(end) {
+.interaction-input-dialog .interaction-input ::deep fluent-text-input::part(end) {
     margin-inline-end: 0;
 }

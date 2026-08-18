@@ -3,18 +3,16 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
-<div class="span-details-layout">
+<div class="details-layout span-details-layout">
     @if (!HideToolbar)
     {
-        <FluentToolbar Orientation="Orientation.Horizontal">
+        <div class="details-toolbar" role="toolbar">
             <div>
                 @Loc[nameof(ControlsStrings.SpanDetailsResourceLabel)] <strong>@ViewModel.Span.Source.Resource.ResourceName</strong>
             </div>
-            <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
             <div>
                 @Loc[nameof(ControlsStrings.SpanDetailsDurationLabel)] <strong>@DurationFormatter.FormatDuration(ViewModel.Span.Duration, CultureInfo.CurrentCulture)</strong>
             </div>
-            <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
             <div>
                 @{
                     // Start time for root span is zero. We don't want to display the smallest unit (0μs) because that looks odd. Use the unit from duration.
@@ -23,64 +21,56 @@
                 }
                 @Loc[nameof(ControlsStrings.SpanDetailsStartTimeLabel)] <strong>@formattedStartTime</strong>
             </div>
-            <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          Immediate="true"
-                          Autofocus="true"
-                          AutoComplete="off"
-                          @bind-Value="_filter"
-                          slot="end" />
-            <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-            <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                              Icon="@(new Icons.Regular.Size20.Options())"
-                              ItemsProvider="@(() => _spanActionsMenuItems)"
-                              Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
-                              slot="end" />
-        </FluentToolbar>
+            <div class="toolbar-end">
+                <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+                              Immediate="true"
+                              Autofocus="true"
+                              AutoComplete="off"
+                              @bind-Value="_filter">
+                    <StartTemplate>
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                    </StartTemplate>
+                </FluentTextInput>
+                <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                  ButtonClass="toolbar-button details-toolbar-button span-details-actions"
+                                  Icon="@(new Icons.Regular.Size20.Options())"
+                                  ItemsProvider="@(() => _spanActionsMenuItems)"
+                                  Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]" />
+            </div>
+        </div>
     }
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsSpanHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredItems.Count()
-                    </FluentBadge>
-                </div>
+        <FluentAccordion Block="true">
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsSpanHeader)]"
+                                                Count="@FilteredItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsContextHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredContextItems.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsContextHeader)]"
+                                                Count="@FilteredContextItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredResourceItems.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsResourceHeader)]"
+                                                Count="@FilteredResourceItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsEventsHeader)]" Expanded="@_isSpanEventsExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredSpanEvents.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsEventsHeader)]"
+                                                Count="@FilteredSpanEvents.Count()"
+                                                Expanded="@_isSpanEventsExpanded">
                 <PropertyGrid TItem="OtlpSpanEvent"
                               Items="@FilteredSpanEvents"
                               GridTemplateColumns="1fr 2fr"
@@ -98,19 +88,15 @@
                                           GridTemplateColumns="1fr 2fr"
                                           IsNameSortable="false"
                                           IsValueSortable="false"
-                                          GenerateHeader="GenerateHeaderOption.Default" />
+                                          GenerateHeader="DataGridGeneratedHeaderType.Default" />
                         }
                     </ExtraValueContent>
                 </PropertyGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredSpanLinks.Count()
-                    </FluentBadge>
-                </div>
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]"
+                                                Count="@FilteredSpanLinks.Count()"
+                                                Expanded="@_isSpanLinksExpanded">
+                <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
@@ -125,20 +111,16 @@
                         @WriteSpanLink(context)
                     </TemplateColumn>
                     <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="Appearance.Lightweight" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
+                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="ButtonAppearance.Transparent" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredSpanBacklinks.Count()
-                    </FluentBadge>
-                </div>
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]"
+                                                Count="@FilteredSpanBacklinks.Count()"
+                                                Expanded="@_isSpanBacklinksExpanded">
+                <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
@@ -153,12 +135,12 @@
                         @WriteSpanLink(context)
                     </TemplateColumn>
                     <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="Appearance.Lightweight" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
+                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="ButtonAppearance.Transparent" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
+            </AspirePropertyDetailsAccordionItem>
         </FluentAccordion>
     </div>
 </div>
@@ -186,7 +168,7 @@
                           GridTemplateColumns="1fr 2fr"
                           IsNameSortable="false"
                           IsValueSortable="false"
-                          GenerateHeader="GenerateHeaderOption.Default" />
+                          GenerateHeader="DataGridGeneratedHeaderType.Default" />
         }
     </div>;
     }

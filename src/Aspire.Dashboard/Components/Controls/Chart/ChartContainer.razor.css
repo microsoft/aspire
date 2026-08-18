@@ -1,5 +1,5 @@
-::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+::deep .tab-label svg {
+    width: 18px !important;
 }
 
 ::deep .metric-tab {

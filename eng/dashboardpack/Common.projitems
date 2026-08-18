@@ -4,7 +4,7 @@
   <Import Project="$(SharedDir)Workload.targets" />
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <IsPackable>true</IsPackable>
     <!-- Unset PackageType as that is being set by Workload.targets to DotnetPlatform, which this package no longer is. -->
     <PackageType />

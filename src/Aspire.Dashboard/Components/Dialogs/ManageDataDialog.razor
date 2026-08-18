@@ -7,12 +7,13 @@
 @using Resources = Aspire.Dashboard.Resources.Resources
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
 
+<FluentDialogBody Class="page-dialog-body manage-data-dialog-body" Style="width: 100%; max-height: calc(100dvh - 48px);">
 <div style="height: 44vh; overflow-y: auto;">
-    <FluentDataGrid @ref="_dataGrid"
+    <AspireFluentDataGrid @ref="_dataGrid"
                     Items="@GetGridItems()"
                     ItemSize="46"
-                    Virtualize="true"
-                    GenerateHeader="GenerateHeaderOption.Sticky"
+                    Virtualize="@Virtualize"
+                    GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                     GridTemplateColumns="2fr 1fr"
                     TGridItem="ManageDataGridItem"
                     OnRowClick="@OnRowClicked"
@@ -52,11 +53,11 @@
                             <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
                                 @if (context.ResourceRow.TelemetryData.Count > 0)
                                 {
-                                    <FluentButton Appearance="Appearance.Lightweight"
+                                    <FluentButton Appearance="ButtonAppearance.Transparent"
                                                   Class="main-grid-expand-button"
                                                   OnClick="@(() => OnToggleExpand(context.ResourceRow))"
                                                   aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
-                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                        <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Default" />
                                     </FluentButton>
                                 }
                             </span>
@@ -109,12 +110,14 @@
                         <span @onclick:stopPropagation="true">
                             @foreach (var dataRow in context.ResourceRow.TelemetryData)
                             {
-                                <FluentButton Appearance="Appearance.Lightweight"
-                                              IconEnd="@dataRow.Icon"
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
+                                              IconOnly="true"
                                               OnClick="@(() => NavigateToDataPage(dataRow))"
                                               Title="@GetDataTypeDisplayName(dataRow.DataType)"
                                               aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
-                                              Style="margin-right: 4px;" />
+                                              Style="margin-right: 4px;">
+                                    <FluentIcon Value="@dataRow.Icon" Color="Color.Primary" />
+                                </FluentButton>
                             }
                         </span>
                     }
@@ -122,27 +125,27 @@
             </TemplateColumn>
         </ChildContent>
         <EmptyContent>
-            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
+            <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" Color="Color.Primary" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
         </EmptyContent>
-    </FluentDataGrid>
+    </AspireFluentDataGrid>
 </div>
 
 <div class="button-container">
     <div>
-        <FluentButton IconStart="@(new Icons.Regular.Size16.ArrowDownload())"
-                      OnClick="ExportSelectedAsync"
+        <FluentButton OnClick="ExportSelectedAsync"
                       Loading="@_isExporting"
                       Disabled="@AreNoneExportableSelected()"
                       Title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
+            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowDownload())" Slot="start" Color="Color.Primary" />
             @Loc[nameof(Dialogs.ManageDataExportButtonText)]
         </FluentButton>
-        <FluentButton IconStart="@(new Icons.Regular.Size16.Delete())"
-                      OnClick="RemoveSelectedAsync"
+        <FluentButton OnClick="RemoveSelectedAsync"
                       Loading="@_isRemoving"
                       Disabled="@(TelemetryRepository.IsReadOnly || AreNoneSelected())"
                       Title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
+            <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Slot="start" Color="Color.Primary" />
             @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
         </FluentButton>
     </div>
@@ -158,10 +161,10 @@
                              OnCompleted="OnInputFileCompleted"
                              OnProgressChange="OnInputFileProgressChange" />
             <FluentButton Id="import-button"
-                          IconStart="@(new Icons.Regular.Size16.ArrowUpload())"
                           Loading="@_isImporting"
                           Title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
                           aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ArrowUpload())" Slot="start" Color="Color.Primary" />
                 @Loc[nameof(Dialogs.SettingsImportButtonText)]
             </FluentButton>
         </div>
@@ -171,4 +174,10 @@
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
     <div class="error-message">@_errorMessage</div>
+}
+</FluentDialogBody>
+
+@code {
+    [Parameter]
+    public bool Virtualize { get; set; } = true;
 }

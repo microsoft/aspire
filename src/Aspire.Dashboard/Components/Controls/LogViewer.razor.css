@@ -1,3 +1,13 @@
+.log-overflow {
+    width: 100%;
+    min-height: 0;
+    overflow: auto;
+}
+
+.console-overflow {
+    height: 100%;
+}
+
 ::deep .console-container {
     background: var(--console-background-color);
     color: var(--console-font-color);
@@ -23,17 +33,31 @@
     text-decoration: underline;
 }
 
-::deep .log-content > fluent-badge {
+::deep .log-content > fluent-badge,
+::deep .resource-prefix {
+    padding: 1px 3px;
+    border: var(--strokeWidthThin) solid transparent;
+    border-radius: var(--borderRadiusLarge);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+    font-weight: initial;
     user-select: none;
+}
+
+::deep .log-content > fluent-badge {
+    min-width: 0;
+    vertical-align: top;
+    white-space: nowrap;
 }
 
 ::deep .console-empty-message {
     gap: 8px;
     color: #fff;
     user-select: none;
-    font-family: var(--body-font);
+    font-family: var(--fontFamilyBase);
     font-weight: 600;
-    padding: calc(var(--design-unit) * 5px);
+    padding: var(--spacingHorizontalXL);
     display: flex;
     align-items: center;
     height: auto !important;
@@ -150,13 +174,4 @@
 
 ::deep .resource-prefix {
     color: var(--resource-text-color);
-    border-radius: calc(var(--control-corner-radius) * 1px);
-    padding: calc(((var(--design-unit) * 0.5) - var(--stroke-width)) * 1px) calc((var(--design-unit) - var(--stroke-width)) * 1px);
-    border: calc(var(--stroke-width) * 1px) solid transparent;
-    font-family: var(--body-font);
-    font-size: var(--type-ramp-minus-1-font-size);
-    line-height: var(--type-ramp-minus-1-line-height);
-    font-weight: initial;
-    font-variation-settings: var(--type-ramp-minus-1-font-variations);
-    user-select: none;
 }

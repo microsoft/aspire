@@ -437,7 +437,7 @@ public sealed class DebugSessionOptions
 
             try
             {
-                _serverCertificate = new X509Certificate2(data);
+                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
             }
             catch (Exception ex)
             {

@@ -1,7 +1,18 @@
+span.aspire-menu-secondary-action-container {
+    align-items: center;
+    align-self: stretch;
+    display: flex;
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: center;
+}
+
 ::deep .aspire-menu-secondary-action {
     opacity: 0;
     visibility: hidden;
-    padding-left: 8px;
+    padding: 0;
+    width: 20px;
+    min-width: 20px;
 }
 
 ::deep .aspire-menu-secondary-action::part(control) {
@@ -9,7 +20,7 @@
 }
 
 ::deep .aspire-menu-secondary-action:hover::part(control) {
-    background-color: var(--neutral-fill-secondary-hover);
+    background-color: var(--colorNeutralBackground2Hover);
 }
 
 fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,

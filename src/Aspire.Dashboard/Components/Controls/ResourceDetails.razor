@@ -9,49 +9,44 @@
 @inject IStringLocalizer<Aspire.Dashboard.Resources.Resources> Loc
 @inject IStringLocalizer<Columns> ColumnsLoc
 
-<div class="resource-details-layout">
+<div class="details-layout resource-details-layout">
 
-    <FluentToolbar Orientation="Orientation.Horizontal">
-        <FluentSearch Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                      Immediate="true"
-                      Autofocus="true"
-                      AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-        <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                          ButtonClass="resource-details-actions"
-                          Icon="@(new Icons.Regular.Size20.Options())"
-                          ItemsProvider="@(() => _resourceActionsMenuItems)"
-                          Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
-                          slot="end" />
-    </FluentToolbar>
+    <div class="details-toolbar" role="toolbar">
+        <div class="toolbar-end">
+            <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                          Immediate="true"
+                          Autofocus="true"
+                          AutoComplete="off"
+                          @bind-Value="_filter">
+                <StartTemplate>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                </StartTemplate>
+            </FluentTextInput>
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="toolbar-button details-toolbar-button resource-details-actions"
+                              Icon="@(new Icons.Regular.Size20.Options())"
+                              ItemsProvider="@(() => _resourceActionsMenuItems)"
+                              Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
+        </div>
+    </div>
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredResourceProperties.Count()
-                    </FluentBadge>
-                </div>
+        <FluentAccordion Block="true">
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]"
+                                                Count="@FilteredResourceProperties.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
                               Items="@FilteredResourceProperties"
                               IsValueMaskedChanged="@OnValueMaskedChanged"
                               HighlightText="@_filter"
                               GridTemplateColumns="1fr 1.5fr"
                               ValueComponents="_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredUrls.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]"
+                                                Count="@FilteredUrls.Count()"
+                                                Expanded="@_isUrlsExpanded">
                 <FluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                 Items="@FilteredUrls"
-                                ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizableColumns="true"
                                 ResizeType="DataGridResizeType.Discrete"
@@ -82,21 +77,15 @@
                                    HighlightText="@_filter" />
                     </AspireTemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
+            </AspirePropertyDetailsAccordionItem>
             @if (Resource.IsContainer())
             {
-                <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded">
-                    <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                            @FilteredVolumes.Count()
-                        </FluentBadge>
-                    </div>
-
+                <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]"
+                                                    Count="@FilteredVolumes.Count()"
+                                                    Expanded="@_isVolumesExpanded">
                     <FluentDataGrid TGridItem="VolumeViewModel"
                                     ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                     Items="@FilteredVolumes"
-                                    ColumnResizeLabels="@_resizeLabels"
-                                    ColumnSortLabels="@_sortLabels"
                                     HeaderCellAsButtonWithMenu="true"
                                     ResizableColumns="true"
                                     ResizeType="DataGridResizeType.Discrete"
@@ -122,22 +111,18 @@
                                 <ContentBeforeValue>
                                     @if (context.IsReadOnly)
                                     {
-                                        <FluentIcon Value="@(new Icons.Regular.Size16.LockClosed())" Class="volume-mount-type-icon" />
+                                        <FluentIcon Value="@(new Icons.Regular.Size16.LockClosed())" Color="Color.Primary" Class="volume-mount-type-icon" />
                                     }
                                 </ContentBeforeValue>
                             </GridValue>
                         </AspireTemplateColumn>
                     </FluentDataGrid>
-                </FluentAccordionItem>
+                </AspirePropertyDetailsAccordionItem>
             }
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredRelationships.Count()
-                    </FluentBadge>
-                </div>
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]"
+                                                Count="@FilteredRelationships.Count()"
+                                                Expanded="@_isRelationshipsExpanded">
+                <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -155,18 +140,14 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredBackRelationships.Count()
-                    </FluentBadge>
-                </div>
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]"
+                                                Count="@FilteredBackRelationships.Count()"
+                                                Expanded="@_isBackRelationshipsExpanded">
+                <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 TGridItem="ResourceDetailRelationshipViewModel"
@@ -184,19 +165,14 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredHealthReports.Count()
-                    </FluentBadge>
-                </div>
-
-                <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
-                                ColumnSortLabels="@_sortLabels"
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]"
+                                                Count="@FilteredHealthReports.Count()"
+                                                Expanded="@_isHealthChecksExpanded">
+                <FluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 Items="@FilteredHealthReports"
@@ -222,7 +198,7 @@
                             <ContentBeforeValue>
                                 @if (context.HealthStatus is null)
                                 {
-                                    <FluentProgressRing Width="16px" Style="display: inline-block;" Class="severity-icon" />
+                                    <FluentSpinner Style="display: inline-block;" Class="severity-icon" />
                                 }
                                 else
                                 {
@@ -245,20 +221,17 @@
                         </GridValue>
                     </AspireTemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredEnvironmentVariables.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]"
+                                                Count="@FilteredEnvironmentVariables.Count()"
+                                                Expanded="@_isEnvironmentVariablesExpanded">
                 <PropertyGrid TItem="EnvironmentVariableViewModel"
                               Items="@FilteredEnvironmentVariables"
                               IsValueMaskedChanged="@OnValueMaskedChanged"
                               HighlightText="@_filter"
                               GridTemplateColumns="1fr 1.5fr"
                               Class="env-var-properties" />
-            </FluentAccordionItem>
+            </AspirePropertyDetailsAccordionItem>
         </FluentAccordion>
     </div>
 </div>

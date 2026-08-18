@@ -153,6 +153,6 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
     {
         var sizePx = (int)icon.Size;
         var size = $"{sizePx}px";
-        return $@"<svg viewBox=""0 0 {sizePx} {sizePx}"" width=""{size}"" fill=""var(--accent-fill-rest)"" style=""width: {size};"" aria-hidden=""true"">{icon.Content}</svg>";
+        return $@"<svg viewBox=""0 0 {sizePx} {sizePx}"" width=""{size}"" fill=""var(--colorBrandForegroundLink)"" style=""width: {size};"" aria-hidden=""true"">{icon.Content}</svg>";
     }
 }

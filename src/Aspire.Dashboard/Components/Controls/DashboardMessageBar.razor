@@ -1,0 +1,84 @@
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+@inject Microsoft.FluentUI.AspNetCore.Components.INotificationService NotificationService
+@inject IStringLocalizer<Dialogs> Loc
+
+<div role="alert" class="dashboard-message-bar @IntentClass">
+    <div class="dashboard-message-bar-icon">
+        <FluentIcon Value="@IntentIcon" Color="@IntentColor" />
+    </div>
+    <div class="dashboard-message-bar-content">
+        @if (!string.IsNullOrEmpty(Content.Title))
+        {
+            <strong>@Content.Title</strong>
+        }
+        <div class="dashboard-message-bar-message">
+            @if (Content.UseMarkupString)
+            {
+                @((MarkupString)Content.Message)
+            }
+            else
+            {
+                @Content.Message
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(Content.LinkText) && !string.IsNullOrEmpty(Content.LinkUrl))
+        {
+            @* Message bar links are specified by application code, so they don't need automatic URL sanitization. *@
+            <a href="@Content.LinkUrl" target="_blank" rel="noreferrer noopener">@Content.LinkText</a>
+        }
+    </div>
+    <div class="dashboard-message-bar-actions">
+        @if (!string.IsNullOrEmpty(Content.PrimaryAction))
+        {
+            <FluentButton OnClick="@(() => CloseAsync(true))">@Content.PrimaryAction</FluentButton>
+        }
+        @if (!string.IsNullOrEmpty(Content.SecondaryAction))
+        {
+            <FluentButton OnClick="@(() => CloseAsync(false))">@Content.SecondaryAction</FluentButton>
+        }
+        @if (Content.AllowDismiss)
+        {
+            <FluentButton Class="dashboard-message-bar-dismiss" OnClick="@(() => CloseAsync(null))" aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Default" />
+            </FluentButton>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required DashboardMessageBarContent Content { get; set; }
+
+    [CascadingParameter]
+    public required IMessageBarInstance MessageBar { get; set; }
+
+    private Icon IntentIcon => MessageBar.Options.Intent switch
+    {
+        MessageBarIntent.Success => new Icons.Filled.Size20.CheckmarkCircle(),
+        MessageBarIntent.Error => new Icons.Filled.Size20.DismissCircle(),
+        MessageBarIntent.Warning => new Icons.Filled.Size20.Warning(),
+        _ => new Icons.Filled.Size20.Info()
+    };
+
+    private Color IntentColor => MessageBar.Options.Intent switch
+    {
+        MessageBarIntent.Success => Color.Success,
+        MessageBarIntent.Error => Color.Error,
+        MessageBarIntent.Warning => Color.Warning,
+        _ => Color.Info
+    };
+
+    private string IntentClass => MessageBar.Options.Intent switch
+    {
+        MessageBarIntent.Success => "intent-success",
+        MessageBarIntent.Error => "intent-error",
+        MessageBarIntent.Warning => "intent-warning",
+        _ => "intent-info"
+    };
+
+    private Task CloseAsync(object? data)
+    {
+        return NotificationService.CloseAsync(MessageBar, data);
+    }
+}

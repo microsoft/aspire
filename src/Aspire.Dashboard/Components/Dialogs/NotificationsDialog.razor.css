@@ -11,7 +11,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px 16px;
-    color: var(--neutral-foreground-hint);
+    color: var(--colorNeutralForeground3);
     gap: 8px;
 }
 
@@ -27,5 +27,5 @@
 }
 
 .notifications-scroll ::deep > :last-child {
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }

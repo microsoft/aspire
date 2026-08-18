@@ -9,17 +9,33 @@
 
 @if (IncludeLabel)
 {
-    <FluentInputLabel Label="@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]" ForId="metric-selector" />
+    <label for="metric-selector">@Loc[nameof(Metrics.MetricsInsturementNameGridNameColumnHeader)]</label>
 }
 
-<FluentTreeView Id="metric-selector" Class="metrics-tree" @bind-CurrentSelected="@PageViewModel.SelectedTreeItem" @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
+<FluentTreeView Id="metric-selector"
+                Class="metrics-tree"
+                Size="TreeSize.Medium"
+                SelectedId="@GetSelectedTreeItemId()"
+                @bind-CurrentSelected="@PageViewModel.SelectedTreeItem"
+                @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">
     <ChildContent>
         @foreach (var meterGroup in PageViewModel.Instruments.GroupBy(i => i.Parent.Name).OrderBy(g => g.Key))
         {
-            <FluentTreeItem @key="meterGroup.Key" Text="@meterGroup.Key" Data="@meterGroup.Key" title="@meterGroup.Key" InitiallyExpanded="true" InitiallySelected="@(PageViewModel.SelectedInstrument == null && meterGroup.Key == PageViewModel.SelectedMeter)">
+            <FluentTreeItem @key="meterGroup.Key"
+                            Id="@GetMeterTreeItemId(meterGroup.Key)"
+                            Text="@meterGroup.Key"
+                            Data="@meterGroup.Key"
+                            title="@meterGroup.Key"
+                            Expanded="@IsMeterExpanded(meterGroup.Key)"
+                            ExpandedChanged="@(expanded => SetMeterExpanded(meterGroup.Key, expanded))">
                 @foreach (var instrument in meterGroup.OrderBy(i => i.Name))
                 {
-                    <FluentTreeItem @key="instrument" Class="nested" Text="@instrument.Name" Data="@instrument" title="@instrument.Name" InitiallySelected="@(instrument.Name == PageViewModel.SelectedInstrument?.Name && instrument.Parent.Name == PageViewModel.SelectedMeter)"/>
+                    <FluentTreeItem @key="instrument"
+                                    Id="@GetInstrumentTreeItemId(instrument.Parent.Name, instrument.Name)"
+                                    Class="nested"
+                                    Text="@instrument.Name"
+                                    Data="@instrument"
+                                    title="@instrument.Name" />
                 }
             </FluentTreeItem>
         }

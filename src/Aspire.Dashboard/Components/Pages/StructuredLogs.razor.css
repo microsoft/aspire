@@ -1,4 +1,4 @@
-::deep table.main-grid {
+::deep table.main-grid:not(:has(tr[row-state="empty-content"], tr[row-state="loading-content"])) {
     margin-bottom: 1px !important; /* make bottom table row border visible when scrolling */
 }
 
@@ -31,12 +31,14 @@
         "main";
 }
 
-::deep .logs-summary-layout > fluent-toolbar {
+::deep .main-toolbar.filter-toolbar {
     grid-area: toolbar;
 }
 
 ::deep .logs-summary-layout > .logs-grid-container {
     grid-area: main;
+    min-width: 0;
+    min-height: 0;
     overflow: auto;
 }
 

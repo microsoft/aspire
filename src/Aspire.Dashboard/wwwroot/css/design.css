@@ -1,0 +1,682 @@
+@font-face {
+    font-family: "Geist";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/geist/Geist-Variable.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Geist Mono";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/geist/GeistMono-Variable.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
+}
+
+:root {
+    color-scheme: light;
+    --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
+    --aspire-font-display: "Poppins", var(--aspire-font-sans);
+    --fontFamilyBase: var(--aspire-font-sans);
+    --fontFamilyMonospace: var(--aspire-font-mono);
+
+    --aspire-page-background: #f7f7f7;
+    --aspire-shell-background: #e5e5e5;
+    --aspire-control-background: #ffffff;
+    --colorNeutralBackground1: var(--aspire-control-background);
+    --colorNeutralBackground2: var(--aspire-page-background);
+    --colorNeutralBackground3: #ebebeb;
+    --colorNeutralBackground4: var(--aspire-shell-background);
+    --colorNeutralForeground1: #1a1a1a;
+    --colorNeutralForeground3: #717171;
+    --colorNeutralStroke1: #d2d2d2;
+    --colorNeutralStroke2: #d2d2d2;
+    --colorNeutralStroke3: #e5e5e5;
+    --aspire-button-hover-border: #c2c2c2;
+    --colorBrandBackground: #512bd4;
+    --colorBrandBackgroundHover: #7455dd;
+    --colorBrandBackgroundPressed: #512bd4;
+    --colorBrandBackgroundSelected: #512bd4;
+    --colorBrandForeground1: #512bd4;
+    --colorBrandForeground2: #512bd4;
+    --colorBrandForegroundInverted: #512bd4;
+    --colorBrandForegroundLink: #512bd4;
+    --colorBrandForegroundLinkHover: #7455dd;
+    --colorBrandForegroundLinkPressed: #512bd4;
+    --colorBrandForegroundLinkSelected: #512bd4;
+    --colorBrandStroke1: #512bd4;
+    --colorStrokeFocus1: var(--colorBrandStroke1);
+    --colorStrokeFocus2: var(--colorBrandStroke1);
+    --colorCompoundBrandBackground: var(--colorBrandBackground);
+    --colorCompoundBrandBackgroundHover: var(--colorBrandBackgroundHover);
+    --colorCompoundBrandBackgroundPressed: var(--colorBrandBackgroundPressed);
+    --colorCompoundBrandStroke: var(--colorBrandStroke1);
+    --colorCompoundBrandStrokeHover: var(--colorBrandBackgroundHover);
+    --colorCompoundBrandStrokePressed: var(--colorBrandBackgroundPressed);
+    --colorNeutralStrokeAccessibleSelected: var(--colorBrandStroke1);
+    --colorNeutralForeground2BrandHover: #7455dd;
+    --aspire-popup-background: #ffffff;
+    --aspire-popup-shadow: rgba(0, 0, 0, 0.2) 0 0 2px 0, rgba(0, 0, 0, 0.24) 0 16px 32px 0;
+    --aspire-menu-item-hover-background: #f3f3f3;
+    --aspire-dropdown-option-foreground: #212121;
+    --aspire-dropdown-option-selected-background: #f3f3f3;
+    --aspire-dropdown-option-selected-hover-background: #f7f7f7;
+    --accent-button-background: var(--colorBrandBackground);
+    --accent-button-foreground: var(--colorNeutralForegroundOnBrand);
+    --accent-button-hover-background: var(--colorBrandBackgroundHover);
+    --accent-button-hover-foreground: var(--colorNeutralForegroundOnBrand);
+    --accent-button-pressed-background: var(--colorBrandBackgroundPressed);
+    --accent-button-pressed-foreground: var(--colorNeutralForegroundOnBrand);
+
+    --layout-left-padding: 12px;
+    --layout-right-padding: 12px;
+    --layout-top-padding: 12px;
+    --datagrid-hover-color: #f3f3f3;
+    --datagrid-selected-color: var(--colorNeutralBackground3);
+    --fluent-multi-splitter-background-color: var(--colorNeutralStroke1);
+
+    --log-critical: #F8ECEB;
+    --log-error: #F8ECEB;
+    --log-warning: #FBF3DD;
+    --info: #717171;
+    --warning: #E85E36;
+    --success: #108310;
+    --error: #D13438;
+    --foreground-subtext-rest: #5D5D5D;
+    --foreground-settings-text: var(--foreground-subtext-rest);
+    --error-ui-foreground-color: #131313;
+    --error-ui-accent-foreground-color: #1d00d0;
+    --highlight-bg: #fffbdd;
+    --reconnection-ui-bg: #ffffff;
+
+    --dialog-background-color: #ffffff;
+    --dialog-border-color: #e5e5e5;
+    --property-grid-background-color: #fbfbfb;
+    --property-grid-genai-dialog-background-color: #fbfbfb;
+    --codeblock-background-color: var(--colorNeutralBackground2);
+    --codeblock-header-background-color: color-mix(in srgb, var(--colorNeutralForeground1) 4%, var(--colorNeutralBackground2));
+    --codeblock-border-color: var(--colorNeutralStroke1);
+
+    --aspire-status-success: #2DA44E;
+    --aspire-status-error: #D13438;
+    --aspire-status-warning: #E8890C;
+    --messagebar-success-background-color: color-mix(in srgb, var(--aspire-status-success) 8%, var(--colorNeutralBackground1));
+    --messagebar-success-border-color: color-mix(in srgb, var(--aspire-status-success) 40%, var(--colorNeutralBackground1));
+    --messagebar-error-background-color: color-mix(in srgb, var(--aspire-status-error) 8%, var(--colorNeutralBackground1));
+    --messagebar-error-border-color: color-mix(in srgb, var(--aspire-status-error) 40%, var(--colorNeutralBackground1));
+    --messagebar-warning-background-color: color-mix(in srgb, var(--aspire-status-warning) 9%, var(--colorNeutralBackground1));
+    --messagebar-warning-border-color: color-mix(in srgb, var(--aspire-status-warning) 42%, var(--colorNeutralBackground1));
+    --messagebar-info-background-color: #f6f6f6;
+    --messagebar-info-border-color: #dadada;
+    --messagebar-foreground-color: #242424;
+    --messagebar-action-background: #fbfbfb;
+    --messagebar-action-border: linear-gradient(var(--colorNeutralBackground3) 90%, var(--colorNeutralStroke1) 100%);
+    --messagebar-action-hover-background: var(--aspire-menu-item-hover-background);
+    --messagebar-action-hover-border: linear-gradient(#e0e0e0 90%, #cacaca 100%);
+    --messagebar-action-pressed-background: var(--aspire-page-background);
+    --messagebar-action-pressed-border: #e0e0e0;
+
+    --scrollbar-size: 8px;
+    --scrollbar-thumb-color: rgba(0, 0, 0, 0.22);
+    --scrollbar-thumb-hover-color: rgba(0, 0, 0, 0.38);
+    --scrollbar-track-color: transparent;
+
+    --trace-tick-background-color: #d8d8d8;
+
+    --main-container-background-color: #f7f7f7;
+    --main-sidebar-background-color: #f7f7f7;
+    --llm-background-color: #a6e9ed;
+    --llm-color: #00666d;
+    --message-background-color: #ebf3fc;
+    --message-color: #115ea3;
+    --tool-calls-background-color: #f2fbf2;
+    --tool-calls-color: #11910d;
+    --tool-response-background-color: #e0c8b0;
+    --tool-response-color: #5a2e00;
+    --output-background-color: #f4bfab;
+    --output-color: #7a2101;
+
+    /* Highlight.js palette. */
+    --hljs-default: #545454;
+    --hljs-comment: #696969;
+    --hljs-variable: #d91e18;
+    --hljs-literal: #aa5d00;
+    --hljs-attribute: #aa5d00;
+    --hljs-string: green;
+    --hljs-section: #00779f;
+    --hljs-keyword: #7928a1;
+
+    /* Stable resource and telemetry palette used by ColorGenerator. */
+    --accent-teal: #14959B;
+    --accent-marigold: #E9C877;
+    --accent-brass: #9F724F;
+    --accent-peach: #F39E67;
+    --accent-coral: #E1694E;
+    --accent-royal-blue: #5F79DE;
+    --accent-orchid: #C764BA;
+    --accent-brand-blue: #0E62AD;
+    --accent-seafoam: #55BFA9;
+    --accent-mink: #9C9587;
+    --accent-cyan: #0E858B;
+    --accent-gold: #D7A763;
+    --accent-bronze: #7B4F2E;
+    --accent-orange: #F57D1A;
+    --accent-rust: #E0522A;
+    --accent-navy: #1B3A70;
+    --accent-berry: #C239B3;
+    --accent-ocean: #0E5E77;
+    --accent-jade: #3BAB8E;
+    --accent-olive: #6F6652;
+    --accent-brand-blue-text: #fff;
+    --accent-bronze-text: #fff;
+    --accent-navy-text: #fff;
+    --accent-ocean-text: #fff;
+    --accent-olive-text: #fff;
+}
+
+/* Fluent v5 Default replaces v4 Stealth for bordered toolbar and utility buttons. */
+fluent-button:not([appearance]) {
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralStroke1Hover: var(--aspire-button-hover-border);
+}
+
+/* Fluent v5 renamed v4's Accent appearance to Primary. Preserve the final-v4 color recipe for every primary action. */
+fluent-button[appearance="primary"] {
+    background-color: var(--accent-button-background);
+    color: var(--accent-button-foreground);
+}
+
+fluent-button[appearance="primary"]:hover {
+    background-color: var(--accent-button-hover-background);
+    color: var(--accent-button-hover-foreground);
+}
+
+fluent-button[appearance="primary"]:active {
+    background-color: var(--accent-button-pressed-background);
+    color: var(--accent-button-pressed-foreground);
+}
+
+fluent-button[appearance="primary"] .copy-icon,
+fluent-button[appearance="primary"] .checkmark-icon {
+    fill: currentColor !important;
+}
+
+/* Fluent v5 renamed v4's Lightweight appearance to Transparent. */
+fluent-button[appearance="transparent"] {
+    --colorTransparentBackgroundHover: var(--colorNeutralBackground2);
+}
+
+/* Preserve the final-v4 input and select recipes across their Fluent v5 replacements. */
+fluent-text-input,
+fluent-dropdown {
+    --colorNeutralStrokeAccessible: var(--colorNeutralStroke1);
+    --colorNeutralStrokeAccessibleHover: var(--colorNeutralStroke1Hover);
+    --colorNeutralStrokeAccessiblePressed: var(--colorNeutralStroke1Pressed);
+    --colorCompoundBrandStroke: var(--colorBrandStroke1);
+    --colorCompoundBrandStrokePressed: var(--colorBrandStroke1);
+    --colorNeutralForeground3: var(--colorNeutralForeground2);
+}
+
+.aspire-input {
+    width: 100%;
+    --borderRadiusMedium: 6px;
+}
+
+fluent-field.aspire-input {
+    margin-block: 0;
+    row-gap: 0;
+}
+
+.aspire-input:not(fluent-field),
+fluent-field.aspire-input > [slot="input"] {
+    width: 100%;
+    height: 28px;
+    min-height: 28px;
+    --borderRadiusMedium: 6px;
+}
+
+.aspire-input:not(fluent-field)::part(root),
+fluent-field.aspire-input > [slot="input"]::part(root) {
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 6px;
+}
+
+fluent-text-input.aspire-input::part(control),
+fluent-number-input.aspire-input::part(control),
+fluent-field.aspire-input > fluent-text-input::part(control),
+fluent-field.aspire-input > fluent-number-input::part(control) {
+    height: 22px;
+    min-height: 22px;
+    padding: 0 9px;
+}
+
+.aspire-button,
+.aspire-button::part(control) {
+    height: 28px;
+    min-height: 28px;
+    padding-inline: 14px;
+    border-radius: 6px;
+    font-weight: var(--fontWeightRegular);
+}
+
+.aspire-icon-button,
+.aspire-icon-button::part(control) {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    background-color: transparent;
+}
+
+fluent-field.aspire-checkbox {
+    margin: 0;
+    column-gap: 0;
+    row-gap: 0;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
+    opacity: 0.3;
+}
+
+.aspire-checkbox:not(fluent-field),
+fluent-field.aspire-checkbox > fluent-checkbox {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    min-height: 18px;
+    --borderRadiusSmall: 6px;
+}
+
+.validation-message,
+.fluent-validation-message {
+    color: var(--error);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+    margin: 0;
+}
+
+.fluent-validation-message > [message] > svg {
+    display: none;
+}
+
+fluent-field.invalid > [slot="input"] {
+    --colorNeutralStroke1: var(--error);
+    --colorNeutralStroke1Hover: var(--error);
+    --colorNeutralStroke1Pressed: var(--error);
+    --colorStrokeFocus1: var(--error);
+    --colorStrokeFocus2: var(--error);
+    --colorCompoundBrandStroke: var(--error);
+    --colorCompoundBrandStrokePressed: var(--error);
+}
+
+input.invalid,
+select.invalid,
+textarea.invalid,
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+    border-color: var(--error);
+}
+
+:focus-visible {
+    outline: 2px solid var(--colorBrandStroke1);
+    outline-offset: 0;
+    box-shadow: none;
+}
+
+fluent-dropdown > [slot="control"]:focus-visible {
+    outline: none;
+}
+
+fluent-dropdown {
+    --borderRadiusMedium: 6px;
+}
+
+fluent-dropdown > fluent-listbox {
+    background-color: var(--aspire-popup-background);
+    border-radius: 10px;
+    box-shadow: var(--aspire-popup-shadow);
+    padding: 3px;
+    row-gap: 0;
+}
+
+fluent-dropdown fluent-option {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 10px;
+    color: var(--aspire-dropdown-option-foreground);
+    background-color: var(--aspire-popup-background);
+}
+
+fluent-dropdown fluent-option[selected],
+fluent-dropdown fluent-option:hover,
+fluent-dropdown fluent-option:state(active),
+fluent-dropdown fluent-option:focus-visible {
+    color: var(--aspire-dropdown-option-foreground);
+    background-color: var(--aspire-dropdown-option-selected-background);
+}
+
+fluent-dropdown fluent-option:state(active) {
+    border: none;
+}
+
+fluent-dropdown fluent-option[selected]:hover {
+    background-color: var(--aspire-dropdown-option-selected-hover-background);
+}
+
+fluent-dropdown fluent-option::part(content) {
+    transform: translateX(-20px);
+}
+
+fluent-dropdown fluent-option[selected],
+fluent-dropdown fluent-option[selected]:hover {
+    position: relative;
+    color: transparent;
+}
+
+fluent-dropdown fluent-option[selected]::part(content) {
+    color: var(--aspire-dropdown-option-foreground);
+}
+
+fluent-dropdown fluent-option[selected]::before {
+    position: absolute;
+    top: 5px;
+    left: 1px;
+    width: 3px;
+    height: 14px;
+    border-radius: 6px;
+    background-color: var(--colorBrandStroke1);
+    content: "";
+}
+
+fluent-dropdown fluent-option:focus-visible {
+    outline: none;
+}
+
+fluent-text-input[appearance="outline"]:focus-within::part(root) {
+    border-color: var(--colorStrokeFocus1);
+    outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
+    outline-offset: calc(-1 * var(--strokeWidthThin));
+}
+
+fluent-text-input[appearance="outline"]:focus-within::part(root)::after {
+    transform: scaleX(0);
+}
+
+.log-overflow {
+    --console-theme-black: #0C0C0C;
+    --console-theme-blue: #0037DA;
+    --console-theme-cyan: #3A96DD;
+    --console-theme-green: #13A10E;
+    --console-theme-magenta: #CD13E8;
+    --console-theme-bg-red: #F80F24;
+    --console-theme-fg-red: #C50F1F;
+    --console-theme-white: #CCCCCC;
+    --console-theme-yellow: #C19C00;
+
+    --console-theme-bright-black: #767676;
+    --console-theme-bright-blue: #3B78FF;
+    --console-theme-bright-cyan: #61D6D6;
+    --console-theme-bright-green: #16C60C;
+    --console-theme-bright-magenta: #DA01FA;
+    --console-theme-bright-red: #E74856;
+    --console-theme-bright-white: #F2F2F2;
+    --console-theme-bright-yellow: #F9F1A5;
+
+    --line-number-color: #848484;
+    --timestamp-color: var(--line-number-color);
+    --resource-text-color: #000;
+    --console-background-color: var(--console-theme-black);
+    --console-background-color-hover: #1D1D1D;
+    --console-font-color: var(--console-theme-white);
+}
+
+#components-reconnect-modal {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.components-rejoining-animation div {
+    border-color: var(--colorBrandStroke1);
+}
+
+[data-theme="dark"] {
+    color-scheme: dark;
+    --aspire-page-background: #221e2d;
+    --aspire-shell-background: #000000;
+    --aspire-control-background: #2d2937;
+    --colorNeutralBackground1: var(--aspire-control-background);
+    --colorNeutralBackground2: var(--aspire-page-background);
+    --colorNeutralBackground3: #312e3c;
+    --colorNeutralBackground4: var(--aspire-shell-background);
+    --datagrid-hover-color: var(--colorNeutralBackground1);
+    --colorNeutralForeground1: #ffffff;
+    --colorNeutralForeground3: #8c8894;
+    --colorNeutralForegroundOnBrand: #000000;
+    --colorNeutralStroke1: #494553;
+    --colorNeutralStroke2: #494553;
+    --colorNeutralStroke3: #312e3c;
+    --aspire-button-hover-border: #5c5865;
+    --colorBrandBackground: #b9aaee;
+    --colorBrandBackgroundHover: #dcd5f6;
+    --colorBrandBackgroundPressed: #b9aaee;
+    --colorBrandBackgroundSelected: #b9aaee;
+    --colorBrandForeground1: #b9aaee;
+    --colorBrandForeground2: #b9aaee;
+    --colorBrandForegroundInverted: #b9aaee;
+    --colorBrandForegroundLink: #b9aaee;
+    --colorBrandForegroundLinkHover: #dcd5f6;
+    --colorBrandForegroundLinkPressed: #b9aaee;
+    --colorBrandForegroundLinkSelected: #b9aaee;
+    --colorBrandStroke1: #b9aaee;
+    --colorNeutralForeground2BrandHover: #dcd5f6;
+    --aspire-popup-background: #363241;
+    --aspire-menu-item-hover-background: #44404e;
+    --aspire-dropdown-option-foreground: #ffffff;
+    --aspire-dropdown-option-selected-background: #44404e;
+    --aspire-dropdown-option-selected-hover-background: #3f3c4a;
+    --accent-button-background: var(--colorBrandBackground);
+    --accent-button-foreground: color-mix(in srgb, #512bd4 85%, #000000);
+    --accent-button-hover-background: color-mix(in srgb, var(--colorBrandBackground) 90%, #000000);
+    --accent-button-hover-foreground: color-mix(in srgb, #512bd4 65%, #000000);
+    --accent-button-pressed-background: color-mix(in srgb, var(--colorBrandBackground) 85%, #000000);
+    --accent-button-pressed-foreground: color-mix(in srgb, #512bd4 55%, #000000);
+
+    --log-critical: #493634;
+    --log-error: #493634;
+    --log-warning: #3F3A2B;
+    --foreground-subtext-rest: #9E9E9E;
+    --foreground-settings-text: #A8A8A8;
+    --error: #E10B11;
+    --error-ui-foreground-color: #000000;
+    --error-ui-accent-foreground-color: #512bd4;
+    --highlight-bg: #fff4ce;
+    --reconnection-ui-bg: #D6D6D6;
+
+    --dialog-background-color: color-mix(in srgb, var(--colorNeutralBackground2) 90%, #000000);
+    --dialog-border-color: #524e5c;
+    --property-grid-background-color: var(--colorNeutralBackground1);
+    --property-grid-genai-dialog-background-color: var(--colorNeutralBackground3);
+    --messagebar-success-background-color: color-mix(in srgb, var(--aspire-status-success) 18%, var(--colorNeutralBackground1));
+    --messagebar-success-border-color: var(--aspire-status-success);
+    --messagebar-error-background-color: color-mix(in srgb, var(--aspire-status-error) 18%, var(--colorNeutralBackground1));
+    --messagebar-error-border-color: var(--aspire-status-error);
+    --messagebar-warning-background-color: color-mix(in srgb, var(--aspire-status-warning) 18%, var(--colorNeutralBackground1));
+    --messagebar-warning-border-color: var(--aspire-status-warning);
+    --messagebar-info-background-color: var(--colorNeutralBackground1);
+    --messagebar-info-border-color: #524e5c;
+    --messagebar-foreground-color: #e5e5e5;
+    --messagebar-action-background: var(--colorNeutralBackground1);
+    --messagebar-action-border: linear-gradient(#494553 0%, #312e3c 10%);
+    --messagebar-action-hover-background: #312e3c;
+    --messagebar-action-hover-border: linear-gradient(#524e5c 0%, #3b3745 10%);
+    --messagebar-action-pressed-background: #282433;
+    --messagebar-action-pressed-border: #3b3745;
+
+    --scrollbar-thumb-color: rgba(255, 255, 255, 0.20);
+    --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.34);
+
+    --trace-tick-background-color: #717171;
+
+    --main-container-background-color: var(--colorNeutralBackground1);
+    --main-sidebar-background-color: var(--colorNeutralBackground2);
+    --llm-background-color: #00666d;
+    --llm-color: #a6e9ed;
+    --message-background-color: #063004;
+    --message-color: #5ec75a;
+    --tool-calls-background-color: #082338;
+    --tool-calls-color: #62abf5;
+    --tool-response-background-color: #3b2a1f;
+    --tool-response-color: #e0c8b0;
+    --output-background-color: #7a2101;
+    --output-color: #f4bfab;
+
+    --hljs-default: #f8f8f2;
+    --hljs-comment: #d4d0ab;
+    --hljs-variable: #ffa07a;
+    --hljs-literal: #f5ab35;
+    --hljs-attribute: gold;
+    --hljs-string: #abe338;
+    --hljs-section: #00e0e0;
+    --hljs-keyword: #dcc6e0;
+
+    --accent-teal: #2CB7BD;
+    --accent-marigold: #F3D58E;
+    --accent-brass: #BF8B64;
+    --accent-peach: #FFC18F;
+    --accent-coral: #F89170;
+    --accent-royal-blue: #88A1F0;
+    --accent-orchid: #E19AD4;
+    --accent-brand-blue: #1A7ECF;
+    --accent-seafoam: #74D6C6;
+    --accent-mink: #B9B2A4;
+    --accent-cyan: #17A0A6;
+    --accent-gold: #E3BA7A;
+    --accent-bronze: #8E6038;
+    --accent-orange: #FFA44A;
+    --accent-rust: #EA6A3E;
+    --accent-navy: #2A4C8A;
+    --accent-berry: #D150C3;
+    --accent-ocean: #16728F;
+    --accent-jade: #51C0A5;
+    --accent-olive: #847B63;
+    --accent-brand-blue-text: #000;
+    --accent-olive-text: #000;
+}
+
+[data-theme="dark"] fluent-badge[color="danger"] {
+    --colorNeutralForegroundOnBrand: #ffffff;
+}
+
+/* Firefox uses the standard properties, while Chromium, Edge, and WebKit use the pseudo-elements
+   for exact sizing and hover styling. Fluent v5 supplies an inherited scrollbar-color, which takes
+   precedence over the pseudo-elements in Chromium 121+, so reset it before applying the v4 recipe.
+   See https://developer.mozilla.org/docs/Web/CSS/scrollbar-color#browser_compatibility */
+@supports selector(::-webkit-scrollbar) {
+    *,
+    fluent-popover-b::part(dialog),
+    ::part(listbox) {
+        scrollbar-color: auto;
+    }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+    *,
+    fluent-popover-b::part(dialog),
+    ::part(listbox) {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+    }
+}
+
+::-webkit-scrollbar,
+fluent-popover-b::part(dialog)::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+}
+
+::-webkit-scrollbar-thumb,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-color);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover-color);
+}
+
+::-webkit-scrollbar-corner,
+fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+.block-warning {
+    font-family: var(--fontFamilyBase);
+    border: 1px solid var(--messagebar-warning-border-color);
+    background-color: var(--messagebar-warning-background-color);
+    color: var(--colorNeutralForeground1);
+    display: grid;
+    grid-template-columns: 24px auto;
+    width: fit-content;
+    align-items: center;
+    min-height: 36px;
+    border-radius: var(--borderRadiusMedium);
+    padding: 0 12px;
+    column-gap: 8px;
+}
+
+.block-warning-icon {
+    grid-column: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.block-warning-message {
+    grid-column: 2;
+    padding: 8px 0;
+    align-self: center;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+}
+
+.block-warning-message .title {
+    font-weight: 600;
+    padding: 0 4px 0 0;
+}

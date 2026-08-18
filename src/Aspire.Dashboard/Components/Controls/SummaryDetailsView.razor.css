@@ -27,15 +27,11 @@
         "main";
 }
 
-::deep .details-container fluent-toolbar {
-    padding-left: calc(var(--design-unit) * 2px);
-}
-
 ::deep .details-container > header {
     height: auto;
     grid-row-start: 1;
-    color: var(--neutral-foreground-rest);
-    padding: calc(var(--design-unit) * 2px) calc(var(--design-unit) * 3px);
+    color: var(--colorNeutralForeground1);
+    padding: var(--spacingVerticalS) var(--spacingHorizontalM);
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas: "title actions";
@@ -47,37 +43,89 @@
 */
 @media (min-width: 768px) {
     ::deep .details-container > header {
-        /* neutral-layer-2 is a subtle, on-theme elevation that distinguishes the header from the
-           panel body without the harsh contrast of neutral-layer-4, which renders near-black in the
-           dark violet theme after the neutral base-color retint. */
-        background-color: var(--neutral-layer-2);
+        background-color: var(--aspire-page-background);
     }
 
-    /* Line the flyout's trailing controls up with the page toolbar's right edge. The header
-       (panel-resize + Close buttons) ships a 12px inline padding and the filter toolbar falls back
-       to Fluent's default 8px, so on the desktop split view the Close button and the filter options
-       button stair-step ~4-6px short of the page toolbar's trailing control. Pinning both to the
+    /* Line the flyout's trailing controls up with the page toolbar's right edge. Pinning both to the
        shared page gutter (--layout-right-padding, the same token .main-toolbar uses) collapses that
        ragged edge into one clean vertical line. Desktop-only: below 768px the flyout stacks
        full-width and its header doubles as the page header, which keeps its own inset. */
     ::deep .details-container > header,
-    ::deep .details-container fluent-toolbar {
+    ::deep .details-container .details-toolbar {
         padding-right: var(--layout-right-padding);
     }
 }
 
-::deep .details-container > header fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background-color: var(--neutral-layer-2);
+::deep .details-container > header fluent-button {
+    --colorNeutralBackground1: var(--aspire-page-background);
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Pressed: var(--aspire-control-background);
+    --colorNeutralForeground1: var(--colorBrandForeground1);
+    --colorNeutralForeground1Hover: var(--colorBrandForeground1);
+    --colorNeutralForeground1Pressed: var(--colorBrandForeground1);
+    --colorNeutralStroke1: transparent;
+    --colorNeutralStroke1Hover: transparent;
+    --colorNeutralStroke1Pressed: transparent;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--colorBrandForeground1);
+}
+
+::deep .details-container > header fluent-button::part(control) {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+::deep .details-container > header fluent-button:hover {
+    background-color: var(--colorNeutralBackground3);
+}
+
+::deep .details-container > header fluent-button:active {
+    background-color: var(--aspire-control-background);
 }
 
 ::deep .details-container > *:last-child {
     grid-row-start: 2;
 }
 
+::deep :is(.resource-details-layout, .structured-log-details-layout, .span-details-layout) {
+    min-height: 0;
+    min-width: 0;
+}
+
+::deep .property-grid-container {
+    grid-area: main;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    width: 100%;
+    box-sizing: border-box;
+    padding-inline: var(--spacingHorizontalS);
+}
+
+::deep .property-grid-container > fluent-accordion {
+    width: 100%;
+}
+
+::deep .property-grid-container .fluent-data-grid > thead > tr > th fluent-button {
+    --colorSubtleBackground: var(--property-grid-background-color);
+}
+
 ::deep .details-container > header > .details-header-title {
     grid-area: title;
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-size: var(--fontSizeBase400);
     font-weight: 600;
+    line-height: 36px;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
@@ -85,6 +133,9 @@
 }
 
 ::deep .details-container > header > .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacingHorizontalXS);
     white-space: nowrap;
     grid-area: actions;
 }

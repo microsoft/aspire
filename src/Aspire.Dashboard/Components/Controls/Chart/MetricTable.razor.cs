@@ -110,8 +110,7 @@ public partial class MetricTable : ChartBase
             Title = DialogsLoc[nameof(Dashboard.Resources.Dialogs.ExemplarsDialogTitle)],
             PrimaryAction = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
             SecondaryAction = string.Empty,
-            Width = "800px",
-            Height = "auto"
+            Width = "800px"
         };
         await DialogService.ShowDialogAsync<ExemplarsDialog>(vm, parameters);
     }

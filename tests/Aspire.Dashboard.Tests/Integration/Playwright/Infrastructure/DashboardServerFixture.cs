@@ -5,6 +5,8 @@ using System.Reflection;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting;
+using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,6 +65,53 @@ public class DashboardServerFixture : IAsyncLifetime
             });
 
         await DashboardApp.StartAsync();
+
+        if (Resources is not null)
+        {
+            var writer = DashboardApp.Services.GetRequiredService<IResourceRepositoryWriter>();
+            await writer.ReplaceResourcesAsync(Resources.Select(CreateResource).ToList());
+        }
+    }
+
+    private static Resource CreateResource(ResourceViewModel resource)
+    {
+        var result = new Resource
+        {
+            Name = resource.Name,
+            DisplayName = resource.DisplayName,
+            ResourceType = resource.ResourceType,
+            Uid = resource.Uid,
+            State = resource.State ?? string.Empty,
+            StateStyle = resource.StateStyle ?? string.Empty
+        };
+
+        if (resource.CreationTimeStamp is { } creationTimeStamp)
+        {
+            result.CreatedAt = Timestamp.FromDateTime(creationTimeStamp.ToUniversalTime());
+        }
+        if (resource.StartTimeStamp is { } startTimeStamp)
+        {
+            result.StartedAt = Timestamp.FromDateTime(startTimeStamp.ToUniversalTime());
+        }
+        if (resource.StopTimeStamp is { } stopTimeStamp)
+        {
+            result.StoppedAt = Timestamp.FromDateTime(stopTimeStamp.ToUniversalTime());
+        }
+
+        result.Urls.AddRange(resource.Urls.Select(url => new Url
+        {
+            EndpointName = url.EndpointName ?? string.Empty,
+            FullUrl = url.Url.AbsoluteUri,
+            IsInternal = url.IsInternal,
+            IsInactive = url.IsInactive,
+            DisplayProperties = new UrlDisplayProperties
+            {
+                DisplayName = url.DisplayProperties.DisplayName,
+                SortOrder = url.DisplayProperties.SortOrder
+            }
+        }));
+
+        return result;
     }
 
     public async ValueTask DisposeAsync()

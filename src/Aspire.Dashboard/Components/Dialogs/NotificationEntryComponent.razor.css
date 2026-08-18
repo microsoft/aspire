@@ -1,13 +1,13 @@
 .notification-entry {
-    font-family: var(--body-font);
-    color: var(--neutral-foreground-rest);
+    font-family: var(--fontFamilyBase);
+    color: var(--colorNeutralForeground1);
     display: grid;
     grid-template-columns: 24px 1fr auto;
     width: 100%;
     min-height: 36px;
     padding: 0 8px;
     column-gap: 4px;
-    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
 .notification-entry.intent-info {
@@ -73,7 +73,7 @@
     font-size: 12px;
     text-align: right;
     padding: 4px 4px 8px 0px;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
 }
 
 ::deep .notification-entry-action {

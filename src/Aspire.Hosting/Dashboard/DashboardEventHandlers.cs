@@ -256,10 +256,16 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                     switch (name)
                     {
                         case "Microsoft.NETCore.App":
-                            frameworkObj["version"] = netCoreVersion;
+                            // The dashboard may target a newer .NET version than the AppHost. Never downgrade its
+                            // runtime config, but continue upgrading older dashboards to the AppHost's version.
+                            frameworkObj["version"] = GetLatestFrameworkVersion(
+                                frameworkObj["version"]?.GetValue<string>() ?? netCoreVersion,
+                                netCoreVersion);
                             break;
                         case "Microsoft.AspNetCore.App":
-                            frameworkObj["version"] = aspNetCoreVersion;
+                            frameworkObj["version"] = GetLatestFrameworkVersion(
+                                frameworkObj["version"]?.GetValue<string>() ?? aspNetCoreVersion,
+                                aspNetCoreVersion);
                             break;
                     }
                 }
@@ -272,6 +278,16 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         _customRuntimeConfigPath = tempPath;
         return tempPath;
+    }
+
+    /// <summary>
+    /// Returns the later of the dashboard and AppHost framework versions.
+    /// </summary>
+    internal static string GetLatestFrameworkVersion(string dashboardVersion, string appHostVersion)
+    {
+        return Version.Parse(dashboardVersion) >= Version.Parse(appHostVersion)
+            ? dashboardVersion
+            : appHostVersion;
     }
 
     private void AddDashboardResource(DistributedApplicationModel model)
