@@ -54,6 +54,10 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         if (_configuration.GetBool(DashboardConfigNames.DashboardUnsecuredAllowAnonymousName.ConfigKey,
                                    DashboardConfigNames.Legacy.DashboardUnsecuredAllowAnonymousName.ConfigKey) ?? false)
         {
+            // This setting explicitly opts into unsecured endpoints. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ before enabling it outside local development.
+            // When the corresponding endpoints are enabled, the dashboard logs warnings and displays a warning
+            // in the UI to inform users about the risks of anonymous access.
             options.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             options.Otlp.AuthMode = OtlpAuthMode.Unsecured;
             options.Api.AuthMode = ApiAuthMode.Unsecured;
@@ -61,6 +65,8 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         else
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
+            // OTLP is unsecured by default for local development. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ when exposing the endpoint outside a trusted environment.
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
             options.Api.AuthMode ??= ApiAuthMode.ApiKey;
         }

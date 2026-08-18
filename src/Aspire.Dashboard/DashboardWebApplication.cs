@@ -405,7 +405,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             if ((_otlpServiceGrpcEndPointAccessor != null || _otlpServiceHttpEndPointAccessor != null) &&
                 _dashboardOptionsMonitor.CurrentValue.Otlp.AuthMode == OtlpAuthMode.Unsecured)
             {
-                _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030");
+                _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://aspire.dev/dashboard/security-considerations/");
             }
 
             _logger.LogDebug("Dashboard API disabled: {ApiDisabled}", _dashboardOptionsMonitor.CurrentValue.Api.Disabled.GetValueOrDefault());
