@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" msdata:Ordinal="5" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="InfoOptionDescription" xml:space="preserve">
+    <value>Show Aspire CLI version, channel, installation, and hive information.</value>
+  </data>
+  <data name="FormatOptionDescription" xml:space="preserve">
+    <value>Select the information output format.</value>
+  </data>
+  <data name="InfoHeading" xml:space="preserve">
+    <value>Aspire CLI</value>
+  </data>
+  <data name="InstallationsHeading" xml:space="preserve">
+    <value>Installations</value>
+  </data>
+  <data name="InstallationHeadingFormat" xml:space="preserve">
+    <value>Installation {0}</value>
+    <comment>{0} is the 1-based index of the installation among the rendered rows.</comment>
+  </data>
+  <data name="CurrentInstallationHeadingFormat" xml:space="preserve">
+    <value>Installation {0} (current)</value>
+    <comment>{0} is the 1-based index of the running Aspire CLI installation among the rendered rows.</comment>
+  </data>
+  <data name="OrphanHiveHeading" xml:space="preserve">
+    <value>Orphan hive</value>
+  </data>
+  <data name="DiscoveryFailureHeading" xml:space="preserve">
+    <value>Installation discovery</value>
+  </data>
+  <data name="VersionLabel" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="ChannelLabel" xml:space="preserve">
+    <value>Channel</value>
+  </data>
+  <data name="SourceLabel" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="PathLabel" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="CanonicalPathLabel" xml:space="preserve">
+    <value>Canonical path</value>
+  </data>
+  <data name="HiveLabel" xml:space="preserve">
+    <value>Hive</value>
+  </data>
+  <data name="StatusLabel" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="PathStatusLabel" xml:space="preserve">
+    <value>PATH status</value>
+  </data>
+  <data name="ReasonLabel" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="StatusOk" xml:space="preserve">
+    <value>OK</value>
+    <comment>Localized rendering of the "ok" InstallationInfoStatus wire value.</comment>
+  </data>
+  <data name="StatusNotProbed" xml:space="preserve">
+    <value>Not probed</value>
+    <comment>Localized rendering of the "notProbed" InstallationInfoStatus wire value.</comment>
+  </data>
+  <data name="StatusFailed" xml:space="preserve">
+    <value>Failed</value>
+    <comment>Localized rendering of the "failed" InstallationInfoStatus wire value.</comment>
+  </data>
+  <data name="StatusNoInstallFound" xml:space="preserve">
+    <value>No install found</value>
+    <comment>Localized rendering of the "noInstallFound" InstallationInfoStatus wire value.</comment>
+  </data>
+  <data name="PathStatusActive" xml:space="preserve">
+    <value>Active</value>
+    <comment>Localized rendering of the "active" InstallationPathStatus wire value.</comment>
+  </data>
+  <data name="PathStatusShadowed" xml:space="preserve">
+    <value>Shadowed</value>
+    <comment>Localized rendering of the "shadowed" InstallationPathStatus wire value.</comment>
+  </data>
+  <data name="PathStatusNotOnPath" xml:space="preserve">
+    <value>Not on PATH</value>
+    <comment>Localized rendering of the "notOnPath" InstallationPathStatus wire value.</comment>
+  </data>
+  <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
+    <value>Install discovery failed. See the Aspire CLI logs for details.</value>
+  </data>
+  <data name="InstallationDiscoveryTimedOutReasonFormat" xml:space="preserve">
+    <value>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</value>
+    <comment>{0} is the timeout in seconds.</comment>
+  </data>
+  <data name="SelfRequiresInfo" xml:space="preserve">
+    <value>The --self option can only be used with --info.</value>
+  </data>
+  <data name="FormatRequiresInfo" xml:space="preserve">
+    <value>The --format option can only be used with --info.</value>
+  </data>
+  <data name="InfoCannotBeCombinedWithSubcommand" xml:space="preserve">
+    <value>The --info option cannot be combined with a subcommand.</value>
+  </data>
+</root>

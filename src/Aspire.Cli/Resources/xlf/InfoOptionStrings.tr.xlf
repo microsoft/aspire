@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../InfoOptionStrings.resx">
+    <body>
+      <trans-unit id="CanonicalPathLabel">
+        <source>Canonical path</source>
+        <target state="new">Canonical path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChannelLabel">
+        <source>Channel</source>
+        <target state="new">Channel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CurrentInstallationHeadingFormat">
+        <source>Installation {0} (current)</source>
+        <target state="new">Installation {0} (current)</target>
+        <note>{0} is the 1-based index of the running Aspire CLI installation among the rendered rows.</note>
+      </trans-unit>
+      <trans-unit id="DiscoveryFailureHeading">
+        <source>Installation discovery</source>
+        <target state="new">Installation discovery</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatOptionDescription">
+        <source>Select the information output format.</source>
+        <target state="new">Select the information output format.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FormatRequiresInfo">
+        <source>The --format option can only be used with --info.</source>
+        <target state="new">The --format option can only be used with --info.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HiveLabel">
+        <source>Hive</source>
+        <target state="new">Hive</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InfoCannotBeCombinedWithSubcommand">
+        <source>The --info option cannot be combined with a subcommand.</source>
+        <target state="new">The --info option cannot be combined with a subcommand.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InfoHeading">
+        <source>Aspire CLI</source>
+        <target state="new">Aspire CLI</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InfoOptionDescription">
+        <source>Show Aspire CLI version, channel, installation, and hive information.</source>
+        <target state="new">Show Aspire CLI version, channel, installation, and hive information.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryFailedReason">
+        <source>Install discovery failed. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryTimedOutReasonFormat">
+        <source>Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery timed out after {0} seconds. See the Aspire CLI logs for details.</target>
+        <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="InstallationHeadingFormat">
+        <source>Installation {0}</source>
+        <target state="new">Installation {0}</target>
+        <note>{0} is the 1-based index of the installation among the rendered rows.</note>
+      </trans-unit>
+      <trans-unit id="InstallationsHeading">
+        <source>Installations</source>
+        <target state="new">Installations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OrphanHiveHeading">
+        <source>Orphan hive</source>
+        <target state="new">Orphan hive</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PathLabel">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PathStatusActive">
+        <source>Active</source>
+        <target state="new">Active</target>
+        <note>Localized rendering of the "active" InstallationPathStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="PathStatusLabel">
+        <source>PATH status</source>
+        <target state="new">PATH status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PathStatusNotOnPath">
+        <source>Not on PATH</source>
+        <target state="new">Not on PATH</target>
+        <note>Localized rendering of the "notOnPath" InstallationPathStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="PathStatusShadowed">
+        <source>Shadowed</source>
+        <target state="new">Shadowed</target>
+        <note>Localized rendering of the "shadowed" InstallationPathStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="ReasonLabel">
+        <source>Reason</source>
+        <target state="new">Reason</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfRequiresInfo">
+        <source>The --self option can only be used with --info.</source>
+        <target state="new">The --self option can only be used with --info.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceLabel">
+        <source>Source</source>
+        <target state="new">Source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StatusFailed">
+        <source>Failed</source>
+        <target state="new">Failed</target>
+        <note>Localized rendering of the "failed" InstallationInfoStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="StatusLabel">
+        <source>Status</source>
+        <target state="new">Status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StatusNoInstallFound">
+        <source>No install found</source>
+        <target state="new">No install found</target>
+        <note>Localized rendering of the "noInstallFound" InstallationInfoStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="StatusNotProbed">
+        <source>Not probed</source>
+        <target state="new">Not probed</target>
+        <note>Localized rendering of the "notProbed" InstallationInfoStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="StatusOk">
+        <source>OK</source>
+        <target state="new">OK</target>
+        <note>Localized rendering of the "ok" InstallationInfoStatus wire value.</note>
+      </trans-unit>
+      <trans-unit id="VersionLabel">
+        <source>Version</source>
+        <target state="new">Version</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -130,7 +130,7 @@ internal sealed class DotnetToolStoreInstallationCandidateSource : IInstallation
     // Reparse points (symlinks / junctions) are skipped so a symlink cycle anywhere
     // under the store cannot make `Directory.EnumerateFiles` walk indefinitely. The
     // legitimate tool-store layout contains no symlinks, so this loses nothing real
-    // and removes a self-DoS surface from `aspire doctor` discovery.
+    // and removes a self-DoS surface from `aspire --info` discovery.
     private static readonly EnumerationOptions s_enumerationOptions = new()
     {
         RecurseSubdirectories = true,

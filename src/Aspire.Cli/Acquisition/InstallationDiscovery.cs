@@ -61,7 +61,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 
     /// <inheritdoc />
     public InstallationInfo DescribeSelf()
-        => DescribeSelf(Environment.ProcessPath, pathHits: null);
+        => DescribeSelf(Environment.ProcessPath, pathHits: []);
 
     /// <summary>
     /// Test seam for <see cref="DescribeSelf()"/>: lets tests substitute the
@@ -70,7 +70,11 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
     /// without manipulating <see cref="Environment.ProcessPath"/>.
     /// </summary>
     internal InstallationInfo DescribeSelf(string? processPath)
-        => DescribeSelf(processPath, pathHits: null);
+        // The hidden self-description contract is invoked as a bounded peer
+        // probe. Avoid walking PATH here because a dead network mount can block
+        // indefinitely; full discovery computes and overwrites PathStatus in
+        // the parent process.
+        => DescribeSelf(processPath, pathHits: []);
 
     private InstallationInfo DescribeSelf(string? processPath, IReadOnlyList<InstallationPathHit>? pathHits)
     {
@@ -100,10 +104,10 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             Path = canonicalPath ?? processPath ?? string.Empty,
             CanonicalPath = canonicalPath,
             // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
-            // `aspire doctor --self` reports the REAL build installed on disk, so this must read
+            // `aspire --info --self` reports the REAL build installed on disk, so this must read
             // the assembly's stamped version even when ASPIRE_CLI_VERSION / the sidecar override
             // the CLI's runtime identity. Routing this through CliExecutionContext.IdentityVersion
-            // would make doctor lie about what is physically installed.
+            // would make --info lie about what is physically installed.
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,
@@ -250,12 +254,12 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     {
                         // Final attempt: derive the channel from the peer's
                         // reported version. This is the only signal we have
-                        // for older peers that don't recognize the
-                        // `doctor --self` self-describe contract — they
-                        // fall through to the `--version` floor in the
-                        // probe and can't report their channel directly,
-                        // but the assembly's InformationalVersion has it
-                        // baked in for PR builds.
+                        // for peers old enough to not recognize either
+                        // self-describe contract (`--info --self` or the
+                        // legacy `doctor --self`) — they fall through to the
+                        // `--version` floor in the probe and can't report
+                        // their channel directly, but the assembly's
+                        // InformationalVersion has it baked in for PR builds.
                         channel = TryDerivePrChannelFromVersion(ok.Info.Version);
                     }
 
@@ -370,11 +374,12 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
     /// <remarks>
     /// Like <see cref="TryDerivePrChannel(string)"/>, this is a purely
     /// cosmetic enrichment for the user-facing table. It rescues the
-    /// channel column for peers that don't recognize the
-    /// <c>doctor --self</c> self-describe contract: those fall through to
-    /// the <c>--version</c> floor in the probe and can't report their
-    /// channel directly, but their assembly's InformationalVersion has
-    /// the PR number baked in regardless of route.
+    /// channel column for peers old enough to not recognize either
+    /// self-describe contract (<c>--info --self</c> or the legacy
+    /// <c>doctor --self</c>): those fall through to the <c>--version</c>
+    /// floor in the probe and can't report their channel directly, but
+    /// their assembly's InformationalVersion has the PR number baked in
+    /// regardless of route.
     /// </remarks>
     internal static string? TryDerivePrChannelFromVersion(string? version)
     {
@@ -412,9 +417,9 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             return channel;
         }
 
-        // Same defensive posture as doctor: a misconfigured dev build
+        // Same defensive posture as before: a misconfigured dev build
         // with no AspireCliChannel assembly metadata must not break
-        // aspire doctor.
+        // aspire --info.
         _logger.LogDebug("Could not read identity channel for InstallationDiscovery: {Error}", error);
         return null;
     }

@@ -42,8 +42,8 @@ If you cannot determine the right knobs, ask — don't guess.
 These are read by `IdentityResolver` and flow into `CliExecutionContext`. They change the
 CLI's **global identity**, so they affect hive discovery, package-channel selection, staging
 feed derivation, `--version`, telemetry identity tags, and the SDK-skew warning. They are
-**stripped before the CLI spawns child Aspire processes**, so they never leak into peer probes
-or `aspire doctor`'s child invocations — treat them as process-local test affordances.
+**stripped before the CLI spawns child Aspire processes**, including the peer probes run by
+`aspire --info`, so treat them as process-local test affordances.
 
 | Env var | Effect |
 |---|---|

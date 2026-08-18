@@ -5,7 +5,7 @@ namespace Aspire.Cli.Acquisition;
 
 /// <summary>
 /// Where a resolved identity field originated. Surfaced by
-/// <c>aspire doctor --self</c> so an operator can tell at a glance whether an
+/// <c>aspire --info --self</c> so an operator can tell at a glance whether an
 /// override is active, which sidecar populated it, or whether the resolver
 /// fell back to the build-time stamp. See
 /// <c>docs/specs/cli-identity-sidecar.md</c>.

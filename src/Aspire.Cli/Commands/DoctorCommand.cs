@@ -25,7 +25,6 @@ internal sealed class DoctorCommand : BaseCommand
 
     private readonly IEnvironmentChecker _environmentChecker;
     private readonly IInstallationDiscovery _installationDiscovery;
-    private readonly WingetFirstRunProbe _wingetFirstRunProbe;
     private readonly IAnsiConsole _ansiConsole;
     private readonly ILogger<DoctorCommand> _logger;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
@@ -40,7 +39,6 @@ internal sealed class DoctorCommand : BaseCommand
     public DoctorCommand(
         IEnvironmentChecker environmentChecker,
         IInstallationDiscovery installationDiscovery,
-        WingetFirstRunProbe wingetFirstRunProbe,
         IAnsiConsole ansiConsole,
         ILogger<DoctorCommand> logger,
         CommonCommandServices services)
@@ -48,7 +46,6 @@ internal sealed class DoctorCommand : BaseCommand
     {
         _environmentChecker = environmentChecker;
         _installationDiscovery = installationDiscovery;
-        _wingetFirstRunProbe = wingetFirstRunProbe;
         _ansiConsole = ansiConsole;
         _logger = logger;
 
@@ -63,33 +60,28 @@ internal sealed class DoctorCommand : BaseCommand
 
         if (selfOnly)
         {
-            var self = InstallationInfoOutput.DescribeSelfSafely(_installationDiscovery, _logger);
-            if (format == OutputFormat.Json)
-            {
-                OutputJson([], self);
-            }
-            else
-            {
-                InstallationInfoOutput.OutputTable(_ansiConsole, self);
-            }
+            // Compatibility-only responder for older CLIs whose peer probe
+            // predates root --info. Keep this hidden and limited to self so
+            // doctor does not resume full installation discovery.
+            var installations = InstallationInfoOutput.DescribeSelfForLegacyDoctor(
+                _installationDiscovery,
+                _logger);
+            OutputJson([], installations);
             return CommandResult.Success();
         }
-
-        var installationsTask = InstallationInfoOutput.DiscoverAllSafelyAsync(_installationDiscovery, _wingetFirstRunProbe, _logger, cancellationToken);
 
         // Run all prerequisite checks
         var results = await InteractionService.ShowStatusAsync(
             DoctorCommandStrings.CheckingPrerequisites,
             async () => await _environmentChecker.CheckAllAsync(cancellationToken));
-        var installations = await installationsTask;
 
         if (format == OutputFormat.Json)
         {
-            OutputJson(results, installations);
+            OutputJson(results, installations: null);
         }
         else
         {
-            OutputHumanReadable(results, installations);
+            OutputHumanReadable(results);
         }
 
         // Exit code: 0 if no failures (warnings are OK), 1 (InvalidCommand) if any failures
@@ -97,7 +89,9 @@ internal sealed class DoctorCommand : BaseCommand
         return CommandResult.FromExitCode(hasFailures ? CliExitCodes.InvalidCommand : CliExitCodes.Success);
     }
 
-    private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
+    private void OutputJson(
+        IReadOnlyList<EnvironmentCheckResult> results,
+        IReadOnlyList<InstallationInfo>? installations)
     {
         var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
         var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
@@ -112,7 +106,7 @@ internal sealed class DoctorCommand : BaseCommand
                 Warnings = warnings,
                 Failed = failed
             },
-            Installations = installations.ToList()
+            Installations = installations?.ToList(),
         };
 
         var json = System.Text.Json.JsonSerializer.Serialize(response, JsonSourceGenerationContext.RelaxedEscaping.DoctorCheckResponse);
@@ -121,7 +115,7 @@ internal sealed class DoctorCommand : BaseCommand
         InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
     }
 
-    private void OutputHumanReadable(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
+    private void OutputHumanReadable(IReadOnlyList<EnvironmentCheckResult> results)
     {
         _ansiConsole.WriteLine();
         _ansiConsole.MarkupLine($"[bold]{DoctorCommandStrings.EnvironmentCheckHeader}[/]");
@@ -159,8 +153,6 @@ internal sealed class DoctorCommand : BaseCommand
             const string prerequisitesUrl = "https://aka.ms/aspire-prerequisites";
             _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, MarkupHelpers.SafeLink(InteractionService, prerequisitesUrl)));
         }
-
-        InstallationInfoOutput.OutputTable(_ansiConsole, installations);
     }
 
     private void OutputCheckResult(EnvironmentCheckResult result)

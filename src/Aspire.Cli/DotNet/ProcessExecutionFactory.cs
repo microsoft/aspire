@@ -146,7 +146,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     // is a different channel/version/commit or to retarget its emitted nuget.config at a local proxy.
     // Letting them leak into child processes (apphost, dotnet, restore, peer probes) means any nested
     // `aspire` invocation inherits the parent's lie about its identity, which silently corrupts
-    // `aspire doctor`, breaks peer probing, and undermines the "what is this binary actually" answer
+    // `aspire --info`, breaks peer probing, and undermines the "what is this binary actually" answer
     // we want callers to see on disk. We strip before merging caller env so a caller can still re-add
     // an ASPIRE_CLI_* var deliberately if a future test needs to. See docs/specs/cli-identity-sidecar.md.
     private static void StripIdentityEnvVars(IsolatedProcessStartInfo startInfo)

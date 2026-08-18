@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -225,6 +226,138 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
 
         var extensionCommand = extensionProvider.GetRequiredService<RootCommand>();
         Assert.Contains(extensionCommand.Options, option => ReferenceEquals(option, RootCommand.StartDebugSessionOption));
+    }
+
+    [Theory]
+    [InlineData("--info", false, nameof(InfoOutputFormat.List))]
+    [InlineData("--info --format list", false, nameof(InfoOutputFormat.List))]
+    [InlineData("--info --format json", false, nameof(InfoOutputFormat.Json))]
+    [InlineData("--info --self --format json", true, nameof(InfoOutputFormat.Json))]
+    public void InfoOption_ParsesWithSelfAndFormat(string commandLine, bool expectedSelf, string expectedFormat)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        Assert.Empty(result.Errors);
+        Assert.True(result.GetValue(RootCommand.InfoOption));
+        Assert.Equal(expectedSelf, result.GetValue(RootCommand.SelfOption));
+        Assert.Equal(Enum.Parse<InfoOutputFormat>(expectedFormat), result.GetValue(RootCommand.FormatOption));
+    }
+
+    [Fact]
+    public void SelfOption_WithoutInfo_IsRejected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--self");
+
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public void FormatOption_WithoutInfo_IsRejected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--format json");
+
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Theory]
+    [InlineData("--self run")]
+    [InlineData("--format json ps")]
+    public void InfoCompanionOption_WithSubcommand_IsRejected(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        Assert.Contains(
+            result.Errors,
+            error => error.Message.Contains("--info", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DoctorCommand_InfoOption_IsRejected()
+    {
+        // --info is root-local and non-recursive: it must not be reachable through
+        // subcommands, so `doctor --info` should fail to parse rather than silently
+        // being accepted (and ignored) by the doctor subcommand.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("doctor --info");
+
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public void DoctorCommand_SelfOption_ParsesForLegacyPeerCompatibility()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("doctor --self --format json");
+
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void DoctorCommand_FormatOption_StillParsesLocally()
+    {
+        // doctor --format is DoctorCommand's own subcommand-local Option<OutputFormat>,
+        // distinct from the root Option<InfoOutputFormat>. It must continue to parse
+        // unaffected by the new root-level --format option.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("doctor --format json");
+
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void InfoOption_WithSubcommand_IsRejected()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.Empty(command.Parse("config list").Errors);
+        Assert.Empty(command.Parse("--info=false config list").Errors);
+        Assert.Empty(command.Parse("--info false config list").Errors);
+
+        AssertInfoRejected("--info config list");
+        AssertInfoRejected("--info=true config list");
+        AssertInfoRejected("--info true config list");
+
+        void AssertInfoRejected(string commandLine)
+        {
+            Assert.Contains(
+                command.Parse(commandLine).Errors,
+                error => error.Message.Contains("--info", StringComparison.Ordinal));
+        }
     }
 
     [Theory]
@@ -537,6 +670,149 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.True(sentinel.WasCreated);
     }
 
+    public static IEnumerable<object[]> InformationalInvocationCases()
+    {
+        // True: real root --info (and its --self/--format variants), root bool options
+        // preceding --info, and help/version anywhere (including after a subcommand).
+        yield return new object[] { true, new[] { "--info" } };
+        yield return new object[] { true, new[] { "--info", "--format", "json" } };
+        yield return new object[] { true, new[] { "--info", "--self", "--format", "json" } };
+        yield return new object[] { true, new[] { "--non-interactive", "--info" } };
+        yield return new object[] { true, new[] { "--debug", "--info" } };
+        yield return new object[] { true, new[] { "--version" } };
+        yield return new object[] { true, new[] { "-v" } };
+        yield return new object[] { true, new[] { "--help" } };
+        yield return new object[] { true, new[] { "-h" } };
+        yield return new object[] { true, new[] { "-?" } };
+        yield return new object[] { true, new[] { "doctor", "--help" } };
+        yield return new object[] { true, new[] { "run", "-h" } };
+
+        // True: explicit "=true"/"true" forms of --info behave the same as the bare flag.
+        yield return new object[] { true, new[] { "--info=true" } };
+        yield return new object[] { true, new[] { "--info", "true" } };
+
+        // True: an explicit true/false value for another root bool option is consumed as that
+        // option's value (not a subcommand boundary), so root --info that follows is still real.
+        // This is the fix for the reported defect: `--debug false --info` was previously stopping
+        // at "false" as if it were a subcommand and returning false.
+        yield return new object[] { true, new[] { "--debug", "true", "--info" } };
+        yield return new object[] { true, new[] { "--debug", "false", "--info" } };
+        yield return new object[] { true, new[] { "-d", "false", "--info" } };
+        yield return new object[] { true, new[] { "--non-interactive", "false", "--info", "--format", "json" } };
+        yield return new object[] { true, new[] { "--capture-profile", "true", "--info" } };
+        yield return new object[] { true, new[] { "--nologo", "false", "--info" } };
+        yield return new object[] { true, new[] { "--banner", "false", "--info" } };
+        yield return new object[] { true, new[] { "--wait-for-debugger", "false", "--info" } };
+        yield return new object[] { true, new[] { "--cli-wait-for-debugger", "false", "--info" } };
+        yield return new object[] { true, new[] { "--start-debug-session", "false", "--info" } };
+        yield return new object[] { true, new[] { "--self", "false", "--info" } };
+        // "--debug=false" is a single token, so it is naturally never confused for a positional
+        // boundary; --info that follows is still real.
+        yield return new object[] { true, new[] { "--debug=false", "--info" } };
+
+        // False: --info that is not a real root option, either because it belongs to a
+        // subcommand, appears after the "--" app-argument delimiter, or is consumed as
+        // the *value* of a preceding value-taking root option (long name and alias).
+        yield return new object[] { false, new[] { "doctor", "--info" } };
+        yield return new object[] { false, new[] { "--info", "config", "list" } };
+        yield return new object[] { false, new[] { "terminal", "ps", "-v" } };
+        yield return new object[] { false, new[] { "run", "--", "--info" } };
+        yield return new object[] { false, new[] { "--capture-profile-output", "--info", "run" } };
+        yield return new object[] { false, new[] { "--capture-profile-delay", "--info", "run" } };
+        yield return new object[] { false, new[] { "--log-level", "--info", "run" } };
+        yield return new object[] { false, new[] { "-l", "--info", "run" } };
+        yield return new object[] { false, new[] { "--format", "--info", "run" } };
+        yield return new object[] { false, new[] { "run", "--format", "json" } };
+        yield return new object[] { false, new[] { "run" } };
+
+        // False: a root bool option's explicit true/false value followed by a real subcommand
+        // (no --info anywhere) correctly hits the subcommand boundary, not the bool value.
+        yield return new object[] { false, new[] { "--debug", "false", "run" } };
+
+        // False: explicit "=false"/"false" forms of --info must NOT be treated as informational,
+        // even though the token "--info" is literally present.
+        yield return new object[] { false, new[] { "--info=false" } };
+        yield return new object[] { false, new[] { "--info", "false" } };
+    }
+
+    [Theory]
+    [MemberData(nameof(InformationalInvocationCases))]
+    public void IsInformationalInvocation_ClassifiesRootInfoAndHelpVersionCorrectly(bool expected, string[] args)
+    {
+        Assert.Equal(expected, CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Fact]
+    public void ValueTakingRootOptionNames_MatchesRootCommandsActualValueTakingOptions()
+    {
+        // Drift guard: CommonOptionNames.IsInformationalInvocation manually tracks which root
+        // options consume a following token as their value (s_valueTakingRootOptionNames), so that
+        // a value literally equal to "--info" (e.g. `--log-level --info run`) is never
+        // misclassified as a distinct --info flag. If a new value-taking root option is added to
+        // RootCommand without updating that manual list, "--new-option --info run" would silently
+        // misclassify as informational. This test enumerates RootCommand's actual direct options
+        // and fails the moment the two sets diverge.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        // An option "consumes a value" for classifier purposes when it requires at least one
+        // value token (Arity.MinimumNumberOfValues > 0). Bool options (--info, --debug, --self,
+        // etc.) have MinimumNumberOfValues == 0: a bare occurrence is an implicit flag, and they
+        // only optionally consume an explicit "true"/"false" token (handled separately by
+        // s_boolRootOptionNames), so they are correctly excluded here.
+        var expectedNames = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var option in command.Options)
+        {
+            if (option.Arity.MinimumNumberOfValues > 0)
+            {
+                expectedNames.Add(option.Name);
+                foreach (var alias in option.Aliases)
+                {
+                    expectedNames.Add(alias);
+                }
+            }
+        }
+
+        var actualNames = new SortedSet<string>(CommonOptionNames.ValueTakingRootOptionNamesForTests, StringComparer.Ordinal);
+
+        Assert.Equal(expectedNames, actualNames);
+    }
+
+    [Fact]
+    public void BoolRootOptionNames_MatchesRootCommandsActualBoolOptions()
+    {
+        // Drift guard: CommonOptionNames.IsInformationalInvocation manually tracks which root
+        // options are Option<bool> (s_boolRootOptionNames), so that an explicit "true"/"false"
+        // value following one of them (e.g. `--debug false --info`) is consumed as that option's
+        // value rather than mistaken for the positional/subcommand-boundary token. If a new bool
+        // root option is added to RootCommand without updating that manual list, its explicit
+        // value would wrongly be treated as a subcommand boundary and stop classification early.
+        //
+        // Reflection over RootCommand's own public static option fields (rather than a
+        // constructed instance's Options collection) is used here because StartDebugSessionOption
+        // is only conditionally added to Options (only when running as an extension host, see
+        // RootCommand's constructor), so a normal DI-constructed instance would silently omit it
+        // from this check even though the classifier must still handle it.
+        var expectedNames = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var field in typeof(RootCommand).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
+        {
+            if (field.GetValue(null) is System.CommandLine.Option option && option.ValueType == typeof(bool))
+            {
+                expectedNames.Add(option.Name);
+                foreach (var alias in option.Aliases)
+                {
+                    expectedNames.Add(alias);
+                }
+            }
+        }
+
+        var actualNames = new SortedSet<string>(CommonOptionNames.BoolRootOptionNamesForTests, StringComparer.Ordinal);
+
+        Assert.Equal(expectedNames, actualNames);
+    }
+
     [Theory]
     [InlineData("ps", "--format", "json")]
     [InlineData("ps", "--format=json")]
@@ -561,6 +837,101 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(bannerService.WasBannerDisplayed);
         Assert.False(sentinel.WasCreated);
+    }
+
+    public static IEnumerable<object[]> RootInfoArgsCases()
+    {
+        yield return new object[] { new[] { "--info" } };
+        yield return new object[] { new[] { "--info", "--self", "--format", "json" } };
+    }
+
+    [Theory]
+    [MemberData(nameof(RootInfoArgsCases))]
+    public async Task RootInfo_SuppressesBannerAndTelemetryNoticeAndDoesNotCreateSentinel(string[] args)
+    {
+        // Real root `--info` invocations (list or json format) must not surface any
+        // pre-command output — the banner, the first-run telemetry notice, or the
+        // first-run sentinel side effect — that could precede or intermix with the
+        // --info contract's own output.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var errorWriter = new StringWriter();
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ErrorTextWriter = errorWriter;
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: "staging",
+                identityVersion: "13.5.0-override",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, args);
+
+        Assert.False(bannerService.WasBannerDisplayed);
+        Assert.False(sentinel.WasCreated);
+        var errorOutput = errorWriter.ToString();
+        Assert.DoesNotContain("Telemetry", errorOutput);
+        Assert.DoesNotContain("13.5.0-override", errorOutput);
+    }
+
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    [InlineData("--help")]
+    public async Task OtherInformationalOptions_DisplayIdentityOverrideNotice(string option)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var errorWriter = new StringWriter();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ErrorTextWriter = errorWriter;
+            options.FirstTimeUseNoticeSentinelFactory = _ => new TestFirstTimeUseNoticeSentinel { SentinelExists = true };
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: "staging",
+                identityVersion: "13.5.0-override",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [option]);
+
+        Assert.Contains("13.5.0-override", errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DoctorInfo_IsNotTreatedAsInformational_SoBannerAndSentinelBehaveNormally()
+    {
+        // Counterexample to RootInfo_*: "doctor --info" is the doctor subcommand's own
+        // (nonexistent) argument, not root --info, so it must not suppress the normal
+        // first-run experience the way genuine root --info does.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var errorWriter = new StringWriter();
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ErrorTextWriter = errorWriter;
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, ["doctor", "--info"]);
+
+        Assert.True(bannerService.WasBannerDisplayed);
+        Assert.True(sentinel.WasCreated);
+        var errorOutput = errorWriter.ToString();
+        Assert.Contains("Telemetry", errorOutput);
     }
 
     [Theory]

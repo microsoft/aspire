@@ -171,7 +171,8 @@ internal sealed class DoctorCheckResponse
     public required DoctorCheckSummary Summary { get; set; }
 
     /// <summary>
-    /// Gets or sets the discovered Aspire CLI installations.
+    /// Gets or sets the running installation returned by the hidden legacy
+    /// <c>doctor --self --format json</c> peer compatibility contract.
     /// </summary>
     [JsonPropertyName("installations")]
     public List<InstallationInfo>? Installations { get; set; }

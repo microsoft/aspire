@@ -7,18 +7,17 @@ using System.Text.Json.Serialization;
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Describes one Aspire CLI installation, as surfaced by
-/// <c>aspire doctor --format json</c>. Each entry corresponds to a single
-/// binary either running this process or discovered on the system.
+/// Describes one Aspire CLI installation used by discovery and peer
+/// self-description. Each entry corresponds to a single binary either running
+/// this process or discovered on the system.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The JSON shape is part of the <c>installations</c> property in the
-/// <c>aspire doctor --format json</c> contract. Fields use camelCase wire names via
-/// <see cref="JsonPropertyNameAttribute"/> applied explicitly here so the
-/// schema stays decoupled from the project-wide camelCase policy: another
-/// process may parse this output across CLI versions and we don't want to
-/// rename fields by changing a global option.
+/// The JSON shape is consumed across CLI versions by
+/// <c>aspire --info --self --format json</c> and the legacy
+/// <c>aspire doctor --self --format json</c> fallback. Fields use camelCase
+/// wire names via <see cref="JsonPropertyNameAttribute"/> applied explicitly
+/// here so the schema stays decoupled from the project-wide camelCase policy.
 /// </para>
 /// <para>
 /// Nullable fields may be <see langword="null"/> for any row, including
@@ -101,7 +100,7 @@ internal sealed record InstallationInfo
 }
 
 /// <summary>
-/// Wire constants for <see cref="InstallationInfo.Status"/>.
+/// Wire constants for <see cref="InstallationInfo.Status"/> and <see cref="Aspire.Cli.Commands.InfoInstallation.Status"/>.
 /// </summary>
 internal static class InstallationInfoStatus
 {
@@ -113,6 +112,12 @@ internal static class InstallationInfoStatus
 
     /// <summary>Probe was attempted, but the peer did not cooperate (timeout, non-zero exit, malformed JSON, etc.).</summary>
     public const string Failed = "failed";
+
+    /// <summary>
+    /// An orphan-hive directory exists on disk, but no installation was found for it.
+    /// Used exclusively on <see cref="Aspire.Cli.Commands.InfoInstallationKind.OrphanHive"/> rows.
+    /// </summary>
+    public const string NoInstallFound = "noInstallFound";
 }
 
 /// <summary>
@@ -131,7 +136,7 @@ internal static class InstallationPathStatus
 }
 
 /// <summary>
-/// Parses rows from the doctor installation discovery wire contract.
+/// Parses rows from the current and legacy peer self-description contracts.
 /// </summary>
 internal static class InstallationInfoParser
 {
@@ -161,7 +166,9 @@ internal static class InstallationInfoParser
             CanonicalPath = GetOptionalString("canonicalPath"),
             Version = GetOptionalString("version"),
             Channel = GetOptionalString("channel"),
-            Route = GetOptionalString("route"),
+            // New `--info --self` peers emit `source`; legacy `doctor` peers emit `route`.
+            // Cross-version discovery must accept both: prefer `source` when present.
+            Route = GetOptionalString("source") ?? GetOptionalString("route"),
             PathStatus = pathStatus,
             Status = GetStringOr("status", InstallationInfoStatus.Ok),
             StatusReason = GetOptionalString("statusReason"),

@@ -19,6 +19,12 @@ internal sealed class FakeInstallationDiscovery : IInstallationDiscovery
 
     public Func<CancellationToken, Task<IReadOnlyList<InstallationInfo>>>? DiscoverAllAsyncCallback { get; init; }
 
+    /// <summary>
+    /// When set, called instead of returning the fixed <c>self</c> row. May throw to
+    /// simulate a self-probe failure (including <see cref="OperationCanceledException"/>).
+    /// </summary>
+    public Func<InstallationInfo>? DescribeSelfCallback { get; init; }
+
     public FakeInstallationDiscovery(InstallationInfo self, IReadOnlyList<InstallationInfo>? others = null, Exception? discoverAllException = null)
     {
         _self = self;
@@ -26,7 +32,7 @@ internal sealed class FakeInstallationDiscovery : IInstallationDiscovery
         _discoverAllException = discoverAllException;
     }
 
-    public InstallationInfo DescribeSelf() => _self;
+    public InstallationInfo DescribeSelf() => DescribeSelfCallback is not null ? DescribeSelfCallback() : _self;
 
     public Task<IReadOnlyList<InstallationInfo>> DiscoverAllAsync(CancellationToken cancellationToken)
     {

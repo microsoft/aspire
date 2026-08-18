@@ -508,6 +508,91 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 }
 ```
 
+## CLI installation information
+
+### `aspire --info`
+
+`--info` is a root-level option, not a subcommand: `aspire --info`. It reports the running CLI's own version and channel, plus a bounded discovery of every other Aspire CLI installation and hive directory it can find. `--format list|json` selects the rendering; the default is `list`.
+
+The top-level `version` and `channel` describe the runtime-resolved CLI identity, including any active identity override. The running CLI's `installs[]` row describes the physical binary on disk, which is also the identity emitted by the hidden peer contract. These values can intentionally differ when the current process is emulating another build.
+
+`aspire --info --format json` emits one object:
+
+```json
+{
+  "version": "13.5.0",
+  "channel": "stable",
+  "installs": [
+    {
+      "kind": "installation",
+      "path": "/usr/local/bin/aspire",
+      "canonicalPath": "/usr/local/bin/aspire",
+      "version": "13.5.0",
+      "channel": "stable",
+      "source": "script",
+      "hive": "/home/user/.aspire/hives/stable",
+      "pathStatus": "active",
+      "status": "ok",
+      "isCurrent": true
+    },
+    {
+      "kind": "orphan-hive",
+      "hive": "/home/user/.aspire/hives/pr-12345",
+      "pathStatus": "notOnPath",
+      "status": "noInstallFound"
+    }
+  ]
+}
+```
+
+`installs` rows are one of three kinds:
+
+| Kind | Meaning |
+| ----- | ----------- |
+| `installation` | A discovered CLI binary (the running CLI, or a peer found on `$PATH` or in a known install location). |
+| `orphan-hive` | A hive directory that exists on disk but has no correlated installation. |
+| `discovery-failed` | Installation or hive discovery failed (timeout or unexpected error). The row is appended after any installation data completed before the failure; it is the only row when no partial data was available. |
+
+#### Row fields
+
+| Field | Description |
+| ----- | ----------- |
+| `kind` | Row discriminator; see the table above. |
+| `path` | Path where the binary was discovered, for `installation` rows. |
+| `canonicalPath` | Symlink-resolved path used to deduplicate installations that share a backing file. |
+| `version` | CLI version reported by the installation. |
+| `channel` | CLI identity channel, such as `stable`, `staging`, `daily`, `local`, or `pr-<N>`. |
+| `source` | Installation source recorded by the install sidecar, such as `script`, `pr`, `winget`, `brew`, `dotnet-tool`, `localhive`, or `nix`. Omitted when the source could not be determined. |
+| `hive` | The hive path correlated with an `installation` row's channel, or the orphaned hive path for an `orphan-hive` row. |
+| `pathStatus` | Relationship between this binary and `$PATH`: `active` (the first `aspire` resolved from `$PATH`), `shadowed` (on `$PATH` but shadowed by an earlier entry), or `notOnPath`. |
+| `status` | Row lifecycle status: `ok`, `notProbed` (listed but not probed), `failed` (probed but did not return usable data), or `noInstallFound` (`orphan-hive` rows only). |
+| `statusReason` | Diagnostic explanation for a non-`ok` status. Omitted when absent. |
+| `isCurrent` | `true` for the running CLI's `installation` row. Omitted from every other row. |
+
+`status` and `pathStatus` are independent axes: a binary can be `active` on `$PATH` while its probe `status` is `failed`, and vice versa. Fields with no value for a given row (for example, `version` on an `orphan-hive` row) are omitted rather than written as `null`.
+
+#### Hidden peer contract: `aspire --info --self --format json`
+
+`aspire --info --self` limits output to the running CLI and stays hidden from `--help`: it exists so other Aspire CLI processes can ask a peer to self-describe, not as a primary user workflow. It does not enumerate hive directories or walk `$PATH`; the discovering parent computes `pathStatus` from its own candidate walk. Its JSON form is a bare array containing exactly one row, using the same shape as an `installs[]` entry — there is no wrapping `version`/`channel` envelope, because the array itself represents a single installation:
+
+```json
+[
+  {
+    "kind": "installation",
+    "path": "/usr/local/bin/aspire",
+    "canonicalPath": "/usr/local/bin/aspire",
+    "version": "13.5.0",
+    "channel": "stable",
+    "source": "script",
+    "pathStatus": "notOnPath",
+    "status": "ok",
+    "isCurrent": true
+  }
+]
+```
+
+When the Aspire CLI discovers a peer installation, it probes that peer's binary in order: `--info --self --format json` first, then `doctor --self --format json` as a compatibility fallback for CLI versions that predate `--info`, then `--version` as the compatibility floor for CLIs that support neither machine-readable self-description form. New CLIs retain the hidden legacy `doctor --self --format json` responder so older installed CLIs can also obtain rich metadata from newer peers. These are compatibility details of peer discovery, not user-facing recursion — running `aspire --info` never re-invokes itself.
+
 ## MCP tooling
 
 ### `aspire mcp tools`

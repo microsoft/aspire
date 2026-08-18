@@ -40,7 +40,7 @@ internal sealed record TelemetryConfiguration
     /// </summary>
     public static TelemetryConfiguration Create(IConfiguration configuration, string[]? args = null)
     {
-        var hasOptOutArg = args?.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a)) ?? false;
+        var hasOptOutArg = args is not null && CommonOptionNames.IsInformationalInvocation(args);
         var telemetryOptOut = hasOptOutArg || configuration.GetBool(AspireCliTelemetry.TelemetryOptOutConfigKey, defaultValue: false);
         var profilingEnabled =
             configuration.GetBool(Aspire.Hosting.KnownConfigNames.ProfilingEnabled) ??

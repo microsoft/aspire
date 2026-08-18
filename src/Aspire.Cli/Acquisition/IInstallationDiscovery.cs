@@ -4,21 +4,26 @@
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Discovers Aspire CLI installations on this machine for <c>aspire doctor</c>.
+/// Discovers Aspire CLI installations on this machine for <c>aspire --info</c>.
 /// </summary>
 /// <remarks>
 /// Two modes:
 /// <list type="bullet">
 ///   <item>
-///     <description><see cref="DescribeSelf"/> — cheap path that describes
-///     only the currently running CLI. No process spawning, no filesystem
-///     walks. Used by the hidden <c>aspire doctor --self</c> peer-probe path.</description>
+///     <description><see cref="DescribeSelf"/> — cheap, in-process path that
+///     describes only the currently running CLI. It reads the install sidecar
+///     and scans <c>$PATH</c> to classify <c>PathStatus</c>, but does not spawn
+///     or probe peers or enumerate installation candidate sources or hives.
+///     Used by the hidden <c>aspire --info --self</c> peer-probe path.</description>
 ///   </item>
 ///   <item>
 ///     <description><see cref="DiscoverAllAsync"/> — walks <c>$PATH</c> plus
 ///     well-known install prefixes and asks each peer with required install
-///     metadata to self-describe via a child <c>aspire doctor --self --format json</c>
-///     call. Used by the default <c>aspire doctor</c> path.</description>
+///     metadata to self-describe via a child process, trying in order
+///     <c>--info --self --format json</c> (current contract), <c>doctor --self
+///     --format json</c> (legacy compatibility fallback), and <c>--version</c>
+///     (compatibility floor). Used by the default <c>aspire --info</c>
+///     path.</description>
 ///   </item>
 /// </list>
 /// </remarks>

@@ -29,6 +29,22 @@ namespace Aspire.Cli.Tests.Acquisition;
 public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void DescribeSelf_DoesNotWalkPath()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "self-bin");
+        Directory.CreateDirectory(pathDir);
+        var binary = WriteFakeBinary(pathDir);
+        using var _ = new EnvVarOverride("PATH", pathDir);
+
+        var discovery = NewDiscovery(new FakePeerInstallProbe(), workspace);
+
+        var self = discovery.DescribeSelf(binary);
+
+        Assert.Equal(InstallationPathStatus.NotOnPath, self.PathStatus);
+    }
+
+    [Fact]
     public async Task DiscoverAllAsync_PathHit_WithoutSidecar_IsListedAsNotProbed_AndNeverSpawned()
     {
         // A binary on $PATH with no .aspire-install.json next to it must not be

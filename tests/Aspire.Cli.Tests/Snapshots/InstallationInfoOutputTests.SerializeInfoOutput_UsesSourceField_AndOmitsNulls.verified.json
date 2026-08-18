@@ -1,0 +1,18 @@
+﻿{
+  "version": "13.0.0",
+  "channel": "stable",
+  "installs": [
+    {
+      "kind": "installation",
+      "path": "/usr/local/bin/aspire",
+      "canonicalPath": "/opt/aspire/bin/aspire",
+      "version": "13.0.0",
+      "channel": "stable",
+      "source": "path",
+      "hive": "/home/test/.aspire/hives/stable",
+      "pathStatus": "active",
+      "status": "ok",
+      "isCurrent": true
+    }
+  ]
+}

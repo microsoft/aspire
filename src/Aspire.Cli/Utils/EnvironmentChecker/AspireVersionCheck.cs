@@ -199,7 +199,7 @@ internal sealed class AspireVersionCheck(
     {
         // physical-binary-channel-by-design (see docs/specs/cli-identity-sidecar.md):
         // doctor reports the channel BAKED INTO the installed assembly, not the emulated
-        // ASPIRE_CLI_CHANNEL / sidecar identity. Like `doctor --self`, this check is a
+        // ASPIRE_CLI_CHANNEL / sidecar identity. Like `aspire --info --self`, this check is a
         // "what is actually installed" diagnostic, so it must describe physical reality.
         // When the CLI is emulating another build, that fact is surfaced separately by the
         // startup override notice (Program.DisplayFirstTimeUseNoticeIfNeededAsync), which
