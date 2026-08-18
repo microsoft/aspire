@@ -1,0 +1,101 @@
+{
+  "run_id": 32166536627,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32166536627",
+  "analyzed_at": "2026-08-18T20:29:33Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19068,
+    "title": "Harden Aspire skills bundle loading, validation, and caching",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-invalidate-aspire-skill-cache",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19068"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "id": 95817242856,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95817242856",
+      "classification": "flaky-test",
+      "reason": "MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState timed out. PR does not touch Aspire.Hosting.Maui code; matches known recurring flaky test (issue #18592).",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, discovery-configuration)",
+      "id": 95821006007,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006007",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h15m max execution time, stuck on 'Install E2E recorder' step. Matches known runner/network hang unrelated to PR (issue #19476). PR only touches Aspire.Cli skills bundle code.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-startup-timeout)",
+      "id": 95821006075,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006075",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h15m max execution time, stuck on 'Install E2E recorder' step. Matches known runner/network hang unrelated to PR (issue #19476).",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 95821006088,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006088",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 and no retrievable logs/TRX data. Matches known recurring flaky java-apphost E2E shard failure (issue #19457) unrelated to PR changes to Aspire.Cli skills bundle code.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-resolution)",
+      "id": 95821006117,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006117",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h15m max execution time, stuck on 'Install E2E recorder' step. Matches known runner/network hang unrelated to PR (issue #19476).",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "id": 95821006139,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006139",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h15m max execution time, stuck on 'Install E2E recorder' step. Matches known runner/network hang unrelated to PR (issue #19476).",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "id": 95821006173,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006173",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h50m max execution time, stuck on 'Install E2E recorder'-related hang. Matches known runner/network hang unrelated to PR (issue #19476).",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, launch-profiles)",
+      "id": 95821006299,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32166536627/job/95821006299",
+      "classification": "transient-infra",
+      "reason": "Job cancelled after exceeding 1h15m max execution time, stuck on 'Install E2E recorder' step. Matches known runner/network hang unrelated to PR (issue #19476).",
+      "failed_steps": ["Install E2E recorder"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663",
+      "classification": "flaky",
+      "reason": "PR does not modify any Aspire.Hosting.Maui code; this test has a known history of intermittent timeouts (issue #18592, 5 prior occurrences)."
+    }
+  ],
+  "causes": ["mauibuildqueue-releasesemaphoreafterlaunchasync", "vscode-e2e-install-recorder-timeout", "vscode-e2e-java-apphost-flaky"]
+}

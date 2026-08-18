@@ -10,6 +10,13 @@
       "job": "Tests / Azure.AI.OpenAI / Azure.AI.OpenAI (windows-latest)",
       "pr_number": 19384,
       "observed_at": "2026-08-18T18:14:47Z"
+    },
+    {
+      "run_id": 32166536627,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32166536627",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "pr_number": 19068,
+      "observed_at": "2026-08-18T20:29:33Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19476"
