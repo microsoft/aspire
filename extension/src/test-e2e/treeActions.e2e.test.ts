@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, getTerminalCommandCount, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { assertClipboardMatchesLastExpectationForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -18,6 +18,7 @@ suite('Aspire tree action command E2E', function () {
         await runE2eTeardown([
             () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
+            () => setDebugLaunchSuppressedForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
             () => stopPrimaryAppHostIfRunning(),
@@ -248,6 +249,59 @@ suite('Aspire tree action command E2E', function () {
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         const codeLensEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from codelens');
         assert.notStrictEqual(codeLensEditor.text, commandPaletteEditor.text);
+    });
+
+    test('surfaces deploy, publish, and pipeline-step actions on the AppHost tree item and routes them through the launch service', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+
+        // Discoverability: the idle AppHost tree item exposes the new actions as visible rows,
+        // addressing the core complaint in #19407 that these operations were not reachable from
+        // the Aspire pane without already knowing which command to search for.
+        const section = await openAspireView();
+        const idleItem = await waitForTreeItem(section, appHostLabel);
+        await idleItem.expand();
+        assert.ok(await waitForChildTreeItem(idleItem, 'Deploy AppHost'), 'Expected a Deploy AppHost row.');
+        assert.ok(await waitForChildTreeItem(idleItem, 'Publish AppHost'), 'Expected a Publish AppHost row.');
+        assert.ok(await waitForChildTreeItem(idleItem, 'Run pipeline step'), 'Expected a Run pipeline step row.');
+        assert.ok(await waitForChildTreeItem(idleItem, 'Debug pipeline step'), 'Expected a Debug pipeline step row.');
+
+        // Route each tree action through the real AppHostLaunchService and assert on the resulting
+        // debug-launch event, mirroring how packageSurface.e2e.test.ts verifies the editor/CodeLens
+        // equivalents (aspire-vscode.deploy, aspire-vscode.publish, aspire-vscode.codeLensDebugPipelineStep).
+        await setDebugLaunchSuppressedForE2E(true);
+        try {
+            const cases: Array<{
+                name: 'deployAppHostTreeAction' | 'publishAppHostTreeAction' | 'runPipelineStepAppHostTreeAction' | 'debugPipelineStepAppHostTreeAction';
+                expectedCommand: string;
+                expectedNoDebug: boolean;
+            }> = [
+                { name: 'deployAppHostTreeAction', expectedCommand: 'deploy', expectedNoDebug: false },
+                { name: 'publishAppHostTreeAction', expectedCommand: 'publish', expectedNoDebug: false },
+                { name: 'runPipelineStepAppHostTreeAction', expectedCommand: 'do', expectedNoDebug: true },
+                { name: 'debugPipelineStepAppHostTreeAction', expectedCommand: 'do', expectedNoDebug: false },
+            ];
+
+            for (const item of cases) {
+                const beforeLaunch = getDebugLaunchCount();
+                await executeE2eControlCommand({ name: item.name, appHostPath }, { waitFor: 'started' });
+
+                const launch = await waitForDebugLaunch(
+                    event => event.executionSuppressed &&
+                        event.command === item.expectedCommand &&
+                        event.noDebug === item.expectedNoDebug,
+                    `${item.name} debug launch`,
+                    60000,
+                    beforeLaunch);
+
+                assert.ok(launch, `Expected a debug launch event for ${item.name}.`);
+            }
+        } finally {
+            await setDebugLaunchSuppressedForE2E(false);
+        }
     });
 });
 

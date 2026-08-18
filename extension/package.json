@@ -49,9 +49,6 @@
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
     "workspaceContains:**/apphost.rs",
-    "workspaceContains:**/AppHost.java",
-    "workspaceContains:**/apphost.java",
-    "workspaceContains:**/src/main/java/AppHost.java",
     "onCommand:aspire-vscode.installCli",
     "onCommand:aspire-vscode.verifyCliInstalled",
     "onLanguageModelTool:aspire_apphost_start",
@@ -377,6 +374,30 @@
         "icon": "$(debug-all)"
       },
       {
+        "command": "aspire-vscode.deployAppHost",
+        "title": "%command.deployAppHost%",
+        "category": "Aspire",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "aspire-vscode.publishAppHost",
+        "title": "%command.publishAppHost%",
+        "category": "Aspire",
+        "icon": "$(package)"
+      },
+      {
+        "command": "aspire-vscode.runPipelineStepAppHost",
+        "title": "%command.runPipelineStepAppHost%",
+        "category": "Aspire",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "aspire-vscode.debugPipelineStepAppHost",
+        "title": "%command.debugPipelineStepAppHost%",
+        "category": "Aspire",
+        "icon": "$(debug-all)"
+      },
+      {
         "command": "aspire-vscode.globalRefreshAppHosts",
         "title": "%command.globalRefreshAppHosts%",
         "category": "Aspire",
@@ -643,6 +664,22 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.deployAppHost",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.publishAppHost",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.runPipelineStepAppHost",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.debugPipelineStepAppHost",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.stopResource",
           "when": "false"
         },
@@ -804,6 +841,26 @@
           "command": "aspire-vscode.stopAppHost",
           "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost)$/",
           "group": "2_actions@1"
+        },
+        {
+          "command": "aspire-vscode.deployAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "group": "2_actions@3"
+        },
+        {
+          "command": "aspire-vscode.publishAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "group": "2_actions@4"
+        },
+        {
+          "command": "aspire-vscode.runPipelineStepAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "group": "2_actions@5"
+        },
+        {
+          "command": "aspire-vscode.debugPipelineStepAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "group": "2_actions@6"
         },
         {
           "command": "aspire-vscode.copyAppHostPath",
@@ -977,8 +1034,7 @@
           "type": "boolean",
           "default": false,
           "description": "%configuration.aspire.registerMcpServerInWorkspace%",
-          "scope": "window",
-          "restricted": true
+          "scope": "window"
         },
         "aspire.appHostsPollingInterval": {
           "type": "number",
@@ -1162,7 +1218,6 @@
     "jsonc-parser": "3.3.1",
     "node-forge": "1.4.0",
     "tree-sitter-c-sharp": "0.23.5",
-    "tree-sitter-java": "0.23.5",
     "tree-sitter-rust": "0.24.0",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",
