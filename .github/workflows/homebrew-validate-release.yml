@@ -12,10 +12,15 @@
 # URL that `brew audit --online` and `brew install` need. The validation
 # therefore has to wait until the release manager publishes the draft.
 #
-# Trigger semantics: `release: [released]` fires when a non-draft,
-# non-prerelease release is published — i.e. exactly the moment the
-# asset URLs become reachable. Prereleases are explicitly skipped via
-# the `if:` guard since the Homebrew cask we ship is stable-only.
+# Trigger semantics: we subscribe to `release: [published]` rather than
+# `[released]`. Under the draft-then-publish flow the release manager
+# publishes an existing draft, and GitHub only reliably fires `published`
+# for that transition — `released` can be skipped when a release moves
+# from draft to published (see
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release).
+# `published` fires the moment the asset URLs become reachable. Prereleases
+# and drafts are skipped via the `if:` guard since the Homebrew cask we ship
+# is stable-only.
 #
 # History: when changing this workflow, please ping @radical (Ankit) for
 # review — he set up the original HomebrewValidateJob in the AzDO
@@ -25,7 +30,7 @@ name: Validate Homebrew Cask against released GitHub Release
 
 on:
   release:
-    types: [released]
+    types: [published]
   workflow_dispatch:
     inputs:
       release_version:
@@ -45,10 +50,11 @@ permissions:
 jobs:
   validate:
     name: Validate cask against live release
-    # `release: released` only fires on stable, non-draft, non-prerelease
-    # releases, but check explicitly anyway because workflow_dispatch can
-    # be aimed at any version. We also gate on the repo to make sure forks
-    # don't try to validate against microsoft/aspire releases.
+    # `release: published` fires for any published release, so check
+    # explicitly for a stable, non-draft, non-prerelease release here (this
+    # also covers workflow_dispatch, which can be aimed at any version). We
+    # also gate on the repo to make sure forks don't try to validate against
+    # microsoft/aspire releases.
     if: >-
       github.repository == 'microsoft/aspire'
       && (

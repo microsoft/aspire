@@ -50,10 +50,10 @@ Aspire's release flow has historically depended on mutating the released artifac
 To support this, the release flow now creates the GitHub release as a **draft**:
 
 1. `release-github-tasks.yml` runs `gh release create --draft`, which writes the tag and creates a draft release with a placeholder body.
-2. The `release: [created]` event fires while the release is still a draft and triggers `release-notes-generate`, which rewrites the body via the gh-aw `update-release` safe output. (Draft releases support body edits via the Releases REST API.)
+2. `release-github-tasks.yml` then explicitly dispatches `release-notes-generate` via `workflow_dispatch` (passing the tag name), which rewrites the body via the gh-aw `update-release` safe output. It uses an explicit dispatch because GitHub Actions does [not fire `release` events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release) (including `created`) for draft releases. (Draft releases support body edits via the Releases REST API.)
 3. The AzDO pipeline's `PublishReleaseAssetsJob` uploads `aspire-cli-*` archives onto the draft via `gh release upload`. (Draft releases support asset upload via the Releases REST API.)
 4. **The release manager publishes the draft manually as a final step** — see [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
-5. Publishing the draft fires `release: [published]` and (for stable, non-prerelease) `release: [released]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs).
+5. Publishing the draft fires `release: [published]`, which kicks off downstream workflows that need the live release: `release-update-support-mdx` (opens a PR on `microsoft/aspire.dev`) and `homebrew-validate-release` (validates the cask against the live download URLs). Both subscribe to `published` rather than `released` because GitHub does not reliably fire `released` when a release is published from a draft.
 
 ## Installer channels
 
@@ -205,11 +205,9 @@ Manual runs go through the normal `authorize` check (admin/maintain permission r
 
 After automation completes:
 
-1. **Review and merge automatically created PRs**:
+1. **Review and merge the merge-back PR**:
    - Merge-back PR: `$RELEASE_BRANCH` → `main`.
-   - Baseline version PR: updates `PackageValidationBaselineVersion`.
-   - Baseline version PR: updates `PackageValidationBaselineVersion`.
-   - Baseline version PR also includes `eng/nix/versions.json` for stable releases.
+   - **Do not merge the baseline version PR yet.** It updates `PackageValidationBaselineVersion` and, for stable releases, `eng/nix/versions.json`, which points at the release's public `releases/download/v<version>/...` asset URLs. Those URLs return 404 until the draft is published, so merging this PR before Step 5 would break `nix run github:microsoft/aspire#aspire-cli` on `main`. You merge it after publishing — see [Step 5](#step-5-publish-the-draft-release).
 2. **Verify draft release contents**:
    - Open the draft on the [GitHub Releases page](https://github.com/microsoft/aspire/releases) (drafts appear above published releases).
    - Confirm the `aspire-cli-*` archives are attached.
@@ -226,8 +224,9 @@ This is a **manual** step performed by the release manager. The release is creat
 2. Click **Edit** to do a final review — confirm the title is `Aspire <version>`, the body looks correct, the tag is `v<version>` pointing at the release commit, and the `aspire-cli-*` archives are attached.
 3. Uncheck **Set as a pre-release** if it is checked but this is a stable release (or check it for a preview release).
 4. Click **Publish release**.
+5. **Now merge the baseline version PR.** With the release published, its `eng/nix/versions.json` asset URLs resolve, so merging it updates `PackageValidationBaselineVersion` and the Nix manifest on `main` without breaking the flake.
 
-Publishing the draft fires the `release: [published]` event (and `release: [released]` for stable, non-prerelease releases), which triggers:
+Publishing the draft fires the `release: [published]` event, which triggers:
 
 - [`release-update-support-mdx`](https://github.com/microsoft/aspire/actions/workflows/release-update-support-mdx.lock.yml): opens a draft PR on `microsoft/aspire.dev` to update the support mdx with the new release info.
 - [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
@@ -426,7 +425,9 @@ GitHub update-nix-cli-flake.yml (dispatched by UpdateNixPackageJob, stable relea
   -> commit the Nix manifest update to update-baseline-<version>
   -> create or update the baseline version PR
 
-GitHub release-notes-generate.lock.yml (triggered on `release: created`)
+GitHub release-notes-generate.lock.yml (dispatched by release-github-tasks.yml
+                                        via workflow_dispatch — draft releases
+                                        do not fire `release: created`)
   -> agent rewrites the draft release body with real notes
      via the gh-aw `update-release` safe output
 
