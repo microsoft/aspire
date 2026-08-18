@@ -235,7 +235,9 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         using var document = JsonDocument.Parse(await File.ReadAllBytesAsync(sidecarPath));
         Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
         Assert.Equal("staging", document.RootElement.GetProperty("channel").GetString());
-        Assert.Empty(Directory.GetFiles(installPath, ".aspire-install.json.*"));
+        Assert.Collection(
+            Directory.GetFiles(installPath),
+            path => Assert.Equal(sidecarPath, path));
     }
 
     [Fact]
