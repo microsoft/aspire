@@ -1576,8 +1576,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             if (isSingleFileAppHost && !builtByCli)
             {
                 // File-based RunCommand metadata is only safe to reuse when the CLI's pre-build
-                // generated it with run-hook suppression. Preserve the existing rebuild behavior
-                // for --no-build and extension-owned builds rather than trusting ambient output.
+                // generated it with run-hook suppression. Preserve the extension-owned rebuild
+                // fallback rather than trusting ambient output.
                 noBuild = false;
                 noRestore = false;
             }
@@ -1669,6 +1669,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var (buildExitCode, builtByCli) = await BuildAppHostIfNeededAsync(
                 context,
                 effectiveAppHostFile,
+                isSingleFileAppHost,
                 isExtensionHost,
                 extensionBackchannel,
                 buildOutputCollector,
@@ -1700,12 +1701,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private async Task<(int? ExitCode, bool BuiltByCli)> BuildAppHostIfNeededAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
         CancellationToken cancellationToken)
     {
-        if (context.NoBuild)
+        if (context.NoBuild && !isSingleFileAppHost)
         {
             return (null, false);
         }
@@ -1719,7 +1721,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return (null, false);
         }
 
-        using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+        // File-based AppHosts cannot safely reuse ambient RunCommand metadata. The runner previously
+        // rebuilt these even for --no-build; keep that behavior but complete it before the startup budget begins.
+        var noRestore = isSingleFileAppHost && context.NoBuild ? false : context.NoRestore;
+        using var buildActivity = _profilingTelemetry.StartAppHostBuild(noRestore, isExtensionHost, extensionHasBuildCapability);
 
         var buildOptions = new ProcessInvocationOptions
         {
@@ -1727,7 +1732,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
 
-        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, noRestore, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
         if (buildExitCode == 0)
