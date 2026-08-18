@@ -478,7 +478,7 @@ suite('configInfoProvider tests', () => {
         const versionProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
         sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
             if (args?.[0] === 'config') {
-                setTimeout(() => emitConfigInfo(options), 20_000);
+                setTimeout(() => emitConfigInfo(options), 5_000);
                 return {} as ChildProcessWithoutNullStreams;
             }
 
@@ -492,8 +492,9 @@ suite('configInfoProvider tests', () => {
                 cliPath: '/exact/aspire',
                 forceRefresh: true,
                 minimumVersion: '13.2.0',
+                timeoutMs: 10_000,
             });
-            await clock.tickAsync(30_000);
+            await clock.tickAsync(10_000);
 
             sinon.assert.calledOnceWithExactly(
                 terminateStub,

@@ -38,6 +38,25 @@ suite('process argument parsing', () => {
             /Expected inferred isolation to use only the true-form --isolated switch/);
     });
 
+    test('ignores option-shaped AppHost arguments after the separator', () => {
+        assert.doesNotThrow(() => assertLinkedAppHostCliLaunch(
+            [
+                cliPath,
+                'run',
+                '--isolated',
+                '--start-debug-session',
+                '--apphost',
+                appHostPath,
+                '--',
+                '--isolated=false',
+                '--start-debug-session',
+                '--apphost',
+            ],
+            appHostPath,
+            cliPath,
+            'linux'));
+    });
+
     test('rejects --start-debug-session embedded in another argument', () => {
         assert.throws(
             () => assertLinkedAppHostCliLaunch(

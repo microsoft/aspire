@@ -542,9 +542,11 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     appHostPath: fixture.appHostPath,
                 });
                 assert.ok(processInfo.cliPid, `Expected the E2E state bridge to report the direct CLI process: ${JSON.stringify(processInfo)}`);
-                const cliProcess = await waitForLinkedAppHostCliProcess(
+                const cliProcess = await waitForExactLinkedAppHostCliProcess(
                     processInfo.cliPid,
+                    getCliPath(),
                     fixture.appHostPath,
+                    appHostArguments,
                     180000,
                     false);
                 const appHostArgv = await waitForAppHostArgvEvidence(argvEvidencePath, 180000);
@@ -956,19 +958,21 @@ function assertLinkedAppHostCliLaunchExpectation(
 
     const runIndex = argumentsList.indexOf('run', 1);
     assert.ok(runIndex > 0, `Expected exact 'run' after the CLI path in: ${formattedArguments}`);
+    const separatorIndex = argumentsList.indexOf('--', runIndex + 1);
+    const rootArgumentsEnd = separatorIndex >= 0 ? separatorIndex : argumentsList.length;
 
     const isolatedIndex = argumentsList.indexOf('--isolated', runIndex + 1);
-    assert.strictEqual(isolatedIndex, -1, `Did not expect inferred root '--isolated' after 'run' in: ${formattedArguments}`);
+    assert.ok(isolatedIndex < 0 || isolatedIndex >= rootArgumentsEnd, `Did not expect inferred root '--isolated' after 'run' in: ${formattedArguments}`);
     assert.strictEqual(
-        argumentsList.some(argument => argument === '--isolated=false'),
+        argumentsList.slice(runIndex + 1, rootArgumentsEnd).some(argument => argument === '--isolated=false'),
         false,
         `Did not expect any root '--isolated=false' after 'run' in: ${formattedArguments}`);
 
     const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session', runIndex + 1);
-    assert.ok(startDebugSessionIndex > runIndex, `Expected exact '--start-debug-session' after 'run' in: ${formattedArguments}`);
+    assert.ok(startDebugSessionIndex > runIndex && startDebugSessionIndex < rootArgumentsEnd, `Expected exact root '--start-debug-session' after 'run' in: ${formattedArguments}`);
 
     const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
-    assert.ok(appHostIndex > startDebugSessionIndex, `Expected exact '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
+    assert.ok(appHostIndex > startDebugSessionIndex && appHostIndex < rootArgumentsEnd, `Expected exact root '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
     assert.ok(
         appHostIndex + 1 < argumentsList.length &&
         commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),

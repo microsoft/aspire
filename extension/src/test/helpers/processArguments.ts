@@ -20,19 +20,22 @@ export function assertLinkedAppHostCliLaunch(
 
     const runIndex = argumentsList.indexOf('run', 1);
     assert.ok(runIndex > 0, `Expected exact 'run' after the CLI path in: ${formattedArguments}`);
+    const separatorIndex = argumentsList.indexOf('--', runIndex + 1);
+    const rootArgumentsEnd = separatorIndex >= 0 ? separatorIndex : argumentsList.length;
 
     const isolatedIndex = argumentsList.indexOf('--isolated', runIndex + 1);
-    assert.ok(isolatedIndex > runIndex, `Expected exact '--isolated' after 'run' in: ${formattedArguments}`);
+    assert.ok(isolatedIndex > runIndex && isolatedIndex < rootArgumentsEnd, `Expected exact '--isolated' root option after 'run' in: ${formattedArguments}`);
     assert.strictEqual(
-        argumentsList.some(argument => argument === '--isolated=false') || argumentsList[isolatedIndex + 1]?.toLowerCase() === 'false',
+        argumentsList.slice(runIndex + 1, rootArgumentsEnd).some(argument => argument === '--isolated=false') ||
+        argumentsList[isolatedIndex + 1]?.toLowerCase() === 'false',
         false,
         `Expected inferred isolation to use only the true-form --isolated switch: ${formattedArguments}`);
 
     const startDebugSessionIndex = argumentsList.indexOf('--start-debug-session', isolatedIndex + 1);
-    assert.ok(startDebugSessionIndex > isolatedIndex, `Expected exact '--start-debug-session' after '--isolated' in: ${formattedArguments}`);
+    assert.ok(startDebugSessionIndex > isolatedIndex && startDebugSessionIndex < rootArgumentsEnd, `Expected exact '--start-debug-session' root option after '--isolated' in: ${formattedArguments}`);
 
     const appHostIndex = argumentsList.indexOf('--apphost', startDebugSessionIndex + 1);
-    assert.ok(appHostIndex > startDebugSessionIndex, `Expected exact '--apphost' after '--start-debug-session' in: ${formattedArguments}`);
+    assert.ok(appHostIndex > startDebugSessionIndex && appHostIndex < rootArgumentsEnd, `Expected exact '--apphost' root option after '--start-debug-session' in: ${formattedArguments}`);
     assert.ok(
         appHostIndex + 1 < argumentsList.length &&
         commandLineArgumentEquals(argumentsList[appHostIndex + 1], appHostPath, platform),

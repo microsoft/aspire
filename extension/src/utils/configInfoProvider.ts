@@ -217,7 +217,8 @@ export class ConfigInfoProvider {
         }
 
         const probeStartTime = Date.now();
-        const configInfo = await this.getConfigInfo({ ...options, cliPath, timeoutMs: configInfoTimeoutMs });
+        const probeTimeoutMs = Math.min(options.timeoutMs ?? configInfoTimeoutMs, configInfoTimeoutMs);
+        const configInfo = await this.getConfigInfo({ ...options, cliPath, timeoutMs: probeTimeoutMs });
         if (configInfo?.capabilities?.includes(capability)) {
             return 'supported';
         }
@@ -226,7 +227,7 @@ export class ConfigInfoProvider {
             return 'unavailable';
         }
 
-        const remainingTimeoutMs = configInfoTimeoutMs - (Date.now() - probeStartTime);
+        const remainingTimeoutMs = probeTimeoutMs - (Date.now() - probeStartTime);
         if (remainingTimeoutMs <= 0) {
             return 'unavailable';
         }
