@@ -958,6 +958,66 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_DistinctEmbeddedParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstHost = new ParameterResource("host", _ => "first-host");
+        var secondHost = new ParameterResource("host", _ => "second-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{firstHost}/{secondHost}");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct embedded parameter sources named 'host' " +
+            "to Helm values path 'config.myapp.host'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctConditionalParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstCondition = new ParameterResource("enable-tls", _ => bool.TrueString);
+        var secondCondition = new ParameterResource("enable-tls", _ => bool.FalseString);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["FIRST"] = ReferenceExpression.CreateConditional(
+                    firstCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+                context.EnvironmentVariables["SECOND"] = ReferenceExpression.CreateConditional(
+                    secondCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+            });
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct condition parameter sources named 'enable-tls' " +
+            "to Helm values path 'parameters.myapp.enable_tls'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
     public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

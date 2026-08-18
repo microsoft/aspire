@@ -8,5 +8,5 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 stringData:
-  OPTIONS: {{ tpl "{{ if eq (.Values.parameters.myapp.mode | lower) \u0022enabled\u0022 }}user={{ .Values.config.myapp.user }};password={{ .Values.secrets.myapp.password }}{{ else }}user={{ .Values.config.myapp.user }};disabled{{ end }}" . | quote }}
+  OPTIONS: {{ tpl "{{ if eq (.Values.parameters.myapp.mode | toString | lower) \u0022enabled\u0022 }}user={{ .Values.config.myapp.user }};password={{ .Values.secrets.myapp.password }}{{ else }}user={{ .Values.config.myapp.user }};disabled{{ end }}" . | quote }}
 type: "Opaque"

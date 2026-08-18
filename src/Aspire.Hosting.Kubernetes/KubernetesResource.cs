@@ -655,20 +655,26 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         // Keep the original parameter name as the dictionary key so names that normalize to the
         // same Helm key remain distinct until publishing can report the collision.
-        Parameters.TryAdd(conditionParam.Name, new HelmValue(paramExpression, conditionParam)
+        var conditionValue = new HelmValue(paramExpression, conditionParam)
         {
             ValuesKey = formattedName,
             IsEmbeddedParameter = true
-        });
+        };
+        AddParameterMapping(
+            Parameters,
+            conditionParam,
+            conditionValue,
+            HelmExtensions.ParametersKey,
+            "condition parameter");
 
         // Ensure parameter values referenced in branches are populated in values.yaml.
         AllocateBranchParameters(expr.WhenTrue!);
         AllocateBranchParameters(expr.WhenFalse!);
 
-        // Extract the values path (e.g., .Values.parameters.myapp.enable_tls) from {{ expression }}.
-        // Pipe through | lower for case-insensitive comparison, matching .NET's
-        // StringComparison.OrdinalIgnoreCase used in other execution/publish paths.
-        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | lower)";
+        // Deploy override YAML can parse values such as "True" as booleans. Convert the value back
+        // to a string before the case-insensitive comparison so both string and boolean values work.
+        // See https://helm.sh/docs/chart_template_guide/function_list/#type-conversion-functions.
+        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | toString | lower)";
         var matchValue = System.Text.Json.JsonSerializer.Serialize((expr.MatchValue ?? string.Empty).ToLowerInvariant());
 
         // Keep the flow control raw while expressions are composed. Once the complete environment
@@ -704,7 +710,38 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         // Keep the original parameter name as the dictionary key so names that normalize to the
         // same Helm key remain distinct until publishing can report the collision.
-        values.TryAdd(parameter.Name, helmValue);
+        AddParameterMapping(
+            values,
+            parameter,
+            helmValue,
+            parameter.Secret ? HelmExtensions.SecretsKey : HelmExtensions.ConfigKey,
+            "embedded parameter");
+    }
+
+    private void AddParameterMapping(
+        Dictionary<string, HelmValue> mappings,
+        ParameterResource parameter,
+        HelmValue helmValue,
+        string helmKey,
+        string sourceKind)
+    {
+        if (!mappings.TryGetValue(parameter.Name, out var existing))
+        {
+            mappings.Add(parameter.Name, helmValue);
+            return;
+        }
+
+        if (ReferenceEquals(existing.ParameterSource, parameter))
+        {
+            return;
+        }
+
+        var resourceKey = TargetResource.Name.ToHelmValuesSectionName();
+        var valuesKey = helmValue.ValuesKey ?? parameter.Name.ToHelmValuesSectionName();
+        throw new InvalidOperationException(
+            $"Resource '{TargetResource.Name}' maps multiple distinct {sourceKind} sources named '{parameter.Name}' " +
+            $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.");
     }
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)

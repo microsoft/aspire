@@ -355,6 +355,7 @@ builder.Build().Run();
             var host = builder.AddParameter("host", "publish-host");
             var token = builder.AddParameter("token", "publish-token", secret: true);
             var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+            var enableTls = builder.AddParameter("enable-tls", "False", publishValueAsDefault: true);
             var user = builder.AddParameter("user", "publish-user", publishValueAsDefault: true);
             var password = builder.AddParameter("password", "publish-password", secret: true);
 
@@ -371,6 +372,11 @@ builder.Build().Run();
 
                     context.EnvironmentVariables["OPTIONS"] = options;
                     context.EnvironmentVariables["EMBEDDED_OPTIONS"] = ReferenceExpression.Create($"prefix-{options}-suffix");
+                    context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
+                        enableTls.Resource,
+                        bool.TrueString,
+                        ReferenceExpression.Create($",ssl=true"),
+                        ReferenceExpression.Create($",ssl=false"));
                 });
 
             builder.AddKubernetesEnvironment("env");
@@ -384,7 +390,11 @@ builder.Build().Run();
             counter,
             TimeSpan.FromMinutes(5));
         await auto.RunCommandAsync(
+            "printf 'parameters:\\n  myapp:\\n    enable_tls: True\\n' > deploy-values.yaml",
+            counter);
+        await auto.RunCommandAsync(
             "helm template aspire-app helm-output " +
+            "--values deploy-values.yaml " +
             "--set-string config.myapp.host=rendered-host " +
             "--set-string secrets.myapp.token=rendered-token " +
             "--set-string parameters.myapp.mode=enabled " +
@@ -393,6 +403,9 @@ builder.Build().Run();
             counter);
         await auto.RunCommandAsync(
             "grep -F 'SOME_URL: \"http://rendered-host/test\"' rendered.yaml",
+            counter);
+        await auto.RunCommandAsync(
+            "grep -F 'TLS_SUFFIX: \",ssl=true\"' rendered.yaml",
             counter);
         await auto.RunCommandAsync(
             "grep -F 'SECRET_URL: \"http://rendered-host/test?token=rendered-token\"' rendered.yaml",
