@@ -238,11 +238,14 @@ export function writeTokenlessStableCliWrapper(invocationLogPath: string): strin
         configInfoJson: createConfigInfo(),
         invocationLogPath,
         versionOutput: '13.2.0',
-    });
+    }, path.dirname(getCliPath()));
 }
 
 function writeTokenlessStablePosixCliWrapper(invocationLogPath: string): string {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
+    // AppHost targets validate that AspireCliPath belongs to a complete CLI bundle. Keep this
+    // capability/version shim beside the isolated real CLI so the configured path retains that
+    // bundle identity while the wrapper still controls the probe responses.
+    const wrapperDirectory = path.dirname(getCliPath());
     const wrapperPath = path.join(wrapperDirectory, 'aspire-tokenless-stable-13-2');
     const logInvocationScript = `require('fs').appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + '\\n')`;
     fs.mkdirSync(wrapperDirectory, { recursive: true });
@@ -356,6 +359,19 @@ export function getCliWrapperInvocationCount(invocationLogPath: string): number 
         .split(/\r?\n/)
         .filter(line => line.length > 0)
         .length;
+}
+
+export async function waitForCliWrapperInvocation(invocationLogPath: string, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (getCliWrapperInvocationCount(invocationLogPath) > 0) {
+            return;
+        }
+
+        await delay(500);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for an Aspire CLI wrapper invocation in ${invocationLogPath}.`);
 }
 
 export function touchPrimaryAppHostProject(): void {
@@ -847,8 +863,8 @@ function writeCliWrapper(
         psSnapshotAppHostPid?: number;
         versionOutput?: string;
     },
+    wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers'),
 ): string {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
 
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);

@@ -1,23 +1,17 @@
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { appHostCliPathConfigKey } from './AspireDebugConfigurationMetadata';
 
 const extensionOwnedConfigurationMarker = `__aspireAppHostLaunchServiceConfiguration_${randomUUID()}`;
 const extensionOwnedConfigurationValue = randomUUID();
 const externalLaunchReservationMarker = `__aspireExternalLaunchReservation_${randomUUID()}`;
-const trustedCliPathMarker = `__aspireTrustedCliPath_${randomUUID()}`;
-const trustedCliPathValue = randomUUID();
+const resolvedCliPathMarker = `__aspireResolvedCliPath_${randomUUID()}`;
+const resolvedCliPathScopeMarker = `__aspireResolvedCliPathScope_${randomUUID()}`;
 
 interface ExternalLaunchReservationMarker {
     reservationId: string;
     appHostPath: string;
     isDirectoryScope: boolean;
-}
-
-interface TrustedCliPathMarker {
-    value: string;
-    cliPath: string;
 }
 
 export function markAspireDebugConfigurationAsExtensionOwned(configuration: vscode.DebugConfiguration): void {
@@ -54,36 +48,39 @@ export function getAspireDebugConfigurationExternalLaunchReservation(configurati
         : undefined;
 }
 
-export function markAspireDebugConfigurationCliPathAsTrusted(configuration: vscode.DebugConfiguration): void {
-    const cliPath = configuration[appHostCliPathConfigKey];
-    if (typeof cliPath !== 'string') {
-        return;
-    }
-
-    (configuration as Record<string, unknown>)[trustedCliPathMarker] = {
-        value: trustedCliPathValue,
-        cliPath,
-    };
+export function markAspireDebugConfigurationWithResolvedCliPath(configuration: vscode.DebugConfiguration, cliPath: string): void {
+    (configuration as Record<string, unknown>)[resolvedCliPathMarker] = cliPath;
 }
 
-export function getAspireDebugConfigurationTrustedCliPath(configuration: vscode.DebugConfiguration): string | undefined {
-    const marker = (configuration as Record<string, unknown>)[trustedCliPathMarker];
-    if (!marker || typeof marker !== 'object') {
-        return undefined;
-    }
+export function getAspireDebugConfigurationResolvedCliPath(configuration: vscode.DebugConfiguration): string | undefined {
+    const cliPath = (configuration as Record<string, unknown>)[resolvedCliPathMarker];
+    return typeof cliPath === 'string' ? cliPath : undefined;
+}
 
-    const candidate = marker as Partial<TrustedCliPathMarker>;
-    return candidate.value === trustedCliPathValue &&
-        typeof candidate.cliPath === 'string' &&
-        configuration[appHostCliPathConfigKey] === candidate.cliPath
-        ? candidate.cliPath
-        : undefined;
+/**
+ * Records which configuration scope the CLI availability gate resolved against.
+ *
+ * The gate runs before VS Code substitutes variables, so a `program` such as
+ * `${workspaceFolder:other}/AppHost.java` — or a relative one — is still opaque and the gate can only
+ * use the initiating folder. Recording the scope lets the substituted resolver notice that the
+ * concrete program belongs to a different folder and re-resolve, instead of launching that folder's
+ * AppHost with another folder's configured CLI.
+ */
+export function markAspireDebugConfigurationWithResolvedCliPathScope(configuration: vscode.DebugConfiguration, scope: string): void {
+    (configuration as Record<string, unknown>)[resolvedCliPathScopeMarker] = scope;
+}
+
+/** @see markAspireDebugConfigurationWithResolvedCliPathScope */
+export function getAspireDebugConfigurationResolvedCliPathScope(configuration: vscode.DebugConfiguration): string | undefined {
+    const scope = (configuration as Record<string, unknown>)[resolvedCliPathScopeMarker];
+    return typeof scope === 'string' ? scope : undefined;
 }
 
 export function stripAspireDebugConfigurationProviderInternalProperties(configuration: vscode.DebugConfiguration): void {
     const configRecord = configuration as Record<string, unknown>;
     delete configRecord[extensionOwnedConfigurationMarker];
     delete configRecord[externalLaunchReservationMarker];
-    delete configRecord[trustedCliPathMarker];
+    delete configRecord[resolvedCliPathMarker];
+    delete configRecord[resolvedCliPathScopeMarker];
     delete configRecord.launchedByExtension;
 }

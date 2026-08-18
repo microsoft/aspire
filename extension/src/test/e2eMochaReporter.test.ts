@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { removeDirectorySafely } from './testHelpers';
 suite('E2E Mocha reporter', () => {
     test('prints spec progress and writes JSON results', () => {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-e2e-reporter-'));
@@ -47,7 +48,7 @@ suite('E2E Mocha reporter', () => {
         }
         finally {
             Base.consoleLog = previousConsoleLog;
-            fs.rmSync(tempDir, { recursive: true, force: true });
+            removeDirectorySafely(tempDir);
         }
     });
 

@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath, getRunRoot } from './helpers/paths';
+import { readCliLogs, readExtensionLogs } from './helpers/logs';
+import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
 suite('Aspire debug startup timeout E2E', function () {
@@ -96,44 +97,6 @@ async function waitForStartupDelayEvidence(startMarker: string, endMarker: strin
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for CLI log markers '${startMarker}' and '${endMarker}'. Last log content:\n${lastLogContent}`);
-}
-
-function readCliLogs(): string {
-    const runRoot = getRunRoot();
-    assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to find isolated CLI logs.');
-
-    const logsRoot = path.join(runRoot, 'aspire-home', 'logs');
-    if (!fs.existsSync(logsRoot)) {
-        return '';
-    }
-
-    return fs.readdirSync(logsRoot, { withFileTypes: true })
-        .filter(entry => entry.isFile() && entry.name.endsWith('.log'))
-        .map(entry => fs.readFileSync(path.join(logsRoot, entry.name), 'utf8'))
-        .join('\n');
-}
-
-function readExtensionLogs(): string {
-    const runRoot = getRunRoot();
-    assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to find isolated extension logs.');
-
-    const logsRoot = path.join(runRoot, 'storage', 'settings', 'logs');
-    if (!fs.existsSync(logsRoot)) {
-        return '';
-    }
-
-    return readFilesRecursively(logsRoot, 'Aspire Extension.log').join('\n');
-}
-
-function readFilesRecursively(directory: string, fileName: string): string[] {
-    return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-        const entryPath = path.join(directory, entry.name);
-        if (entry.isDirectory()) {
-            return readFilesRecursively(entryPath, fileName);
-        }
-
-        return entry.isFile() && entry.name === fileName ? [fs.readFileSync(entryPath, 'utf8')] : [];
-    });
 }
 
 function tryGetMarkerTimestamp(logContent: string, marker: string): Date | undefined {

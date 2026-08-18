@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Language, Node as TreeSitterNode, Parser, Tree } from 'web-tree-sitter';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
 import { initializeTreeSitter, resolveBundledWasmAssetPath } from './treeSitter';
-import { visit } from './treeSitterHelpers';
+import { isInInactiveNode, visit } from './treeSitterHelpers';
 
 /**
  * C# AppHost resource parser.
@@ -74,6 +74,14 @@ class CSharpAppHostParser implements AppHostResourceParser {
         });
     }
 
+    async filterActiveOffsets(document: vscode.TextDocument, offsets: readonly number[]): Promise<number[]> {
+        if (offsets.length === 0) {
+            return [];
+        }
+
+        return await withCSharpTree(document.getText(), tree =>
+            offsets.filter(offset => !isInInactiveNode(tree.rootNode, offset)));
+    }
 }
 
 // Self-register on import
@@ -129,19 +137,6 @@ function hasActiveSdkDirective(text: string, rootNode: TreeSitterNode): boolean 
         if (!isInInactiveNode(rootNode, match.index)) {
             return true;
         }
-    }
-
-    return false;
-}
-
-function isInInactiveNode(rootNode: TreeSitterNode, index: number): boolean {
-    let node = rootNode.descendantForIndex(index);
-    while (node) {
-        if (node.type === 'comment' || node.type.includes('string')) {
-            return true;
-        }
-
-        node = node.parent;
     }
 
     return false;

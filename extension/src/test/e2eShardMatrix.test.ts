@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { load } from 'js-yaml';
 
+import { removeDirectorySafely } from './testHelpers';
 /**
  * The E2E suite runs one spec per workflow matrix row. This unit test is the signal for a spec that
  * has no row, because an E2E shard cannot report that a different shard was never scheduled.
@@ -192,7 +193,7 @@ suite('E2E shard matrix', () => {
                 assert.AssertionError);
         }
         finally {
-            fs.rmSync(fixtureRoot, { recursive: true, force: true });
+            removeDirectorySafely(fixtureRoot);
         }
     });
 

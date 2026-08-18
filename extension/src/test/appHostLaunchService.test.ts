@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import * as locStrings from '../loc/strings';
 import { appHostLifecycleBusy } from '../loc/strings';
@@ -13,6 +13,7 @@ import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCanc
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
 import { isolatedLaunchCapability, type CapabilityStatus } from '../types/configInfo';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
@@ -169,10 +170,60 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.noDebug, false);
         assert.strictEqual(config.step, undefined);
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
+        assert.strictEqual(config.resolvedCliPath, '/path/bin/aspire');
         assert.strictEqual(config.__aspireAppHostSelectionOrigin, 'user-selection');
     });
 
-    test('lifecycle-owned launch omits isolation arguments when unspecified', async () => {
+    test('suppressed lifecycle launch does not report verified isolation', async () => {
+        const environmentVariables = [
+            'ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE',
+            'ASPIRE_EXTENSION_E2E_STATE_FILE',
+            'ASPIRE_EXTENSION_E2E_CONTROL_FILE',
+            'ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH',
+        ] as const;
+        const originalValues = new Map(environmentVariables.map(name => [name, process.env[name]]));
+
+        try {
+            process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE = 'true';
+            process.env.ASPIRE_EXTENSION_E2E_STATE_FILE = 'state.json';
+            process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE = 'control.json';
+            process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH = 'true';
+
+            const isolation = await service.launchFromLifecycleOwner(
+                '/repo/AppHost.csproj',
+                'run',
+                true,
+                true,
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(isolation, undefined);
+            assert.strictEqual(startDebuggingStub.called, false);
+        }
+        finally {
+            for (const [name, value] of originalValues) {
+                if (value === undefined) {
+                    delete process.env[name];
+                }
+                else {
+                    process.env[name] = value;
+                }
+            }
+        }
+    });
+
+    test('launch reuses an already-verified CLI path', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const target = workspaceFolderCliPathTarget(folder);
+
+        await service.launch('/repo/AppHost.csproj', 'do', false, undefined, target, '/repo/bin/aspire');
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(config.resolvedCliPath, '/repo/bin/aspire');
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
+    });
+
+    test('lifecycle-owned launch does not replace an existing workspace default', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
 
@@ -359,7 +410,7 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.args, undefined);
-        assert.strictEqual(config[appHostCliPathConfigKey], '/path/bin/aspire');
+        assert.strictEqual(config.resolvedCliPath, '/path/bin/aspire');
         assert.deepStrictEqual(isolation, { effective: false, option: undefined });
         assert.deepStrictEqual(capabilityProvider.calls, [{
             capability: isolatedLaunchCapability,
@@ -494,6 +545,33 @@ suite('AppHostLaunchService', () => {
         }
         finally {
             showErrorMessageStub.restore();
+        }
+    });
+
+    test('CLI availability probe resolves the target from the AppHost path workspace folder', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(folder);
+
+        try {
+            await service.launch('/repo/AppHost.csproj', 'run', true);
+
+            assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
+        }
+    });
+
+    test('CLI availability probe falls back to the window target when no folder owns the AppHost path', async () => {
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+
+        try {
+            await service.launch('/outside/AppHost.csproj', 'run', true);
+
+            assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
         }
     });
 

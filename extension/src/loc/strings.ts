@@ -21,6 +21,8 @@ export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI V
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
 export const aspireCliPathEnvironmentDescription = vscode.l10n.t('Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.');
+export const configuredCliPathRejected = (configuredPath: string) => vscode.l10n.t('The configured Aspire CLI path could not be used, so a different Aspire CLI is running instead: {0}. Check that aspire.aspireCliExecutablePath points to the aspire executable itself and that it runs.', configuredPath);
+export const configuredCliPathRejectedOpenSetting = vscode.l10n.t('Open Setting');
 export const installCliPlaceholder = vscode.l10n.t('Select how to install the Aspire CLI');
 export const installCliViewAllOptions = vscode.l10n.t('View all installation options');
 export const installCliViewAllOptionsDescription = vscode.l10n.t('Open the installation guide (includes the install script)');
@@ -68,6 +70,7 @@ export const debugSessionStartTimedOut = (sessionName: string, seconds: number) 
 export const debugSessionStopTimedOut = (sessionName: string, seconds: number) => vscode.l10n.t("Timed out after {1} seconds waiting for debug session '{0}' to stop.", sessionName, seconds);
 export const invalidTokenProvided = vscode.l10n.t('Invalid token provided.');
 export const noWorkspaceFolder = vscode.l10n.t('No workspace folder found.');
+export const selectWorkspaceFolderForAspireCommand = vscode.l10n.t('Select the workspace folder for the Aspire command');
 export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration already exists in launch.json.');
 export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed to configure launch.json: {0}.', error);
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default AppHost');
@@ -186,6 +189,8 @@ export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
+export const javaDisplayName = (mainClass: string) => vscode.l10n.t('Java: {0}', mainClass);
+export const javaLabel = vscode.l10n.t('Java');
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
@@ -206,6 +211,9 @@ export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPat
 export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string, projectPath: string) => vscode.l10n.t('The default launch profile \'{0}\' is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', profileName, projectPath);
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
+export const javaDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Java AppHosts are launched through the Java debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
+export const javaAppHostCommandNotRecognized = () => vscode.l10n.t('The Java AppHost launch command was not recognized and cannot be debugged.');
+export const javaAttachNotSupported = vscode.l10n.t('Java resources are started by the IDE rather than attached to, and the app host requested an attach session. Aspire cannot start one because no debug address is available.');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
 export const hotReloadDisabledNotice = vscode.l10n.t('C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.');
 export const openSettingsLabel = vscode.l10n.t('Open Settings');
@@ -261,6 +269,12 @@ export const codeLensRustAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not cl
 export const codeLensRustAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
 export const codeLensRustAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
 export const codeLensRustAppHostUseAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
+export const codeLensSpringBootDashboardBypassesAspire = vscode.l10n.t('⚠️ Do not start this app from the Spring Boot Dashboard; it bypasses Aspire');
+export const codeLensSpringBootDashboardBypassesAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. The Spring Boot Dashboard starts the app on its own, so it receives none of the service discovery, connection string, or OpenTelemetry settings Aspire injects.');
+export const codeLensJavaAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not click the Java Run or Debug actions; this AppHost is already running in Aspire');
+export const codeLensJavaAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. The Java extension starts another java process outside the running Aspire session.');
+export const codeLensJavaAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the Java Run or Debug actions; they bypass Aspire');
+export const codeLensJavaAppHostUseAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. The Java extension runs this file directly, so the AppHost starts with no Aspire session: none of its resources are launched, and the dashboard never appears.');
 
 export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspire AppHost');
 export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');

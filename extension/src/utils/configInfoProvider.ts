@@ -6,6 +6,7 @@ import { extensionLogOutputChannel } from './logging';
 import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
@@ -45,12 +46,14 @@ export async function getConfigInfo(terminalProvider: AspireTerminalProvider): P
     return new ConfigInfoProvider(terminalProvider).getConfigInfo();
 }
 
-interface ConfigInfoOptions {
+export interface ConfigInfoOptions {
     suppressErrors?: boolean;
     forceRefresh?: boolean;
     cliPath?: string;
     cancellationToken?: vscode.CancellationToken;
     minimumVersion?: string;
+    /** The resolution scope to use when `cliPath` is not already known. Defaults to the window scope. */
+    target?: CliPathResolutionTarget;
 }
 
 interface CliVersion {
@@ -61,15 +64,31 @@ interface CliVersion {
 }
 
 /**
+ * Working directory for `aspire config info`, chosen from the resolution target.
+ *
+ * The CLI discovers `aspire.config.json` by walking up from its working directory, so the folder it
+ * runs in decides which local settings file the answer describes. Window-scoped callers have no
+ * folder of their own and fall back to the first one, which is the best available guess and matches
+ * how other window-scoped commands behave.
+ */
+function resolveConfigInfoWorkingDirectory(target: CliPathResolutionTarget): string | undefined {
+    if (target.kind === 'workspaceFolder') {
+        return target.workspaceFolder.uri.fsPath;
+    }
+
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+/**
  * Wraps `aspire config info --json` and exposes the parsed {@link ConfigInfo} plus capability
  * negotiation helpers. This is the authoritative, locale-independent source for what the installed
  * CLI supports: features and capabilities are reported as structured data rather than parsed from
  * (potentially localized) command output.
  *
- * Successful reads and concurrent probes are cached by CLI executable path. This lets callers share
- * one invocation while ensuring that changing `aspire.aspireCliExecutablePath` cannot reuse
- * capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that can't
- * answer, or a transient spawn error, should be retried on the next call.
+ * Successful reads and concurrent probes are cached by CLI executable path and working directory.
+ * This lets callers share one invocation without reusing another workspace folder's local settings
+ * or capabilities from a different CLI. Failures are intentionally NOT cached: an older CLI that
+ * can't answer, or a transient spawn error, should be retried on the next call.
  *
  * Capability checks can fall back to a minimum CLI version when the token predates structured
  * capability reporting. Version probes are intentionally not cached: an exact launch must observe
@@ -96,6 +115,8 @@ export class ConfigInfoProvider {
      *   probe describes the same executable the caller is about to invoke.
      * @param options.cancellationToken Cancels this caller's wait. For a force refresh it also
      *   terminates that invocation-owned CLI process; shared probes continue for other callers.
+     * @param options.target The workspace scope that selects both the CLI and config-info working
+     *   directory. Defaults to the window scope.
      */
     async getConfigInfo(options?: ConfigInfoOptions): Promise<ConfigInfo | null> {
         const suppressErrors = options?.suppressErrors ?? false;
@@ -104,13 +125,21 @@ export class ConfigInfoProvider {
         }
 
         const startTime = Date.now();
-        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors, options?.cancellationToken);
+        const target = options?.target ?? windowCliPathTarget;
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(suppressErrors, target, options?.cancellationToken);
         if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
 
+        // `aspire config info` reports the local settings file it discovers from its working
+        // directory, so the answer is per-folder, not per-CLI. Keying the caches by CLI path alone
+        // let one folder's result be served for another in a multi-root workspace - and callers such
+        // as "Open Local Settings" act on `localSettingsPath`, so that opens or creates the wrong file.
+        const workingDirectory = resolveConfigInfoWorkingDirectory(target);
+        const cacheKey = `${cliPath}\u0000${workingDirectory ?? ''}`;
+
         if (!options?.forceRefresh) {
-            const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cliPath);
+            const cachedConfigInfo = this._cachedConfigInfoByCliPath.get(cacheKey);
             if (cachedConfigInfo) {
                 return cachedConfigInfo;
             }
@@ -123,19 +152,20 @@ export class ConfigInfoProvider {
         }
 
         if (options?.forceRefresh) {
-            const generation = this._beginProbe(cliPath);
+            const generation = this._beginProbe(cacheKey);
             const result = await this._fetchConfigInfo(
                 cliPath,
+                workingDirectory,
                 suppressErrors,
                 remainingTimeoutMs,
                 options.cancellationToken);
-            if (result && this._probeGenerationByCliPath.get(cliPath) === generation) {
-                this._cachedConfigInfoByCliPath.set(cliPath, result);
+            if (result && this._probeGenerationByCliPath.get(cacheKey) === generation) {
+                this._cachedConfigInfoByCliPath.set(cacheKey, result);
             }
             return result;
         }
 
-        const existingProbe = this._inFlightByCliPath.get(cliPath);
+        const existingProbe = this._inFlightByCliPath.get(cacheKey);
         if (existingProbe) {
             return await this._awaitProbe(
                 existingProbe,
@@ -144,7 +174,7 @@ export class ConfigInfoProvider {
                 options?.cancellationToken);
         }
 
-        const probe = this._startSharedProbe(cliPath, suppressErrors, remainingTimeoutMs);
+        const probe = this._startSharedProbe(cacheKey, cliPath, workingDirectory, suppressErrors, remainingTimeoutMs);
         return await this._awaitProbe(probe, undefined, suppressErrors, options?.cancellationToken);
     }
 
@@ -178,7 +208,8 @@ export class ConfigInfoProvider {
         }
 
         const suppressErrors = options.suppressErrors ?? false;
-        const cliPath = options.cliPath ?? await this._resolveCliPath(suppressErrors, options.cancellationToken);
+        const target = options.target ?? windowCliPathTarget;
+        const cliPath = options.cliPath ?? await this._resolveCliPath(suppressErrors, target, options.cancellationToken);
         if (!cliPath || options.cancellationToken?.isCancellationRequested) {
             return 'unavailable';
         }
@@ -291,28 +322,34 @@ export class ConfigInfoProvider {
         });
     }
 
-    private _startSharedProbe(cliPath: string, suppressErrors: boolean, timeoutMs: number): Promise<ConfigInfo | null> {
-        const generation = this._beginProbe(cliPath);
+    private _startSharedProbe(
+        cacheKey: string,
+        cliPath: string,
+        workingDirectory: string | undefined,
+        suppressErrors: boolean,
+        timeoutMs: number,
+    ): Promise<ConfigInfo | null> {
+        const generation = this._beginProbe(cacheKey);
         let probe!: Promise<ConfigInfo | null>;
-        probe = this._fetchConfigInfo(cliPath, suppressErrors, timeoutMs)
+        probe = this._fetchConfigInfo(cliPath, workingDirectory, suppressErrors, timeoutMs)
             .then(result => {
-                if (result && this._probeGenerationByCliPath.get(cliPath) === generation) {
-                    this._cachedConfigInfoByCliPath.set(cliPath, result);
+                if (result && this._probeGenerationByCliPath.get(cacheKey) === generation) {
+                    this._cachedConfigInfoByCliPath.set(cacheKey, result);
                 }
                 return result;
             })
             .finally(() => {
-                if (this._inFlightByCliPath.get(cliPath) === probe) {
-                    this._inFlightByCliPath.delete(cliPath);
+                if (this._inFlightByCliPath.get(cacheKey) === probe) {
+                    this._inFlightByCliPath.delete(cacheKey);
                 }
             });
-        this._inFlightByCliPath.set(cliPath, probe);
+        this._inFlightByCliPath.set(cacheKey, probe);
         return probe;
     }
 
-    private _beginProbe(cliPath: string): number {
-        const generation = (this._probeGenerationByCliPath.get(cliPath) ?? 0) + 1;
-        this._probeGenerationByCliPath.set(cliPath, generation);
+    private _beginProbe(cacheKey: string): number {
+        const generation = (this._probeGenerationByCliPath.get(cacheKey) ?? 0) + 1;
+        this._probeGenerationByCliPath.set(cacheKey, generation);
         return generation;
     }
 
@@ -351,7 +388,11 @@ export class ConfigInfoProvider {
         }
     }
 
-    private _resolveCliPath(suppressErrors: boolean, cancellationToken?: vscode.CancellationToken): Promise<string | null> {
+    private _resolveCliPath(
+        suppressErrors: boolean,
+        target: CliPathResolutionTarget,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<string | null> {
         return new Promise<string | null>((resolve) => {
             let settled = false;
             let cancellation: vscode.Disposable | undefined;
@@ -380,7 +421,7 @@ export class ConfigInfoProvider {
             cancellation = cancellationToken?.onCancellationRequested(() => settle(null));
 
             try {
-                this._terminalProvider.getAspireCliExecutablePath().then(
+                this._terminalProvider.getAspireCliExecutablePath(target).then(
                     cliPath => settle(cliPath),
                     reportError);
             }
@@ -392,6 +433,7 @@ export class ConfigInfoProvider {
 
     private _fetchConfigInfo(
         cliPath: string,
+        workingDirectory: string | undefined,
         suppressErrors: boolean,
         timeoutMs: number,
         cancellationToken?: vscode.CancellationToken,
@@ -447,7 +489,6 @@ export class ConfigInfoProvider {
                 }
             });
 
-            const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
                 if (settled) {
                     return;

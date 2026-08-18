@@ -368,6 +368,41 @@ export async function waitForEditorTitle(expectedText: string, timeoutMs = 60000
     }
 }
 
+/**
+ * Waits for a CodeLens whose text contains <paramref name="expectedText"/> in the named editor.
+ *
+ * The widget spans are read directly rather than through `TextEditor.getCodeLenses()` because that
+ * API enumerates `.//span[contains(@widgetid, 'codelens.widget')]/a[@id]` -- only the *clickable*
+ * lenses. A lens contributed with an empty command id is rendered by VS Code as plain text rather
+ * than a link, so it has no anchor element and is structurally invisible to that API. Aspire's
+ * entry point warnings are exactly that shape: they state a fact and have nothing to navigate to.
+ *
+ * One widget exists per line and holds every lens on it, so the returned strings are per line and
+ * read like the editor does, e.g. `Run | Debug | ⚠️ Do not click the Java Run or Debug actions...`.
+ */
+export async function waitForCodeLensText(fileName: string, expectedText: string, timeoutMs = 60000): Promise<string[]> {
+    let lastTexts: string[] = [];
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                await new EditorView().openEditor(fileName);
+                lastTexts = await VSBrowser.instance.driver.executeScript<string[]>(
+                    `return Array.from(document.querySelectorAll('[widgetid*="codelens.widget"]')).map(widget => widget.innerText || widget.textContent || '');`);
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+                return false;
+            }
+
+            return lastTexts.some(text => text.includes(expectedText)) ? lastTexts : false;
+        }, timeoutMs, `Timed out waiting for a CodeLens containing '${expectedText}' in '${fileName}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`CodeLenses: ${formatDiagnosticList(lastTexts)}`]);
+    }
+}
+
 export async function waitForWorkbenchText(expectedText: string, timeoutMs = 30000): Promise<string> {
     let lastText = '';
 

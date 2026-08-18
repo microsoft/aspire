@@ -5,6 +5,7 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import * as ts from 'typescript';
 
+import { removeDirectorySafely } from './testHelpers';
 function readSourcePattern(source: string, name: string): RegExp {
     const declaration = new RegExp(`const ${name} = /(.+)/;`).exec(source);
     assert.ok(declaration, `run-e2e.js must define ${name}`);
@@ -233,7 +234,7 @@ suite('E2E launch profile', () => {
             assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
         }
         finally {
-            fs.rmSync(tempRoot, { recursive: true, force: true });
+            removeDirectorySafely(tempRoot);
         }
     });
 
@@ -256,7 +257,7 @@ suite('E2E launch profile', () => {
             assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
         }
         finally {
-            fs.rmSync(tempRoot, { recursive: true, force: true });
+            removeDirectorySafely(tempRoot);
         }
     });
 
@@ -282,7 +283,7 @@ suite('E2E launch profile', () => {
                 assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
             }
             finally {
-                fs.rmSync(tempRoot, { recursive: true, force: true });
+                removeDirectorySafely(tempRoot);
             }
         }
     });

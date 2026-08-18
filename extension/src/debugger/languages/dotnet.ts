@@ -17,14 +17,15 @@ import {
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction,
     LaunchProfileCommandName,
     LaunchProfile,
     LaunchSettings,
     expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
-import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { resolveCliPath } from '../../utils/cliPath';
+import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
 import { deleteEnvironmentVariable, getEnvironmentWithoutE2EBridgeVariables, setEnvironmentVariable } from '../../utils/environment';
 
@@ -69,48 +70,52 @@ export class DotNetService implements IDotNetService {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
             const args = ['build', projectFile];
-            const buildProcess = spawn('dotnet', args, {
-                // The .NET SDK searches for global.json from the process working directory, not the
-                // project argument. Run from the project directory so extension and CLI builds select
-                // the same SDK and repository configuration.
-                cwd: path.dirname(projectFile),
-                env: createAspireCliPathProcessEnvironment()
-            });
 
-            let stdoutOutput = '';
-            let stderrOutput = '';
+            void (async () => {
+                const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
+                const buildProcess = spawn('dotnet', args, {
+                    // The .NET SDK searches for global.json from the process working directory, not the
+                    // project argument. Run from the project directory so extension and CLI builds select
+                    // the same SDK and repository configuration.
+                    cwd: path.dirname(projectFile),
+                    env: createResolvedAspireCliPathProcessEnvironment(cliPath)
+                });
 
-            // Stream stdout in real-time
-            buildProcess.stdout?.on('data', (data: Buffer) => {
-                const output = data.toString();
-                stdoutOutput += output;
-                this.writeToDebugConsole(output, 'stdout');
-            });
+                let stdoutOutput = '';
+                let stderrOutput = '';
 
-            // Stream stderr in real-time
-            buildProcess.stderr?.on('data', (data: Buffer) => {
-                const output = data.toString();
-                stderrOutput += output;
-                this.writeToDebugConsole(output, 'stderr');
-            });
+                // Stream stdout in real-time
+                buildProcess.stdout?.on('data', (data: Buffer) => {
+                    const output = data.toString();
+                    stdoutOutput += output;
+                    this.writeToDebugConsole(output, 'stdout');
+                });
 
-            buildProcess.on('error', (err) => {
-                extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
-                reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
-            });
+                // Stream stderr in real-time
+                buildProcess.stderr?.on('data', (data: Buffer) => {
+                    const output = data.toString();
+                    stderrOutput += output;
+                    this.writeToDebugConsole(output, 'stderr');
+                });
 
-            buildProcess.on('close', (code) => {
-                if (code === 0) {
-                    // if build succeeds, simply return. otherwise throw to trigger error handling
-                    if (stderrOutput) {
-                        reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                buildProcess.on('error', (err) => {
+                    extensionLogOutputChannel.error(`dotnet build process error: ${err}`);
+                    reject(new Error(buildFailedForProjectWithError(projectFile, err.message)));
+                });
+
+                buildProcess.on('close', (code) => {
+                    if (code === 0) {
+                        // if build succeeds, simply return. otherwise throw to trigger error handling
+                        if (stderrOutput) {
+                            reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
+                        } else {
+                            resolve();
+                        }
                     } else {
-                        resolve();
+                        reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
                     }
-                } else {
-                    reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
-                }
-            });
+                });
+            })().catch(reject);
         });
     }
 
@@ -124,10 +129,11 @@ export class DotNetService implements IDotNetService {
             '-property:GenerateFullPaths=true'
         ];
         try {
+            const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
             const { stdout } = await this.execFileAsync('dotnet', args, {
                 cwd: path.dirname(projectFile),
                 encoding: 'utf8',
-                env: createAspireCliPathProcessEnvironment()
+                env: createResolvedAspireCliPathProcessEnvironment(cliPath)
             });
             const output = stdout.trim();
             if (!output) {
@@ -141,20 +147,21 @@ export class DotNetService implements IDotNetService {
     }
 
     async getDotNetRunApiOutput(projectPath: string, environment?: NodeJS.ProcessEnv): Promise<string> {
-        let childProcess: ChildProcessWithoutNullStreams;
+        const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectPath)));
+        let childProcess: ChildProcessWithoutNullStreams | undefined;
 
-        return new Promise<string>(async (resolve, reject) => {
+        return new Promise<string>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                childProcess?.kill();
+                reject(new Error('Timeout while waiting for dotnet run-api response'));
+            }, 10_000);
+
             try {
-                const timeout = setTimeout(() => {
-                    childProcess?.kill();
-                    reject(new Error('Timeout while waiting for dotnet run-api response'));
-                }, 10_000);
-
                 extensionLogOutputChannel.info('dotnet run-api - starting process');
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: createAspireCliPathProcessEnvironment({ ...process.env, ...environment }),
+                    env: createResolvedAspireCliPathProcessEnvironment(cliPath, { ...process.env, ...environment }),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
@@ -178,9 +185,10 @@ export class DotNetService implements IDotNetService {
                 childProcess.stdin.write(message + os.EOL);
                 childProcess.stdin.end();
             } catch (e) {
+                clearTimeout(timeout);
                 reject(e);
             }
-        }).finally(() => childProcess.removeAllListeners());
+        }).finally(() => childProcess?.removeAllListeners());
     }
 }
 
@@ -631,12 +639,21 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             debugConfiguration.executablePath = baseProfile?.executablePath;
             debugConfiguration.checkForDevCert = baseProfile?.useSSL;
 
-            // The apphost's application URL is the Aspire dashboard URL. We already get the dashboard login URL later on,
-            // so avoid generating a serverReadyAction for the apphost and manually open the browser ourselves.
-            // For project resources, launch settings supply a default only when debugger settings did not provide one.
-            if (!launchOptions.isApphost && debugConfiguration.serverReadyAction === undefined) {
-                debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, baseProfile?.launchUrl);
-            }
+            // `launchBrowser` from launchSettings.json is deliberately not honoured here. Every project that
+            // reaches this callback is started by the app host, and the app host owns its endpoints: it
+            // assigns ports and can front the project with a proxy, so the `applicationUrl` on disk is
+            // routinely not where the resource actually listens. The Aspire dashboard resource is the
+            // extreme case, because the app host both replaces its URLs and puts a login token on the real
+            // address, so honouring the profile opened a stale port and an unauthenticated page.
+            //
+            // The run-session payload carries no endpoint data, so the extension cannot correct the URL.
+            // The CLI resolves this by ignoring the setting outright — `LaunchProfile.LaunchBrowser` is
+            // parsed but never read anywhere in Aspire.Hosting or Aspire.Cli, so `aspire run` opens nothing
+            // for a project resource and leaves URLs to the dashboard. Matching that keeps the two front
+            // ends consistent instead of having VS Code open a URL the CLI never would.
+            //
+            // A serverReadyAction the user configured explicitly in launch.json is still respected; it is
+            // read from `debugConfiguration` above and never overwritten here.
 
             // TODO: Remove this block — the dashboard no longer recognizes ASPIRE_DASHBOARD_AI_DISABLED.
             // See https://github.com/microsoft/aspire/issues/18751

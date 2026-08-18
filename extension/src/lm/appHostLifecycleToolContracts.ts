@@ -99,7 +99,7 @@ export interface AppHostLifecycleLaunchService {
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
     resolveLaunchIsolation(appHostPath: string, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
+    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation | undefined>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
     stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }

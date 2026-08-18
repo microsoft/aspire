@@ -14,7 +14,9 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
+import { workspaceFolderCliPathTarget, getCliPathTargetKey } from '../utils/cliPathVariables';
 
+import { removeDirectorySafely } from './testHelpers';
 interface RecordedEvent {
     name: string;
     properties?: Record<string, string>;
@@ -472,6 +474,8 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.rs'));
+                // Case matters: watcher globs are case-sensitive on Linux and the file is AppHost.java.
+                assert.ok(watchedPatterns.includes('**/AppHost.java'));
             }
             finally {
                 service.dispose();
@@ -1490,9 +1494,9 @@ suite('AppHost discovery', () => {
                     { cliPath: 'old-aspire', args: ['ls', '--format', 'json', '--nologo'] },
                     { cliPath: 'new-aspire', args: ['ls', '--format', 'json', '--stream', '--nologo'] },
                 ]);
-                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'old-aspire' },
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'new-aspire' },
+                assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => ({ ...call.args[0], target: getCliPathTargetKey(call.args[0].target) })), [
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'old-aspire', target: getCliPathTargetKey(workspaceFolderCliPathTarget(makeWorkspaceFolder(buildPath('workspace-one')))) },
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'new-aspire', target: getCliPathTargetKey(workspaceFolderCliPathTarget(makeWorkspaceFolder(buildPath('workspace-two')))) },
                 ]);
             }
             finally {
@@ -1527,8 +1531,8 @@ suite('AppHost discovery', () => {
                     ['ls', '--format', 'json', '--stream', '--nologo'],
                 ]);
                 assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args[0]), [
-                    { suppressErrors: true, forceRefresh: false, cliPath: 'aspire' },
-                    { suppressErrors: true, forceRefresh: true, cliPath: 'aspire' },
+                    { suppressErrors: true, forceRefresh: false, cliPath: 'aspire', target: workspaceFolderCliPathTarget(workspaceFolder) },
+                    { suppressErrors: true, forceRefresh: true, cliPath: 'aspire', target: workspaceFolderCliPathTarget(workspaceFolder) },
                 ]);
             }
             finally {
@@ -1913,7 +1917,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2049,7 +2053,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2090,7 +2094,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2154,7 +2158,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2225,7 +2229,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2269,7 +2273,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2319,7 +2323,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2461,7 +2465,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2524,7 +2528,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2581,7 +2585,7 @@ suite('AppHost discovery', () => {
                 }
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2614,7 +2618,7 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(selectedPath, matchingAppHostPath);
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2644,7 +2648,7 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(selectedPath, undefined);
             }
             finally {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 
@@ -2670,6 +2674,49 @@ suite('AppHost discovery', () => {
                 buildPath('workspace', 'First', 'AppHost.csproj'),
                 buildPath('workspace', 'Second', 'AppHost.csproj'),
             ]);
+        });
+    });
+
+    suite('workspace-folder CLI resolution target', () => {
+        let sandbox: sinon.SinonSandbox;
+
+        setup(() => {
+            sandbox = sinon.createSandbox();
+            stubFileSystemWatchers(sandbox);
+        });
+
+        teardown(() => {
+            sandbox.restore();
+        });
+
+        test('resolves the CLI path and capability probe with the workspace folder target', async () => {
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const getAspireCliExecutablePathStub = sandbox.stub().resolves('/repo/a/bin/aspire');
+            const terminalProvider = {
+                getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+                createEnvironment: () => ({}),
+            } as unknown as AspireTerminalProvider;
+            const getConfigInfoStub = sandbox.stub().resolves({ capabilities: [] });
+            const fakeConfigInfoProvider = { getConfigInfo: getConfigInfoStub } as unknown as configInfoProvider.ConfigInfoProvider;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([]));
+                options?.exitCallback?.(0);
+                return { kill: () => true } as any;
+            });
+            const service = new AppHostDiscoveryService(terminalProvider, fakeConfigInfoProvider);
+
+            try {
+                await service.discover(workspaceFolder);
+
+                assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(workspaceFolder)));
+                assert.strictEqual(getConfigInfoStub.calledOnce, true);
+                const configInfoOptions = getConfigInfoStub.firstCall.args[0];
+                assert.strictEqual(configInfoOptions.cliPath, '/repo/a/bin/aspire');
+                assert.deepStrictEqual(configInfoOptions.target, workspaceFolderCliPathTarget(workspaceFolder));
+            }
+            finally {
+                service.dispose();
+            }
         });
     });
 });

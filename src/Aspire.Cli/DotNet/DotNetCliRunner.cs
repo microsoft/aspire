@@ -487,7 +487,7 @@ internal sealed class DotNetCliRunner(
         logger.LogDebug("Starting backchannel connection to AppHost at {SocketPath}", socketPath);
 
         var startTime = DateTimeOffset.UtcNow;
-        var connectionTimeout = GetBackchannelConnectionTimeout(configuration);
+        var connectionTimeout = AppHostStartupTimeout.GetBackchannelConnectionTimeout(configuration);
 
         do
         {
@@ -657,24 +657,6 @@ internal sealed class DotNetCliRunner(
     {
         return BundleDiscovery.TryDiscoverDcpFromDirectory(bundleRoot, out _, out _, out _)
             && BundleDiscovery.TryDiscoverManagedFromDirectory(bundleRoot, out _);
-    }
-
-    internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
-    {
-        var configuredValue = configuration[KnownConfigNames.CliBackchannelConnectTimeoutSeconds];
-        if (double.TryParse(configuredValue, CultureInfo.InvariantCulture, out var seconds) && seconds >= 0)
-        {
-            return TimeSpan.FromSeconds(seconds);
-        }
-
-        var timeout = TimeSpan.FromSeconds(WaitCommand.DefaultTimeoutSeconds);
-        var configuredStartupTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
-        if (int.TryParse(configuredStartupTimeout, CultureInfo.InvariantCulture, out var startupTimeoutSeconds) && startupTimeoutSeconds > timeout.TotalSeconds)
-        {
-            timeout = TimeSpan.FromSeconds(startupTimeoutSeconds);
-        }
-
-        return timeout;
     }
 
     // Cache expiry/max age handled inside DiskCache implementation.

@@ -184,32 +184,6 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
-  # Work around https://github.com/github/gh-aw/issues/50906 in gh-aw v0.85.4.
-  # Threat detection runs on a fresh runner, and its custom steps run before the
-  # generated Copilot installer. Run the same verified installer here so the
-  # following step can stage a cached CLI where the generated AWF command expects
-  # it. Remove these steps after upgrading to a compiler containing
-  # https://github.com/github/gh-aw/pull/50908.
-  threat-detection:
-    steps:
-      - name: Install GitHub Copilot CLI for threat detection staging
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh"
-        env:
-          GH_HOST: github.com
-          GH_AW_COMPILED_VERSION: v0.85.4
-      - name: Stage GitHub Copilot CLI for threat detection
-        run: |
-          COPILOT_BIN="$(command -v copilot || true)"
-          if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
-            echo "::error::The GitHub Copilot CLI installer did not provide an executable."
-            exit 1
-          fi
-
-          if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
-            sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
-            sudo chmod 755 /usr/local/bin/copilot
-          fi
-          /usr/local/bin/copilot --version
   # gh-aw generates the target-repository checkout required by create-pull-request.
   # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
   # in v0.85.4 and downgrade the app token from contents: write to contents: read.
@@ -243,13 +217,13 @@ safe-outputs:
                 f"found {len(create_items)}."
             )
 
-        base_branch = create_items[0].get("base_branch")
+        base_branch = create_items[0].get("base")
         if (
             not isinstance(base_branch, str)
             or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
             is None
         ):
-            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
+            raise SystemExit("Canonical create_pull_request base is invalid.")
 
         with open(sys.argv[1], "a", encoding="utf-8") as github_output:
             github_output.write(f"branch={base_branch}\n")
@@ -573,22 +547,6 @@ safe-outputs:
 # agent starts and writes the result to .pr-docs-check/target.json. The
 # agent reads that file verbatim and never re-derives the branch.
 pre-agent-steps:
-  # gh-aw v0.85.4 can select a cached Copilot CLI but still hard-codes
-  # /usr/local/bin/copilot in the AWF command. Stage the selected binary there
-  # until the compiler includes https://github.com/github/gh-aw/pull/50908.
-  - name: Stage GitHub Copilot CLI for agent execution
-    run: |
-      COPILOT_BIN="$(command -v copilot || true)"
-      if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
-        echo "::error::The GitHub Copilot CLI installer did not provide an executable."
-        exit 1
-      fi
-
-      if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
-        sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
-        sudo chmod 755 /usr/local/bin/copilot
-      fi
-      /usr/local/bin/copilot --version
   - name: Check out pre-agent scripts
     # The `checkout:` block above made microsoft/aspire.dev the current
     # workspace because that's where the doc PR is authored. We need a sparse,

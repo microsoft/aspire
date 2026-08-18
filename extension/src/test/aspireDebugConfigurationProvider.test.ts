@@ -7,12 +7,14 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
-import { appHostCliPathConfigKey, appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
-import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationCliPathAsTrusted, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
+import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import * as cliPathModule from '../utils/cliPath';
+import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
+import { removeDirectorySafely } from './testHelpers';
 /** Captures the AppHost paths the provider claims for `launch.json`/F5 launches. */
 class RecordingLaunchReservation implements ExternalLaunchReservation {
     readonly reserved: string[] = [];
@@ -95,7 +97,7 @@ suite('AspireDebugConfigurationProvider', () => {
 
     teardown(() => {
         sandbox.restore();
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeDirectorySafely(tempDir);
     });
 
     test('resolves launch config SDK-style AppHost Program.cs to containing project file', async () => {
@@ -358,7 +360,7 @@ suite('AspireDebugConfigurationProvider', () => {
             : undefined;
 
         assert.strictEqual(phaseTwo?.[appHostLaunchReservationIdConfigKey], undefined);
-        assert.strictEqual(phaseTwo?.[appHostCliPathConfigKey], '/resolved/aspire');
+        assert.strictEqual((phaseTwo as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/resolved/aspire');
         assert.deepStrictEqual(launchReservation.reserved, []);
     });
 
@@ -373,10 +375,10 @@ suite('AspireDebugConfigurationProvider', () => {
             type: 'aspire',
             request: 'launch',
             program: appHostPath,
-            [appHostCliPathConfigKey]: '/forged/aspire',
+            resolvedCliPath: '/forged/aspire',
         });
 
-        assert.strictEqual(config?.[appHostCliPathConfigKey], '/resolved/aspire');
+        assert.strictEqual((config as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/resolved/aspire');
         assert.deepStrictEqual(config?.args, ['--isolated']);
         assert.deepStrictEqual(launchReservation.prepared, [{
             appHostPath,
@@ -395,13 +397,13 @@ suite('AspireDebugConfigurationProvider', () => {
             type: 'aspire',
             request: 'launch',
             program: appHostPath,
-            [appHostCliPathConfigKey]: '/selected/aspire',
+            resolvedCliPath: '/selected/aspire',
         };
         markAspireDebugConfigurationAsExtensionOwned(input);
 
         const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, input);
 
-        assert.strictEqual(config?.[appHostCliPathConfigKey], '/selected/aspire');
+        assert.strictEqual((config as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/selected/aspire');
     });
 
     test('uses the trusted pinned CLI path when preparing run arguments', async () => {
@@ -414,13 +416,14 @@ suite('AspireDebugConfigurationProvider', () => {
             type: 'aspire',
             request: 'launch',
             program: appHostPath,
-            [appHostCliPathConfigKey]: '/trusted/aspire',
+            resolvedCliPath: '/trusted/aspire',
         };
-        markAspireDebugConfigurationCliPathAsTrusted(input);
+        markAspireDebugConfigurationWithResolvedCliPath(input, '/trusted/aspire');
+        markAspireDebugConfigurationWithResolvedCliPathScope(input, getCliPathTargetKey(windowCliPathTarget));
 
         const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, input);
 
-        assert.strictEqual(config?.[appHostCliPathConfigKey], '/trusted/aspire');
+        assert.strictEqual((config as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/trusted/aspire');
         assert.deepStrictEqual(config?.args, ['--isolated']);
         assert.deepStrictEqual(launchReservation.prepared, [{
             appHostPath,
@@ -920,22 +923,93 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(showErrorMessageStub.called, false);
     });
 
-    test('resolveDebugConfiguration validates the exact trusted CLI pinned for restart', async () => {
+    test('resolveDebugConfiguration resolves CLI availability with the supplied workspace folder target', async () => {
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
-        resolveCliPathStub.resolves({
-            cliPath: '/current/aspire',
-            available: true,
-            source: 'configured',
+        const folder = createWorkspaceFolder('/repo');
+        resolveCliPathStub.resolves({ cliPath: '/repo/bin/aspire', available: true, source: 'configured' });
+
+        const config = await provider.resolveDebugConfiguration(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+    });
+
+    test('resolveDebugConfiguration resolves CLI availability from a concrete program owner instead of the supplied folder', async () => {
+        const folderA = createWorkspaceFolder(path.join(tempDir, 'workspace-a'));
+        const folderB = createWorkspaceFolder(path.join(tempDir, 'workspace-b'));
+        const programPath = path.join(folderB.uri.fsPath, 'AppHost.csproj');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(programPath), launchReservation);
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
+            if (uri.fsPath.startsWith(folderA.uri.fsPath)) {
+                return folderA;
+            }
+            if (uri.fsPath.startsWith(folderB.uri.fsPath)) {
+                return folderB;
+            }
+            return undefined;
         });
-        tryExecuteCliStub.resolves(true);
+        resolveCliPathStub.resolves({ cliPath: '/workspace-b/bin/aspire', available: true, source: 'configured' });
+
+        const config = await provider.resolveDebugConfiguration(folderA, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: programPath,
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folderB)));
+    });
+
+    test('resolveDebugConfiguration uses the supplied folder while program variables are unresolved', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder');
+        resolveCliPathStub.resolves({ cliPath: '/workspace/bin/aspire', available: true, source: 'configured' });
+
+        const config = await provider.resolveDebugConfiguration(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '${workspaceFolder}/AppHost.csproj',
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        assert.ok(getWorkspaceFolderStub.notCalled);
+    });
+
+    test('resolveDebugConfiguration resolves CLI availability with the window target when no folder is supplied', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+
+        const config = await provider.resolveDebugConfiguration(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
+    });
+
+    test('resolveDebugConfiguration validates the exact CLI pinned for restart', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
         const config = {
             name: 'Debug AppHost',
             type: 'aspire',
             request: 'launch',
             program: '/repo/AppHost.csproj',
-            [appHostCliPathConfigKey]: '/pinned/aspire',
-        };
-        markAspireDebugConfigurationCliPathAsTrusted(config);
+            resolvedCliPath: '/pinned/aspire',
+        } as AspireExtendedDebugConfiguration;
+        markAspireDebugConfigurationWithResolvedCliPath(config, '/pinned/aspire');
+        markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(windowCliPathTarget));
 
         const resolved = await provider.resolveDebugConfiguration(undefined, config);
 
@@ -944,13 +1018,8 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(resolveCliPathStub.called, false);
     });
 
-    test('resolveDebugConfiguration aborts restart when its trusted pinned CLI is unavailable', async () => {
+    test('resolveDebugConfiguration aborts restart when its pinned CLI is unavailable', async () => {
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
-        resolveCliPathStub.resolves({
-            cliPath: '/current/aspire',
-            available: true,
-            source: 'configured',
-        });
         tryExecuteCliStub.resolves(false);
         sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         const config = {
@@ -958,15 +1027,81 @@ suite('AspireDebugConfigurationProvider', () => {
             type: 'aspire',
             request: 'launch',
             program: '/repo/AppHost.csproj',
-            [appHostCliPathConfigKey]: '/pinned/aspire',
-        };
-        markAspireDebugConfigurationCliPathAsTrusted(config);
+            resolvedCliPath: '/pinned/aspire',
+        } as AspireExtendedDebugConfiguration;
+        markAspireDebugConfigurationWithResolvedCliPath(config, '/pinned/aspire');
+        markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(windowCliPathTarget));
 
         const resolved = await provider.resolveDebugConfiguration(undefined, config);
 
         assert.strictEqual(resolved, undefined);
         sinon.assert.calledOnceWithExactly(tryExecuteCliStub, '/pinned/aspire');
         assert.strictEqual(resolveCliPathStub.called, false);
+    });
+
+    test('preserves the CLI path selected by a normal launch availability gate', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        resolveCliPathStub.resolves({
+            cliPath: '/verified/aspire',
+            available: true,
+            source: 'configured',
+        });
+
+        const gatedConfig = await provider.resolveDebugConfiguration(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            resolvedCliPath: '/injected/aspire',
+        } as AspireExtendedDebugConfiguration);
+        const config = gatedConfig
+            ? await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, gatedConfig) as AspireExtendedDebugConfiguration | undefined
+            : undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.resolvedCliPath, '/verified/aspire');
+    });
+
+    test('re-resolves the CLI against the substituted program when variables named another folder', async () => {
+        const folderA = createWorkspaceFolder(path.join(tempDir, 'workspace-a'));
+        const folderB = createWorkspaceFolder(path.join(tempDir, 'workspace-b'));
+        const programPath = path.join(folderB.uri.fsPath, 'AppHost.java');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(programPath), launchReservation);
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri => {
+            if (uri.fsPath.startsWith(folderA.uri.fsPath)) {
+                return folderA;
+            }
+            if (uri.fsPath.startsWith(folderB.uri.fsPath)) {
+                return folderB;
+            }
+            return undefined;
+        });
+        resolveCliPathStub.callsFake(async (target: unknown) => {
+            const isFolderB = JSON.stringify(target) === JSON.stringify(workspaceFolderCliPathTarget(folderB));
+            return { cliPath: isFolderB ? '/workspace-b/bin/aspire' : '/workspace-a/bin/aspire', available: true, source: 'configured' } as never;
+        });
+
+        // The gate runs before substitution, so ${workspaceFolder:workspace-b} is still literal and the
+        // only folder available is the initiating one. That first answer must not be final.
+        const gatedConfig = await provider.resolveDebugConfiguration(folderA, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '${workspaceFolder:workspace-b}/AppHost.java',
+        } as AspireExtendedDebugConfiguration);
+
+        assert.ok(gatedConfig);
+
+        // VS Code substitutes variables in place and passes the same configuration to this hook, so
+        // the owning folder is now knowable and the CLI must be re-resolved against it.
+        (gatedConfig as AspireExtendedDebugConfiguration).program = programPath;
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(
+            folderA,
+            gatedConfig as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.resolvedCliPath, '/workspace-b/bin/aspire');
+        assert.ok(resolveCliPathStub.calledWith(workspaceFolderCliPathTarget(folderB)));
     });
 
     test('resolveDebugConfigurationWithSubstitutedVariables removes internal skip flag before launch', async () => {
@@ -982,6 +1117,39 @@ suite('AspireDebugConfigurationProvider', () => {
 
         assert.ok(config);
         assert.strictEqual(config.skipCliAvailabilityCheck, undefined);
+    });
+
+    test('removes a resolved CLI path injected by a launch configuration', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'publish',
+            program: '/repo/AppHost.csproj',
+            resolvedCliPath: '/untrusted/aspire',
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.resolvedCliPath, undefined);
+    });
+
+    test('preserves the resolved CLI path on an extension-owned launch', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'), launchReservation);
+        const initialConfig = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            resolvedCliPath: '/verified/aspire',
+        } as AspireExtendedDebugConfiguration;
+        markAspireDebugConfigurationAsExtensionOwned(initialConfig);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, initialConfig) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.resolvedCliPath, '/verified/aspire');
     });
 
     function setActiveEditor(filePath: string, folder: vscode.WorkspaceFolder): void {
