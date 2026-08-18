@@ -681,7 +681,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://aspire.dev/dashboard/security-considerations/", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
@@ -865,7 +865,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             },
             w =>
             {
-                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://aspire.dev/dashboard/security-considerations/", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
             },
             w =>
