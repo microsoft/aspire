@@ -1,0 +1,16 @@
+{
+  "id": "polyglot-java-sdk-validation-build-image-failure",
+  "type": "infra-failure",
+  "title": "Polyglot SDK Validation: Java SDK Validation job fails building validation image with exit code 1, unrelated to PR changes; job logs unavailable for detailed diagnosis",
+  "error_pattern": "Process completed with exit code 1. (Build Java validation image step failed; job logs failed to fetch: '(Failed to fetch logs for job 95550474447)'); downstream 'Polyglot Validation Results / Check validation results' job also fails as a result (exit code 1)",
+  "occurrences": [
+    {
+      "run_id": 32082892403,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32082892403",
+      "job": "Tests / Polyglot SDK Validation / Java SDK Validation",
+      "pr_number": 19337,
+      "observed_at": "2026-08-18T00:47:23Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19452"
+}

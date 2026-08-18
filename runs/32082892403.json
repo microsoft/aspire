@@ -1,0 +1,38 @@
+{
+  "run_id": 32082892403,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32082892403",
+  "analyzed_at": "2026-08-18T00:47:23Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19337,
+    "title": "Revert \"Bound the NuGet package search timeout\"",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/revert-19178",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19337"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / Java SDK Validation",
+      "id": 95550474447,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32082892403/job/95550474447",
+      "classification": "transient-infra",
+      "reason": "Job fails at 'Build Java validation image' step with exit code 1. PR only changes src/Aspire.Cli/Layout/LayoutProcessRunner.cs and its test, unrelated to the Java SDK/polyglot validation image build. Detailed logs were unavailable, but this mirrors a previously observed pattern of Polyglot SDK Validation jobs failing for infra reasons unrelated to PR content (see cause polyglot-typescript-sdk-validation-node24-failure for TypeScript SDK).",
+      "failed_steps": ["Build Java validation image"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 95552370968,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32082892403/job/95552370968",
+      "classification": "transient-infra",
+      "reason": "Downstream aggregation job fails because the Java SDK Validation job failed upstream; not caused by PR changes.",
+      "failed_steps": ["Check validation results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["polyglot-java-sdk-validation-build-image-failure"]
+}
