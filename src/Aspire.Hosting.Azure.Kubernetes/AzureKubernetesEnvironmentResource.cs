@@ -109,7 +109,7 @@ public partial class AzureKubernetesEnvironmentResource :
             // Kubernetes cleanup steps still runs through the credential prerequisite and fails rather
             // than allowing the command to fall back to the caller's ambient Kubernetes context.
             var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
-            if (deploymentStateSection.Data.Count == 0)
+            if (!HasPersistedAksIdentity(deploymentStateSection.Data))
             {
                 if (string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
                 {

@@ -414,6 +414,12 @@ public static partial class KubernetesHelmChartExtensions
 
         var arguments = new StringBuilder();
         arguments.Append(CultureInfo.InvariantCulture, $"uninstall {releaseName} --namespace {@namespace}");
+        // The chart state is deleted before later destroy steps run, so a retry can reach this
+        // command after Helm already removed the release. Helm's --ignore-not-found only converts
+        // that missing-release case to success; authentication, connectivity, and other failures
+        // still return a nonzero exit code.
+        // See https://helm.sh/docs/helm/helm_uninstall/.
+        arguments.Append(" --ignore-not-found");
 
         if (environment.KubeConfigPath is not null)
         {

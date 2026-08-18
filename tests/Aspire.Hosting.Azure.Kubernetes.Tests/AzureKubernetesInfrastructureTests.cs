@@ -17,6 +17,7 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -248,6 +249,118 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task DestroyRetryAfterExternalChartCleanupStillReachesAzureDeletion()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "app-resource-group",
+            ["SubscriptionId"] = "00000000-1111-2222-3333-444444444444"
+        });
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Outputs"] = new JsonObject
+            {
+                ["id"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = "/subscriptions/00000000-5555-6666-7777-888888888888/" +
+                        "resourceGroups/cluster-resource-group/providers/Microsoft.ContainerService/" +
+                        "managedClusters/aks-physical-name"
+                },
+                ["name"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = "aks-physical-name"
+                }
+            }.ToJsonString(),
+            ["Scope"] = new JsonObject
+            {
+                ["resourceGroup"] = "cluster-resource-group",
+                ["subscription"] = "00000000-5555-6666-7777-888888888888"
+            }.ToJsonString()
+        });
+        stateManager.SetSection("HelmChart:aks:podinfo", new JsonObject
+        {
+            ["ReleaseName"] = "podinfo",
+            ["Namespace"] = "podinfo"
+        });
+
+        var uninstallCount = 0;
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments =>
+            {
+                if (!arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (0, null);
+                }
+
+                if (Interlocked.Increment(ref uninstallCount) == 1 ||
+                    arguments.Contains(" --ignore-not-found", StringComparison.Ordinal))
+                {
+                    return (0, null);
+                }
+
+                // Helm reports a missing release in this form after the first destroy removed it.
+                return (1, "Error: uninstall: Release not loaded: podinfo: release: not found");
+            }
+        };
+
+        async Task<TestPipelineActivityReporter> RunDestroyAsync()
+        {
+            var reporter = new TestPipelineActivityReporter(output);
+            using var builder = TestDistributedApplicationBuilder.Create(
+                DistributedApplicationOperation.Publish,
+                workspace.Path,
+                step: WellKnownPipelineSteps.Destroy);
+            builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+            builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+            builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+            builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+            builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+            var aks = builder.AddAzureKubernetesEnvironment("aks");
+            aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
+            aks.Resource.AzCommandRunnerForTesting = (_, _, _) => Task.FromResult(
+                new AzureKubernetesEnvironmentResource.AzCommandResult(0, "apiVersion: v1", string.Empty));
+            aks.AddHelmChart("podinfo", "oci://example.com/chart", "1.0.0")
+                .WithDestroy();
+
+            // Force the real Azure destroy step to fail after its Kubernetes prerequisites.
+            // The retry must reach this same failure instead of being blocked by the now-missing release.
+            builder.Services.RemoveAll<ITokenCredentialProvider>();
+
+            await using var app = builder.Build();
+            await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            return reporter;
+        }
+
+        var firstReporter = await RunDestroyAsync();
+        var chartStateAfterFirstDestroy = await stateManager.AcquireSectionAsync(
+            "HelmChart:aks:podinfo",
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(chartStateAfterFirstDestroy.Data);
+        Assert.StartsWith(
+            "Step 'destroy-azure-azure-environment' failed:",
+            firstReporter.CompletionMessage,
+            StringComparison.Ordinal);
+
+        var retryReporter = await RunDestroyAsync();
+
+        Assert.Equal(2, uninstallCount);
+        Assert.All(
+            fakeHelm.Arguments.Where(arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)),
+            arguments => Assert.Contains(" --ignore-not-found", arguments, StringComparison.Ordinal));
+        Assert.StartsWith(
+            "Step 'destroy-azure-azure-environment' failed:",
+            retryReporter.CompletionMessage,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DestroyPipelineUsesMatchingCredentialsForEachAksEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -302,6 +415,11 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         {
             ["Outputs"] = new JsonObject
             {
+                ["id"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = "/subscriptions/00000000-5555-6666-7777-888888888888/resourceGroups/cluster-resource-group/providers/Microsoft.ContainerService/managedClusters/aks-physical-name"
+                },
                 ["name"] = new JsonObject
                 {
                     ["type"] = "String",
@@ -359,18 +477,82 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DestroyPipelineFailsBeforeClusterCleanupWhenAksDeploymentStateIsIncomplete()
+    public async Task DestroyPipelineUsesPersistedAksResourceIdWhenScopeIsAbsent()
     {
+        const string clusterSubscriptionId = "00000000-5555-6666-7777-888888888888";
+        const string clusterResourceGroup = "cluster-resource-group";
+        const string clusterName = "aks-physical-name";
         using var workspace = TemporaryWorkspace.Create(output);
         var stateManager = new InMemoryDeploymentStateManager();
         stateManager.SetSection("Azure", new JsonObject
         {
-            ["ResourceGroup"] = "app-resource-group",
+            ["ResourceGroup"] = "current-app-resource-group",
             ["SubscriptionId"] = "00000000-1111-2222-3333-444444444444"
         });
         stateManager.SetSection("Azure:Deployments:aks", new JsonObject
         {
-            ["Outputs"] = "{}"
+            ["Outputs"] = new JsonObject
+            {
+                ["id"] = new JsonObject
+                {
+                    ["type"] = "String",
+                    ["value"] = $"/subscriptions/{clusterSubscriptionId}/resourceGroups/{clusterResourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}"
+                }
+            }.ToJsonString()
+        });
+        string? azArguments = null;
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // A fresh destroy does not run provisioning, so resolving either reference would wait
+        // indefinitely. Compatibility state without Scope must use the persisted resource ID.
+        aks.Resource.Scope = new AzureBicepResourceScope(
+            aks.Resource.NameOutputReference,
+            aks.Resource.Id);
+        aks.Resource.AzCliPathResolverForTesting = () => "/fake/az";
+        aks.Resource.AzCommandRunnerForTesting = (_, arguments, _) =>
+        {
+            azArguments = arguments;
+            return Task.FromResult(new AzureKubernetesEnvironmentResource.AzCommandResult(
+                0,
+                "apiVersion: v1",
+                string.Empty));
+        };
+
+        var azureEnvironment = builder.Resources.OfType<AzureEnvironmentResource>().Single();
+        azureEnvironment.Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var destroyAzureStep = context.GetSteps(azureEnvironment)
+                .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
+            destroyAzureStep.RequiredBySteps.Remove(WellKnownPipelineSteps.Destroy);
+            return Task.CompletedTask;
+        }));
+
+        await using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            $"aks get-credentials --resource-group \"{clusterResourceGroup}\" --name \"{clusterName}\" --file - " +
+            $"--subscription \"{clusterSubscriptionId}\"",
+            azArguments);
+        Assert.Empty(aks.Resource.Outputs);
+    }
+
+    [Fact]
+    public async Task DestroyPipelineSkipsClusterCleanupWhenAksDeploymentStateHasNoIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Location"] = "westus2"
         });
         stateManager.SetSection("Helm:aks", new JsonObject
         {
@@ -394,16 +576,14 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         await using var app = builder.Build();
         await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
         Assert.Equal(
-            "Step 'aks-get-credentials-for-destroy-aks' failed: " +
-            "The Azure deployment state for AKS environment 'aks' does not contain the deployed cluster name.",
-            reporter.CompletionMessage);
-        Assert.Equal(
-            ["aks-get-credentials-for-destroy-aks", "destroy-prereq"],
+            ["destroy", "destroy-azure-azure-environment", "destroy-prereq"],
             reporter.CreatedSteps
                 .Where(step => step.Contains("destroy", StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal));
+        Assert.Contains(
+            reporter.CompletedSteps,
+            step => step is ("destroy-azure-azure-environment", _, CompletionState.Completed));
         Assert.Null(aks.Resource.KubernetesEnvironment.KubeConfigPath);
     }
 
@@ -444,11 +624,15 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DirectAzureDestroySkipsClusterCleanupForNeverDeployedAksEnvironment()
+    public async Task DirectAzureDestroySkipsClusterCleanupWithoutPersistedAksIdentity()
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var reporter = new TestPipelineActivityReporter(output);
         var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure:Deployments:aks", new JsonObject
+        {
+            ["Location"] = "westus2"
+        });
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
             workspace.Path,
@@ -490,6 +674,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IHelmRunner, FakeHelmRunner>();
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         aks.AddHelmChart("same-name-as-ambient-release", "oci://example.com/chart", "1.0.0")

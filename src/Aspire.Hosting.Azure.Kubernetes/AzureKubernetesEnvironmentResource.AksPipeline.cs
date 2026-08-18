@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -14,6 +15,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
+using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -346,16 +348,16 @@ public partial class AzureKubernetesEnvironmentResource
         }
 
         // Azure deployment outputs are persisted as a JSON string with the ARM output shape:
-        //   { "name": { "type": "String", "value": "aks-abc123" } }
+        //   {
+        //     "id": { "type": "String", "value": "/subscriptions/.../managedClusters/aks-abc123" },
+        //     "name": { "type": "String", "value": "aks-abc123" }
+        //   }
         // Read it directly because the provisioning step that normally populates Outputs is not
         // part of a fresh destroy process.
-        string? clusterName;
+        ResourceIdentifier? clusterResourceId;
         try
         {
-            var outputsJson = deploymentStateSection.Data["Outputs"]?.GetValue<string>();
-            clusterName = string.IsNullOrEmpty(outputsJson)
-                ? null
-                : JsonNode.Parse(outputsJson)?["name"]?["value"]?.GetValue<string>();
+            clusterResourceId = GetPersistedAksResourceId(deploymentStateSection.Data);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -364,21 +366,25 @@ public partial class AzureKubernetesEnvironmentResource
                 ex);
         }
 
-        if (string.IsNullOrEmpty(clusterName))
+        if (clusterResourceId is null)
         {
             throw new InvalidOperationException(
-                $"The Azure deployment state for AKS environment '{Name}' does not contain the deployed cluster name.");
+                $"The Azure deployment state for AKS environment '{Name}' does not contain the deployed cluster identity.");
         }
 
         // Scope is persisted as a JSON string using the same shape produced by
         // BicepUtilities.SetScopeAsync:
         //   { "resourceGroup": "shared-rg", "subscription": "00000000-..." }
         // A missing property means the resource did not pin that scope value, so only that value
-        // falls back to global Azure deployment state. Older state without Scope falls back to the
-        // resource's current explicit scope before consulting global state.
-        var (scopedSubscription, scopedResourceGroup) = GetExplicitScopeValues();
+        // falls back to global Azure deployment state. Older state without Scope uses the persisted
+        // resource ID so a changed AppHost scope cannot redirect cleanup to another cluster or wait
+        // on provisioning that is not part of the destroy graph.
+        string subscriptionId;
+        string? resourceGroupName;
         if (deploymentStateSection.Data["Scope"] is not null)
         {
+            string? scopedSubscription;
+            string? scopedResourceGroup;
             try
             {
                 var scopeJson = deploymentStateSection.Data["Scope"]!.GetValue<string>();
@@ -393,15 +399,60 @@ public partial class AzureKubernetesEnvironmentResource
                     $"The Azure deployment state for AKS environment '{Name}' contains an invalid scope.",
                     ex);
             }
+
+            (subscriptionId, resourceGroupName) = await ResolveDeploymentScopeAsync(
+                scopedSubscription,
+                scopedResourceGroup,
+                context.Services,
+                context.CancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            subscriptionId = clusterResourceId.SubscriptionId!;
+            resourceGroupName = clusterResourceId.ResourceGroupName!;
         }
 
-        var (subscriptionId, resourceGroupName) = await ResolveDeploymentScopeAsync(
-            scopedSubscription,
-            scopedResourceGroup,
-            context.Services,
-            context.CancellationToken).ConfigureAwait(false);
+        await GetAksCredentialsAsync(context, clusterResourceId.Name, resourceGroupName, subscriptionId).ConfigureAwait(false);
+    }
 
-        await GetAksCredentialsAsync(context, clusterName, resourceGroupName, subscriptionId).ConfigureAwait(false);
+    private static bool HasPersistedAksIdentity(JsonObject deploymentState)
+    {
+        try
+        {
+            return GetPersistedAksResourceId(deploymentState) is not null;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            // Malformed or partial state must not prevent the aggregate Azure destroy path from
+            // deleting the containing resource group. A directly targeted Kubernetes cleanup still
+            // invokes the credential step, which reports the invalid state rather than using ambient
+            // Kubernetes credentials.
+            return false;
+        }
+    }
+
+    private static ResourceIdentifier? GetPersistedAksResourceId(JsonObject deploymentState)
+    {
+        var outputsJson = deploymentState["Outputs"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(outputsJson))
+        {
+            return null;
+        }
+
+        var resourceId = JsonNode.Parse(outputsJson)?["id"]?["value"]?.GetValue<string>();
+        if (!ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) ||
+            parsedResourceId is null ||
+            string.IsNullOrEmpty(parsedResourceId.SubscriptionId) ||
+            string.IsNullOrEmpty(parsedResourceId.ResourceGroupName) ||
+            !string.Equals(
+                parsedResourceId.ResourceType.ToString(),
+                "Microsoft.ContainerService/managedClusters",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return parsedResourceId;
     }
 
     /// <summary>

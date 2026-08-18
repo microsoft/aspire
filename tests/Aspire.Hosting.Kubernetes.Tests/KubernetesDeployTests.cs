@@ -1806,4 +1806,54 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
         Assert.Equal("my-release", stateSection.Data["ReleaseName"]?.ToString());
     }
+
+    [Fact]
+    public async Task DestroyExternalHelmChart_DoesNotIgnoreUnrelatedFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)
+                ? (1, "Error: Kubernetes cluster unreachable")
+                : (0, null)
+        };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("HelmChart:env:podinfo", new JsonObject
+        {
+            ["ReleaseName"] = "podinfo",
+            ["Namespace"] = "podinfo"
+        });
+
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env")
+            .AddHelmChart("podinfo", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var uninstallArguments = Assert.Single(
+            fakeHelm.Arguments,
+            arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(" --ignore-not-found", uninstallArguments, StringComparison.Ordinal);
+        Assert.Equal(
+            "Step 'helm-uninstall-podinfo' failed: helm uninstall for chart 'podinfo' failed: " +
+            "Error: Kubernetes cluster unreachable",
+            reporter.CompletionMessage);
+
+        var stateSection = await stateManager.AcquireSectionAsync("HelmChart:env:podinfo");
+        Assert.Equal("podinfo", stateSection.Data["ReleaseName"]?.ToString());
+    }
 }
