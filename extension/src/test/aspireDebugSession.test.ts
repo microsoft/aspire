@@ -481,6 +481,80 @@ suite('AspireDebugSession tests', () => {
         sinon.assert.calledWithMatch(infoStub, 'Skipping Aspire CLI launch for disposed or shutting-down debug session');
     });
 
+    suite('launch command arguments', () => {
+        test('omits the debug session flag for a no-debug do launch', async () => {
+            const args = await captureLaunchCommandArgs('do', true);
+
+            assert.deepStrictEqual(args, [
+                'do',
+                'build',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+
+        test('includes the debug session flag for a debug do launch', async () => {
+            const args = await captureLaunchCommandArgs('do', false);
+
+            assert.deepStrictEqual(args, [
+                'do',
+                'build',
+                '--start-debug-session',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+
+        test('preserves no-debug run launch arguments', async () => {
+            const args = await captureLaunchCommandArgs('run', true);
+
+            assert.deepStrictEqual(args, [
+                'run',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+
+        test('preserves debug run launch arguments', async () => {
+            const args = await captureLaunchCommandArgs('run', false);
+
+            assert.deepStrictEqual(args, [
+                'run',
+                '--start-debug-session',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+
+        test('ignores noDebug for deploy launch arguments', async () => {
+            const args = await captureLaunchCommandArgs('deploy', true);
+
+            assert.deepStrictEqual(args, [
+                'deploy',
+                '--start-debug-session',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+
+        test('ignores noDebug for publish launch arguments', async () => {
+            const args = await captureLaunchCommandArgs('publish', true);
+
+            assert.deepStrictEqual(args, [
+                'publish',
+                '--start-debug-session',
+                '--nologo',
+                '--apphost',
+                '/workspace/apphost.cs',
+            ]);
+        });
+    });
+
     test('suppresses the Aspire CLI first-run banner for extension-managed launches', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -4832,6 +4906,43 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
             await clock.tickAsync(10);
         }
+    }
+
+    async function captureLaunchCommandArgs(
+        command: 'run' | 'do' | 'deploy' | 'publish',
+        noDebug: boolean,
+    ): Promise<string[]> {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command,
+                step: command === 'do' ? 'build' : undefined,
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            terminalProvider as any,
+            () => { });
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug } });
+        await waitFor(() => spawnStub.calledOnce);
+
+        return spawnStub.firstCall.args[0];
     }
 
     function createSessionForSpawn(

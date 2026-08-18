@@ -901,7 +901,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private async handleLaunchMessage(message: any): Promise<void> {
     const command = this.configuration.command ?? 'run';
-    const noDebug = !!message.arguments?.noDebug && command === 'run';
+    const noDebug = !!message.arguments?.noDebug && (command === 'run' || command === 'do');
 
     // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
     const commandArgs = this.configuration.args ?? [];
