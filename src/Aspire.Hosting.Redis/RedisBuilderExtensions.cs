@@ -323,6 +323,7 @@ public static class RedisBuilderExtensions
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
                 .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: 5540, name: "http")
+                .WithHttpHealthCheck("/api/settings", endpointName: "http")
                 .WithEnvironment(context =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();

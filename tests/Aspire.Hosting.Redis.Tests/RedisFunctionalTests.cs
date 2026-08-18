@@ -186,7 +186,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-        await rns.WaitForResourceAsync(redisInsightBuilder.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+        await rns.WaitForResourceHealthyAsync(redisInsightBuilder.Resource.Name, cts.Token);
 
         var client = app.CreateHttpClient(redisInsightBuilder.Resource.Name, "http");
 
@@ -521,7 +521,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
                 await app.StartAsync();
 
                 var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.WaitForResourceAsync(redisInsightBuilder1.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+                await rns.WaitForResourceHealthyAsync(redisInsightBuilder1.Resource.Name, cts.Token);
 
                 try
                 {
@@ -556,7 +556,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
                 await app.StartAsync();
 
                 var rns = app.Services.GetRequiredService<ResourceNotificationService>();
-                await rns.WaitForResourceAsync(redisInsightBuilder2.Resource.Name, KnownResourceStates.Running).WaitAsync(cts.Token);
+                await rns.WaitForResourceHealthyAsync(redisInsightBuilder2.Resource.Name, cts.Token);
 
                 try
                 {
@@ -629,10 +629,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         });
 
-        var apiUrl = $"/api/settings";
-
-        var response = await client.PatchAsync(apiUrl, jsonContent, ct);
-
+        var response = await client.PatchAsync("/api/settings", jsonContent, ct);
         response.EnsureSuccessStatusCode();
 
         await EnsureRedisInsightEulaAccepted(client, ct);
