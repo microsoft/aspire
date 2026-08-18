@@ -249,6 +249,72 @@ public sealed class ParseResultHelperTests : IDisposable
         Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
     }
 
+    [Fact]
+    public void GetLoggableArguments_RedactsForwardedTokensWithoutSeparator()
+    {
+        var parseResult = _command.Parse(["run", "--ApiKey", "sk-live-secret"]);
+        var loggable = ParseResultHelper.GetLoggableArguments(parseResult);
+
+        Assert.Equal("run <redacted> <redacted>", loggable);
+        Assert.DoesNotContain("sk-live-secret", loggable, StringComparison.Ordinal);
+        Assert.Equal("aspire run <redacted> <redacted>", $"aspire {loggable}");
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesRecognizedOptionsAndRedactsTheRest()
+    {
+        var parseResult = _command.Parse(["run", "--debug", "--secret", "value"]);
+        var loggable = ParseResultHelper.GetLoggableArguments(parseResult);
+
+        Assert.Equal("run --debug <redacted> <redacted>", loggable);
+        Assert.DoesNotContain("--secret", loggable, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesSeparatorAndRedactsTrailingTokens()
+    {
+        var parseResult = _command.Parse(["run", "--", "--ApiKey", "secret"]);
+        var loggable = ParseResultHelper.GetLoggableArguments(parseResult);
+
+        Assert.Equal("run -- <redacted> <redacted>", loggable);
+        Assert.DoesNotContain("secret", loggable, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesCommandArguments()
+    {
+        var parseResult = _command.Parse(["add", "Aspire.Hosting.Redis"]);
+
+        Assert.Equal("add Aspire.Hosting.Redis", ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_PreservesRecognizedOptionValues()
+    {
+        var parseResult = _command.Parse(["run", "--apphost", "path/to/App.csproj"]);
+
+        Assert.Equal("run --apphost path/to/App.csproj", ParseResultHelper.GetLoggableArguments(parseResult));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_ReturnsEmptyStringForBareInvocation()
+    {
+        Assert.Equal(string.Empty, ParseResultHelper.GetLoggableArguments(_command.Parse([])));
+
+        // System.CommandLine keeps the first argument when it already names the root command, so
+        // the synthesized and the user-supplied forms must both render as an empty argument list.
+        Assert.Equal(string.Empty, ParseResultHelper.GetLoggableArguments(_command.Parse([_command.Name])));
+    }
+
+    [Fact]
+    public void GetLoggableArguments_RedactsRepeatedValueOnlyInForwardedPosition()
+    {
+        var parseResult = _command.Parse(["run", "--apphost", "same-value", "--", "same-value"]);
+        var loggable = ParseResultHelper.GetLoggableArguments(parseResult);
+
+        Assert.Equal("run --apphost same-value -- <redacted>", loggable);
+    }
+
     public void Dispose()
     {
         _provider.Dispose();

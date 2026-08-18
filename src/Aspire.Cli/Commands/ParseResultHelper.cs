@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Globalization;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using CommandLineCommandResult = System.CommandLine.Parsing.CommandResult;
 
 namespace Aspire.Cli.Commands;
@@ -50,6 +51,8 @@ internal sealed class ForwardedArguments
 /// </summary>
 internal static class ParseResultHelper
 {
+    private const string DoubleDashSeparator = "--";
+
     /// <summary>
     /// Projects explicitly supplied arguments while excluding options handled by the caller.
     /// </summary>
@@ -58,7 +61,11 @@ internal static class ParseResultHelper
         params Option[] excludedOptions)
     {
         var (excludedTokens, excludedOptionNames) = GetForwardingExclusions(parseResult, excludedOptions);
-        var optionValueOwners = GetOptionValueOwners(parseResult.RootCommandResult);
+
+        // Command arguments (for example the package name in `aspire add <package>`) belong to the
+        // CLI command being projected rather than to the child command line, so they stay excluded
+        // from the owner map here.
+        var optionValueOwners = GetValueOwners(parseResult.RootCommandResult, includeArgumentResults: false);
         var forwardedTokens = new List<string>(parseResult.Tokens.Count);
         int? optionCount = null;
         Token? lastForwardedToken = null;
@@ -71,7 +78,11 @@ internal static class ParseResultHelper
                 break;
             }
 
-            var hasOptionValueOwner = optionValueOwners.TryGetValue(token, out var optionResult);
+            var hasOptionValueOwner = optionValueOwners.TryGetValue(token, out var ownerResult);
+
+            // The owner map is built without ArgumentResult entries above, so every owner here is
+            // an OptionResult; the cast keeps that guarantee explicit rather than assumed.
+            var optionResult = ownerResult as OptionResult;
             if (excludedTokens.Contains(token) ||
                 (token.Type == TokenType.Option && excludedOptionNames.Contains(token.Value)))
             {
@@ -91,11 +102,99 @@ internal static class ParseResultHelper
 
         if (parseResult.UnmatchedTokens.Count > 0)
         {
-            forwardedTokens.Add("--");
+            forwardedTokens.Add(DoubleDashSeparator);
             forwardedTokens.AddRange(parseResult.UnmatchedTokens);
         }
 
         return new ForwardedArguments(forwardedTokens, finalOptionCount);
+    }
+
+    /// <summary>
+    /// Renders the arguments of <paramref name="parseResult"/> in a form that is safe to write to
+    /// logs: tokens the CLI itself owns are preserved and every token that would be forwarded to
+    /// the AppHost is replaced with <see cref="AppHostArgumentRedactor.RedactedToken"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AppHostArgumentRedactor"/> keys off the literal <c>--</c> separator, which is
+    /// correct for a projected child command line (<see cref="GetForwardedArguments"/> always
+    /// emits one) but wrong for raw user input: <c>run</c> and <c>start</c> forward unmatched
+    /// tokens even when no separator was typed, so
+    /// <code>
+    /// aspire run --ApiKey sk-live-...
+    /// </code>
+    /// reaches the AppHost as <c>--ApiKey sk-live-...</c> with nothing to key off. The boundary is
+    /// therefore derived from the parse tree instead: what the CLI did not claim is AppHost input.
+    /// </remarks>
+    internal static string GetLoggableArguments(ParseResult parseResult)
+    {
+        var cliOwnedTokens = GetCliOwnedTokens(parseResult);
+        var loggableTokens = new List<string>(parseResult.Tokens.Count);
+        var isAfterSeparator = false;
+
+        foreach (var token in parseResult.Tokens)
+        {
+            // System.CommandLine synthesizes a leading token holding the root command name when the
+            // first argument is not that name, so `aspire run` tokenizes as ["aspire", "run"] even
+            // though the caller only passed ["run"]. Callers render the executable name themselves.
+            if (ReferenceEquals(token, parseResult.RootCommandResult.IdentifierToken))
+            {
+                continue;
+            }
+
+            if (token.Type == TokenType.DoubleDash)
+            {
+                // The separator carries no user data and marks where AppHost input begins. Keeping
+                // it readable preserves the boundary that makes the redacted tail interpretable.
+                isAfterSeparator = true;
+                loggableTokens.Add(DoubleDashSeparator);
+                continue;
+            }
+
+            // Ownership must be checked by reference, not by value: the same raw string can appear
+            // on both sides of the boundary (`run --apphost same-value -- same-value`) and only the
+            // occurrence the parser bound to a CLI symbol is safe to log.
+            loggableTokens.Add(!isAfterSeparator && cliOwnedTokens.Contains(token)
+                ? token.Value
+                : AppHostArgumentRedactor.RedactedToken);
+        }
+
+        return string.Join(' ', loggableTokens);
+    }
+
+    /// <summary>
+    /// Collects the tokens the CLI itself consumed. Everything else in
+    /// <see cref="ParseResult.Tokens"/> is AppHost input.
+    /// </summary>
+    private static HashSet<Token> GetCliOwnedTokens(ParseResult parseResult)
+    {
+        var ownedTokens = new HashSet<Token>(ReferenceEqualityComparer.Instance);
+
+        CommandLineCommandResult? commandResult = parseResult.CommandResult;
+        while (commandResult is not null)
+        {
+            ownedTokens.Add(commandResult.IdentifierToken);
+            commandResult = commandResult.Parent as CommandLineCommandResult;
+        }
+
+        foreach (var token in parseResult.Tokens)
+        {
+            // The tokenizer assigns TokenType.Option only to arguments that matched a known option
+            // (including the `--name` half of `--name=value`); an unrecognized `--secret` stays a
+            // TokenType.Argument token and so is never treated as CLI-owned here.
+            if (token.Type == TokenType.Option)
+            {
+                ownedTokens.Add(token);
+            }
+        }
+
+        // Include command argument values (`aspire add <package>`) so ordinary invocations stay
+        // readable in logs; they are consumed by the CLI command and never forwarded.
+        foreach (var (token, _) in GetValueOwners(parseResult.RootCommandResult, includeArgumentResults: true))
+        {
+            ownedTokens.Add(token);
+        }
+
+        return ownedTokens;
     }
 
     private static (HashSet<Token> Tokens, HashSet<string> OptionNames) GetForwardingExclusions(
@@ -129,16 +228,27 @@ internal static class ParseResultHelper
         return (excludedTokens, excludedOptionNames);
     }
 
-    private static Dictionary<Token, OptionResult> GetOptionValueOwners(CommandLineCommandResult commandResult)
+    /// <summary>
+    /// Maps every value token in the parse tree to the symbol result that consumed it.
+    /// </summary>
+    /// <param name="commandResult">The command result whose subtree is walked.</param>
+    /// <param name="includeArgumentResults">
+    /// Whether tokens consumed by command arguments are included. Forwarding needs option values
+    /// only, while log redaction also needs command arguments so they stay readable.
+    /// </param>
+    private static Dictionary<Token, SymbolResult> GetValueOwners(
+        CommandLineCommandResult commandResult,
+        bool includeArgumentResults)
     {
-        var owners = new Dictionary<Token, OptionResult>(ReferenceEqualityComparer.Instance);
-        AddOptionValueOwners(commandResult, owners);
+        var owners = new Dictionary<Token, SymbolResult>(ReferenceEqualityComparer.Instance);
+        AddValueOwners(commandResult, includeArgumentResults, owners);
 
         return owners;
 
-        static void AddOptionValueOwners(
+        static void AddValueOwners(
             CommandLineCommandResult currentCommandResult,
-            Dictionary<Token, OptionResult> currentOwners)
+            bool includeArguments,
+            Dictionary<Token, SymbolResult> currentOwners)
         {
             foreach (var child in currentCommandResult.Children)
             {
@@ -150,11 +260,19 @@ internal static class ParseResultHelper
                         // Unknown values have no owner, so token identity distinguishes equal raw values.
                         foreach (var token in optionResult.Tokens)
                         {
-                            currentOwners.Add(token, optionResult);
+                            // TryAdd rather than Add: a token reachable from two results must not
+                            // throw, because this map is also built on the logging path.
+                            currentOwners.TryAdd(token, optionResult);
+                        }
+                        break;
+                    case ArgumentResult argumentResult when includeArguments:
+                        foreach (var token in argumentResult.Tokens)
+                        {
+                            currentOwners.TryAdd(token, argumentResult);
                         }
                         break;
                     case CommandLineCommandResult childCommandResult:
-                        AddOptionValueOwners(childCommandResult, currentOwners);
+                        AddValueOwners(childCommandResult, includeArguments, currentOwners);
                         break;
                 }
             }

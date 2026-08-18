@@ -49,7 +49,12 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 
         // `dotnet run --project AppHost.csproj -- <appHostArgs>` reaches this factory with the
         // forwarded AppHost arguments still attached, so redact past the separator before logging.
-        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, AppHostArgumentRedactor.RedactToString(args));
+        // Direct AppHost launches have no separator at all and instead declare the boundary through
+        // ProcessInvocationOptions.AppHostArgumentStartIndex.
+        var loggableArgs = options.AppHostArgumentStartIndex is { } appHostArgumentStartIndex
+            ? AppHostArgumentRedactor.RedactFromToString(args, appHostArgumentStartIndex)
+            : AppHostArgumentRedactor.RedactToString(args);
+        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, loggableArgs);
 
         if (env is not null)
         {

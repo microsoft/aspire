@@ -18,6 +18,12 @@ namespace Aspire.Cli.Utils;
 /// configuration (see <c>extension/src/debugger/AspireDebugSession.ts</c>); this keeps the
 /// CLI consistent with it. One placeholder is emitted per token so log readers can still
 /// diagnose argument-count and boundary problems.
+/// <para>
+/// This type only handles command lines the CLI itself projected or built, where a literal
+/// <c>--</c> always precedes AppHost input. Raw user arguments carry no such guarantee — the
+/// <c>run</c> and <c>start</c> commands also forward unmatched tokens — so those must be
+/// redacted with <c>ParseResultHelper.GetLoggableArguments</c> instead.
+/// </para>
 /// </remarks>
 internal static class AppHostArgumentRedactor
 {
@@ -51,17 +57,35 @@ internal static class AppHostArgumentRedactor
             return args;
         }
 
-        var redacted = new List<string>(args.Count);
-        for (var i = 0; i <= separatorIndex; i++)
+        // Every token past the separator is redacted, including a literal "--" that appears after
+        // the first one: only the first separator is a boundary, later ones are AppHost input.
+        return RedactFrom(args, separatorIndex + 1);
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="args"/> in which every token from
+    /// <paramref name="firstRedactedIndex"/> onward is replaced with <see cref="RedactedToken"/>.
+    /// </summary>
+    /// <remarks>
+    /// Some invocations carry AppHost input without a separator to key off. Launching a built
+    /// AppHost directly is one of them, because the executable is invoked without the
+    /// <c>dotnet run</c> boundary:
+    /// <code>
+    /// bin/Debug/net10.0/MyApp.AppHost --ApiKey sk-live-...
+    /// </code>
+    /// Those callers know where CLI-owned arguments stop and pass that index explicitly.
+    /// </remarks>
+    internal static IReadOnlyList<string> RedactFrom(IReadOnlyList<string> args, int firstRedactedIndex)
+    {
+        if (firstRedactedIndex >= args.Count)
         {
-            redacted.Add(args[i]);
+            return args;
         }
 
-        // Every remaining token is redacted, including a literal "--" that appears after the
-        // first separator: only the first separator is a boundary, later ones are AppHost input.
-        for (var i = separatorIndex + 1; i < args.Count; i++)
+        var redacted = new List<string>(args.Count);
+        for (var i = 0; i < args.Count; i++)
         {
-            redacted.Add(RedactedToken);
+            redacted.Add(i < firstRedactedIndex ? args[i] : RedactedToken);
         }
 
         return redacted;
@@ -72,4 +96,11 @@ internal static class AppHostArgumentRedactor
     /// that log a whole command line.
     /// </summary>
     internal static string RedactToString(IReadOnlyList<string> args) => string.Join(' ', Redact(args));
+
+    /// <summary>
+    /// Returns the space-joined form of <paramref name="args"/> with every token from
+    /// <paramref name="firstRedactedIndex"/> onward replaced by <see cref="RedactedToken"/>.
+    /// </summary>
+    internal static string RedactFromToString(IReadOnlyList<string> args, int firstRedactedIndex)
+        => string.Join(' ', RedactFrom(args, firstRedactedIndex));
 }

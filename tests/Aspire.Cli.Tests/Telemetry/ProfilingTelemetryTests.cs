@@ -66,7 +66,7 @@ public class ProfilingTelemetryTests
 
         using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
         {
-            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost"], msBuildServer: null);
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost"], appHostArgumentStartIndex: null, msBuildServer: null);
         }
 
         using (profilingTelemetry.StartGitCommand("ls-files", "git", ["ls-files", "--cached"], new DirectoryInfo(workingDirectory)))
@@ -131,7 +131,13 @@ public class ProfilingTelemetryTests
 
         using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
         {
-            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost", "--", "--ConnectionStrings:db", "Server=db;Password=hunter2"], msBuildServer: null);
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost", "--", "--ConnectionStrings:db", "Server=db;Password=hunter2"], appHostArgumentStartIndex: null, msBuildServer: null);
+        }
+
+        // A direct AppHost launch has no separator to key off, so the caller supplies the boundary.
+        using (var directActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
+        {
+            directActivity.SetDotNetResolvedExecutable("AppHost", ["--from-msbuild", "value", "--ApiKey", "sk-live-secret"], appHostArgumentStartIndex: 2, msBuildServer: null);
         }
 
         var sessionActivities = GetSessionActivities(startedActivities, "session-1");
@@ -146,6 +152,11 @@ public class ProfilingTelemetryTests
             {
                 Assert.Equal(new[] { "run", "--project", "AppHost", "--", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
                 Assert.Equal(6, dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            directActivity =>
+            {
+                Assert.Equal(new[] { "--from-msbuild", "value", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(directActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(4, directActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
             });
     }
 

@@ -89,4 +89,43 @@ public class AppHostArgumentRedactorTests
     {
         Assert.Equal("run --project AppHost.csproj", AppHostArgumentRedactor.RedactToString(["run", "--project", "AppHost.csproj"]));
     }
+
+    [Fact]
+    public void RedactFrom_RedactsEveryTokenFromIndex()
+    {
+        // A direct AppHost launch has no separator: the leading arguments come from MSBuild
+        // RunArguments and the launch profile, and the tail is user-supplied AppHost input.
+        string[] args = ["--from-msbuild", "value", "--ApiKey", "sk-live-secret"];
+
+        Assert.Equal(
+            ["--from-msbuild", "value", "<redacted>", "<redacted>"],
+            AppHostArgumentRedactor.RedactFrom(args, 2));
+    }
+
+    [Fact]
+    public void RedactFrom_IndexAtOrPastEnd_ReturnsArgumentsUnchanged()
+    {
+        string[] args = ["--from-msbuild", "value"];
+
+        Assert.Equal(args, AppHostArgumentRedactor.RedactFrom(args, 2));
+        Assert.Equal(args, AppHostArgumentRedactor.RedactFrom(args, 5));
+    }
+
+    [Fact]
+    public void RedactFrom_ZeroIndex_RedactsEveryToken()
+    {
+        Assert.Equal(
+            ["<redacted>", "<redacted>"],
+            AppHostArgumentRedactor.RedactFrom(["--ApiKey", "sk-live-secret"], 0));
+    }
+
+    [Fact]
+    public void RedactFromToString_JoinsRedactedTokensWithSpaces()
+    {
+        string[] args = ["--from-msbuild", "value", "--ApiKey", "sk-live-secret"];
+        var redacted = AppHostArgumentRedactor.RedactFromToString(args, 2);
+
+        Assert.Equal("--from-msbuild value <redacted> <redacted>", redacted);
+        Assert.DoesNotContain("sk-live-secret", redacted, StringComparison.Ordinal);
+    }
 }

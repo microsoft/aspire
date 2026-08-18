@@ -408,8 +408,12 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     toolName: startToolName,
                     input: { appHostPath: relativeAppHostPath, mode: 'debug' },
                 });
+                // The AppHost lives in a linked worktree and `isolated` was omitted, so the
+                // lifecycle tool infers isolation. The confirmation has to disclose that, because
+                // this dialog is what "Always allow" is granted against.
+                const expectedConfirmation = `Start the Aspire AppHost ${relativeAppHostPath} in debug mode with isolation?`;
                 assert.strictEqual(preparedStart.confirmationTitle, 'Start Aspire AppHost');
-                assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode?`);
+                assert.strictEqual(preparedStart.confirmationMessage, expectedConfirmation);
 
                 const startInvocation = await invokeLifecycleTool({
                     name: 'invokeLanguageModelTool',
@@ -417,7 +421,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     input: { appHostPath: relativeAppHostPath, mode: 'debug' },
                 }, 600000, 1, 'apphost-lifecycle-linked-worktree-start-confirmation');
                 assert.strictEqual(startInvocation.dialogs[0].message, 'Start Aspire AppHost');
-                assert.strictEqual(startInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode?`);
+                assert.strictEqual(startInvocation.dialogs[0].details, expectedConfirmation);
                 assert.deepStrictEqual(startInvocation.results, [{
                     tool: startToolName,
                     outcome: 'started',

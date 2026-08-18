@@ -1134,14 +1134,20 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging. Everything after the "--" separator
-                // is forwarded to the AppHost verbatim and can contain secrets, so it is redacted.
-                var loggableArgs = AppHostArgumentRedactor.RedactToString(args);
-                var commandLine = args.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
+                // Parse before logging. `aspire run --ApiKey sk-live-...` forwards unmatched tokens
+                // to the AppHost even though the user never typed a `--` separator, so the parse
+                // tree is the only reliable way to tell CLI-owned tokens from AppHost input.
+                // Reordering is safe because Parse collects errors into the result instead of
+                // throwing, and nothing between here and the original call site inspects args.
+                var parseResult = rootCommand.Parse(args);
+
+                // Log command invocation details for debugging. Anything forwarded to the AppHost
+                // can contain secrets, so it is redacted.
+                var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
+                var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);
 
                 logger.LogDebug("Parsing arguments: {Args}", loggableArgs);
-                var parseResult = rootCommand.Parse(args);
 
 #if DEBUG
                 WaitForDebuggerIfRequested(parseResult, app.Services, WaitForDebugger);

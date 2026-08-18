@@ -1136,11 +1136,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);
 
-        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, string? msBuildServer)
+        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, int? appHostArgumentStartIndex, string? msBuildServer)
         {
             // `dotnet run --project AppHost.csproj -- <appHostArgs>` flows through here, and the
             // recorded tag is persisted with the exported trace, so redact the forwarded tail.
-            SetProcessInvocation(dotnetPath, AppHostArgumentRedactor.Redact(args));
+            // A direct AppHost launch has no separator and declares its boundary explicitly.
+            SetProcessInvocation(dotnetPath, appHostArgumentStartIndex is { } startIndex
+                ? AppHostArgumentRedactor.RedactFrom(args, startIndex)
+                : AppHostArgumentRedactor.Redact(args));
             SetDotNetMsBuildServer(msBuildServer);
         }
 
