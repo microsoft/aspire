@@ -1496,7 +1496,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var sidecarPath = Path.Combine(installDirectory.FullName, InstallSidecarReader.SidecarFileName);
         await File.WriteAllTextAsync(
             sidecarPath,
-            """{"source":"script","channel":"stable","futureField":"preserved"}""");
+            """{"source":"script","channel":"stable","version":"13.4.6","commit":"01234567","futureField":"preserved"}""");
 
         var archivePath = await CreateSelfUpdateArchiveAsync(workspace);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -1518,6 +1518,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var document = JsonDocument.Parse(await File.ReadAllBytesAsync(sidecarPath));
         Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
         Assert.Equal("staging", document.RootElement.GetProperty("channel").GetString());
+        // Version and commit describe the executable that was replaced. Keeping either value would
+        // override the new binary's assembly metadata and make update routing use stale identity.
+        Assert.False(document.RootElement.TryGetProperty("version", out _));
+        Assert.False(document.RootElement.TryGetProperty("commit", out _));
         Assert.Equal("preserved", document.RootElement.GetProperty("futureField").GetString());
     }
 

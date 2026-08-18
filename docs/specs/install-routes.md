@@ -25,10 +25,13 @@ portable installs, the Aspire home used for hives and local state.
 Identity fields are optional so sidecars written by older installers remain
 valid. `aspire update --self` atomically updates `channel` in an existing
 sidecar after replacing and verifying the executable, while preserving
-`source` and all other fields. A legacy sidecar-less install remains
-sidecar-less because self-update cannot infer its original route. Persisting
-the selected channel is required when a staging download contains a
-ship-candidate binary that is deliberately stamped `stable`.
+`source` and fields unrelated to executable identity. Existing `version` and
+`commit` values are removed so the resolver reads those values from the
+replacement binary rather than retaining identity from the executable that was
+replaced. A legacy sidecar-less install remains sidecar-less because self-update
+cannot infer its original route. Persisting the selected channel is required
+when a staging download contains a ship-candidate binary that is deliberately
+stamped `stable`.
 
 | `source` value | Install route                                          |
 |----------------|--------------------------------------------------------|

@@ -835,9 +835,11 @@ internal sealed class UpdateCommand : BaseCommand
 
                 // Shared staging archives can contain a ship-candidate binary deliberately stamped
                 // as stable. Persist the channel selected by this update so the next invocation keeps
-                // using staging instead of falling back to the binary stamp. Write while the executable
-                // backup still exists so a sidecar failure restores the previous CLI.
-                InstallSidecarWriter.UpdateChannel(installDir, channel);
+                // using staging instead of falling back to the binary stamp. Remove any sidecar version
+                // and commit assigned to the previous executable so identity falls back to the replacement
+                // binary's metadata. Write while the executable backup still exists so a sidecar failure
+                // restores the previous CLI.
+                InstallSidecarWriter.UpdateForSelfUpdate(installDir, channel);
 
                 // If we get here, both the executable and its identity were updated successfully.
                 FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);

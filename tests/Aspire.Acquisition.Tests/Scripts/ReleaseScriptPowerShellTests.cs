@@ -207,6 +207,37 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteInstallSidecar_LegacyPowerShell_CreatesOrReplacesSidecar(bool sidecarExists)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        Directory.CreateDirectory(installPath);
+        var sidecarPath = Path.Combine(installPath, ".aspire-install.json");
+        if (sidecarExists)
+        {
+            await File.WriteAllTextAsync(sidecarPath, """{"source":"old"}""");
+        }
+
+        // CI runs these tests with pwsh. Force the legacy branch to exercise the APIs used by
+        // Windows PowerShell 4/5.1 without requiring those hosts on every test platform.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"$Script:IsModernPowerShell = $false; Write-InstallSidecar -InstallPath '{installPath}' -Quality 'staging'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(await File.ReadAllBytesAsync(sidecarPath));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        Assert.Equal("staging", document.RootElement.GetProperty("channel").GetString());
+        Assert.Empty(Directory.GetFiles(installPath, ".aspire-install.json.*"));
+    }
+
     [Fact]
     public async Task DefaultInstallPath_MentionsAspireDirectory()
     {

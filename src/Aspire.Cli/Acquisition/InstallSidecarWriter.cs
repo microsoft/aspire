@@ -6,19 +6,21 @@ using System.Text.Json;
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Updates identity fields in the install-route sidecar while preserving the
-/// route and any fields written by newer installers.
+/// Updates install-route sidecars after executable replacement while preserving
+/// route-specific and forward-compatible fields.
 /// </summary>
 internal static class InstallSidecarWriter
 {
     /// <summary>
-    /// Atomically updates the selected channel in the sidecar next to the CLI binary.
-    /// A missing sidecar is left absent because the update path cannot infer the
-    /// original install route's required <c>source</c> value.
+    /// Atomically updates the sidecar next to the CLI binary after a self-update.
+    /// The selected channel is written while version and commit are removed so the
+    /// replacement binary's assembly metadata supplies those executable-specific values.
+    /// A missing sidecar is left absent because the update path cannot infer the original
+    /// install route's required <c>source</c> value.
     /// </summary>
     /// <param name="binaryDirectory">Directory containing the CLI binary.</param>
     /// <param name="channel">Channel selected for the installed CLI.</param>
-    public static void UpdateChannel(string binaryDirectory, string channel)
+    public static void UpdateForSelfUpdate(string binaryDirectory, string channel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(binaryDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(channel);
@@ -42,7 +44,9 @@ internal static class InstallSidecarWriter
 
                     foreach (var property in existingSidecar.RootElement.EnumerateObject())
                     {
-                        if (!property.NameEquals("channel"))
+                        if (!property.NameEquals("channel") &&
+                            !property.NameEquals("version") &&
+                            !property.NameEquals("commit"))
                         {
                             property.WriteTo(writer);
                         }

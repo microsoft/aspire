@@ -799,6 +799,7 @@ function Write-InstallSidecar {
 
     $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
     $temporaryPath = "$sidecarPath.$([System.Guid]::NewGuid().ToString('N')).tmp"
+    $backupPath = "$temporaryPath.bak"
     $payload = '{"source":"script"}'
     if (-not [string]::IsNullOrWhiteSpace($Quality)) {
         $channel = ConvertTo-ChannelName -Quality $Quality
@@ -808,10 +809,25 @@ function Write-InstallSidecar {
     [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
     try {
         [System.IO.File]::WriteAllText($temporaryPath, "$payload`n")
-        [System.IO.File]::Move($temporaryPath, $sidecarPath, $true)
+        if ($Script:IsModernPowerShell) {
+            [System.IO.File]::Move($temporaryPath, $sidecarPath, $true)
+        }
+        else {
+            # File.Move(source, destination, overwrite) was added in .NET Core 3 and is unavailable
+            # to Windows PowerShell 4/5.1. File.Replace provides atomic overwrite on .NET Framework.
+            if ([System.IO.File]::Exists($sidecarPath)) {
+                # PowerShell binds a null backup argument as an empty path for File.Replace, so use
+                # a unique same-directory backup and remove it after the atomic replacement.
+                [System.IO.File]::Replace($temporaryPath, $sidecarPath, $backupPath)
+            }
+            else {
+                [System.IO.File]::Move($temporaryPath, $sidecarPath)
+            }
+        }
     }
     finally {
         [System.IO.File]::Delete($temporaryPath)
+        [System.IO.File]::Delete($backupPath)
     }
 }
 
