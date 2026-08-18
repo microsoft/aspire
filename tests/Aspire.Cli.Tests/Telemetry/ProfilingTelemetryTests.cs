@@ -115,6 +115,41 @@ public class ProfilingTelemetryTests
     }
 
     [Fact]
+    public void ProcessSpansRedactForwardedAppHostArguments()
+    {
+        var startedActivities = new ConcurrentQueue<Activity>();
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
+        var aspirePath = Path.Combine("tools", "aspire");
+        var workingDirectory = Directory.GetCurrentDirectory();
+
+        using (profilingTelemetry.StartDetachedSpawnChild(aspirePath, ["run", "--apphost", "AppHost", "--", "--ApiKey", "sk-live-secret"], childCommand: "run"))
+        {
+        }
+
+        using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
+        {
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost", "--", "--ConnectionStrings:db", "Server=db;Password=hunter2"], msBuildServer: null);
+        }
+
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
+        Assert.Collection(
+            sessionActivities,
+            spawnActivity =>
+            {
+                Assert.Equal(new[] { "run", "--apphost", "AppHost", "--", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(6, spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            dotnetActivity =>
+            {
+                Assert.Equal(new[] { "run", "--project", "AppHost", "--", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(6, dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            });
+    }
+
+    [Fact]
     public void StartAddCommand_CreatesAddSpecificSpans()
     {
         var startedActivities = new ConcurrentQueue<Activity>();

@@ -1134,11 +1134,13 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging
-                var commandLine = args.Length > 0 ? $"aspire {string.Join(" ", args)}" : "aspire";
+                // Log command invocation details for debugging. Everything after the "--" separator
+                // is forwarded to the AppHost verbatim and can contain secrets, so it is redacted.
+                var loggableArgs = AppHostArgumentRedactor.RedactToString(args);
+                var commandLine = args.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);
 
-                logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
+                logger.LogDebug("Parsing arguments: {Args}", loggableArgs);
                 var parseResult = rootCommand.Parse(args);
 
 #if DEBUG

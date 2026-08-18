@@ -410,4 +410,89 @@ public class GitWorktreeTests(ITestOutputHelper outputHelper)
 
         Assert.True(GitWorktree.IsSameWorktreeScope(submoduleAppHost, primaryRoot));
     }
+
+    [Fact]
+    public void IsSameWorktreeScope_AppHostNestedInSamePrimaryCheckout_IsSameScope()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var primaryRoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoA");
+        var appHostPath = Path.Combine(primaryRoot, "sub", "App", "App.csproj");
+
+        Assert.True(GitWorktree.IsSameWorktreeScope(appHostPath, primaryRoot));
+    }
+
+    [Fact]
+    public void IsSameWorktreeScope_AppHostInDifferentPrimaryCheckout_IsDifferentScope()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var repoARoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoA");
+        var repoBRoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoB");
+        var repoBAppHost = Path.Combine(repoBRoot, "App", "App.csproj");
+
+        Assert.False(GitWorktree.IsSameWorktreeScope(repoBAppHost, repoARoot));
+        Assert.False(GitWorktree.IsSameWorktreeScope(Path.Combine(repoARoot, "App", "App.csproj"), repoBRoot));
+    }
+
+    [Fact]
+    public void IsSameWorktreeScope_SubmodulesInDifferentPrimaryCheckouts_AreDifferentScopes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var repoARoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoA");
+        var repoBRoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoB");
+        var repoBSubmoduleRoot = Directory.CreateDirectory(Path.Combine(repoBRoot, "extern", "dep")).FullName;
+        TestGitWorktree.WriteGitDirFile(
+            repoBSubmoduleRoot,
+            Path.Combine(repoBRoot, ".git", "modules", "dep"));
+        var repoBSubmoduleAppHost = Path.Combine(repoBSubmoduleRoot, "AppHost.csproj");
+
+        Assert.True(GitWorktree.IsSameWorktreeScope(repoBSubmoduleAppHost, repoBRoot));
+        Assert.False(GitWorktree.IsSameWorktreeScope(repoBSubmoduleAppHost, repoARoot));
+    }
+
+    [Fact]
+    public void IsSameWorktreeScope_PrimaryCheckoutAndNestedLinkedWorktree_AreDifferentScopes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var primaryRoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoA");
+        var worktreeRoot = Directory.CreateDirectory(Path.Combine(primaryRoot, ".worktrees", "feature")).FullName;
+        TestGitWorktree.WriteLinkedWorktreeMetadata(worktreeRoot, Path.Combine(primaryRoot, ".git"));
+
+        Assert.False(GitWorktree.IsSameWorktreeScope(Path.Combine(worktreeRoot, "App", "App.csproj"), primaryRoot));
+        Assert.False(GitWorktree.IsSameWorktreeScope(Path.Combine(primaryRoot, "App", "App.csproj"), worktreeRoot));
+    }
+
+    [Fact]
+    public void IsSameWorktreeScope_BothOutsideAnyGitRepository_IsSameScope()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var workingDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "plain")).FullName;
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "other", "App.csproj");
+
+        Assert.True(GitWorktree.IsSameWorktreeScope(appHostPath, workingDirectory));
+    }
+
+    [Fact]
+    public void IsSameWorktreeScope_AppHostOutsideAnyGitRepository_IsDifferentScopeFromCheckout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var primaryRoot = CreatePrimaryCheckout(workspace.WorkspaceRoot, "repoA");
+        var unmanagedDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "outside")).FullName;
+        var unmanagedAppHost = Path.Combine(unmanagedDirectory, "App.csproj");
+
+        Assert.False(GitWorktree.IsSameWorktreeScope(unmanagedAppHost, primaryRoot));
+        Assert.False(GitWorktree.IsSameWorktreeScope(Path.Combine(primaryRoot, "App", "App.csproj"), unmanagedDirectory));
+    }
+
+    /// <summary>
+    /// Creates a primary checkout (a real <c>.git</c> directory) under <paramref name="parent"/> so
+    /// scope comparisons are deterministic regardless of whether the test host's temp directory
+    /// happens to sit inside a git repository.
+    /// </summary>
+    private static string CreatePrimaryCheckout(DirectoryInfo parent, string name)
+    {
+        var root = Directory.CreateDirectory(Path.Combine(parent.FullName, name)).FullName;
+        Directory.CreateDirectory(Path.Combine(root, ".git"));
+
+        return root;
+    }
 }

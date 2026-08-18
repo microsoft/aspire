@@ -91,23 +91,44 @@ internal static class GitWorktree
     /// as <paramref name="workingDirectory"/> for stop/ps scoping.
     /// </summary>
     /// <remarks>
-    /// A linked worktree cwd only matches AppHosts in that same worktree. A primary (or
-    /// non-git) cwd matches AppHosts that are not inside a different linked worktree, so a
-    /// nested <c>.worktrees/feature</c> checkout cannot steal <c>aspire stop</c>.
+    /// Both paths are reduced to the scope identity described on
+    /// <see cref="TryGetScopeWorktreeRoot"/>. Two paths share a scope only when both identities
+    /// are non-<see langword="null"/> and equal, or when both are <see langword="null"/> (neither
+    /// path is in a git repository at all). Because a primary checkout now identifies as its own
+    /// root, running <c>aspire stop</c> in repository A cannot reach an AppHost in unrelated
+    /// repository B, and a nested <c>.worktrees/feature</c> checkout still cannot be stolen by
+    /// the primary checkout that contains it.
     /// </remarks>
     public static bool IsSameWorktreeScope(string appHostPath, string workingDirectory)
     {
-        var workingLinkedRoot = TryGetScopeWorktreeRoot(workingDirectory);
-        var appHostLinkedRoot = TryGetScopeWorktreeRoot(appHostPath);
+        var workingScopeRoot = TryGetScopeWorktreeRoot(workingDirectory);
+        var appHostScopeRoot = TryGetScopeWorktreeRoot(appHostPath);
 
-        if (workingLinkedRoot is not null)
+        if (workingScopeRoot is null || appHostScopeRoot is null)
         {
-            return appHostLinkedRoot is not null && PathsEqual(workingLinkedRoot, appHostLinkedRoot);
+            // "Not in a git repository" is only ever equivalent to another path that is also
+            // outside every repository. Pairing it with a real checkout root would let an
+            // unrelated stray path fall into a repository's scope.
+            return workingScopeRoot is null && appHostScopeRoot is null;
         }
 
-        return appHostLinkedRoot is null;
+        return PathsEqual(workingScopeRoot, appHostScopeRoot);
     }
 
+    /// <summary>
+    /// Returns the canonical root of the checkout that owns <paramref name="startPath"/>, used as
+    /// the scope identity for stop/ps filtering.
+    /// </summary>
+    /// <remarks>
+    /// The identity is three-way and each case must stay distinguishable:
+    /// <list type="bullet">
+    /// <item><description>inside a linked worktree: the canonical linked worktree root.</description></item>
+    /// <item><description>inside a primary checkout: the canonical primary checkout root.</description></item>
+    /// <item><description>not inside any git repository: <see langword="null"/>.</description></item>
+    /// </list>
+    /// Collapsing the second and third cases to <see langword="null"/> would make every primary
+    /// checkout compare equal to every other primary checkout and to every non-git directory.
+    /// </remarks>
     private static string? TryGetScopeWorktreeRoot(string startPath)
     {
         string current;
@@ -125,7 +146,9 @@ internal static class GitWorktree
             var gitPath = Path.Combine(current, GitDirectoryName);
             if (Directory.Exists(gitPath))
             {
-                return null;
+                // Primary checkout (or any clone with a real .git directory). Its own root is the
+                // scope identity so two unrelated clones never compare equal.
+                return CanonicalizePath(current);
             }
 
             if (File.Exists(gitPath))
@@ -135,13 +158,22 @@ internal static class GitWorktree
                     return CanonicalizePath(current);
                 }
 
-                // A submodule inside a linked worktree has metadata under:
-                //   <common>/worktrees/<id>/modules/<submodule>
-                // It remains a separate checkout for isolation, but stop/resource scoping
-                // must use the enclosing linked worktree rather than the primary checkout.
-                return TryReadGitDirTarget(gitPath, out var gitDirectory)
-                    ? TryGetEnclosingLinkedWorktreeRoot(gitDirectory)
-                    : null;
+                // A submodule's .git is a file whose gitdir points into the superproject:
+                //   /repo/extern/dep/.git                -> gitdir: /repo/.git/modules/dep
+                //   /repo/.worktrees/feature/extern/dep/.git
+                //                                        -> gitdir: /repo/.git/worktrees/feature/modules/dep
+                // A submodule is a separate checkout, but for scoping it belongs to whatever
+                // checkout physically contains it: the enclosing linked worktree when the admin
+                // directory sits under <common>/worktrees/<id>/, ...
+                if (TryReadGitDirTarget(gitPath, out var gitDirectory) &&
+                    TryGetEnclosingLinkedWorktreeRoot(gitDirectory) is { } enclosingWorktreeRoot)
+                {
+                    return enclosingWorktreeRoot;
+                }
+
+                // ... otherwise keep walking ancestors so a submodule in a primary checkout
+                // resolves to that checkout's root instead of collapsing to null, which would
+                // make a submodule of repository A compare equal to a submodule of repository B.
             }
 
             var parent = Directory.GetParent(current);

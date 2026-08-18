@@ -363,8 +363,10 @@ internal sealed class AppHostLauncher(
 
         childArgs.AddRange(args);
 
+        // childArgs ends with the caller's "-- <appHostArgs>" tail, which is user-supplied AppHost
+        // input rather than CLI options, so it must not be written to the log verbatim.
         logger.LogDebug("Spawning child CLI: {Executable} (isDotnetHost={IsDotnetHost}) with args: {Args}",
-            dotnetPath, isDotnetHost, string.Join(" ", childArgs));
+            dotnetPath, isDotnetHost, AppHostArgumentRedactor.RedactToString(childArgs));
         logger.LogDebug("Working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
 
         return (dotnetPath, childArgs);
