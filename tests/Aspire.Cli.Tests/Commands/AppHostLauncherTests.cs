@@ -236,7 +236,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task LaunchDetachedAsync_OmittedFromLinkedWorktree_InfersTrue()
+    public async Task LaunchDetachedAsync_OmittedFromLinkedWorktree_DoesNotInferIsolation()
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
         harness.SetLinkedWorktree();
@@ -260,7 +260,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
-        Assert.Equal("--isolated", harness.ProcessFactory.CreatedArguments![^1]);
+        Assert.Equal(0, harness.ProcessFactory.CreatedArguments!.Count(argument => argument == "--isolated"));
     }
 
     [Fact]
