@@ -194,9 +194,9 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return Task.CompletedTask;
     }
 
-    private void OnOverviewTabChange(FluentTab newTab)
+    private void OnOverviewTabChange(FluentTab? newTab)
     {
-        var id = newTab.Id?.Substring("tab-overview-".Length);
+        var id = newTab?.Id?.Substring("tab-overview-".Length);
 
         if (id is null
             || !Enum.TryParse(typeof(OverviewViewKind), id, out var o)
@@ -213,9 +213,9 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         OverviewActiveView = viewKind;
     }
 
-    private void OnMessageTabChange(FluentTab newTab)
+    private void OnMessageTabChange(FluentTab? newTab)
     {
-        var id = newTab.Id?.Substring("tab-message-".Length);
+        var id = newTab?.Id?.Substring("tab-message-".Length);
 
         if (id is null
             || !Enum.TryParse(typeof(ItemViewKind), id, out var o)

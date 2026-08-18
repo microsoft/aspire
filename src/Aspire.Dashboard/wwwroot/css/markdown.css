@@ -75,7 +75,7 @@
 }
 
 .markdown-container code {
-    font-family: var(--aspire-font-mono);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     color: unset;
     background-color: var(--neutral-fill-secondary-focus);
     padding: .15rem .3rem;

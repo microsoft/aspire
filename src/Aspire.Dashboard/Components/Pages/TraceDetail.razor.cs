@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Extensions;
@@ -41,7 +42,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
-    private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
+    private AspireFluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
@@ -239,6 +240,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         if (firstRender)
         {
+            // OnParametersSetAsync runs before the grid reference is assigned, so its initial
+            // refresh is a no-op. Refresh now to ensure client-side navigation displays the spans.
+            await _dataGrid.SafeRefreshDataAsync();
+
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
@@ -386,9 +391,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         UpdateDetailViewData();
         UpdateTraceActionsMenu();
-        await _dataGrid.SafeRefreshDataAsync();
-
         await InvokeAsync(StateHasChanged);
+        await _dataGrid.SafeRefreshDataAsync();
 
         // Close mobile toolbar if open, as the content has changed.
         Debug.Assert(_layout is not null);
@@ -548,7 +552,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task HandleFilterDialog(DialogResult result)
     {
-        if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        if (result.Value is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
         {
             if (filterResult.Delete)
             {

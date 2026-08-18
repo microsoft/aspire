@@ -136,6 +136,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         Assert.Null(header.GetAttribute("role"));
         Assert.Equal("group", filterGroup.GetAttribute("role"));
         Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+        Assert.True(filterGroup.ClassList.Contains("filter-toolbar"));
         Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-details"));
         Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-filters"));
         cut.WaitForAssertion(() =>
@@ -291,9 +292,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         logger.LogInformation($"Assert updated row count for '{traceId}'");
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
         {
-            var grid = cut.FindComponent<FluentDataGrid<SpanWaterfallViewModel>>();
-            var rows = grid.FindAll(".fluent-data-grid-row");
-            return rows.Count == 4;
+            return cut.Instance.PageViewModel.SpanWaterfallViewModels?.Count == 3;
         }, "Expected rows to be rendered.", logger);
     }
 

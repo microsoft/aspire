@@ -1,0 +1,10 @@
+@using Aspire.Dashboard.Model.Interaction
+
+<FluentDialogBody>
+    @((MarkupString)Content.MarkupMessage)
+</FluentDialogBody>
+
+@code {
+    [Parameter, EditorRequired]
+    public required InteractionMessageBoxContent Content { get; set; }
+}

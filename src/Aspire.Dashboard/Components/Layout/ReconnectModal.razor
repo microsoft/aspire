@@ -17,7 +17,7 @@
             @((MarkupString)Loc[nameof(Reconnect.ReconnectFailedText)].Value)
         </p>
         <div class="components-reconnect-failed-visible">
-            <FluentButton Id="components-reconnect-button" Appearance="Appearance.Accent">
+            <FluentButton Id="components-reconnect-button" Appearance="ButtonAppearance.Primary">
                 @Loc[nameof(Reconnect.ReconnectRetryButtonText)]
             </FluentButton>
         </div>
@@ -29,7 +29,7 @@
             @((MarkupString)string.Format(CultureInfo.CurrentCulture, Loc[nameof(Reconnect.ResourceServiceReconnectUnsupportedText)], "<span id=\"reconnect-unsupported-app-name\"></span>", UpgradeAspireUrl, "<span id=\"reconnect-unsupported-required-version\"></span>"))
         </p>
         <div class="components-reconnect-resource-service-retry-visible">
-            <FluentButton Id="components-reconnect-resource-service-button" Appearance="Appearance.Accent">
+            <FluentButton Id="components-reconnect-resource-service-button" Appearance="ButtonAppearance.Primary">
                 @Loc[nameof(Reconnect.ResourceServiceReconnectRetryButtonText)]
             </FluentButton>
         </div>

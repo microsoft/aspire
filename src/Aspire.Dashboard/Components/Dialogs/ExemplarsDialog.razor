@@ -2,10 +2,10 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Dialogs = Aspire.Dashboard.Resources.Dialogs
-@implements IDialogContentComponent<ExemplarsDialogViewModel>
 
 @inject IStringLocalizer<Dialogs> Loc
 
+<FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
 <div style="max-height: 44vh; overflow-y: auto;">
     <FluentDataGrid Items="@MetricView"
                     RowSize="DataGridRowSize.Medium"
@@ -24,7 +24,7 @@
                 @FormatMetricValue(context.Value)
             </TemplateColumn>
             <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]">
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
             </TemplateColumn>
         </ChildContent>
         <EmptyContent>
@@ -32,3 +32,4 @@
         </EmptyContent>
     </FluentDataGrid>
 </div>
+</FluentDialogBody>
