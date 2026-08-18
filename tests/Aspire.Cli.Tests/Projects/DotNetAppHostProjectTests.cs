@@ -1840,7 +1840,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
             """);
 
-        var runner = new TestDotNetCliRunner();
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, _, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                return 0;
+            }
+        };
         var project = CreateDotNetAppHostProject(runner);
 
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, options, _) =>
@@ -1875,7 +1882,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task PublishAsync_SingleFileAppHostUsesEnvironmentArgumentWhenProvided()
     {
         var appHostFile = CreateSingleFileAppHost();
-        var runner = new TestDotNetCliRunner();
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, _, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                return 0;
+            }
+        };
         var project = CreateDotNetAppHostProject(runner);
 
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, options, _) =>
@@ -1917,7 +1931,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 return Task.CompletedTask;
             }
         };
-        var runner = new TestDotNetCliRunner();
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, _, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                return 0;
+            }
+        };
         var project = CreateDotNetAppHostProject(
             runner,
             layout,
@@ -1949,6 +1970,36 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.Equal(0, exitCode);
         Assert.False(bundleAcquisitionRequested);
+    }
+
+    [Fact]
+    public async Task PublishAsync_SingleFileAppHostWithNoBuildLetsRunnerBuildSafely()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, options, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(watch);
+            Assert.False(noBuild);
+            Assert.False(noRestore);
+            Assert.True(options.NoLaunchProfile);
+            Assert.Equal(["--operation", "publish"], args);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.PublishAsync(new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Arguments = ["--operation", "publish"],
+            EnvironmentVariables = new Dictionary<string, string>(),
+            NoBuild = true
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

@@ -2322,8 +2322,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
         }
 
+        var builtByCli = false;
+
         // Build the apphost (unless --no-build is specified)
-        if (!isSingleFileAppHost && !context.NoBuild)
+        if (!context.NoBuild)
         {
             var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
@@ -2350,6 +2352,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     new InvalidOperationException("The app host build failed."));
                 return CliExitCodes.FailedToBuildArtifacts;
             }
+
+            builtByCli = true;
         }
 
         // Create collector and store in context for exception handling
@@ -2369,10 +2373,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ConfigureSingleFilePublishEnvironment(effectiveAppHostFile, env, args: context.Arguments);
         }
 
+        // Single-file RunCommand metadata is safe to reuse only when this invocation generated it
+        // with run-hook suppression. Otherwise preserve the rebuilding fallback used by run.
+        var noBuild = !isSingleFileAppHost || builtByCli;
+
         return await _runner.RunAsync(
             effectiveAppHostFile,
             watch: false,
-            noBuild: true,
+            noBuild,
             noRestore: false,
             context.Arguments,
             env,
