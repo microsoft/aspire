@@ -362,6 +362,14 @@ internal sealed class RunCommand : BaseCommand
             {
                 // Restore and build happen before the AppHost can begin startup, so they must not
                 // consume ASPIRE_CLI_START_TIMEOUT. User cancellation still stops an unexpectedly long build.
+                var completedTask = await Task.WhenAny(buildCompletionSource.Task, runTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (completedTask == runTask)
+                {
+                    // A project that faults or exits before signaling build completion must not leave
+                    // this unbounded wait pending. The existing build-failure path observes runTask.
+                    buildCompletionSource.TrySetResult(false);
+                }
+
                 buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
@@ -373,7 +381,10 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return CommandResult.Failure(await runTask, InteractionServiceStrings.ProjectCouldNotBeBuilt);
+                var runExitCode = await runTask;
+                return CommandResult.Failure(
+                    runExitCode == CliExitCodes.Success ? CliExitCodes.FailedToDotnetRunAppHost : runExitCode,
+                    InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
             var startupStartTimestamp = _timeProvider.GetTimestamp();
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
