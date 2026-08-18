@@ -146,6 +146,14 @@ internal static class CoreExports
         string env)
         where T : IComputeResource, IResourceWithEnvironment
     {
+        // These exports are the polyglot projection of the public WithVolume<T>(name, target, env, isReadOnly)
+        // overload, so they have to reject the same inputs. WithVolumeCore only null-checks target because it is
+        // shared with the container overloads, which have accepted an empty target since they shipped.
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(target);
+        ArgumentException.ThrowIfNullOrEmpty(env);
+
         return VolumeResourceBuilderExtensions.WithVolumeCore(resource, name, target, isReadOnly, env);
     }
 

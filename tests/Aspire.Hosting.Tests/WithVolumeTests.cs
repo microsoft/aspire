@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPERSISTENCE001
 
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -226,6 +227,20 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
             serviceProvider: app.Services);
 
         Assert.Equal(expectedPath, environment["DATA_PATH"]);
+    }
+
+    [Theory]
+    [InlineData("", "data", "DATA_PATH")]
+    [InlineData("/data", "", "DATA_PATH")]
+    [InlineData("/data", "data", "")]
+    public void PolyglotVolumeExportsRejectEmptyArguments(string target, string name, string env)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null);
+        var executable = builder.AddExecutable("exe", "cmd", ".");
+
+        Assert.Throws<ArgumentException>(() => CoreExports.WithProjectVolumeForPolyglot(project, target, name, env));
+        Assert.Throws<ArgumentException>(() => CoreExports.WithExecutableVolumeForPolyglot(executable, target, name, env));
     }
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment
