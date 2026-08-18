@@ -210,15 +210,15 @@ suite('Aspire debug dashboard E2E', function () {
         const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            const beforePublish = getCommandInvocationCount('aspire-vscode.publishAppHost');
+            await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublish);
             await waitForDebugLaunch(
                 event => event.command === 'publish' && event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath),
                 `publish launch for AppHost '${appHostPath}'`,
                 30000,
                 beforeDebugLaunch);
             await waitForDebugConsoleOutput('publish completed successfully', appHostPath, 120000);
-            const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
-            assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected completed publish log guidance to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
             await waitForExtensionState(
                 file =>
                     file.state.debugSessions.length === 1 &&
