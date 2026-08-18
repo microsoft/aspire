@@ -24,7 +24,10 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             StringComparison.Ordinal);
         Assert.Contains("/tmp/gh-aw/agent_output.json", customSteps, StringComparison.Ordinal);
         Assert.Contains("len(create_items) != 1", customSteps, StringComparison.Ordinal);
-        Assert.Contains("create_items[0].get(\"base_branch\")", customSteps, StringComparison.Ordinal);
+        Assert.Contains("create_items[0].get(\"base\")", customSteps, StringComparison.Ordinal);
+        Assert.Equal(
+            -1,
+            customSteps.IndexOf("create_items[0].get(\"base_branch\")", StringComparison.Ordinal));
         Assert.Contains(
             "re.fullmatch(r\"main|release/[0-9]+\\.[0-9]+(?:\\.[0-9]+)?\", base_branch)",
             customSteps,
@@ -57,6 +60,10 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             safeOutputs,
             StringComparison.Ordinal);
         Assert.Contains("/tmp/gh-aw/agent_output.json", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("create_items[0].get(\"base\")", safeOutputs, StringComparison.Ordinal);
+        Assert.Equal(
+            -1,
+            safeOutputs.IndexOf("create_items[0].get(\"base_branch\")", StringComparison.Ordinal));
         Assert.Contains(
             "\\\"base_branch\\\":\\\"${{ steps.resolve-target.outputs.branch || 'main' }}\\\"",
             safeOutputs,
@@ -65,6 +72,18 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
             Regex.Matches(safeOutputs, "uses: actions/checkout@", RegexOptions.CultureInvariant).Cast<Match>(),
             _ => { },
             _ => { });
+    }
+
+    [Fact]
+    public void OutcomeValidatorReadsCanonicalBase()
+    {
+        var validator = File.ReadAllText(
+            Path.Combine(RepoRoot.Path, ".github", "workflows", "pr-docs-check", "validate_outcome.py"));
+
+        Assert.Contains("create_pull_request.get(\"base\")", validator, StringComparison.Ordinal);
+        Assert.Equal(
+            -1,
+            validator.IndexOf("create_pull_request.get(\"base_branch\")", StringComparison.Ordinal));
     }
 
     [Fact]

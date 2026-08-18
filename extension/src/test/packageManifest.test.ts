@@ -39,6 +39,7 @@ type ExtensionManifest = {
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             commandPalette?: ManifestMenuItem[];
+            'editor/title/run'?: ManifestMenuItem[];
             'explorer/context'?: ManifestMenuItem[];
             'view/title'?: ManifestMenuItem[];
             'view/item/context'?: ManifestMenuItem[];
@@ -154,6 +155,17 @@ suite('extension/package.json', () => {
         assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
     });
 
+    test('active AppHost Run action does not require a language debugger', () => {
+        const manifest = readManifest();
+        const editorRunMenus = manifest.contributes.menus?.['editor/title/run'] ?? [];
+
+        const runAppHost = editorRunMenus.find(item => item.command === 'aspire-vscode.runAppHostCommand');
+        const debugAppHost = editorRunMenus.find(item => item.command === 'aspire-vscode.debugAppHostCommand');
+
+        assert.strictEqual(runAppHost?.when, 'aspire.fileIsAppHost || (aspire.workspaceHasAppHost && aspire.editorSupportsRunDebug)');
+        assert.strictEqual(debugAppHost?.when, '(aspire.fileIsAppHost || aspire.workspaceHasAppHost) && aspire.editorSupportsRunDebug');
+    });
+
     test('Node module AppHost files activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];
@@ -166,6 +178,29 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.cjs'));
     });
 
+    test('Rust AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.rs'));
+    });
+
+    // A Java-only workspace contains no project file the other activation events match: no .csproj,
+    // and `.aspire/` only exists once a restore has already run. Without an explicit Java event the
+    // extension never activates on a fresh clone, so the AppHost never appears in the Aspire view
+    // and none of the editor features register. Both casings are listed because `workspaceContains`
+    // globs are case-sensitive on Linux and macOS, and Java ties the file name to the class name:
+    // `aspire init` writes `AppHost.java` while the lowercase spelling matches the other languages.
+    test('Java AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/AppHost.java'), 'aspire init writes AppHost.java');
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.java'), 'lowercase matches the other languages');
+        // Maven and Gradle AppHosts nest the source under the standard layout rather than the root.
+        assert.ok(activationEvents.includes('workspaceContains:**/src/main/java/AppHost.java'));
+    });
+
     test('FSharp and Visual Basic AppHost projects activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];
@@ -174,10 +209,10 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/*.vbproj'));
     });
 
-    test('Explorer AppHost commands include Node module filenames', () => {
+    test('Explorer AppHost commands include guest AppHost filenames', () => {
         const manifest = readManifest();
         const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];
-        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs'];
+        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs', 'apphost.rs'];
 
         for (const commandName of ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']) {
             const menuItem = explorerMenus.find(item => item.command === commandName);
@@ -217,6 +252,26 @@ suite('extension/package.json', () => {
         assert.strictEqual(argsProperty.type, 'array');
         assert.strictEqual(argsProperty.items?.type, 'string');
         assert.strictEqual(argsProperty.description, '%extension.debug.args%');
+    });
+
+    test('CodeLens commands are contributed and hidden from the command palette', () => {
+        // CodeLens commands are invoked from lenses, never typed by the user, so each registration
+        // needs a contributes.commands entry (otherwise the title is unlocalized/undeclared) plus a
+        // commandPalette "when": "false" entry so it does not leak into the palette.
+        const manifest = readManifest();
+        const registrationSource = fs.readFileSync(path.resolve(__dirname, '../../src/activation/registerCodeLensCommands.ts'), 'utf8');
+        const registeredCodeLensCommands = [...registrationSource.matchAll(/registerInstrumentedCommand\('(aspire-vscode\.codeLens[A-Za-z0-9]*)'/g)]
+            .map(match => match[1]);
+
+        assert.ok(registeredCodeLensCommands.includes('aspire-vscode.codeLensRevealAppHost'), 'Expected codeLensRevealAppHost to be registered.');
+
+        const contributedCommands = new Set((manifest.contributes.commands ?? []).map(item => item.command));
+        const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command));
+
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !contributedCommands.has(command)), []);
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !hiddenFromPalette.has(command)), []);
     });
 
     test('aspire launch configuration declares dashboard browser choices', () => {

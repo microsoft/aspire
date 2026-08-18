@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
-import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
-import type { ViewMode } from '../views/AppHostDataRepository';
+import type { DebugLaunchSettings, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { ViewMode } from '../data/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
 import type { AppHostLaunchRequestedEvent } from '../services/AppHostLaunchService';
@@ -98,6 +98,12 @@ export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
     updatedAt: string;
+    /**
+     * Identifies the E2E run whose extension host produced this file. The state and control files
+     * live at a stable per-shard path, so an extension host left behind by an earlier run can still
+     * be polling them. Readers compare this against their own run id to ignore a foreign writer.
+     */
+    runId?: string;
     state: AspireExtensionStateSnapshot;
     dashboardUrl?: string;
     commandInvocations: readonly AspireExtensionE2ECommandInvocation[];
@@ -106,7 +112,21 @@ export interface AspireExtensionE2EStateFile {
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
     stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
     taskProcessEvents: readonly AspireExtensionE2ETaskProcessEvent[];
+    browserDebugSessions: readonly AspireExtensionE2EBrowserDebugSession[];
     control?: AspireExtensionE2EControlStatus;
+}
+
+/**
+ * A browser debug session (`pwa-chrome`, `pwa-msedge`, or `firefox`) that VS Code currently
+ * reports as active. Browser sessions are not part of the extension's own state snapshot, so
+ * E2E tests use this to observe whether a launched dashboard browser actually terminated.
+ */
+export interface AspireExtensionE2EBrowserDebugSession {
+    id: string;
+    type: string;
+    name: string;
+    parentSessionId?: string;
+    parentSessionType?: string;
 }
 
 export interface AspireExtensionE2ESequence {
@@ -153,6 +173,12 @@ export interface AspireExtensionE2EControlStatus {
 
 export interface AspireExtensionE2EControlPayload {
     revision: number;
+    /**
+     * Addresses this payload to a single E2E run. `revision` alone cannot do that: it restarts at 0
+     * in every test process while a freshly launched extension host starts at -1, so a host left
+     * behind by an earlier run would accept another run's commands.
+     */
+    runId?: string;
     aspireCliExecutablePath?: string;
     e2eCliExecutablePath?: string | null;
     forceCliUnavailable?: boolean;
@@ -196,6 +222,9 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
+    | { name: 'getRegisteredLanguageModelTools' }
+    | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
@@ -208,7 +237,21 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
+    | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }
-    | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
+    | { name: 'getSupportedCapabilities' }
+    | { name: 'getVisibleExtensionIds' }
+    | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
+    | {
+        name: 'createResourceDebugConfiguration';
+        launchConfig: ExecutableLaunchConfiguration;
+        args?: readonly string[];
+        env?: readonly EnvVar[];
+        debug?: boolean;
+        isApphost?: boolean;
+        debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
+        environmentKeys?: readonly string[];
+    }
+    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

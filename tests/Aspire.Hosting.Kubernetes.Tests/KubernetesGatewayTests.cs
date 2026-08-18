@@ -447,4 +447,42 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
         var content = await File.ReadAllTextAsync(gatewayFile);
         Assert.Contains("Gateway", content);
     }
+
+    /// <summary>
+    /// The deployment-target step is reachable from two pipeline executions: it is RequiredBy
+    /// "before-start" and it is also part of the publish DAG. The step guards against adding a second
+    /// DeploymentTargetAnnotation, but gateway route generation runs downstream of that guard, so a
+    /// second pass appended every route again. The rendered chart hid it, because duplicate routes
+    /// share a name and overwrite each other's file — the list itself grew on every pass.
+    /// </summary>
+    [Fact]
+    public async Task AddGateway_WhenDeploymentTargetsArePreparedTwice_DoesNotDuplicateHttpRoutes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        var prepareStep = Assert.Single(steps, step => step.Name == "prepare-deployment-targets-env");
+
+        await RunStepAsync(app.Services, prepareStep);
+        await RunStepAsync(app.Services, prepareStep);
+
+        var gatewayResource = Assert.IsType<KubernetesGatewayResource>(gateway.Resource);
+        var route = Assert.Single(gatewayResource.GeneratedHttpRoutes);
+        var rule = Assert.Single(route.Spec.Rules);
+        var match = Assert.Single(rule.Matches);
+
+        Assert.Equal("/api", match.Path?.Value);
+    }
 }

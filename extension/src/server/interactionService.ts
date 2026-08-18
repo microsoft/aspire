@@ -38,7 +38,7 @@ export interface IInteractionService extends vscode.Disposable {
     openEditor: (path: string) => Promise<void>;
     logMessage: (logLevel: CSLogLevel, message: string) => void;
     launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void>;
-    stopDebugging: () => void;
+    stopDebugging: () => Promise<void>;
     closeDashboard: () => void;
     notifyAppHostStartupCompleted: () => void;
     startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
@@ -657,9 +657,12 @@ export class InteractionService implements IInteractionService {
         return debugSession.startAppHost(projectFile, args, environment, debug, { forceBuild });
     }
 
-    stopDebugging() {
+    async stopDebugging(): Promise<void> {
         this.clearProgressNotification();
-        this._getAspireDebugSession()?.dispose();
+        // Await the ordered shutdown so the CLI (and the user, via the endpoint middleware) learns
+        // if a resource, AppHost, or parent debug session did not stop. Disposable.dispose() starts
+        // the same bounded work in the background but cannot return its failures.
+        await this._getAspireDebugSession()?.stopDebugging();
     }
 
     notifyAppHostStartupCompleted() {

@@ -60,6 +60,52 @@ suite('utils/strings tests', () => {
             assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
         }
     });
+
+    test('Rust loc strings are present in package.nls.json and the generated XLF catalog', () => {
+        // package.nls.json is the only input to the XLF catalog (see gulpfile.js), so a string that
+        // only exists in strings.ts is shipped untranslated. Guard the Rust debugger strings, which
+        // are the newest additions and the easiest to forget.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        const declarationPattern = /export\s+const\s+(rust[A-Za-z0-9_]*)\s*=\s*(?:\([^)]*\)\s*=>\s*)?vscode\.l10n\.t\(/g;
+        const names = [...stringsSource.matchAll(declarationPattern)].map(match => match[1]);
+        assert.ok(names.includes('rustDebuggerExtensionNotInstalled'), 'Expected rustDebuggerExtensionNotInstalled to be declared in strings.ts.');
+
+        const missingFromNls = names.filter(name => packageNls[`aspire-vscode.strings.${name}`] === undefined);
+        assert.deepStrictEqual(missingFromNls, [], 'Every rust* loc string needs an aspire-vscode.strings.* entry in package.nls.json.');
+
+        const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+        assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
+
+    test('Java loc strings are present in package.nls.json and the generated XLF catalog', () => {
+        // Same guard as the Rust strings above: package.nls.json is the only input to the XLF
+        // catalog (see gulpfile.js), so a Java string that only exists in strings.ts ships
+        // untranslated.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+        const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
+
+        // The Spring Boot Dashboard lens strings are matched explicitly because they belong to the Java
+        // experience but are named after the code lens they render in, so a java* prefix scan misses them.
+        const declarationPattern = /export\s+const\s+(java[A-Za-z0-9_]*|codeLensSpringBoot[A-Za-z0-9_]*)\s*=\s*(?:\([^)]*\)\s*=>\s*)?vscode\.l10n\.t\(/g;
+        const names = [...stringsSource.matchAll(declarationPattern)].map(match => match[1]);
+        assert.ok(names.includes('javaDisplayName'), 'Expected javaDisplayName to be declared in strings.ts.');
+        assert.ok(names.includes('javaLabel'), 'Expected javaLabel to be declared in strings.ts.');
+        assert.ok(
+            names.includes('codeLensSpringBootDashboardBypassesAspire'),
+            'Expected codeLensSpringBootDashboardBypassesAspire to be declared in strings.ts.');
+
+        const missingFromNls = names.filter(name => packageNls[`aspire-vscode.strings.${name}`] === undefined);
+        assert.deepStrictEqual(missingFromNls, [], 'Every Java loc string needs an aspire-vscode.strings.* entry in package.nls.json.');
+
+        const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
+        assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
+    });
 });
 
 suite('loc/strings tests', () => {
@@ -97,4 +143,85 @@ suite('loc/strings tests', () => {
 				launchingRunWithAppHost: 'Launching Aspire run session for AppHost {0}...',
 			});
 	});
+
+    test('no new loc string ships without a package.nls.json entry', () => {
+        // The two guards above only cover the rust*/java* prefixes, so the configuredCliPath* strings
+        // were added, shipped English-only, and passed CI - package.nls.json is the only input to the
+        // XLF catalog (see gulpfile.js), so a string that exists only in strings.ts never reaches
+        // translators. This guard covers every vscode.l10n.t export instead of a prefix, so the next
+        // omission fails here rather than in a localization drop.
+        //
+        // The allowlist is the set that predates the guard. It is deliberately an explicit list rather
+        // than a count: entries may be removed as strings are localized, but adding one means shipping
+        // a user-visible string untranslated and should be a conscious decision in review.
+        const knownUnlocalized = new Set([
+        'appHostStoppingDescription',
+        'aspireDashboard',
+        'aspireDebugSessionNotInitialized',
+        'browserDisplayName',
+        'browserLabel',
+        'codeLensCommand',
+        'codeLensDebugPipelineStep',
+        'codeLensOpenDashboard',
+        'codeLensResourceFailedToStart',
+        'codeLensResourceFailedToStartError',
+        'codeLensResourceNotStarted',
+        'codeLensResourceRunning',
+        'codeLensResourceRunningError',
+        'codeLensResourceRunningWarning',
+        'codeLensResourceRuntimeUnhealthy',
+        'codeLensResourceStarting',
+        'codeLensResourceStopped',
+        'codeLensResourceStoppedError',
+        'codeLensResourceStoppedErrorWithExitCode',
+        'codeLensResourceStoppedWithExitCode',
+        'codeLensResourceStopping',
+        'codeLensResourceValueMissing',
+        'codeLensResourceWaiting',
+        'codeLensRestart',
+        'codeLensRustAppHostAlreadyRunning',
+        'codeLensRustAppHostAlreadyRunningTooltip',
+        'codeLensRustAppHostUseAspire',
+        'codeLensRustAppHostUseAspireTooltip',
+        'codeLensStart',
+        'codeLensStop',
+        'codeLensViewAppHostLogs',
+        'codeLensViewLogs',
+        'dashboardLabel',
+        'defaultConfigurationName',
+        'errorFetchingAppHosts',
+        'errorMessage',
+        'healthCheckDescription',
+        'healthChecksLabel',
+        'logFileLabel',
+        'pidDescription',
+        'resourceCommandLogOpenFailed',
+        'resourceCommandOpenAppHostLog',
+        'resourceCommandOpenCliLog',
+        'resourceDescriptionExitCode',
+        'resourceDescriptionHealth',
+        'rpcServerAddressError',
+        'settingsLabel',
+        'tooltipEndpoints',
+        'tooltipHealth',
+        'tooltipState',
+        'tooltipType',
+        ]);
+
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        const declarationPattern = /export\s+const\s+([A-Za-z0-9_]+)\s*=\s*(?:\([^)]*\)\s*=>\s*)?vscode\.l10n\.t\(/g;
+        const names = [...stringsSource.matchAll(declarationPattern)].map(match => match[1]);
+        assert.ok(names.length > 200, `Expected the declaration scan to find the loc strings, found ${names.length}.`);
+
+        const newlyMissing = names
+            .filter(name => packageNls[`aspire-vscode.strings.${name}`] === undefined)
+            .filter(name => !knownUnlocalized.has(name));
+        assert.deepStrictEqual(newlyMissing, [], 'Add an aspire-vscode.strings.* entry to package.nls.json for these, then run "yarn run localize".');
+
+        const localizedButAllowlisted = [...knownUnlocalized].filter(name => packageNls[`aspire-vscode.strings.${name}`] !== undefined);
+        assert.deepStrictEqual(localizedButAllowlisted, [], 'These strings are localized now - remove them from knownUnlocalized.');
+    });
 });

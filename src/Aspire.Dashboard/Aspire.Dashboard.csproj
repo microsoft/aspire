@@ -51,7 +51,6 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
-    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
     <PackageReference Include="Markdig" />
@@ -60,7 +59,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
-    <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 
   <ItemGroup>

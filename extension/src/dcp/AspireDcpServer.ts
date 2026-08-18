@@ -12,7 +12,7 @@ import { timingSafeEqual, randomBytes } from 'crypto';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { authorizationAndDcpHeadersRequired, authorizationHeaderMustStartWithBearer, authorizationHeaderRequired, encounteredErrorStartingResource, invalidOrMissingToken, invalidTokenLength } from '../loc/strings';
 import { DashboardTelemetryPassthrough } from './DashboardTelemetryPassthrough';
-import { classifyError, sendTelemetryErrorEvent, sendTelemetryEvent } from '../utils/telemetry';
+import { classifyError, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent } from '../utils/telemetry';
 import { RunSessionRecord, RunSessionRegistry } from './RunSessionRegistry';
 
 /**
@@ -518,6 +518,7 @@ export default class AspireDcpServer {
                     debugSessionId,
                 });
 
+                const pendingDebugSessionStart = aspireDebugSession.beginPendingDebugSessionStart(launchConfig.type);
                 try {
                     const preparedSession = await prepareDebugSession(
                         aspireDebugSession.configuration,
@@ -612,7 +613,26 @@ export default class AspireDcpServer {
                         return;
                     }
 
-                    extensionLogOutputChannel.error(`Error creating debug session ${runId}: ${err}`);
+                    if (isCommandCancellation(err)) {
+                        // A language build can be canceled when its owning debug session is disposed. This
+                        // is the same lifecycle outcome as DELETE during startup: terminate the wire session
+                        // and let the registry record canceled telemetry instead of reporting launch_failed.
+                        cleanupRun(runId);
+                        runSessions.terminate(runId, undefined);
+                        res.status(409).json({
+                            error: {
+                                code: 'RunSessionTerminated',
+                                message: `Run session ${runId} terminated while its debug session was starting.`,
+                                details: [],
+                            },
+                        }).end();
+                        return;
+                    }
+
+                    // Launch errors can include compiler stderr intended for the user-facing response. Keep
+                    // that output out of the persistent extension log; the error kind is sufficient here and
+                    // is the same bounded classification sent to telemetry below.
+                    extensionLogOutputChannel.error(`Error creating debug session ${runId} (${classifyError(err)}).`);
 
                     // Synchronous launch failure — emit the matching end event and update
                     // aggregate stats via the shared helper before responding so the eventual
@@ -636,6 +656,8 @@ export default class AspireDcpServer {
 
                     const response: ErrorResponse = { error };
                     respondWithError(res, 500, response);
+                } finally {
+                    pendingDebugSessionStart.dispose();
                 }
             });
 

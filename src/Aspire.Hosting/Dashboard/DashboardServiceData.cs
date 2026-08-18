@@ -19,7 +19,7 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
-    private readonly IFileUploadStore _fileUploadStore;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
     private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
@@ -28,7 +28,7 @@ internal sealed class DashboardServiceData : IDisposable
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
-        IFileUploadStore fileUploadStore)
+        IInteractionFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
@@ -217,7 +217,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(interaction.InteractionId, inputsInfo, i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -230,15 +230,20 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    private InputDto MapInputDto(int interactionId, Interaction.InputsInteractionInfo inputsInfo, Aspire.DashboardService.Proto.V1.InteractionInput i)
     {
-        var inputType = DashboardService.MapInputType(i.InputType);
+        if (!inputsInfo.Inputs.TryGetByName(i.Name, out var modelInput))
+        {
+            return new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType));
+        }
+
+        var inputType = modelInput.InputType;
 
         // For file inputs, Value contains a JSON array of objects with file IDs and names.
         // Resolve each ID to the temp file path and build InputFileDto entries.
         if (inputType == InputType.File)
         {
-            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
+            var files = InteractionFileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(i.Name, i.Value, inputType, files);

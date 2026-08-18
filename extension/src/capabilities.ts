@@ -15,17 +15,22 @@ export type Capability =
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
+    | 'rust' // Support for running Rust projects
+    | 'ms-vscode.cpptools' // Rust debug adapter extension identifier on Windows (cppvsdbg)
+    | 'vadimcn.vscode-lldb' // Rust debug adapter extension identifier on macOS/Linux (CodeLLDB)
     | 'node' // Support for running Node.js projects
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'maui' // Support for running .NET MAUI projects
     | 'ms-dotnettools.dotnet-maui' // MAUI debug adapter extension identifier
+    | 'java' // Support for running Java projects
+    | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
     | 'azure-functions'; // Support for running Azure Functions projects
 
 export type Capabilities = Capability[];
 
-function isExtensionInstalled(extensionId: string): boolean {
+export function isExtensionInstalled(extensionId: string): boolean {
     const extension = vscode.extensions.getExtension(extensionId);
     return !!extension;
 }
@@ -46,6 +51,28 @@ export function isGoInstalled() {
     return isExtensionInstalled("golang.go");
 }
 
+// Rust debugging depends on a native debugger extension. Prefer the Microsoft C++ extension's
+// Windows-only cppvsdbg engine when it is available, but CodeLLDB is also a valid Windows adapter
+// and is required for GNU Rust targets. CodeLLDB remains the default on macOS/Linux. See:
+// https://code.visualstudio.com/docs/languages/rust#_install-debugging-support
+export function getRustExtensionId(
+    platform: NodeJS.Platform = process.platform,
+    extensionInstalled?: (extensionId: string) => boolean
+): 'ms-vscode.cpptools' | 'vadimcn.vscode-lldb' {
+    if (platform === 'win32'
+        && extensionInstalled
+        && !extensionInstalled('ms-vscode.cpptools')
+        && extensionInstalled('vadimcn.vscode-lldb')) {
+        return 'vadimcn.vscode-lldb';
+    }
+
+    return platform === 'win32' ? 'ms-vscode.cpptools' : 'vadimcn.vscode-lldb';
+}
+
+export function isRustInstalled(platform: NodeJS.Platform = process.platform) {
+    return isExtensionInstalled(getRustExtensionId(platform, isExtensionInstalled));
+}
+
 export function isAzureFunctionsExtensionInstalled() {
     return isExtensionInstalled("ms-azuretools.vscode-azurefunctions");
 }
@@ -63,7 +90,20 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
-export function getSupportedCapabilities(): Capabilities {
+// The Java debug adapter cannot launch anything on its own: it resolves main classes, the
+// classpath and project metadata through the redhat.java language server, which is why
+// vscjava.vscode-java-debug declares redhat.java as an extension dependency and both ship together
+// in the "Extension Pack for Java". java.ts also calls the redhat.java API directly to refresh the
+// project configuration, so advertise Java support only when both are present.
+// https://github.com/microsoft/vscode-java-debug#requirements
+export const javaLanguageExtensionId = 'redhat.java';
+export const javaDebugExtensionId = 'vscjava.vscode-java-debug';
+
+export function isJavaInstalled(extensionInstalled: (extensionId: string) => boolean = isExtensionInstalled) {
+    return extensionInstalled(javaLanguageExtensionId) && extensionInstalled(javaDebugExtensionId);
+}
+
+export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
     if (isCsDevKitInstalled()) {
@@ -92,6 +132,12 @@ export function getSupportedCapabilities(): Capabilities {
         capabilities.push("golang.go");
     }
 
+    if (isRustInstalled(platform)) {
+        const rustExtensionId = getRustExtensionId(platform, isExtensionInstalled);
+        capabilities.push("rust");
+        capabilities.push(rustExtensionId);
+    }
+
     if (isNodeInstalled()) {
         capabilities.push("node");
         capabilities.push("browser");
@@ -105,6 +151,11 @@ export function getSupportedCapabilities(): Capabilities {
     if (isMauiInstalled()) {
         capabilities.push("maui");
         capabilities.push("ms-dotnettools.dotnet-maui");
+    }
+
+    if (isJavaInstalled()) {
+        capabilities.push("java");
+        capabilities.push(javaDebugExtensionId);
     }
 
     return capabilities;

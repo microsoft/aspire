@@ -117,8 +117,8 @@ def _validate_drafted_base_contract(
 
     create_pull_request = _get_create_pull_request(payload)
     canonical_base = _require_target_branch(
-        create_pull_request.get("base_branch"),
-        "canonical create_pull_request base_branch",
+        create_pull_request.get("base"),
+        "canonical create_pull_request base",
     )
     notification_target = _require_target_branch(
         notification.get("target_branch"),
@@ -126,7 +126,7 @@ def _validate_drafted_base_contract(
     )
     if notification_target != canonical_base:
         raise OutcomeValidationError(
-            "Canonical create_pull_request base_branch "
+            "Canonical create_pull_request base "
             f"{canonical_base} does not match notify_source_pr target_branch "
             f"{notification_target}."
         )
@@ -135,7 +135,7 @@ def _validate_drafted_base_contract(
     if actual_base != canonical_base:
         raise OutcomeValidationError(
             f"Drafted PR base branch {actual_base} does not match canonical "
-            f"create_pull_request base_branch {canonical_base}."
+            f"create_pull_request base {canonical_base}."
         )
 
 

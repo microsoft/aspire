@@ -22,7 +22,20 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
     private const string CodeGenTarget = "Java";
 
     private const string LanguageDisplayName = "Java";
-    private static readonly string[] s_detectionPatterns = ["AppHost.java"];
+
+    /// <summary>
+    /// AppHost locations, in priority order: the flat single-file layout, and the standard Maven and
+    /// Gradle source root that a build-tool project uses.
+    /// </summary>
+    /// <remarks>
+    /// The flat layout is listed first and remains the default so an AppHost that predates build-tool
+    /// support keeps working unchanged, and so the common case needs nothing but a JDK.
+    /// </remarks>
+    private static readonly string[] s_detectionPatterns =
+    [
+        "AppHost.java",
+        "src/main/java/AppHost.java"
+    ];
 
     /// <inheritdoc />
     public string Language => LanguageId;
@@ -78,19 +91,137 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             }
             """;
 
+        // Without a pom.xml or build.gradle the Java language server treats the folder as an
+        // "invisible project" and only puts the workspace root on the source path, so every
+        // reference to the generated SDK under .aspire/modules resolves to "cannot be resolved to a
+        // type": no completion, no navigation, and no breakpoint binding in the AppHost. Declaring
+        // both source roots is what makes a build-tool-free AppHost a real editing experience.
+        // The setting is ignored once a build file exists, because the build tool then owns the
+        // project model, so this stays correct if the user later adopts Maven or Gradle.
+        // https://github.com/redhat-developer/vscode-java/wiki/Java-Project-Settings
+        files[".vscode/settings.json"] = """
+            {
+              "java.project.sourcePaths": [
+                ".",
+                ".aspire/modules"
+              ],
+              "java.compile.nullAnalysis.mode": "disabled"
+            }
+            """;
+
         return files;
     }
 
     /// <inheritdoc />
     public DetectionResult Detect(string directoryPath)
     {
-        var appHostPath = Path.Combine(directoryPath, "AppHost.java");
-        if (!File.Exists(appHostPath))
+        foreach (var pattern in s_detectionPatterns)
         {
-            return DetectionResult.NotFound;
+            // The patterns are written with forward slashes because they are also a wire contract,
+            // so they have to be translated before touching the file system on Windows.
+            var relativePath = pattern.Replace('/', Path.DirectorySeparatorChar);
+
+            if (File.Exists(Path.Combine(directoryPath, relativePath)))
+            {
+                return DetectionResult.Found(LanguageId, relativePath);
+            }
         }
 
-        return DetectionResult.Found(LanguageId, "AppHost.java");
+        return DetectionResult.NotFound;
+    }
+
+    /// <summary>
+    /// Directory that the generated SDK sources and the AppHost are compiled into.
+    /// </summary>
+    private const string BuildOutputDirectory = ".java-build";
+
+    /// <summary>
+    /// Compiler options used to build the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The scaffolded AppHost is a compact source file with an instance <c>main</c> method, which
+    /// requires Java 25. That feature was previewed in Java 21 through 24 (JEP 445, 463, 477, and
+    /// 495) and finalized in Java 25 by <see href="https://openjdk.org/jeps/512">JEP 512</see>, so
+    /// <c>--enable-preview</c> is deliberately absent: passing it here compiles no preview feature
+    /// and only risks stamping the class files with the preview minor version (65535), which binds
+    /// them to one exact JDK release and forces the flag at run time too.
+    /// </para>
+    /// <para>
+    /// <c>--release</c> is used rather than <c>--source</c> because only <c>--release</c> also
+    /// constrains the visible API surface. With <c>--source</c> alone a newer JDK still compiles
+    /// against its own class library, so an AppHost can bind to APIs that do not exist in Java 25
+    /// and then fail at run time on a conforming Java 25 runtime.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] s_javacOptions = ["--release", "25"];
+
+    /// <summary>
+    /// Argument file listing the generated SDK sources, produced by the code generator.
+    /// </summary>
+    /// <remarks>
+    /// Passed to <c>javac</c> as an <c>@</c> argument file. javac expands these itself, so this
+    /// works without a shell and stays well under the command-line length limit even though the
+    /// generated SDK is hundreds of files.
+    /// </remarks>
+    private const string GeneratedSourcesListPath = $"{GeneratedSourcesDirectory}/sources.txt";
+
+    /// <summary>
+    /// Directory the generated SDK sources are written to.
+    /// </summary>
+    private const string GeneratedSourcesDirectory = ".aspire/modules";
+
+    /// <summary>
+    /// Class that the scaffolded AppHost compiles to.
+    /// </summary>
+    /// <remarks>
+    /// The AppHost is declared in the default package, so this is also its fully qualified name.
+    /// </remarks>
+    private const string AppHostClassName = "AppHost";
+
+    /// <summary>
+    /// Name of the file written after a successful compile, used to skip the next one.
+    /// </summary>
+    internal const string CompileStampFileName = ".aspire-compile-stamp";
+
+    /// <summary>
+    /// Builds the up-to-date check that lets an unchanged AppHost skip <c>javac</c> entirely.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// javac given an explicit list of sources recompiles every one of them, so without this the
+    /// generated SDK — several hundred files — is recompiled on every launch even when nothing
+    /// changed. Every other supported language either has an incremental compiler of its own or no
+    /// compile step at all, so this is what brings Java to the same startup cost.
+    /// </para>
+    /// <para>
+    /// The inputs are exactly javac's source roots: the AppHost file, the sources beside it, the
+    /// generated SDK, and <c>src/main/java</c> for the layout where the AppHost sits at the project
+    /// root. The AppHost directory is recursive because javac is given no <c>-sourcepath</c>, so its
+    /// source path defaults to the user class path and therefore to the AppHost directory: a helper
+    /// class in a package beside the AppHost is compiled implicitly, and rewriting it in place moves
+    /// no ancestor's timestamp. The scan prunes the trees that cannot hold a package - dot
+    /// directories, <c>node_modules</c>, and javac's own output - so the sibling trees in a typical
+    /// solution do not give back the time this saves.
+    /// </para>
+    /// </remarks>
+    /// <param name="classOutputDirectory">Directory javac writes classes to, which is where the stamp lives.</param>
+    internal static CommandUpToDateCheck CreateCompileUpToDateCheck(string classOutputDirectory)
+    {
+        return new CommandUpToDateCheck
+        {
+            Inputs =
+            [
+                "{appHostFile}",
+                "./**",
+                $"{GeneratedSourcesDirectory}/**",
+                "src/main/java/**"
+            ],
+            // Only sources are inputs. Without this the .class files javac writes beside the sources in
+            // the flat layout would invalidate the very check they were produced under.
+            FileExtensions = [".java"],
+            StampFile = Path.Combine(classOutputDirectory, CompileStampFileName)
+        };
     }
 
     /// <inheritdoc />
@@ -102,16 +233,35 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
-            // No separate install step - compilation happens in Execute
+            // Compilation is a pre-execute step rather than part of Execute so that Execute is a plain
+            // JVM launch. That is what lets the AppHost be debugged (the IDE starts the JVM itself and
+            // would otherwise start a shell), and it lets --no-build skip the compile.
+            // A Maven or Gradle AppHost replaces both commands via JavaAppHostToolchainResolver.
             InstallDependencies = null,
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    // No shell. javac creates the destination directory itself, so there is nothing
+                    // left that needed one, and running without a shell means arguments are not
+                    // re-split: a project under a path such as "C:\My Projects" works unchanged, on
+                    // Windows and Unix alike, from a single spec.
+                    Command = "javac",
+                    Args = [.. s_javacOptions, "-d", BuildOutputDirectory, $"@{GeneratedSourcesListPath}", "{appHostFile}"],
+                    UpToDateCheck = CreateCompileUpToDateCheck(BuildOutputDirectory)
+                }
+            ],
+            // Debugging the AppHost itself goes through the same Java debug adapter the resources use.
+            // The CLI only takes this path when the extension reports the capability, so a CLI-only
+            // run is unaffected.
+            ExtensionLaunchCapability = LanguageId,
             Execute = new CommandSpec
             {
-                // Use a shell to compile and run in sequence
-                // On Windows, use cmd /c; on Unix, use sh -c
-                Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
-                Args = OperatingSystem.IsWindows()
-                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.aspire\\modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
-                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.aspire/modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                Command = "java",
+                // {args} is deliberately absent. When no argument contains that placeholder the CLI
+                // appends its arguments as separate argv entries, whereas substituting the placeholder
+                // joins them into a single space-separated string the AppHost would have to re-split.
+                Args = ["-cp", BuildOutputDirectory, AppHostClassName]
             }
         };
     }

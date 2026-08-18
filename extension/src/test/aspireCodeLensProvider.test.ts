@@ -4,19 +4,21 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { createMockDocument } from './testHelpers';
 import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
 import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
 import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
-import { codeLensCommand, codeLensResourceValueMissing } from '../loc/strings';
+import { codeLensCommand, codeLensJavaAppHostAlreadyRunning, codeLensJavaAppHostAlreadyRunningTooltip, codeLensJavaAppHostUseAspire, codeLensJavaAppHostUseAspireTooltip, codeLensResourceValueMissing, codeLensRustAppHostUseAspire, codeLensSpringBootDashboardBypassesAspire, codeLensSpringBootDashboardBypassesAspireTooltip } from '../loc/strings';
 import { ResourceState, ResourceType } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
+import '../editor/parsers/rustAppHostParser';
 
 // Build platform-native paths so dirname comparison works on Windows too
 // (vscode.Uri.file('/foo/bar').fsPath becomes '\\foo\\bar' on Windows, so we
@@ -25,63 +27,6 @@ function p(...segments: string[]): string {
     return path.join(path.sep, ...segments);
 }
 
-function createMockDocument(content: string, filePath: string): vscode.TextDocument {
-    const lines = content.split('\n');
-    return {
-        uri: vscode.Uri.file(filePath),
-        fileName: filePath,
-        isUntitled: false,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
-        version: 1,
-        isDirty: false,
-        isClosed: false,
-        eol: vscode.EndOfLine.LF,
-        lineCount: lines.length,
-        encoding: 'utf-8',
-        save: () => Promise.resolve(false),
-        lineAt: (lineOrPos: number | vscode.Position) => {
-            const lineNum = typeof lineOrPos === 'number' ? lineOrPos : lineOrPos.line;
-            const text = lines[lineNum] || '';
-            return {
-                lineNumber: lineNum,
-                text,
-                range: new vscode.Range(lineNum, 0, lineNum, text.length),
-                rangeIncludingLineBreak: new vscode.Range(lineNum, 0, lineNum + 1, 0),
-                firstNonWhitespaceCharacterIndex: text.search(/\S/),
-                isEmptyOrWhitespace: text.trim().length === 0,
-            } as vscode.TextLine;
-        },
-        offsetAt: (position: vscode.Position) => {
-            let offset = 0;
-            for (let i = 0; i < position.line && i < lines.length; i++) {
-                offset += lines[i].length + 1;
-            }
-            return offset + position.character;
-        },
-        positionAt: (offset: number) => {
-            let remaining = offset;
-            for (let i = 0; i < lines.length; i++) {
-                if (remaining <= lines[i].length) {
-                    return new vscode.Position(i, remaining);
-                }
-                remaining -= lines[i].length + 1;
-            }
-            return new vscode.Position(lines.length - 1, lines[lines.length - 1].length);
-        },
-        getText: (range?: vscode.Range) => {
-            if (!range) {
-                return content;
-            }
-            const startOffset = lines.slice(0, range.start.line).reduce((sum, l) => sum + l.length + 1, 0) + range.start.character;
-            const endOffset = lines.slice(0, range.end.line).reduce((sum, l) => sum + l.length + 1, 0) + range.end.character;
-            return content.substring(startOffset, endOffset);
-        },
-        getWordRangeAtPosition: () => undefined,
-        validateRange: (range: vscode.Range) => range,
-        validatePosition: (position: vscode.Position) => position,
-        notebook: undefined as any,
-    } as vscode.TextDocument;
-}
 
 function makeAppHost(appHostPath: string): AppHostDisplayInfo {
     return {
@@ -121,6 +66,7 @@ function createHarness(opts: {
     appHosts?: AppHostDisplayInfo[];
     workspaceResources?: ResourceJson[];
     workspaceAppHostPath?: string;
+    installedExtensions?: string[];
 }): TestHarness {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
@@ -131,7 +77,10 @@ function createHarness(opts: {
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
     const workspaceAppHostPathStub = sinon.stub(repository, 'workspaceAppHostPath').get(() => opts.workspaceAppHostPath);
 
-    const provider = new AspireCodeLensProvider(treeProvider, repository);
+    const provider = new AspireCodeLensProvider(
+        treeProvider,
+        repository,
+        extensionId => (opts.installedExtensions ?? []).includes(extensionId));
 
     return {
         provider,
@@ -410,6 +359,57 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('warns on the main CodeLens row when a Rust AppHost is already running', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({ appHosts: [makeAppHost(appHostPath)] });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const warningLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost');
+
+        assert.ok(warningLens);
+        assert.strictEqual(warningLens.command?.title, '⚠️ Do not click the rust-analyzer Run or Debug actions; this AppHost is already running in Aspire');
+        assert.strictEqual(warningLens.command?.tooltip, 'Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
+        assert.deepStrictEqual(warningLens.command?.arguments, [appHostPath]);
+        assert.strictEqual(warningLens.range.start.line, 0);
+        harness.dispose();
+    });
+
+    test('renders the stopped Rust AppHost warning as non-clickable text', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = 'fn main() {\n    let builder = create_builder(None)?;\n}';
+        const harness = createHarness({});
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const warningLens = lenses.find(lens => lens.command?.title === codeLensRustAppHostUseAspire);
+
+        assert.ok(warningLens);
+        assert.strictEqual(warningLens.command?.title, '⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');
+        assert.strictEqual(warningLens.command?.tooltip, 'Use Aspire Run or Debug instead. rust-analyzer starts Cargo directly, so VS Code does not create or attach to an Aspire AppHost session.');
+        // An empty command id keeps the warning from being a link that reveals an AppHost the tree
+        // cannot contain while it is stopped.
+        assert.strictEqual(warningLens.command?.command, '');
+        assert.strictEqual(warningLens.command?.arguments, undefined);
+        assert.ok(!lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost'));
+        assert.strictEqual(warningLens.range.start.line, 0);
+        harness.dispose();
+    });
+
+    test('does not add the Rust warning to a running C# AppHost', async () => {
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(APP_HOST_DOC, docPath), cancellationToken) as vscode.CodeLens[];
+
+        assert.ok(!lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealAppHost'));
+        harness.dispose();
+    });
+
     test('returns empty array for non-AppHost documents', async () => {
         const harness = createHarness({ appHosts: [makeAppHost(p('repo', 'AppHost', 'AppHost.csproj'))] });
 
@@ -633,6 +633,77 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
     function getStateLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
         return lenses.filter(l => l.command?.command === 'aspire-vscode.codeLensRevealResource');
     }
+
+    test('emits resource state and action lenses for a running Rust AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '    let cache = builder.add_redis("cache")?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({
+            workspaceAppHostPath: appHostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    restart: {
+                        displayName: 'Restart',
+                        description: null,
+                        state: 'Enabled',
+                        visibility: 'Api, Ui',
+                    },
+                },
+            })],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+
+        assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource'));
+        assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensResourceAction'));
+        harness.dispose();
+    });
+
+    test('renders resource and builder lenses for a Java AppHost, which previously had none', async () => {
+        const appHostPath = p('repo', 'AppHost', 'AppHost.java');
+        const content = [
+            'import aspire.*;',
+            'void main() throws Exception {',
+            '    var builder = DistributedApplication.CreateBuilder();',
+            '    var catalog = builder.addSpringBootApp("catalog", "./catalog");',
+            '    builder.build().run();',
+            '}',
+        ].join('\n');
+        const harness = createHarness({
+            appHosts: [makeAppHost(appHostPath)],
+            workspaceAppHostPath: appHostPath,
+            workspaceResources: [makeResource('catalog', { state: 'Running' })],
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+
+        assert.ok(lenses.some(lens => lens.range.start.line === 3), 'expected at least one lens anchored on the addSpringBootApp line');
+        assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensOpenDashboard'), 'expected the builder statement to carry Open Dashboard');
+        harness.dispose();
+    });
+
+    test('emits pipeline debug lenses for a stopped Rust AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.rs');
+        const content = [
+            'fn main() {',
+            '    let builder = create_builder(None)?;',
+            '    builder.add_step("publish")?;',
+            '}',
+        ].join('\n');
+        const harness = createHarness({ workspaceAppHostPath: appHostPath });
+
+        const lenses = await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[];
+        const pipelineLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensDebugPipelineStep');
+
+        assert.ok(pipelineLens);
+        assert.deepStrictEqual(pipelineLens.command?.arguments, ['publish']);
+        assert.strictEqual(pipelineLens.range.start.line, 2);
+        harness.dispose();
+    });
 
     test('does not emit resource state lenses for line-commented C# resource calls', async () => {
         const docPath = p('repo', 'AppHost', 'AppHost.cs');
@@ -1093,5 +1164,368 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
         assert.strictEqual(reveals.length, 1, 'expected only the state lens (no value lens) for a missing value');
         assert.strictEqual(reveals[0].command?.title, codeLensResourceValueMissing);
         harness.dispose();
+    });
+    suite('Java AppHost entry point warning', () => {
+        const javaAppHostPath = p('repo', 'AppHost', 'AppHost.java');
+
+        function appHostSource(main: string): string {
+            return [
+                'import aspire.*;',
+                main,
+                '    var builder = DistributedApplication.CreateBuilder();',
+                '    builder.addSpringBootApp("catalog", "./catalog");',
+                '    builder.build().run();',
+                '}',
+            ].join('\n');
+        }
+
+        function entryPointLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
+            return lenses.filter(lens =>
+                lens.command?.title === codeLensJavaAppHostUseAspire ||
+                lens.command?.title === codeLensJavaAppHostAlreadyRunning);
+        }
+
+        async function lensesFor(content: string, opts: Parameters<typeof createHarness>[0] = {}): Promise<vscode.CodeLens[]> {
+            const harness = createHarness(opts);
+            const lenses = entryPointLenses(await harness.provider.provideCodeLenses(createMockDocument(content, javaAppHostPath), cancellationToken) as vscode.CodeLens[]);
+            harness.dispose();
+            return lenses;
+        }
+
+        test('warns on the implicitly declared instance main the Java AppHost actually ships', async () => {
+            // JEP 512: a source-launched AppHost.java has no class, no modifiers and no parameters.
+            const lenses = await lensesFor(appHostSource('void main() throws Exception {'));
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].range.start.line, 1, 'the warning belongs on the declaration the Run/Debug lens sits above');
+            assert.strictEqual(lenses[0].command?.title, codeLensJavaAppHostUseAspire);
+            assert.strictEqual(lenses[0].command?.tooltip, codeLensJavaAppHostUseAspireTooltip);
+            // Rendered as plain text: a stopped AppHost has nothing in the tree to reveal.
+            assert.strictEqual(lenses[0].command?.command, '');
+        });
+
+        test('warns on a conventional static main, which is the Maven and Gradle project shape', async () => {
+            const lenses = await lensesFor(appHostSource('public static void main(String[] args) throws Exception {'));
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].range.start.line, 1);
+        });
+
+        test('does not warn on a Java file that is not an AppHost', async () => {
+            const lenses = await lensesFor('public class Application {\n    public static void main(String[] args) {\n    }\n}');
+
+            assert.deepStrictEqual(lenses, [], 'detection is content-based, so an ordinary Java file with a main is left alone');
+        });
+
+        test('points at the running AppHost once it is started under Aspire', async () => {
+            const lenses = await lensesFor(appHostSource('void main() {'), {
+                appHosts: [makeAppHost(javaAppHostPath)],
+            });
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].command?.title, codeLensJavaAppHostAlreadyRunning);
+            assert.strictEqual(lenses[0].command?.tooltip, codeLensJavaAppHostAlreadyRunningTooltip);
+            assert.strictEqual(lenses[0].command?.command, 'aspire-vscode.codeLensRevealAppHost');
+            assert.deepStrictEqual(lenses[0].command?.arguments, [javaAppHostPath]);
+        });
+    });
+
+    suite('Spring Boot Dashboard warning', () => {
+        const springBootDashboard = 'vscjava.vscode-spring-boot-dashboard';
+
+        function springBootLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
+            return lenses.filter(lens => lens.command?.title === codeLensSpringBootDashboardBypassesAspire);
+        }
+
+        test('warns on the line that launches a Java resource through the Spring Boot Maven plugin', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'builder.AddJavaApp("api", "../api")',
+                '       .WithMavenGoal("spring-boot:run");',
+                '',
+                'builder.Build().Run();',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].range.start.line, 3, 'the warning belongs on the goal, not the Add call');
+            assert.strictEqual(lenses[0].command?.tooltip, codeLensSpringBootDashboardBypassesAspireTooltip);
+            // Rendered as plain text: there is no Spring Boot Dashboard command worth invoking here.
+            assert.strictEqual(lenses[0].command?.command, '');
+            harness.dispose();
+        });
+
+        test('warns on the Gradle bootRun task', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddJavaApp("api", "../api").WithGradleTask("bootRun");',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].range.start.line, 1);
+            harness.dispose();
+        });
+
+        test('warns on AddSpringBootApp, which configures the same launch internally', async () => {
+            // The README leads with this form, so matching only the explicit goal would miss the case
+            // users are most likely to hit.
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'AppHost', 'apphost.cs'), 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddSpringBootApp("catalog", "../catalog");'],
+                [p('repo', 'AppHost', 'apphost.ts'), "const builder = createBuilder();\nbuilder.addSpringBootApp('catalog', '../catalog');"],
+                [p('repo', 'AppHost', 'apphost.rs'), 'fn main() {\n    let builder = create_builder(None)?;\n    let catalog = builder.add_spring_boot_app("catalog", "../catalog")?;\n}'],
+                [p('repo', 'AppHost', 'apphost.py'), 'builder = create_builder()\nbuilder.add_spring_boot_app("catalog", "../catalog")'],
+                [p('repo', 'AppHost', 'AppHost.java'), 'public class AppHost {\n    public static void main(String[] args) {\n        var builder = DistributedApplication.CreateBuilder();\n        builder.addSpringBootApp("catalog", "../catalog");\n    }\n}'],
+                [p('repo', 'AppHost', 'apphost.go'), 'func main() {\n\tbuilder.AddSpringBootApp("catalog", "../catalog")\n}'],
+            ];
+
+            for (const [appHostPath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 1, `expected a warning for ${appHostPath}`);
+                harness.dispose();
+            }
+        });
+
+        test('stays silent for AddQuarkusApp, which the Spring Boot Dashboard does not offer to run', async () => {
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+            const content = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddQuarkusApp("inventory", "../inventory");';
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, p('repo', 'AppHost', 'apphost.cs')), cancellationToken) as vscode.CodeLens[]);
+            assert.strictEqual(lenses.length, 0);
+            harness.dispose();
+        });
+
+        test('warns regardless of the AppHost language', async () => {
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'AppHost', 'apphost.ts'), "const builder = createBuilder();\nbuilder.addJavaApp('api', '../api').withGradleTask('bootRun');"],
+                [p('repo', 'AppHost', 'apphost.js'), 'const builder = createBuilder();\nbuilder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");'],
+                [p('repo', 'AppHost', 'apphost.rs'), 'fn main() {\n    let builder = create_builder(None)?;\n    let api = builder.add_java_app("api", "../api")?.with_maven_goal("spring-boot:run")?;\n}'],
+            ];
+
+            for (const [appHostPath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 1, `expected a warning for ${appHostPath}`);
+                harness.dispose();
+            }
+        });
+
+        test('warns in AppHost languages that have no resource parser', async () => {
+            // These languages produce no state or action lenses because nothing parses their resource
+            // model, but they can still launch a Java resource through Spring Boot's build plugins.
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'AppHost', 'apphost.py'), 'builder = create_builder()\nbuilder.add_java_app("api", "../api").with_gradle_task("bootRun")'],
+                [p('repo', 'AppHost', 'apphost.go'), 'func main() {\n\tbuilder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run")\n}'],
+            ];
+
+            for (const [appHostPath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 1, `expected a warning for ${appHostPath}`);
+                harness.dispose();
+            }
+        });
+
+        test('stays silent for a source file that is not the AppHost', async () => {
+            // The parserless languages have nothing narrowing the document to an AppHost, so without a
+            // file-name gate every Python and Go file in the workspace would be scanned - and any
+            // that happened to contain the call would get an Aspire lens.
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'src', 'Application.java'), 'class Application {\n    void configure() {\n        builder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");\n    }\n}'],
+                [p('repo', 'src', 'helpers.py'), 'builder.add_java_app("api", "../api").with_gradle_task("bootRun")'],
+                [p('repo', 'src', 'main.go'), 'func run() {\n\tbuilder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run")\n}'],
+            ];
+
+            for (const [filePath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, filePath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 0, `expected no warning for ${filePath}`);
+                harness.dispose();
+            }
+        });
+
+        test('warns in a nested AppHost that keeps the conventional file name', async () => {
+            // A Maven or Gradle Java AppHost sits at the build tool's source root rather than next to
+            // the project file, so content-based parser detection has to work no matter how deep the
+            // AppHost.java source file is nested.
+            const appHostPath = p('repo', 'AppHost', 'src', 'main', 'java', 'AppHost.java');
+            const content = 'public class AppHost {\n    public static void main(String[] args) {\n        var builder = DistributedApplication.CreateBuilder();\n        builder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");\n    }\n}';
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 1);
+            harness.dispose();
+        });
+
+        test('stays silent for a commented-out launch in Java and languages that have no parser', async () => {
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'AppHost', 'AppHost.java'), 'public class AppHost {\n    public static void main(String[] args) {\n        var builder = DistributedApplication.CreateBuilder();\n        // builder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");\n        /* builder.addJavaApp("b", "../b").withGradleTask("bootRun"); */\n    }\n}'],
+                [p('repo', 'AppHost', 'apphost.py'), '# builder.add_java_app("api", "../api").with_maven_goal("spring-boot:run")'],
+                [p('repo', 'AppHost', 'apphost.go'), 'func main() {\n\t// builder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run")\n}'],
+            ];
+
+            for (const [appHostPath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 0, `expected no warning for ${appHostPath}`);
+                harness.dispose();
+            }
+        });
+
+        test('still warns on a live Java launch that follows a commented-out one', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.java');
+            const content = [
+                'public class AppHost {',
+                '    public static void main(String[] args) {',
+                '        var builder = DistributedApplication.CreateBuilder();',
+                '        // builder.addJavaApp("old", "../old").withMavenGoal("spring-boot:run");',
+                '        builder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");',
+                '    }',
+                '}',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 1);
+            assert.strictEqual(lenses[0].range.start.line, 4);
+            harness.dispose();
+        });
+
+        test('stays silent for a launch quoted inside a Java text block', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.java');
+            const content = [
+                'public class AppHost {',
+                '    public static void main(String[] args) {',
+                '        var builder = DistributedApplication.CreateBuilder();',
+                '    }',
+                '    static final String DOCS = """',
+                '        builder.addJavaApp("api", "../api").withMavenGoal("spring-boot:run");',
+                '        """;',
+                '}',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 0);
+            harness.dispose();
+        });
+
+        test('warns once per line and once per resource', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run");',
+                'builder.AddJavaApp("worker", "../worker").WithGradleTask("bootRun");',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.deepStrictEqual(lenses.map(lens => lens.range.start.line), [1, 2]);
+            harness.dispose();
+        });
+
+        test('stays silent when the Spring Boot Dashboard is not installed', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run");',
+            ].join('\n');
+            const harness = createHarness({});
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 0);
+            harness.dispose();
+        });
+
+        test('stays silent for build-tool launches that are not Spring Boot', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddJavaApp("api", "../api").WithMavenGoal("exec:java");',
+                'builder.AddJavaApp("worker", "../worker").WithGradleTask("run");',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.strictEqual(lenses.length, 0);
+            harness.dispose();
+        });
+
+        test('stays silent for a commented-out launch', async () => {
+            // Users leave disabled variants in place while iterating; warning about a resource that
+            // does not exist is misleading.
+            const cases: ReadonlyArray<readonly [string, readonly string[]]> = [
+                [p('repo', 'AppHost', 'AppHost.cs'), [
+                    'var builder = DistributedApplication.CreateBuilder(args);',
+                    '// builder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run");',
+                    '/* builder.AddJavaApp("worker", "../worker").WithGradleTask("bootRun"); */',
+                ]],
+                [p('repo', 'AppHost', 'apphost.ts'), [
+                    'const builder = createBuilder();',
+                    "// builder.addJavaApp('api', '../api').withMavenGoal('spring-boot:run');",
+                    "/* builder.addJavaApp('worker', '../worker').withGradleTask('bootRun'); */",
+                ]],
+                [p('repo', 'AppHost', 'apphost.rs'), [
+                    'fn main() {',
+                    '    let builder = create_builder(None)?;',
+                    '    // builder.add_java_app("api", "../api")?.with_maven_goal("spring-boot:run")?;',
+                    '    /* builder.add_java_app("worker", "../worker")?.with_gradle_task("bootRun")?; */',
+                    '}',
+                ]],
+            ];
+
+            for (const [appHostPath, lines] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(lines.join('\n'), appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 0, `expected no warning for ${appHostPath}, got ${lenses.length}`);
+                harness.dispose();
+            }
+        });
+
+        test('stays silent for a launch quoted inside a string literal', async () => {
+            const cases: ReadonlyArray<readonly [string, string]> = [
+                [p('repo', 'AppHost', 'AppHost.cs'),
+                    'var builder = DistributedApplication.CreateBuilder(args);\nvar docs = "call .WithMavenGoal(\\"spring-boot:run\\") to use the plugin";'],
+                [p('repo', 'AppHost', 'apphost.ts'),
+                    'const builder = createBuilder();\nconst docs = `call .withMavenGoal("spring-boot:run") to use the plugin`;'],
+                [p('repo', 'AppHost', 'apphost.rs'),
+                    'fn main() {\n    let builder = create_builder(None)?;\n    let docs = "call .with_maven_goal(\\"spring-boot:run\\") to use the plugin";\n}'],
+            ];
+
+            for (const [appHostPath, content] of cases) {
+                const harness = createHarness({ installedExtensions: [springBootDashboard] });
+                const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+                assert.strictEqual(lenses.length, 0, `expected no warning for ${appHostPath}, got ${lenses.length}`);
+                harness.dispose();
+            }
+        });
+
+        test('still warns on a real launch that shares a document with a commented-out one', async () => {
+            const appHostPath = p('repo', 'AppHost', 'AppHost.cs');
+            const content = [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '// builder.AddJavaApp("old", "../old").WithMavenGoal("spring-boot:run");',
+                'builder.AddJavaApp("api", "../api").WithMavenGoal("spring-boot:run");',
+            ].join('\n');
+            const harness = createHarness({ installedExtensions: [springBootDashboard] });
+
+            const lenses = springBootLenses(await harness.provider.provideCodeLenses(createMockDocument(content, appHostPath), cancellationToken) as vscode.CodeLens[]);
+
+            assert.deepStrictEqual(lenses.map(lens => lens.range.start.line), [2]);
+            harness.dispose();
+        });
     });
 });

@@ -51,6 +51,11 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("What if", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
+        Assert.True(
+            result.Output.IndexOf("Write route sidecar", StringComparison.Ordinal) <
+            result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal),
+            "Bundle setup should be planned after the install-route sidecar is written.");
     }
 
     [Fact]
@@ -127,6 +132,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Set up Aspire CLI bundle", result.Output);
     }
 
     [Fact]
@@ -216,6 +222,21 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WhatIfWithExtension_PlansExtensionBeforeBundleSetup()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-InstallExtension", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var extensionIndex = result.Output.IndexOf("Installing VS Code extension", StringComparison.Ordinal);
+        var setupIndex = result.Output.IndexOf("Set up Aspire CLI bundle", StringComparison.Ordinal);
+        Assert.True(extensionIndex >= 0, "VS Code extension installation should be planned.");
+        Assert.True(setupIndex > extensionIndex, "Bundle setup should be planned after VS Code extension installation.");
     }
 
     [Theory]

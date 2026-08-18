@@ -124,7 +124,7 @@ public class ConnectionStringParserTests
     [InlineData("Data Source=localhost;Initial Catalog=Catalog", true, "Catalog")]
     [InlineData("Server=localhost;Database Name=Catalog", true, "Catalog")]
     [InlineData("jdbc:sqlserver://localhost:1433;databaseName=Catalog", true, "Catalog")]
-    [InlineData("mongodb://user:password@localhost:27017/catalogdb", true, "catalogdb")]
+    [InlineData("mongodb://PlaceholderUser:PlaceholderPassword@localhost:27017/catalogdb", true, "catalogdb")]
     [InlineData("mongodb+srv://cluster0.example.mongodb.net/catalogdb", true, "catalogdb")]
     [InlineData("mssql://localhost:1433/Catalog", true, "Catalog")]
     [InlineData("postgresql://localhost:5432/catalog%20db", true, "catalog db")]

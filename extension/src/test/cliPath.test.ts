@@ -3,16 +3,25 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 import {
     findCliOnPath,
+    getConfiguredCliPath,
     getDefaultCliInstallPaths,
     resolveCliPath,
     CliPathDependencies,
+    CliPathResolver,
     tryExecuteCli,
     CliProbeExecutor,
     isConfiguredCliPathRejectedForForwarding,
     resetRejectedConfiguredCliPathForForwarding,
 } from '../utils/cliPath';
+import {
+    getCliExecutableCandidates,
+    windowCliPathTarget,
+    workspaceFolderCliPathTarget,
+} from '../utils/cliPathVariables';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
 const globalToolPath = '/home/user/.dotnet/tools/aspire';
@@ -21,6 +30,7 @@ const defaultPaths = [bundlePath, globalToolPath];
 function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDependencies {
     return {
         getConfiguredPath: () => '',
+        getWorkspaceFolders: () => [],
         getDefaultPaths: () => defaultPaths,
         isConfiguredPathAutoConfigured: (configuredPath, paths) => paths.some(candidate => process.platform === 'win32'
             ? path.win32.normalize(candidate).toLowerCase() === path.win32.normalize(configuredPath).toLowerCase()
@@ -28,6 +38,7 @@ function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDe
         findOnPath: async () => undefined,
         findAtDefaultPath: async () => undefined,
         tryExecute: async () => false,
+        getExecutableCandidates: candidate => [candidate],
         setConfiguredPath: async () => {},
         updateResolvedPathForForwarding: () => {},
         ...overrides,
@@ -194,7 +205,7 @@ suite('utils/cliPath tests', () => {
                     commandShim);
             }
             finally {
-                fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+                removeDirectorySafely(tempDirectory);
             }
         });
     });
@@ -351,7 +362,7 @@ suite('utils/cliPath tests', () => {
                     available: true,
                     source: 'default-install',
                 });
-                assert.ok(setConfiguredPath.calledOnceWithExactly(''));
+                assert.ok(setConfiguredPath.calledOnceWithExactly('', windowCliPathTarget));
             }
             finally {
                 platformStub.restore();
@@ -395,7 +406,7 @@ suite('utils/cliPath tests', () => {
 
                 assert.deepStrictEqual(result, { cliPath: 'aspire', available: true, source: 'path' });
                 assert.ok(tryExecute.notCalled);
-                assert.ok(setConfiguredPath.calledOnceWithExactly(''));
+                assert.ok(setConfiguredPath.calledOnceWithExactly('', windowCliPathTarget));
             }
             finally {
                 platformStub.restore();
@@ -947,7 +958,7 @@ suite('utils/cliPath tests', () => {
                 assert.strictEqual(await tryExecuteCli(wrapperPath), true);
             }
             finally {
-                fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+                removeDirectorySafely(tempDirectory);
             }
         });
 
@@ -969,7 +980,7 @@ suite('utils/cliPath tests', () => {
                 assert.strictEqual(await tryExecuteCli(wrapperPath), true);
             }
             finally {
-                fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+                removeDirectorySafely(tempDirectory);
             }
         });
 
@@ -1041,5 +1052,282 @@ suite('utils/cliPath tests', () => {
                 platformStub.restore();
             }
         });
+    });
+});
+
+suite('CliPathResolver scoped tests', () => {
+    // Folder paths for the ${workspaceFolder} cases have to be shaped like the host's, because
+    // expandConfiguredCliPath normalizes its expansion with the host's path library: a POSIX literal
+    // becomes a backslash path on Windows and stops matching what the test configured. path.resolve
+    // supplies the drive letter Windows needs for the result to be fully qualified.
+    const folderAPath = path.resolve('/repo/a');
+    const folderBPath = path.resolve('/repo/b');
+    const folderACli = path.join(folderAPath, 'bin', 'aspire');
+    const folderBCli = path.join(folderBPath, 'bin', 'aspire');
+    const folderA = createWorkspaceFolder('a', folderAPath, 0);
+    const folderB = createWorkspaceFolder('b', folderBPath, 1);
+    const targetA = workspaceFolderCliPathTarget(folderA);
+    const targetB = workspaceFolderCliPathTarget(folderB);
+
+    test('resolves the same tokenized setting independently for two workspace folders without coalescing', async () => {
+        const attempted: string[] = [];
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '${workspaceFolder}/bin/aspire',
+            getWorkspaceFolders: () => [folderA, folderB],
+            tryExecute: async candidate => {
+                attempted.push(candidate);
+                return candidate === folderACli || candidate === folderBCli;
+            },
+        }));
+
+        const [resultA, resultB] = await Promise.all([
+            resolver.resolve(targetA),
+            resolver.resolve(targetB),
+        ]);
+
+        assert.strictEqual(resultA.cliPath, folderACli);
+        assert.strictEqual(resultA.source, 'configured');
+        assert.strictEqual(resultB.cliPath, folderBCli);
+        assert.strictEqual(resultB.source, 'configured');
+        assert.deepStrictEqual(attempted.sort(), [folderACli, folderBCli].sort());
+    });
+
+    test('never passes a tokenized configured value to setConfiguredPath', async () => {
+        const setConfiguredPath = sinon.stub().resolves();
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '${workspaceFolder}/bin/aspire',
+            getWorkspaceFolders: () => [folderA],
+            tryExecute: async candidate => candidate === folderACli,
+            setConfiguredPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.cliPath, folderACli);
+        assert.strictEqual(result.source, 'configured');
+        assert.ok(setConfiguredPath.notCalled);
+    });
+
+    test('does not persist the global setting for a folder target with an empty configured path when a default install is found', async () => {
+        const setConfiguredPath = sinon.stub().resolves();
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '',
+            getWorkspaceFolders: () => [folderA],
+            findOnPath: async () => undefined,
+            findAtDefaultPath: async () => bundlePath,
+            setConfiguredPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.cliPath, bundlePath);
+        assert.strictEqual(result.source, 'default-install');
+        assert.ok(setConfiguredPath.notCalled, 'a folder target must never write the window-wide setting');
+    });
+
+    test('does not clear the global setting for a folder target inheriting a legacy configured path when PATH is found', async () => {
+        const setConfiguredPath = sinon.stub().resolves();
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => bundlePath,
+            isConfiguredPathAutoConfigured: () => true,
+            getWorkspaceFolders: () => [folderA],
+            findOnPath: async () => 'aspire',
+            setConfiguredPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.cliPath, 'aspire');
+        assert.strictEqual(result.source, 'path');
+        assert.ok(setConfiguredPath.notCalled, 'a folder target must never clear the window-wide setting');
+    });
+
+    test('does not persist the global setting when a tokenized configured candidate fails and a default install is found', async () => {
+        const setConfiguredPath = sinon.stub().resolves();
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '${workspaceFolder}/bin/aspire',
+            getWorkspaceFolders: () => [folderA],
+            tryExecute: async () => false,
+            findOnPath: async () => undefined,
+            findAtDefaultPath: async () => bundlePath,
+            setConfiguredPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.cliPath, bundlePath);
+        assert.strictEqual(result.source, 'default-install');
+        assert.ok(setConfiguredPath.notCalled, 'a rejected tokenized candidate must never fall back to persisting a default install path');
+    });
+
+    test('scopes rejection state to the folder that produced it', async () => {
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: target => target.kind === 'workspaceFolder' && target.workspaceFolder.name === 'a'
+                ? '/repo/a/missing/aspire'
+                : '/repo/b/bin/aspire',
+            getWorkspaceFolders: () => [folderA, folderB],
+            findOnPath: async () => 'aspire',
+            tryExecute: async candidate => candidate === '/repo/b/bin/aspire',
+        }));
+
+        await resolver.resolve(targetA);
+        await resolver.resolve(targetB);
+
+        assert.strictEqual(resolver.isConfiguredPathRejectedForForwarding(targetA, '/repo/a/missing/aspire'), true);
+        assert.strictEqual(resolver.isConfiguredPathRejectedForForwarding(targetB, '/repo/a/missing/aspire'), false);
+        assert.strictEqual(resolver.isConfiguredPathRejectedForForwarding(targetB, '/repo/b/bin/aspire'), false);
+    });
+
+    test('falls through to PATH/default without probing an unsupported token', async () => {
+        const attempted: string[] = [];
+        const findOnPath = sinon.stub().resolves('aspire');
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '${unsupportedToken}/aspire',
+            getWorkspaceFolders: () => [folderA],
+            tryExecute: async candidate => {
+                attempted.push(candidate);
+                return false;
+            },
+            findOnPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.source, 'path');
+        assert.strictEqual(result.cliPath, 'aspire');
+        assert.deepStrictEqual(attempted, []);
+        assert.ok(findOnPath.calledOnce);
+    });
+
+    test('probes Windows configured candidates in exact, .exe, .cmd, .bat order', async () => {
+        const attempted: string[] = [];
+        const configured = 'C:\\repo\\a\\bin\\aspire';
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => configured,
+            getExecutableCandidates: candidate => getCliExecutableCandidates(candidate, 'win32'),
+            tryExecute: async candidate => {
+                attempted.push(candidate);
+                return candidate === `${configured}.cmd`;
+            },
+        }));
+
+        const result = await resolver.resolve(windowCliPathTarget);
+
+        assert.deepStrictEqual(attempted, [configured, `${configured}.exe`, `${configured}.cmd`]);
+        assert.strictEqual(result.cliPath, `${configured}.cmd`);
+        assert.strictEqual(result.source, 'configured');
+    });
+
+    test('reads the scoped setting through vscode.workspace.getConfiguration', () => {
+        const workspaceConfiguration = {
+            get: sinon.stub().returns('/repo/a/bin/aspire'),
+        } as unknown as vscode.WorkspaceConfiguration;
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns(workspaceConfiguration);
+
+        try {
+            const result = getConfiguredCliPath(targetA);
+
+            assert.ok(getConfigurationStub.calledOnceWith('aspire', folderA.uri));
+            assert.strictEqual(result, '/repo/a/bin/aspire');
+        }
+        finally {
+            getConfigurationStub.restore();
+        }
+    });
+
+    test('ignores workspace CLI paths in Restricted Mode while preserving the global value', () => {
+        const trustDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, 'isTrusted');
+        Object.defineProperty(vscode.workspace, 'isTrusted', { value: false, configurable: true });
+        const workspaceConfiguration = {
+            get: sinon.stub().returns('/repo/a/tools/aspire'),
+            inspect: sinon.stub().returns({
+                key: 'aspire.aspireCliExecutablePath',
+                globalValue: '/users/me/aspire',
+                workspaceValue: '/repo/tools/aspire',
+                workspaceFolderValue: '/repo/a/tools/aspire',
+            }),
+        } as unknown as vscode.WorkspaceConfiguration;
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns(workspaceConfiguration);
+
+        try {
+            assert.strictEqual(getConfiguredCliPath(targetA), '/users/me/aspire');
+            assert.strictEqual(getConfiguredCliPath(windowCliPathTarget), '/users/me/aspire');
+        }
+        finally {
+            getConfigurationStub.restore();
+            if (trustDescriptor) {
+                Object.defineProperty(vscode.workspace, 'isTrusted', trustDescriptor);
+            }
+        }
+    });
+
+    test('ignores a tokenized global CLI path in Restricted Mode', () => {
+        const trustDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, 'isTrusted');
+        Object.defineProperty(vscode.workspace, 'isTrusted', { value: false, configurable: true });
+        const workspaceConfiguration = {
+            get: sinon.stub().returns('${workspaceFolder}/tools/aspire'),
+            inspect: sinon.stub().returns({
+                key: 'aspire.aspireCliExecutablePath',
+                globalValue: '${workspaceFolder}/tools/aspire',
+            }),
+        } as unknown as vscode.WorkspaceConfiguration;
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns(workspaceConfiguration);
+
+        try {
+            assert.strictEqual(getConfiguredCliPath(targetA), '');
+            assert.strictEqual(getConfiguredCliPath(windowCliPathTarget), '');
+        }
+        finally {
+            getConfigurationStub.restore();
+            if (trustDescriptor) {
+                Object.defineProperty(vscode.workspace, 'isTrusted', trustDescriptor);
+            }
+        }
+    });
+
+    test('treats a non-string configured CLI path as unset', () => {
+        const workspaceConfiguration = {
+            get: sinon.stub().returns({ path: '/repo/a/bin/aspire' }),
+            inspect: sinon.stub().returns(undefined),
+        } as unknown as vscode.WorkspaceConfiguration;
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns(workspaceConfiguration);
+
+        try {
+            assert.strictEqual(getConfiguredCliPath(targetA), '');
+        }
+        finally {
+            getConfigurationStub.restore();
+        }
+    });
+
+    test('keeps plain absolute configured path behavior unchanged', async () => {
+        const configured = '/repo/a/bin/aspire';
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => configured,
+            tryExecute: async candidate => candidate === configured,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.deepStrictEqual(result, { cliPath: configured, available: true, source: 'configured' });
+    });
+
+    test('keeps a plain relative configured path invalid and falls through', async () => {
+        const attempted: string[] = [];
+        const findOnPath = sinon.stub().resolves('aspire');
+        const resolver = new CliPathResolver(createMockDeps({
+            getConfiguredPath: () => '../artifacts/aspire',
+            tryExecute: async candidate => {
+                attempted.push(candidate);
+                return false;
+            },
+            findOnPath,
+        }));
+
+        const result = await resolver.resolve(targetA);
+
+        assert.strictEqual(result.source, 'path');
+        assert.strictEqual(result.cliPath, 'aspire');
+        assert.deepStrictEqual(attempted, []);
     });
 });

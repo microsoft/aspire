@@ -1,6 +1,6 @@
 ﻿@inject IStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings> ControlsLoc
 <!DOCTYPE html>
-<html lang="@System.Globalization.CultureInfo.CurrentUICulture.Name">
+<html lang="@GlobalizationHelpers.GetHtmlLanguageName(System.Globalization.CultureInfo.CurrentUICulture)">
 
 <head>
     <meta charset="utf-8" />
@@ -37,12 +37,8 @@
 
 <body class="before-upgrade"
       data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
-    @* Fluent design tokens are element-scoped. This ancestor gives app-theme.js one stable target whose
-       emitted token properties are inherited by every Fluent Blazor component in the dashboard. *@
-    <div id="aspire-design-system">
-        <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
-        <ReconnectModal />
-    </div>
+    <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+    <ReconnectModal />
     <BlazorScript />
     <script src="js/app.js"></script>
     <script src="js/app-reconnect.js"></script>

@@ -16,7 +16,7 @@ namespace Aspire.Hosting.JavaScript.Tests;
 
 public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 {
-    private const string InternalNpmRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+    private const string PublicNpmRegistry = "https://registry.npmjs.org/";
 
     [Fact]
     public async Task VerifyDockerfile()
@@ -154,7 +154,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(
             [
-                $"ARG NPM_REGISTRY={InternalNpmRegistry}",
+                $"ARG NPM_REGISTRY={PublicNpmRegistry}",
                 "RUN npm install --global --registry \"$NPM_REGISTRY\" pnpm@10.30.1",
                 "RUN --mount=type=cache,target=/pnpm/store pnpm install --prefer-frozen-lockfile"
             ],
@@ -395,7 +395,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
         var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
-        Assert.Contains($"ARG NPM_REGISTRY={InternalNpmRegistry}", dockerfile);
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfile);
         Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfile);
         Assert.Contains("createHash(algorithm)", dockerfile);
         Assert.Contains("\"sha512\" \"3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a\" \"$archive\"", dockerfile);
@@ -566,7 +566,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 
         // Read the generated Dockerfile and verify it installs pnpm through npm.
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains($"ARG NPM_REGISTRY={InternalNpmRegistry}", dockerfileContent);
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfileContent);
         Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfileContent);
         Assert.Contains("createHash(algorithm)", dockerfileContent);
         Assert.Contains("npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\"", dockerfileContent);
@@ -661,7 +661,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains($"ARG NPM_REGISTRY={InternalNpmRegistry}", dockerfileContent);
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfileContent);
         Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfileContent);
         Assert.Contains("createHash(algorithm)", dockerfileContent);
         Assert.Contains("npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\"", dockerfileContent);

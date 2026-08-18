@@ -283,6 +283,7 @@ internal sealed class ConfigCommand : BaseCommand
                 .ToHashSet(StringComparer.Ordinal);
 
             var unconfiguredFeatures = KnownFeatures.GetAllFeatureMetadata()
+                .Where(f => !f.Hidden)
                 .Where(f => !allConfiguredFeatures.Contains(f.Name))
                 .ToList();
 
@@ -464,6 +465,7 @@ internal sealed class ConfigCommand : BaseCommand
             var localPath = ConfigurationService.GetSettingsFilePath(isGlobal: false);
             var globalPath = ConfigurationService.GetSettingsFilePath(isGlobal: true);
             var availableFeatures = KnownFeatures.GetAllFeatureMetadata()
+                .Where(m => !m.Hidden)
                 .Select(m => new FeatureInfo(m.Name, m.Description, m.DefaultValue))
                 .ToList();
             var localSchema = SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: false);

@@ -41,6 +41,11 @@ internal static class KnownConfigNames
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
 
+    // Direct AppHost owner of an aspire-managed terminalhost process. The terminal host watches
+    // this identity so it can shut down and unlink its sockets if the AppHost disappears.
+    public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
+    public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
+
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the
     // AppHost tree down if the launcher dies before the app reaches readiness, preventing leaked

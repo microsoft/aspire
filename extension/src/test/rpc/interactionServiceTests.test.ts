@@ -11,6 +11,8 @@ import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
 import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
+import { AspireExtensionContext } from '../../AspireExtensionContext';
+import { debugSessionStopTimedOut } from '../../loc/strings';
 
 suite('InteractionService endpoints', () => {
 	let statusBarItem: vscode.StatusBarItem;
@@ -871,6 +873,276 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(infoStub.callCount, infoCallCount);
 			assert.strictEqual(showStub.called, false);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	// The CLI's `stopDebugging` RPC endpoint resolves its session through AspireExtensionContext on
+	// every request. A failed stop must keep that session registered, or the retry sees no session
+	// and falsely reports success without asking the failed adapters again.
+	test("stopDebugging keeps a failed debug session reachable until a retry succeeds", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			const appHostDebugSession = { id: 'apphost-session', type: 'coreclr', name: 'AppHost' };
+			const resourceDebugSession = { id: 'resource-session', type: 'pwa-node', name: 'Node.js: server.js' };
+			const resourceStopFailure = new Error('Resource stop failed');
+			const appHostStopFailure = new Error('AppHost stop failed');
+			let resourceStopAttempts = 0;
+			let appHostStopAttempts = 0;
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging')
+				.callsFake(async session => {
+					if (session === resourceDebugSession as unknown as vscode.DebugSession) {
+						resourceStopAttempts++;
+						if (resourceStopAttempts === 1) {
+							throw resourceStopFailure;
+						}
+					}
+
+					if (session === appHostDebugSession as unknown as vscode.DebugSession) {
+						appHostStopAttempts++;
+						if (appHostStopAttempts === 1) {
+							throw appHostStopFailure;
+						}
+					}
+				});
+			const terminalProvider = { isCliDebugLoggingEnabled: () => false };
+			const context = new AspireExtensionContext();
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				terminalProvider as any,
+				context.removeAspireDebugSession.bind(context),
+				() => { },
+				'debug-session');
+			(aspireDebugSession as any)._appHostDebugSession = {
+				id: appHostDebugSession.id,
+				session: appHostDebugSession as unknown as vscode.DebugSession,
+				stopSession: () => vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession),
+			};
+			(aspireDebugSession as any)._resourceDebugSessions = [
+				{
+					id: resourceDebugSession.id,
+					session: resourceDebugSession as unknown as vscode.DebugSession,
+					stopSession: () => vscode.debug.stopDebugging(resourceDebugSession as unknown as vscode.DebugSession),
+				},
+			];
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+
+			await assert.rejects(
+				() => testInfo.interactionService.stopDebugging(),
+				(error: unknown) => {
+					assert.ok(error instanceof AggregateError, `Expected an AggregateError but got ${error}`);
+					assert.deepStrictEqual((error as AggregateError).errors, [resourceStopFailure, appHostStopFailure]);
+					return true;
+				});
+
+			assert.deepStrictEqual(
+				stopDebuggingStub.getCalls().map(call => call.args[0]),
+				[
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+					parentDebugSession as unknown as vscode.DebugSession,
+				]);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), aspireDebugSession);
+			assert.strictEqual((aspireDebugSession as any)._disposed, false);
+
+			await testInfo.interactionService.stopDebugging();
+
+			assert.deepStrictEqual(
+				stopDebuggingStub.getCalls().map(call => call.args[0]),
+				[
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+					parentDebugSession as unknown as vscode.DebugSession,
+					resourceDebugSession as unknown as vscode.DebugSession,
+					appHostDebugSession as unknown as vscode.DebugSession,
+				]);
+			assert.strictEqual(resourceStopAttempts, 2);
+			assert.strictEqual(appHostStopAttempts, 2);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+			assert.strictEqual((aspireDebugSession as any)._disposed, true);
+
+			await testInfo.interactionService.stopDebugging();
+			assert.strictEqual(stopDebuggingStub.callCount, 5, 'A successful retry must remove the session exactly once');
+
+			await context.dispose();
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("stopDebugging retries a timed-out parent stop and waits for confirmed termination", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			let completeFirstStop: (() => void) | undefined;
+			const firstStop = new Promise<void>(resolve => {
+				completeFirstStop = resolve;
+			});
+			let completeRetryStop: (() => void) | undefined;
+			const retryStop = new Promise<void>(resolve => {
+				completeRetryStop = resolve;
+			});
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging');
+			stopDebuggingStub.onFirstCall().returns(firstStop);
+			stopDebuggingStub.onSecondCall().returns(retryStop);
+			const context = new AspireExtensionContext();
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				{ isCliDebugLoggingEnabled: () => false } as any,
+				context.removeAspireDebugSession.bind(context),
+				() => { },
+				'debug-session');
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+			const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+
+			const initialStop = testInfo.interactionService.stopDebugging();
+			await clock.tickAsync(10_001);
+
+			await assert.rejects(initialStop, (error: Error) => {
+				assert.strictEqual(error.message, debugSessionStopTimedOut(parentDebugSession.name, 10));
+				return true;
+			});
+
+			const retry = testInfo.interactionService.stopDebugging();
+			let retrySettled = false;
+			void retry.then(() => {
+				retrySettled = true;
+			});
+			await clock.tickAsync(0);
+
+			const stopCallsBeforeConfirmation = stopDebuggingStub.callCount;
+			const settledBeforeConfirmation = retrySettled;
+
+			completeRetryStop?.();
+			await retry;
+			completeFirstStop?.();
+			await Promise.resolve();
+			await context.dispose();
+
+			assert.strictEqual(stopCallsBeforeConfirmation, 2, 'The retry must issue a fresh parent stop request');
+			assert.strictEqual(settledBeforeConfirmation, false, 'The retry must wait for the fresh stop request to complete');
+			assert.strictEqual(stopDebuggingStub.callCount, 2);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("stopDebugging disposes a timed-out session when its parent stop completes before retry", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: {
+					type: 'aspire',
+					request: 'launch',
+					name: 'Aspire',
+					program: '/workspace/apphost.cs',
+					command: 'run',
+				},
+				customRequest: sandbox.stub(),
+				getDebugProtocolBreakpoint: sandbox.stub(),
+			};
+			let completeFirstStop: (() => void) | undefined;
+			const firstStop = new Promise<void>(resolve => {
+				completeFirstStop = resolve;
+			});
+			const stopDebuggingStub = sandbox.stub(vscode.debug, 'stopDebugging').returns(firstStop);
+			const context = new AspireExtensionContext();
+			let removalCalls = 0;
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				{ isCliDebugLoggingEnabled: () => false } as any,
+				session => {
+					removalCalls++;
+					context.removeAspireDebugSession(session);
+				},
+				() => { },
+				'debug-session');
+			context.addAspireDebugSession(aspireDebugSession);
+			const testInfo = await createTestRpcServer(
+				null,
+				() => context.getAspireDebugSession(aspireDebugSession.debugSessionId));
+			const clock = sandbox.useFakeTimers({ shouldClearNativeTimers: true });
+
+			const initialStop = testInfo.interactionService.stopDebugging();
+			await clock.tickAsync(10_001);
+
+			await assert.rejects(initialStop, (error: Error) => {
+				assert.strictEqual(error.message, debugSessionStopTimedOut(parentDebugSession.name, 10));
+				return true;
+			});
+
+			completeFirstStop?.();
+			await Promise.resolve();
+
+			assert.strictEqual((aspireDebugSession as any)._parentStopped, true);
+			assert.strictEqual((aspireDebugSession as any)._disposed, false);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), aspireDebugSession);
+
+			await testInfo.interactionService.stopDebugging();
+
+			assert.strictEqual(stopDebuggingStub.callCount, 1, 'A confirmed parent stop must not be issued again');
+			assert.strictEqual(removalCalls, 1, 'The no-work retry must run lifecycle cleanup exactly once');
+			assert.strictEqual((aspireDebugSession as any)._disposed, true);
+			assert.strictEqual(context.getAspireDebugSession(aspireDebugSession.debugSessionId), null);
+
+			await testInfo.interactionService.stopDebugging();
+			assert.strictEqual(stopDebuggingStub.callCount, 1);
+			assert.strictEqual(removalCalls, 1);
+
+			await context.dispose();
 		}
 		finally {
 			sandbox.restore();

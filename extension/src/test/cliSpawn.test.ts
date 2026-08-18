@@ -7,13 +7,62 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../debugger/languages/cli';
+import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
 import { EnvironmentVariables } from '../utils/environment';
 
+import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
+    test('builds the child environment from the exact CLI command being launched', () => {
+        const childProcess = createTestChildProcess(4801);
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+        const createEnvironmentStub = sinon.stub().returns({});
+        const terminalProvider = { createEnvironment: createEnvironmentStub } as unknown as AspireTerminalProvider;
+
+        try {
+            spawnCliProcess(terminalProvider, '/repo/a/bin/aspire', ['config', 'info']);
+
+            assert.ok(createEnvironmentStub.calledOnceWith(undefined, undefined, undefined, '/repo/a/bin/aspire'));
+        }
+        finally {
+            spawnStub.restore();
+        }
+    });
+
+    test('passes the original cmd shim path to createEnvironment on Windows, not cmd.exe', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+        const childProcess = createTestChildProcess(4802);
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+        const createEnvironmentStub = sinon.stub().returns({});
+        const terminalProvider = { createEnvironment: createEnvironmentStub } as unknown as AspireTerminalProvider;
+
+        try {
+            spawnCliProcess(terminalProvider, 'C:\\repo\\a\\aspire.cmd', ['config', 'info']);
+
+            // createEnvironment must receive the original shim path so the terminal provider
+            // can compute correct environment variables relative to the CLI install location.
+            assert.ok(createEnvironmentStub.calledOnceWith(undefined, undefined, undefined, 'C:\\repo\\a\\aspire.cmd'));
+            // The actual spawn must go through cmd.exe, not the shim directly.
+            assert.strictEqual(spawnStub.firstCall.args[0], 'C:\\Windows\\System32\\cmd.exe');
+            assert.notStrictEqual(spawnStub.firstCall.args[0], 'C:\\repo\\a\\aspire.cmd');
+        }
+        finally {
+            spawnStub.restore();
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
     test('creates POSIX process groups only for lifecycle-managed CLI processes', () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const children = [createTestChildProcess(4101), createTestChildProcess(4102)];
@@ -285,7 +334,7 @@ suite('spawnCliProcess tests', () => {
             assert.strictEqual(result.stdout.trim(), 'mcp-started');
         }
         finally {
-            fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+            removeDirectorySafely(tempDirectory);
         }
     });
 

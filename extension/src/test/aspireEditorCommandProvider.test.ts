@@ -11,12 +11,13 @@ import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
 
+import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
     return {
         document: {
             uri: vscode.Uri.file(filePath),
             fileName: filePath,
-            languageId: filePath.endsWith('.ts') ? 'typescript' : 'csharp'
+            languageId: filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'csharp'
         } as vscode.TextDocument
     } as vscode.TextEditor;
 }
@@ -41,7 +42,9 @@ suite('AspireEditorCommandProvider', () => {
         activeEditorStub = sinon.stub(vscode.window, 'activeTextEditor').get(() => activeEditor);
         workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) => {
-            if (uri.fsPath.startsWith(tempDir)) {
+            // VS Code lowercases the drive letter in fsPath, so the raw mkdtemp path does not
+            // prefix-match its own URI on Windows. Normalise both sides through Uri.file.
+            if (uri.fsPath.startsWith(vscode.Uri.file(tempDir).fsPath)) {
                 return { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
             }
 
@@ -69,7 +72,7 @@ suite('AspireEditorCommandProvider', () => {
         getWorkspaceFolderStub.restore();
         workspaceFoldersStub.restore();
         activeEditorStub.restore();
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeDirectorySafely(tempDir);
     });
 
     test('returns containing project file when active editor is SDK-style AppHost Program.cs', async () => {
@@ -111,6 +114,20 @@ suite('AspireEditorCommandProvider', () => {
         activeEditor = createEditor(appHostPath);
 
         const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
+        try {
+            assert.strictEqual(await provider.getAppHostPath(), appHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('returns source file when active editor is Rust apphost.rs', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.rs');
+        fs.writeFileSync(appHostPath, 'fn main() {}');
+        activeEditor = createEditor(appHostPath);
+
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), new AppHostLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }

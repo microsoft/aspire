@@ -569,8 +569,9 @@ jobs:
     name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
     needs: [setup_for_tests]
-    # Also gated on run_extension_e2e (not just run_extension_unit): extension_e2e_tests `needs` this
-    # job, so gating it off while e2e runs would skip e2e via need-propagation.
+    # Also gated on run_extension_e2e (not just run_extension_unit): this job packages and uploads
+    # the aspire-extension VSIX that extension_e2e_tests installs, so skipping it would leave the
+    # shards with nothing to install.
     if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -639,14 +640,19 @@ jobs:
         run: corepack yarn install --frozen-lockfile --non-interactive
       - name: Run tests
         run: corepack yarn test
+      # The VSIX steps from here down run even when 'Run tests' failed. extension_e2e_tests
+      # installs the artifact this job uploads but is deliberately not gated on the unit-test
+      # result, so the packaging has to happen regardless or that decoupling buys nothing.
       - name: Override extension version for PR builds
-        if: ${{ inputs.extensionVersionOverride != '' }}
+        if: ${{ !cancelled() && inputs.extensionVersionOverride != '' }}
         run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
       - name: Package VSIX
+        if: ${{ !cancelled() }}
         env:
           ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
       - name: Assert E2E VSIX contains bridge
+        if: ${{ !cancelled() }}
         run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
       # Packaged separately (not reusing out/aspire-extension.vsix) because the step above already
       # proved that VSIX contains the bridge on purpose; asserting Absent against it would be
@@ -655,10 +661,13 @@ jobs:
       # GitHub Actions step `env:` blocks don't leak into later steps, so this reproduces exactly
       # what Extension.proj's shipping build packages, with no ability to inherit the opt-in above.
       - name: Package production VSIX
+        if: ${{ !cancelled() }}
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
       - name: Assert production VSIX excludes bridge
+        if: ${{ !cancelled() }}
         run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
       - name: Upload VSIX
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: aspire-extension
@@ -722,8 +731,21 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
+    # extension_tests_win stays in `needs` because it uploads the aspire-extension VSIX these shards
+    # install, but E2E is deliberately not gated on its unit-test *result*: !cancelled() keeps the
+    # shards running when those tests fail, and the VSIX packaging steps in that job carry the same
+    # condition so the artifact is published either way. Before this, one unit failure - or an npm
+    # blip on that single Windows runner - skipped all 30 shards and erased the E2E signal entirely.
+    # The remaining producers are still required by result, since a missing CLI archive or package
+    # feed makes every shard fail on a download rather than tell us anything.
+    if: >-
+      ${{ !cancelled() &&
+          needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
+          needs.build_packages.result == 'success' &&
+          needs.build_cli_archive_linux.result == 'success' &&
+          needs.build_cli_archive_windows.result == 'success' &&
+          needs.extension_bootstrap_linux.result == 'success' }}
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
   typescript_sdk_tests:

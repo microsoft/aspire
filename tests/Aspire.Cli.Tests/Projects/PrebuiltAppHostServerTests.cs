@@ -8,6 +8,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -22,6 +23,341 @@ namespace Aspire.Cli.Tests.Projects;
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
+    [Fact]
+    public async Task WriteIfChangedAsync_LeavesAnIdenticalFileAlone()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+        var firstWrite = File.GetLastWriteTimeUtc(path);
+
+        // MSBuild rebuilds when an input timestamp moves, so an identical rewrite must not touch the file.
+        File.SetLastWriteTimeUtc(path, firstWrite.AddMinutes(-5));
+        var backdated = File.GetLastWriteTimeUtc(path);
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+
+        Assert.Equal(backdated, File.GetLastWriteTimeUtc(path));
+        Assert.Equal("<Project />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public async Task WriteIfChangedAsync_WritesWhenContentDiffers()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project Sdk=\"Microsoft.NET.Sdk\" />", CancellationToken.None);
+
+        Assert.Equal("<Project Sdk=\"Microsoft.NET.Sdk\" />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public async Task WriteIfChangedAsync_RewritesAFileItCannotRead()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Read permission is removed with POSIX file modes.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await File.WriteAllTextAsync(path, "<Project />");
+
+        // A generated file the CLI owns but momentarily cannot read -- an antivirus scanner holding it
+        // open on Windows, a mode the user changed on POSIX -- must be rewritten, not turned into a
+        // launch failure. The write below is what surfaces a genuinely unrecoverable error.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserWrite);
+        }
+
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project Sdk=\"Microsoft.NET.Sdk\" />", CancellationToken.None);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Equal("<Project Sdk=\"Microsoft.NET.Sdk\" />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenNothingHasBeenRestoredYet()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenTheAssetsAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenTheFingerprintChanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "old-fingerprint");
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "new-fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_SkipsWhenTheFingerprintMatches()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
+
+        Assert.True(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenAReferencedProjectChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        // A referenced project bumping its own dependency changes the closure that restore resolves
+        // without changing a byte of the generated project file.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        // Under central package management the reference carries no version at all: the version lives
+        // in Directory.Packages.props, which MSBuild imports automatically. Bumping it there changes
+        // what restore resolves while every hashed file stays byte-for-byte identical.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" /></ItemGroup></Project>""");
+        var packagesProps = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");
+        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenATransitivelyReferencedProjectChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        // Restore resolves the whole graph, not just its first level, so a package bump two hops out
+        // changes the closure exactly as much as one hop out does.
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenATransitivelyReferencedProjectFloats()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.False(inputs.IsEligibleForSkip);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_ToleratesAProjectReferenceCycle()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var first = Path.Combine(workspace.WorkspaceRoot.FullName, "First.csproj");
+        var second = Path.Combine(workspace.WorkspaceRoot.FullName, "Second.csproj");
+        // MSBuild rejects a cycle, but the fingerprint is computed before anything validates the
+        // graph, so walking it has to terminate on its own rather than hang the launch.
+        await File.WriteAllTextAsync(first, """<Project><ItemGroup><ProjectReference Include="Second.csproj" /></ItemGroup></Project>""");
+        await File.WriteAllTextAsync(second, """<Project><ItemGroup><ProjectReference Include="First.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("First", first) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEmpty(inputs.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintIsStableForUnchangedInputs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, "<Project />");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenAReferencedProjectFloats()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        // The generated project pins exact versions, so the only float is inside the referenced
+        // project. Restore must still run because the feed can resolve it to a different package.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.False(inputs.IsEligibleForSkip);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsEligibleForSkipWhenEveryVersionIsExact()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project ToolsVersion="4.0"><ItemGroup><PackageReference Include="Some.Package" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0") };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", packageRefs, projectRefs, CancellationToken.None);
+
+        Assert.True(inputs.IsEligibleForSkip);
+    }
+
+    [Theory]
+    [InlineData("""<PackageReference Include="A" Version="13.4.*" />""")]
+    [InlineData("""<PackageReference Include="A" Version="[13.4,14)" />""")]
+    [InlineData("""<PackageReference Include="A" Version="(13.4,)" />""")]
+    [InlineData("""<PackageReference Include="A" VersionOverride="13.4.*" />""")]
+    [InlineData("""<PackageReference Include="A" Version = "13.4.*" />""")]
+    public void HasFloatingVersionAttribute_DetectsVersionsThatCanResolveDifferently(string projectText)
+    {
+        Assert.True(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
+    }
+
+    [Theory]
+    [InlineData("""<PackageReference Include="A" Version="13.5.0" />""")]
+    [InlineData("""<PackageReference Include="A" Version="13.5.0-preview.1.25000.1" />""")]
+    // ToolsVersion ends in "Version" but is not a package version; the word boundary must exclude it.
+    [InlineData("""<Project ToolsVersion="4.0,x" />""")]
+    [InlineData("<Project />")]
+    public void HasFloatingVersionAttribute_IsFalseForExactVersions(string projectText)
+    {
+        Assert.False(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
+    }
+
+    [Theory]
+    [InlineData("13.4.*")]
+    [InlineData("[13.4,14)")]
+    [InlineData("(13.4,)")]
+    public void HasFloatingPackageVersion_DetectsVersionsThatCanResolveDifferently(string version)
+    {
+        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", version) };
+
+        Assert.True(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
+    }
+
+    [Fact]
+    public void HasFloatingPackageVersion_IsFalseForExactVersions()
+    {
+        var packageRefs = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0"),
+            IntegrationReference.FromPackage("Aspire.Hosting.Java", "13.5.0-preview.1.25000.1")
+        };
+
+        Assert.False(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
+    }
+
+    [Theory]
+    [InlineData("error NETSDK1004: Assets file '/tmp/obj/project.assets.json' not found. Run a NuGet package restore.")]
+    [InlineData("/tmp/obj/project.assets.json' doesn't have a target for 'net10.0'.")]
+    public void ShouldRetryWithRestore_RetriesWhenTheAssetsAreMissingOrStale(string line)
+    {
+        var output = new OutputCollector();
+        output.AppendOutput(line);
+
+        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Theory]
+    [InlineData("error NETSDK1064: Package Aspire.Hosting.Redis, version 13.5.0 was not found. It might have been deleted since NuGet restore. Otherwise, NuGet restore might have only partially completed, which might have been due to maximum path length restrictions.")]
+    [InlineData("error NU1101: Unable to find package Aspire.Hosting.Java. No packages exist with this id in source(s): dotnet-public")]
+    [InlineData("error NU1102: Unable to find package Aspire.Hosting with version (>= 13.6.0-dev)")]
+    public void ShouldRetryWithRestore_RetriesWhenThePackageCacheIsMissingPackages(string line)
+    {
+        var output = new OutputCollector();
+        output.AppendOutput(line);
+
+        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Fact]
+    public void ShouldRetryWithRestore_DoesNotRetryAnOrdinaryCompileFailure()
+    {
+        var output = new OutputCollector();
+        output.AppendOutput("Program.cs(3,1): error CS0103: The name 'Foo' does not exist in the current context");
+
+        Assert.False(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Fact]
+    public void GetIntegrationBuildFailureMessage_ExplainsAPackageDowngrade()
+    {
+        var output = new OutputCollector();
+        // Localized MSBuild output: the error code is the only stable part to match on.
+        output.AppendOutput("IntegrationRestore.csproj : error NU1605: Advertencia como error: Degradación del paquete detectada: Aspire.Hosting de 13.6.0-dev a 13.5.0.");
+
+        var message = PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output);
+
+        Assert.Contains("aspire.config.json", message, StringComparison.Ordinal);
+        Assert.Contains(VersionHelper.GetDefaultTemplateVersion(), message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetIntegrationBuildFailureMessage_FallsBackForOtherFailures()
+    {
+        var output = new OutputCollector();
+        output.AppendOutput("Program.cs(3,1): error CS0103: The name 'Foo' does not exist in the current context");
+
+        Assert.Equal(ErrorStrings.IntegrationBuildFailed, PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output));
+    }
+
+    private static void WriteRestoreState(string restoreDir, string fingerprint, bool writeAssets = true)
+    {
+        var objDir = Path.Combine(restoreDir, "obj");
+        Directory.CreateDirectory(objDir);
+        if (writeAssets)
+        {
+            File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
+        }
+
+        File.WriteAllText(Path.Combine(objDir, "aspire-restore.stamp"), fingerprint);
+    }
 
     [Fact]
     public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
@@ -449,8 +785,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideTempDir()
     {
         // End-to-end pin for the staging temp-config hang fix: when the real PackagingService
-        // synthesizes the staging channel (here driven by overrideStagingFeed on a stable-shaped
-        // CLI so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
+        // synthesizes the staging channel (here driven by overrideStagingFeed on a staging
+        // identity so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
         // PrebuiltAppHostServer must point globalPackagesFolder at an absolute path that survives
         // the TemporaryNuGetConfig.Dispose recursive delete. Otherwise BundleNuGetService restores
         // staging assemblies into <temp>/.nugetpackages, bakes those paths into
@@ -473,8 +809,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache(),
             new TestFeatures(),
             configuration,
-            NullLogger<PackagingService>.Instance,
-            isStableShapedCliVersion: () => true);
+            NullLogger<PackagingService>.Instance);
 
         var server = CreateServerWithPackagingService(workspace, packagingService, executionContext);
 
@@ -1240,6 +1575,65 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(result.Success);
             Assert.NotNull(restoreArgs);
             Assert.Equal([packageSource.FullName, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithHiveBackedChannelUsingFileUri_UsesLocalAspireSourceAsOverride()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        var packageSourceUri = new Uri(packageSource.FullName).AbsoluteUri;
+        List<string>? restoreArgs = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-12345"
+            }
+            """);
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "pr-12345",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSourceUri)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Contains(packageSourceUri, GetSourceArguments(restoreArgs!));
             Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
             Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
             Assert.Contains("--nuget-config", restoreArgs!);

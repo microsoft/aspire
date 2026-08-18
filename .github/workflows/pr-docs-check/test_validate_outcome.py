@@ -39,12 +39,12 @@ def payload(
     }
 
 
-def create_pull_request_item(base_branch: object = "release/13.5") -> dict:
+def create_pull_request_item(base: object = "release/13.5") -> dict:
     return {
         "type": "create_pull_request",
         "title": "Draft docs",
         "body": "Docs",
-        "base_branch": base_branch,
+        "base": base,
     }
 
 
@@ -72,7 +72,7 @@ class ValidateOutcomeTests(unittest.TestCase):
         with self.assertRaisesRegex(
             OutcomeValidationError,
             "Drafted PR base branch main does not match canonical "
-            "create_pull_request base_branch release/13.5",
+            "create_pull_request base release/13.5",
         ):
             validate_outcome(
                 drafted_payload,
@@ -87,8 +87,25 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             OutcomeValidationError,
-            "Canonical create_pull_request base_branch release/13.5 does not match "
+            "Canonical create_pull_request base release/13.5 does not match "
             "notify_source_pr target_branch main",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "release/13.5",
+            )
+
+    def test_drafted_with_legacy_base_branch_only_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        create_item = create_pull_request_item()
+        create_item["base_branch"] = create_item.pop("base")
+        drafted_payload["items"].append(create_item)
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Invalid canonical create_pull_request base",
         ):
             validate_outcome(
                 drafted_payload,

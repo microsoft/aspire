@@ -21,6 +21,9 @@ VERSION=""
 QUALITY=""
 OS=""
 ARCH=""
+INSTALLED_CLI_PATH=""
+INSTALLED_CLI_OS=""
+INSTALLED_CLI_ARCH=""
 SHOW_HELP=false
 VERBOSE=false
 KEEP_ARCHIVE=false
@@ -995,6 +998,9 @@ download_and_install_archive() {
         cli_exe="aspire"
     fi
     cli_path="${INSTALL_PATH}/${cli_exe}"
+    INSTALLED_CLI_PATH="$cli_path"
+    INSTALLED_CLI_OS="$os"
+    INSTALLED_CLI_ARCH="$arch"
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
@@ -1017,6 +1023,33 @@ download_and_install_archive() {
             say_warn "Cannot install extension: VS Code CLI not found in PATH"
             say_info "Please ensure VS Code is installed and available in PATH"
         fi
+    fi
+}
+
+setup_cli_bundle() {
+    local host_os host_arch
+
+    if ! host_os=$(detect_os) || ! host_arch=$(get_cli_architecture_from_architecture "<auto>"); then
+        say_warn "Skipping Aspire CLI bundle setup because the current platform could not be detected."
+        return 0
+    fi
+
+    # Cross-target archive downloads are supported, but the downloaded executable cannot
+    # safely be run to extract its embedded bundle on a different host platform.
+    if [[ "$INSTALLED_CLI_OS" != "$host_os" || "$INSTALLED_CLI_ARCH" != "$host_arch" ]]; then
+        say_info "Skipping Aspire CLI bundle setup for ${INSTALLED_CLI_OS}-${INSTALLED_CLI_ARCH} on ${host_os}-${host_arch}."
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: $INSTALLED_CLI_PATH setup"
+        return 0
+    fi
+
+    say_verbose "Running: $INSTALLED_CLI_PATH setup"
+    if ! "$INSTALLED_CLI_PATH" setup; then
+        say_error "Aspire CLI bundle setup failed"
+        return 1
     fi
 }
 
@@ -1104,6 +1137,10 @@ main() {
     else
         mkdir -p "$INSTALL_PATH"
         printf '{"source":"script"}\n' > "$sidecar_path"
+    fi
+
+    if ! setup_cli_bundle; then
+        exit 1
     fi
 
     # Skip PATH configuration if --skip-path is set

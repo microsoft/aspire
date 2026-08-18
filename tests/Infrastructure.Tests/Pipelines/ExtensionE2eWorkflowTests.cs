@@ -9,8 +9,8 @@ namespace Infrastructure.Tests.Pipelines;
 /// <summary>
 /// Guards the advisory-failure contract in <c>.github/workflows/extension-e2e-tests.yml</c>.
 ///
-/// Every shard still runs and produces diagnostics, but failures from the VS Code test execution
-/// are temporarily non-blocking. Setup before test execution and cleanup remain blocking.
+/// Every shard still runs and produces diagnostics. Only issue-tracked rows may treat completed
+/// VS Code test failures as advisory; setup, harness, and cleanup failures remain blocking.
 /// </summary>
 public sealed class ExtensionE2eWorkflowTests
 {
@@ -18,22 +18,35 @@ public sealed class ExtensionE2eWorkflowTests
     private const string CallerWorkflowRelativePath = ".github/workflows/tests.yml";
 
     [Fact]
-    public void AllShardRowsRunWithAllowedTestFailures()
+    public void AdvisoryShardRowsRemainIssueTrackedWithoutWeakeningRunnerStep()
     {
         var job = LoadExtensionE2eJob();
 
         var rows = MatrixIncludeRows(job).ToList();
         Assert.NotEmpty(rows);
-        Assert.All(rows, row => Assert.Equal("true", Scalar(row, "allowFailure")));
-        Assert.All(rows, row => Assert.False(row.Children.ContainsKey(new YamlScalarNode("disabledIssue"))));
+        Assert.All(rows, row =>
+        {
+            Assert.False(row.Children.ContainsKey(new YamlScalarNode("allowFailure")));
+            Assert.False(row.Children.ContainsKey(new YamlScalarNode("disabledIssue")));
+        });
+        Assert.Contains(rows, row => row.Children.ContainsKey(new YamlScalarNode("advisoryIssue")));
+        Assert.Contains(rows, row => !row.Children.ContainsKey(new YamlScalarNode("advisoryIssue")));
 
         var steps = ((YamlSequenceNode)job.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
         var runSuiteStep = Assert.Single(steps, step => Scalar(step, "name") == "Run extension E2E tests");
-        Assert.Null(Scalar(runSuiteStep, "if"));
-        Assert.Null(Scalar(runSuiteStep, "continue-on-error"));
+        Assert.False(runSuiteStep.Children.ContainsKey(new YamlScalarNode("if")));
+        Assert.False(runSuiteStep.Children.ContainsKey(new YamlScalarNode("continue-on-error")));
 
         var environment = (YamlMappingNode)runSuiteStep.Children[new YamlScalarNode("env")];
-        Assert.Equal("${{ matrix.allowFailure }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE"));
+        Assert.False(environment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE")));
+        Assert.Equal("${{ matrix.advisoryIssue }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE"));
+
+        var prepareCliStep = Assert.Single(steps, step => Scalar(step, "name") == "Prepare Aspire CLI and package hive");
+        var prepareCliScript = Scalar(prepareCliStep, "run") ?? string.Empty;
+        Assert.Contains(
+            "\"ASPIRE_DCP_PATH=$($dcp.Directory.FullName)\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
+            prepareCliScript,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -46,7 +59,35 @@ public sealed class ExtensionE2eWorkflowTests
         var root = (YamlMappingNode)yaml.Documents[0].RootNode;
         var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
         var extensionE2eJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e_tests")];
-        Assert.Equal("${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}", Scalar(extensionE2eJob, "if"));
+
+        // The condition is a folded block, so compare on collapsed whitespace rather than the layout.
+        var e2eCondition = string.Join(' ', (Scalar(extensionE2eJob, "if") ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        // Selection still decides whether the shards run at all.
+        Assert.Contains("needs.setup_for_tests.outputs.run_extension_e2e == 'true'", e2eCondition, StringComparison.Ordinal);
+
+        // !cancelled() rather than success(): extension_tests_win is in `needs` only because it
+        // uploads the VSIX the shards install, and its packaging steps carry the same condition, so a
+        // unit-test failure must not take the E2E signal with it. Assert the job's result is not
+        // consulted at all -- reintroducing it is the regression this pins.
+        Assert.StartsWith("${{ !cancelled() &&", e2eCondition, StringComparison.Ordinal);
+        Assert.DoesNotContain("needs.extension_tests_win.result", e2eCondition, StringComparison.Ordinal);
+
+        // The artifact producers stay required by result: without them every shard fails on a
+        // download, which reports nothing useful about the extension.
+        foreach (var producer in new[] { "build_packages", "build_cli_archive_linux", "build_cli_archive_windows", "extension_bootstrap_linux" })
+        {
+            Assert.Contains($"needs.{producer}.result == 'success'", e2eCondition, StringComparison.Ordinal);
+        }
+
+        // The VSIX the shards install is published even when the unit tests fail; without this the
+        // decoupling above buys nothing because the artifact would never exist.
+        var extensionUnitJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_tests_win")];
+        var unitSteps = ((YamlSequenceNode)extensionUnitJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
+        var uploadStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Upload VSIX");
+        Assert.Contains("!cancelled()", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        var packageStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Package VSIX");
+        Assert.Contains("!cancelled()", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
 
         var resultsJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("results")];
         var steps = (YamlSequenceNode)resultsJob.Children[new YamlScalarNode("steps")];

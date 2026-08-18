@@ -16,6 +16,7 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
     public Func<EnsureCertificateResult>? EnsureHttpCertificateExistsCallback { get; set; }
     public Func<EnsureCertificateResult>? TrustHttpCertificateCallback { get; set; }
     public Func<CertificateCleanResult>? CleanHttpCertificateCallback { get; set; }
+    public Func<string, string?>? ExportDevCertificatePublicPemCallback { get; set; }
 
     public CertificateTrustResult CheckHttpCertificate(CancellationToken cancellationToken = default)
     {
@@ -53,5 +54,13 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
         return CleanHttpCertificateCallback is not null
             ? CleanHttpCertificateCallback()
             : new CertificateCleanResult { Success = true };
+    }
+
+    public string? ExportDevCertificatePublicPem(string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ExportDevCertificatePublicPemCallback is not null
+            ? ExportDevCertificatePublicPemCallback(outputDirectory)
+            : null;
     }
 }
