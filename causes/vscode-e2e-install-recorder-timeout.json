@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-install-recorder-timeout",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E jobs cancelled after exceeding max execution time during 'Install E2E recorder' step",
+  "error_pattern": "The job has exceeded the maximum execution time of 1h15m0s / 1h50m0s. The operation was canceled. Failure occurs while stuck on the 'Install E2E recorder' step, indicating a runner/network hang unrelated to PR test logic.",
+  "occurrences": [
+    {
+      "run_id": 32157178231,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32157178231",
+      "job": "Tests / Azure.AI.OpenAI / Azure.AI.OpenAI (windows-latest)",
+      "pr_number": 19384,
+      "observed_at": "2026-08-18T18:14:47Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19476"
+}

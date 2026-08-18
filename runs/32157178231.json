@@ -1,0 +1,119 @@
+{
+  "run_id": 32157178231,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32157178231",
+  "analyzed_at": "2026-08-18T18:14:47Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19384,
+    "title": "Scope AppHost lifecycle by worktree and forward launch arguments",
+    "author": "Shaurya2k06",
+    "state": "closed",
+    "head_branch": "worktree-aware-apphost-lifecycle",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19384"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Azure.AI.OpenAI / Azure.AI.OpenAI (windows-latest)",
+      "id": 95778624646,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95778624646",
+      "classification": "transient-infra",
+      "reason": "Process completed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) across three steps, a known Windows runner process-init crash unrelated to any PR code (Azure.AI.OpenAI tests are unaffected by this PR's changes).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 95778625446,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95778625446",
+      "classification": "code-issue",
+      "reason": "Run tests (Windows) failed with an actual test assertion failure in Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsFailureWhenLegacyV2ProbeDoesNotSucceedBeforeChildExit (Expected: 2, Actual: 0). This test and AppHostLauncher.cs were both modified by this PR, indicating the failure is caused by the PR's behavioral changes to legacy V2 probe / child-exit handling.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, command-palette)",
+      "id": 95781868437,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868437",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder', a runner/network hang unrelated to specific PR logic.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-tree)",
+      "id": 95781868507,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868507",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, edge-cases)",
+      "id": 95781868646,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868646",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost-debug-startup-timeout)",
+      "id": 95781868653,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868653",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h50m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, package-surface)",
+      "id": 95781868687,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868687",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 95781868706,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868706",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 95781868708,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868708",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h15m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 95781868761,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32157178231/job/95781868761",
+      "classification": "transient-infra",
+      "reason": "Job exceeded max execution time (1h50m) and was cancelled while stuck on 'Install E2E recorder'.",
+      "failed_steps": ["Install E2E recorder"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsFailureWhenLegacyV2ProbeDoesNotSucceedBeforeChildExit",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 2\nActual:   0",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsFailureWhenLegacyV2ProbeDoesNotSucceedBeforeChildExit() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\AppHostLauncherTests.cs:line 563\n--- End of stack trace from previous location ---",
+      "classification": "code-issue",
+      "reason": "This test and the AppHostLauncher.cs implementation it exercises were both modified by this PR (worktree-aware apphost lifecycle changes). The assertion mismatch (expected 2, actual 0) indicates the PR's legacy V2 probe/child-exit handling logic does not behave as the new test expects, a direct regression from PR changes rather than an environmental issue."
+    }
+  ],
+  "causes": ["windows-process-init-exit-code", "vscode-e2e-install-recorder-timeout"]
+}
