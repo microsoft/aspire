@@ -1,9 +1,56 @@
+::deep.layout > header {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 52px;
+    padding: 0 12px;
+    gap: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+::deep.layout > header > a.logo {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+::deep.layout > header > .flex-filler {
+    flex: 1 1 auto;
+    min-width: 8px;
+}
+
+::deep.layout > header .header-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+}
+
+::deep.layout > header fluent-button.header-button::part(control) {
+    width: 40px;
+    height: 40px;
+}
+
+::deep.layout > .messagebar-container > .top-messagebar {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 @media (min-width: 768px) {
     ::deep.layout {
+        --desktop-nav-collapsed-width: 68px;
+        --desktop-nav-expanded-width: 176px;
         height: 100vh;
         width: 100vw;
         display: grid;
-        grid-template-columns: auto 1fr;
         grid-template-rows: auto auto 1fr;
         /* The header spans BOTH columns ("head head") so it is a full-width top bar rather than a cell
            confined to the column beside the rail. This lets the logo + app name + page title live in the
@@ -18,14 +65,54 @@
         color: var(--neutral-foreground-rest);
     }
 
+    ::deep.layout.nav-collapsed {
+        grid-template-columns: var(--desktop-nav-collapsed-width) minmax(0, 1fr);
+    }
+
+    ::deep.layout.nav-expanded {
+        grid-template-columns: var(--desktop-nav-expanded-width) minmax(0, 1fr);
+    }
+
     ::deep.layout > header {
         grid-area: head;
+        padding-left: 20px;
+    }
+
+    ::deep.layout > header > a.brand-logo {
+        flex: 0 0 24px;
+        width: 24px;
+        height: 24px;
+        margin-inline-end: 4px;
+    }
+
+    ::deep.layout > header > .page-title-slot {
+        display: flex;
+        align-items: center;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 45vw;
+        margin-inline-start: 8px;
+        overflow: hidden;
+    }
+
+    ::deep.layout > header > .page-title-slot .page-header {
+        min-width: 0;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     ::deep.layout > .desktop-nav-rail {
         grid-area: nav;
         display: flex;
         flex-direction: column;
+        width: 100%;
         min-height: 0;
         background: var(--neutral-layer-4);
     }
@@ -34,9 +121,73 @@
        stays pinned because it is flex-shrink:0. min-height:0 lets the scroll container shrink. */
     ::deep.layout > .desktop-nav-rail > .fluent-appbar {
         flex: 1 1 auto;
+        width: 100%;
         min-height: 0;
         overflow-y: auto;
         background: var(--neutral-layer-4);
+    }
+
+    ::deep.layout > .desktop-nav-rail .fluent-appbar-item {
+        width: 100%;
+        min-height: 48px !important;
+        height: 48px;
+    }
+
+    ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a,
+    ::deep.layout > .desktop-nav-rail .fluent-appbaritem-stack {
+        width: 100%;
+        height: 100%;
+    }
+
+    ::deep.layout.nav-collapsed > .desktop-nav-rail .fluent-appbaritem-stack {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbaritem-stack {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        column-gap: 10px !important;
+        padding-inline: 12px;
+    }
+
+    /* Keep collapsed labels available to assistive technology while removing them visually. */
+    ::deep.layout.nav-collapsed > .desktop-nav-rail .fluent-appbar-item [part="label"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    ::deep.layout.nav-expanded > .desktop-nav-rail .fluent-appbar-item [part="label"] {
+        position: static;
+        width: auto;
+        height: auto;
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        clip: auto;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    ::deep.layout > .desktop-nav-rail > .nav-toggle-button {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        flex: 0 0 48px;
+    }
+
+    ::deep.layout > .desktop-nav-rail > .nav-toggle-button::part(control) {
+        width: 100%;
+        height: 48px;
     }
 
     ::deep.layout > .layout-body-container {
@@ -85,12 +236,12 @@
 
     /* A small gap between the logo glyph and the app name so they read as one lockup. The header
        flex row only sets a 2px column-gap, which is too tight for a logo + wordmark. */
-    ::deep .header-gutters fluent-anchor.brand-logo {
-        margin-inline-end: var(--aspire-space-sm, 8px);
+    ::deep .header-gutters a.brand-logo {
+        margin-inline-end: 8px;
     }
 
     /* Inset the brand from the header's left edge by the same 20px the nav rail uses for its icon
-       gutter (see .desktop-nav-menu / .nav-toggle-content padding-left in app.css), so the logo sits
+    gutter used by the desktop navigation, so the logo sits
        directly above the nav rail icons below it — one continuous left edge down the whole rail. */
     ::deep.layout > header > .header-gutters {
         margin: 0;

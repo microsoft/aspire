@@ -46,7 +46,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = RenderComponent<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        Assert.Single(cut.FindComponents<FluentDialogBody>());
 
         cut.WaitForAssertion(() =>
         {
@@ -136,6 +137,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     public async Task IconCheckbox_DoesNotInvokeClickWhenDisabled()
     {
         var clickCount = 0;
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         SetupIconCheckboxJs();
 
         var cut = RenderComponent<IconCheckbox>(parameters => parameters
@@ -192,7 +194,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = RenderComponent<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
 
         cut.WaitForAssertion(() =>
         {
@@ -204,6 +206,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         await ExpandResourceRowsAsync(cut, expectedCount: 1);
         cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
         await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
+        await ExpandResourceRowsAsync(cut, expectedCount: 1);
 
         repository.ClearTraces(resourceKey);
 

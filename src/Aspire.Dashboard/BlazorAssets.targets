@@ -3,7 +3,7 @@
     Downloads Microsoft.AspNetCore.App.Internal.Assets NuGet packages at restore time and copies
     blazor.web.js from each package into wwwroot/framework/blazor.web.{major}.js.
 
-    The dashboard targets net8.0 but rolls forward to .NET 10 or 11 at runtime. In .NET 10+ the
+    The dashboard targets net9.0 but rolls forward to .NET 10 or 11 at runtime. In .NET 10+ the
     Blazor JS file is a static web asset delivered by the SDK, but since we don't target 10+ the
     SDK never provides it. This target bridges that gap by extracting the JS from the published
     NuGet package for each supported major runtime version.
@@ -18,18 +18,36 @@
     </ParameterGroup>
     <Task>
       <Using Namespace="System.IO" />
+      <Using Namespace="System.Threading" />
       <Code Type="Fragment" Language="cs">
 <![CDATA[
-foreach (var filePath in FilePaths)
+  using var mutex = new Mutex(initiallyOwned: false, "Aspire.Dashboard.BlazorWebJs");
+  try
 {
-    var sourceText = File.ReadAllText(filePath.ItemSpec);
-    var updatedText = sourceText.Replace(",isComposing:t.isComposing", string.Empty);
-
-    if (updatedText != sourceText)
+    try
     {
+      mutex.WaitOne();
+    }
+    catch (AbandonedMutexException)
+    {
+      // The abandoned mutex is now owned by this process, so the shared files can still be repaired.
+    }
+
+    foreach (var filePath in FilePaths)
+    {
+      var sourceText = File.ReadAllText(filePath.ItemSpec);
+      var updatedText = sourceText.Replace(",isComposing:t.isComposing", string.Empty);
+
+      if (updatedText != sourceText)
+      {
         File.WriteAllText(filePath.ItemSpec, updatedText);
+      }
     }
 }
+  finally
+  {
+    mutex.ReleaseMutex();
+  }
 ]]>
       </Code>
     </Task>
@@ -60,7 +78,7 @@ foreach (var filePath in FilePaths)
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true" />
 
-        <!-- The dashboard is a net8.0 app that rolls forward to newer shared frameworks.
+        <!-- The dashboard is a net9.0 app that rolls forward to newer shared frameworks.
           Some newer blazor.web.js assets include event fields that older compatible
           runtimes reject as unknown JSON properties. -->
         <RemoveUnsupportedBlazorEventProperties FilePaths="@(BlazorAssetPackage->'$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(Identity).js')" />

@@ -13,8 +13,8 @@ public class MenuButtonItem
     public string? Tooltip { get; set; }
     public Icon? Icon { get; set; }
     /// <summary>
-    /// Optional ARIA role for the item. Set to <see cref="MenuItemRole.MenuItemCheckbox"/> or
-    /// <see cref="MenuItemRole.MenuItemRadio"/> to expose an accessible checked state (via
+    /// Optional ARIA role for the item. Set to <see cref="MenuItemRole.Checkbox"/> or
+    /// <see cref="MenuItemRole.Radio"/> to expose an accessible checked state (via
     /// <see cref="Checked"/>) that assistive technology can announce; leave <see langword="null"/>
     /// for an ordinary menu item.
     /// </summary>
@@ -26,7 +26,7 @@ public class MenuButtonItem
     public bool Checked { get; set; }
     public Func<Task>? OnClick { get; set; }
     public bool IsDisabled { get; set; }
-    public string Id { get; set; } = Identifier.NewId();
+    public string Id { get; set; } = $"menu-item-{Guid.NewGuid():N}";
     public string? Class { get; set; }
     public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 }

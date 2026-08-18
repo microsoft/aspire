@@ -29,9 +29,9 @@ public partial class MetricsTests : DashboardTestContext
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
+    public async Task ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
     {
-        ChangeResourceAndAssertInstrument(
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test1",
             expectedMeterNameAfterChange: "test-meter",
@@ -39,9 +39,9 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
+    public async Task ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
     {
-        ChangeResourceAndAssertInstrument(
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test2",
             expectedMeterNameAfterChange: null,
@@ -184,6 +184,72 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("test-instrument")]
+    public void InitialLoad_RouteSelection_SelectsTreeItem(string? instrumentName)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(
+            resource: "TestApp",
+            meter: "test-meter",
+            instrument: instrumentName,
+            duration: 5,
+            view: MetricViewKind.Table.ToString()));
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var cut = RenderComponent<Metrics>(builder =>
+        {
+            builder.Add(component => component.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var tree = cut.FindComponent<FluentTreeView>();
+            var treeItems = cut.FindComponents<FluentTreeItem>();
+            var selectedItem = Assert.Single(treeItems, item => item.Instance.Id == tree.Instance.SelectedId);
+            var meterItems = treeItems.Where(item => item.Instance.Data is string).ToList();
+            var expandedMeterItems = meterItems.Where(item => item.Find("fluent-tree-item").HasAttribute("expanded")).ToList();
+
+            Assert.True(selectedItem.Find("fluent-tree-item").HasAttribute("selected"));
+            Assert.Equal(instrumentName is null ? 0 : 1, expandedMeterItems.Count);
+            if (instrumentName is not null)
+            {
+                Assert.Equal("test-meter", Assert.Single(expandedMeterItems).Instance.Data);
+            }
+            if (instrumentName is null)
+            {
+                Assert.Equal("test-meter", selectedItem.Instance.Data);
+            }
+            else
+            {
+                Assert.Equal(instrumentName, Assert.IsType<OtlpInstrumentSummary>(selectedItem.Instance.Data).Name);
+            }
+        });
+    }
+
     [Fact]
     public void MetricsTree_MetricsAdded_TreeUpdated()
     {
@@ -280,7 +346,7 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
-    private void ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
+    private async Task ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
     {
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
@@ -349,8 +415,8 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("TestApp2");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "TestApp2");
+        await resourceSelect.InvokeAsync(() => resourceSelect.Instance.SelectedResourceChanged.InvokeAsync(selectedResource));
 
         cut.WaitForAssertion(() => Assert.Equal("TestApp2", viewModel.SelectedResource.Name));
 

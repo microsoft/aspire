@@ -5,10 +5,10 @@ using System.Globalization;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
-using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Model.Interaction;
 
 namespace Aspire.Dashboard.Model;
 
@@ -48,19 +48,13 @@ public static class TraceLinkHelpers
             using var cts = new CancellationTokenSource();
             using var registration = cancellationToken.Register(cts.Cancel);
 
-            var reference = await dialogService.ShowMessageBoxAsync(new DialogParameters<MessageBoxContent>()
-            {
-                Content = new MessageBoxContent
+            var reference = await dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(
+                new InteractionMessageBoxContent { MarkupMessage = unavailableText },
+                new DialogParameters
                 {
-                    Intent = MessageBoxIntent.Info,
-                    Icon = new Icons.Filled.Size24.Info(),
-                    IconColor = Color.Info,
-                    MarkupMessage = new MarkupString(unavailableText),
-                },
-                DialogType = DialogType.MessageBox,
                 PrimaryAction = string.Empty,
                 SecondaryAction = loc[nameof(Dialogs.OpenSpanDialogCancelButtonText)]
-            }).ConfigureAwait(false);
+                }).ConfigureAwait(false);
 
             // Task that polls for the span to be available.
             var waitForTraceTask = Task.Run(async () =>

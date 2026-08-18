@@ -10,6 +10,8 @@ namespace Aspire.Dashboard.Components;
 
 public partial class UrlsColumnDisplay
 {
+    private const int MaxRenderedOverflowItems = 20;
+
     internal static string GetTooltipText(DisplayedUrl displayedUrl)
     {
         return displayedUrl.Url ?? displayedUrl.OriginalUrlString;

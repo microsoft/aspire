@@ -31,7 +31,6 @@ class ResourceGraph {
     constructor(resourcesInterop) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
-        this.openContextMenu = false;
 
         this.nodes = [];
         this.links = [];
@@ -536,23 +535,13 @@ class ResourceGraph {
         return 'resource-link';
     }
 
-    nodeContextMenu = async (event) => {
+    nodeContextMenu = (event) => {
         var data = event.target.__data__;
 
         // Prevent default browser context menu.
         event.preventDefault();
 
-        this.openContextMenu = true;
-
-        try {
-            // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, window.innerWidth, window.innerHeight, event.clientX, event.clientY);
-        } finally {
-            this.openContextMenu = false;
-
-            // Unselect the node when the context menu is closed to reset mouseover state.
-            this.updateNodeHighlights(null);
-        }
+        this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, window.innerWidth, window.innerHeight, event.clientX, event.clientY);
     };
 
     selectNode = (event) => {
@@ -600,11 +589,7 @@ class ResourceGraph {
     }
 
     unHoverNode = (event) => {
-        // Don't unhover the selected node when the context menu is open.
-        // This is done to keep the node selected until the context menu is closed.
-        if (!this.openContextMenu) {
-            this.updateNodeHighlights(null);
-        }
+        this.updateNodeHighlights(null);
     };
 
     nodeEquals(resource1, resource2) {

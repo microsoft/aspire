@@ -64,6 +64,27 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task GridActionButtons_UseCompactMinimumWidth()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var values = await page.Locator(".grid-action-container fluent-button").EvaluateAllAsync<int[]>(
+                """
+                buttons => [
+                    buttons.length,
+                    buttons.filter(button => getComputedStyle(button).minWidth !== '32px').length
+                ]
+                """);
+
+            Assert.True(values[0] > 0);
+            Assert.Equal(0, values[1]);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourceViewTabs_RemainVisibleAtNarrowViewport()
     {
         await RunTestAsync(async page =>
@@ -101,6 +122,92 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await AssertTabVisibleWithinViewportAsync(tableTab, 360);
             await AssertTabVisibleWithinViewportAsync(parametersTab, 360);
             await AssertTabVisibleWithinViewportAsync(graphTab, 360);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task GraphView_SwitchesWithoutReloadOrLayoutCollapse()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var navigationCount = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
+
+            var graphTab = page.Locator("#tab-Graph");
+            await graphTab.ClickAsync();
+            await Assertions.Expect(graphTab).ToHaveAttributeAsync("aria-selected", "true");
+
+            var graphContainer = page.Locator("#resourcesGraphContainer");
+            await Assertions.Expect(graphContainer).ToBeVisibleAsync();
+
+            var graphWidth = await graphContainer.EvaluateAsync<double>("element => element.getBoundingClientRect().width");
+            Assert.True(graphWidth > 100, $"The resource graph should fill the page content area, but its width was {graphWidth}px.");
+
+            var navigationCountAfterSwitch = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
+            Assert.Equal(navigationCount, navigationCountAfterSwitch);
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task GraphNode_RightClickOpensMenuAtCursorWithoutOverlay()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.GotoAsync("/?view=Graph");
+
+            var node = page.Locator(".resource-node").First;
+            await Assertions.Expect(node).ToBeVisibleAsync();
+            var nodeBounds = await node.BoundingBoxAsync();
+            Assert.NotNull(nodeBounds);
+
+            var cursorX = nodeBounds.X + nodeBounds.Width / 2;
+            var cursorY = nodeBounds.Y + nodeBounds.Height / 2;
+            await node.Locator("xpath=..").EvaluateAsync(
+                """
+                element => {
+                    const bounds = element.querySelector('.resource-node').getBoundingClientRect();
+                    element.dispatchEvent(new MouseEvent('contextmenu', {
+                        bubbles: true,
+                        button: 2,
+                        clientX: Math.round(bounds.left + bounds.width / 2),
+                        clientY: Math.round(bounds.top + bounds.height / 2)
+                    }));
+                }
+                """);
+
+            var menu = page.Locator("fluent-menu.aspire-menu-container:not([trigger]) > fluent-menu-list");
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            var menuBounds = await menu.BoundingBoxAsync();
+            Assert.NotNull(menuBounds);
+
+            Assert.InRange(Math.Abs(menuBounds.X - cursorX), 0, 2);
+            Assert.InRange(Math.Abs(menuBounds.Y - cursorY), 0, 2);
+
+            var visibleBlockingIndicators = await page.Locator("fluent-overlay, fluent-progress-ring, fluent-spinner").EvaluateAllAsync<int>(
+                "elements => elements.filter(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0).length");
+            Assert.Equal(0, visibleBlockingIndicators);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
+
+            await node.Locator("xpath=..").EvaluateAsync(
+                """
+                element => {
+                    const bounds = element.querySelector('.resource-node').getBoundingClientRect();
+                    element.dispatchEvent(new MouseEvent('contextmenu', {
+                        bubbles: true,
+                        button: 2,
+                        clientX: Math.round(bounds.left + bounds.width / 2),
+                        clientY: Math.round(bounds.top + bounds.height / 2)
+                    }));
+                }
+                """);
+
+            await Assertions.Expect(menu).ToBeVisibleAsync();
         });
     }
 

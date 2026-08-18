@@ -1,3 +1,13 @@
+.log-overflow {
+    width: 100%;
+    min-height: 0;
+    overflow: auto;
+}
+
+.console-overflow {
+    height: 100%;
+}
+
 ::deep .console-container {
     background: var(--console-background-color);
     color: var(--console-font-color);
