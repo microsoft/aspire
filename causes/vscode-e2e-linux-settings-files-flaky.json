@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-linux-settings-files-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Linux, settings-files) shard fails, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Linux, settings-files)' shard unrelated to PR changes touching only Aspire.Hosting.Dotnet.Tests.",
+  "occurrences": [
+    {
+      "run_id": 32062674946,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32062674946",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, settings-files)",
+      "pr_number": 19402,
+      "observed_at": "2026-08-17T20:59:20Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19453"
+}

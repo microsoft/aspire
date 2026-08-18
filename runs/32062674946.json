@@ -1,0 +1,29 @@
+{
+  "run_id": 32062674946,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32062674946",
+  "analyzed_at": "2026-08-17T20:59:20Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19402,
+    "title": "Bound Dotnet project pipeline tests",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/address-pr-19399-findings",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19402"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, settings-files)",
+      "id": 95491706801,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32062674946/job/95491706801",
+      "classification": "flaky-test",
+      "reason": "Job failed with a generic 'Process completed with exit code 1' annotation and job logs were unavailable ('Failed to fetch logs for job'). The PR only changes tests/Aspire.Hosting.Dotnet.Tests/* (DotnetProjectResourceTests.cs and its csproj), which is unrelated to the VS Code extension or its E2E test infrastructure. This matches a recurring pattern of intermittent VS Code extension E2E failures with generic exit codes and no retrievable logs seen on other shards/platforms.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-settings-files-flaky"]
+}
