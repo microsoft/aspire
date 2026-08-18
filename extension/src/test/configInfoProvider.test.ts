@@ -469,6 +469,43 @@ suite('configInfoProvider tests', () => {
         }
     });
 
+    test('getCapabilityStatus shares one timeout budget across config and version probes', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const versionProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] === 'config') {
+                setTimeout(() => emitConfigInfo(options), 20_000);
+                return {} as ChildProcessWithoutNullStreams;
+            }
+
+            return versionProcess;
+        });
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const probe = provider.getCapabilityStatus(isolatedLaunchCapability, {
+                cliPath: '/exact/aspire',
+                forceRefresh: true,
+                minimumVersion: '13.2.0',
+            });
+            await clock.tickAsync(30_000);
+
+            sinon.assert.calledOnceWithExactly(
+                terminateStub,
+                versionProcess,
+                'timed-out Aspire CLI version probe');
+            assert.strictEqual(await probe, 'unavailable');
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
     test('getCapabilityStatus reports cancellation as unavailable and terminates the version process', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',

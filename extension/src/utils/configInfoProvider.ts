@@ -54,6 +54,8 @@ export interface ConfigInfoOptions {
     minimumVersion?: string;
     /** The resolution scope to use when `cliPath` is not already known. Defaults to the window scope. */
     target?: CliPathResolutionTarget;
+    /** Internal timeout budget for this config-info invocation. */
+    timeoutMs?: number;
 }
 
 interface CliVersion {
@@ -145,7 +147,7 @@ export class ConfigInfoProvider {
             }
         }
 
-        const remainingTimeoutMs = configInfoTimeoutMs - (Date.now() - startTime);
+        const remainingTimeoutMs = (options?.timeoutMs ?? configInfoTimeoutMs) - (Date.now() - startTime);
         if (remainingTimeoutMs <= 0) {
             this._reportTimeout(suppressErrors);
             return null;
@@ -214,7 +216,8 @@ export class ConfigInfoProvider {
             return 'unavailable';
         }
 
-        const configInfo = await this.getConfigInfo({ ...options, cliPath });
+        const probeStartTime = Date.now();
+        const configInfo = await this.getConfigInfo({ ...options, cliPath, timeoutMs: configInfoTimeoutMs });
         if (configInfo?.capabilities?.includes(capability)) {
             return 'supported';
         }
@@ -223,12 +226,18 @@ export class ConfigInfoProvider {
             return 'unavailable';
         }
 
-        return await this._getCliMinimumVersionStatus(cliPath, minimumVersion, options.cancellationToken);
+        const remainingTimeoutMs = configInfoTimeoutMs - (Date.now() - probeStartTime);
+        if (remainingTimeoutMs <= 0) {
+            return 'unavailable';
+        }
+
+        return await this._getCliMinimumVersionStatus(cliPath, minimumVersion, remainingTimeoutMs, options.cancellationToken);
     }
 
     private _getCliMinimumVersionStatus(
         cliPath: string,
         minimumVersion: CliVersion,
+        timeoutMs: number,
         cancellationToken?: vscode.CancellationToken,
     ): Promise<CapabilityStatus> {
         return new Promise<CapabilityStatus>((resolve) => {
@@ -270,7 +279,7 @@ export class ConfigInfoProvider {
                         extensionLogOutputChannel.error(`Failed to terminate timed-out Aspire CLI version probe: ${String(error)}`);
                     });
                 }
-            }, cliVersionProbeTimeoutMs);
+            }, Math.min(timeoutMs, cliVersionProbeTimeoutMs));
             cancellation = cancellationToken?.onCancellationRequested(() => {
                 settle('unavailable');
                 if (childProcess) {
