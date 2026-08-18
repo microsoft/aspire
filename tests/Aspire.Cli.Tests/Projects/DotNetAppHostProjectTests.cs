@@ -322,7 +322,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.False(watch);
-            Assert.True(noBuild);
+            Assert.False(noBuild);
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
             Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
@@ -355,7 +355,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.False(watch);
-            Assert.True(noBuild);
+            Assert.False(noBuild);
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
             Assert.Equal(["--environment", "Staging"], args);

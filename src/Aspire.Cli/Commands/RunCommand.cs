@@ -331,7 +331,6 @@ internal sealed class RunCommand : BaseCommand
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            var startupStartTimestamp = _timeProvider.GetTimestamp();
             runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // When this is a detached child, watch the foreground launcher during startup. If the launcher
@@ -361,17 +360,9 @@ internal sealed class RunCommand : BaseCommand
             bool buildSuccess;
             using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
             {
-                try
-                {
-                    buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
-                }
-                catch (TimeoutException)
-                {
-                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
-                    return CreateStartupTimeoutResult(timeoutSeconds);
-                }
-
+                // Restore and build happen before the AppHost can begin startup, so they must not
+                // consume ASPIRE_CLI_START_TIMEOUT. User cancellation still stops an unexpectedly long build.
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
@@ -384,6 +375,7 @@ internal sealed class RunCommand : BaseCommand
                 }
                 return CommandResult.Failure(await runTask, InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
+            var startupStartTimestamp = _timeProvider.GetTimestamp();
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.

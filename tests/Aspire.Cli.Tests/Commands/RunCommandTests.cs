@@ -485,22 +485,34 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
+    public async Task RunCommand_StartupTimeoutStartsAfterBuildCompletes()
     {
         var interactionService = new TestInteractionService();
         var timeProvider = new FakeTimeProvider();
+        var appHostReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowBackchannel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var backchannelFactory = (IServiceProvider sp) => new TestAppHostBackchannel
+        {
+            NotifyAppHostReadyAsyncCalled = appHostReady,
+            GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync
+        };
 
         var runnerFactory = (IServiceProvider sp) =>
         {
             var runner = new TestDotNetCliRunner();
             runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
             {
-                timeProvider.Advance(TimeSpan.FromSeconds(2));
+                timeProvider.Advance(TimeSpan.FromSeconds(3));
                 return 0;
             };
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
+                runStarted.TrySetResult();
+                await allowBackchannel.Task.WaitAsync(ct);
+                backchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
                 return 0;
             };
@@ -513,6 +525,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ConfigurationCallback += config =>
             {
@@ -527,12 +540,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.Contains(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
-            interactionService.DisplayedErrors);
+        Assert.Same(runStarted.Task, await Task.WhenAny(runStarted.Task, pendingRun).DefaultTimeout());
+        allowBackchannel.SetResult();
+        Assert.Same(appHostReady.Task, await Task.WhenAny(appHostReady.Task, pendingRun).DefaultTimeout());
+
+        await cts.CancelAsync().DefaultTimeout();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]

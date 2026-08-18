@@ -917,10 +917,9 @@ internal sealed class DotNetCliRunner(
         string[] cliOptions = isSingleFile switch
         {
             false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName],
-            // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
-            // for single-file AppHosts so the suppression property is applied before launch
-            // and a CLI-launched AppHost cannot recursively enter the run hook.
-            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName]
+            // BuildAsync applies the suppression property when it compiles file-based AppHosts, so
+            // --no-build can reuse that output without recursively entering the CLI run hook.
+            true => ["run", noBuildSwitch, noRestoreSwitch, noProfileSwitch, noBuild ? string.Empty : suppressCliRunHookProperty, "--file", projectFile.FullName]
         };
 
         // Empty extension-owned entries represent omitted optional switches, while empty or
@@ -1270,9 +1269,16 @@ internal sealed class DotNetCliRunner(
         string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
+        // File-based AppHosts derive their RunCommand during build. Persist suppression into that
+        // generated command so the later dotnet run --no-build cannot recursively invoke Aspire CLI.
+        var buildEnvironment = new Dictionary<string, string>
+        {
+            [KnownConfigNames.SuppressCliRunHook] = "true"
+        };
+
         return await ExecuteAsync(
             args: cliArgs,
-            env: null,
+            env: buildEnvironment,
             projectFile: projectFilePath,
             workingDirectory: projectFilePath.Directory!,
             backchannelCompletionSource: null,

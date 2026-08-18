@@ -746,14 +746,20 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task LaunchDetachedAsync_UsesSingleUncancelledChildExitObservationWhileWaitingForBackchannel()
+    public async Task LaunchDetachedAsync_DoesNotConsumeStartupTimeoutBeforeBackchannelConnects()
     {
-        using var harness = AppHostLauncherHarness.Create(outputHelper);
-        using var cts = new CancellationTokenSource();
-        var execution = new NonExitingProcessExecution();
-        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) => Task.FromResult<IProcessExecution>(execution);
+        var timeProvider = new FakeTimeProvider();
+        using var harness = AppHostLauncherHarness.Create(outputHelper, timeProvider);
+        var scanStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Monitor.ScanAsyncCallback = async cancellationToken =>
+        {
+            scanStarted.TrySetResult();
+            await continueScan.Task.WaitAsync(cancellationToken);
+        };
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
 
-        var result = await harness.Launcher.LaunchDetachedAsync(
+        var launchTask = harness.Launcher.LaunchDetachedAsync(
             harness.AppHostFile,
             format: null,
             isolated: false,
@@ -763,9 +769,50 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            cts.Token).DefaultTimeout();
+            CancellationToken.None);
 
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+        await scanStarted.Task.DefaultTimeout();
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+        continueScan.SetResult();
+
+        var result = await launchTask.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Empty(harness.InteractionService.DisplayedErrors);
+        Assert.False(harness.ProcessFactory.StartedProcess?.HasExited);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_UsesSingleUncancelledChildExitObservationWhileWaitingForBackchannel()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var execution = new NonExitingProcessExecution();
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) => Task.FromResult<IProcessExecution>(execution);
+
+        var launchTask = harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 1,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            cts.Token);
+
+        await execution.WaitForExitCalled.Task.DefaultTimeout();
+        await cts.CancelAsync().DefaultTimeout();
+        var result = await launchTask.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(1, execution.WaitForExitCallCount);
         Assert.Equal(0, execution.WaitForExitWithCancelableTokenCount);
     }
@@ -1084,8 +1131,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public TestDetachedProcessFactory ProcessFactory { get; }
 
-        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, TimeProvider? timeProvider = null)
         {
+            timeProvider ??= TimeProvider.System;
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
             var hivesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("hives");
@@ -1114,7 +1162,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
                 executionContext, new TestEnvironment(),
                 NullLogger<ProcessTreeGracefulShutdownService>.Instance,
-                TimeProvider.System);
+                timeProvider);
             var launcher = new AppHostLauncher(
                 new TestProjectLocator(),
                 executionContext,
@@ -1128,7 +1176,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 processFactory,
                 new ConfigurationBuilder().Build(),
                 NullLogger<AppHostLauncher>.Instance,
-                TimeProvider.System);
+                timeProvider);
 
             return new AppHostLauncherHarness(
                 workspace,
@@ -1469,6 +1517,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public int WaitForExitWithCancelableTokenCount => Volatile.Read(ref _waitForExitWithCancelableTokenCount);
 
+        public TaskCompletionSource WaitForExitCalled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public Task<bool> StartAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1478,6 +1528,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _waitForExitCallCount);
+            WaitForExitCalled.TrySetResult();
             if (cancellationToken.CanBeCanceled)
             {
                 Interlocked.Increment(ref _waitForExitWithCancelableTokenCount);
