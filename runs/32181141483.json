@@ -1,0 +1,83 @@
+{
+  "run_id": 32181141483,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32181141483",
+  "analyzed_at": "2026-08-18T21:57:03Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18554,
+    "title": "Add health check to Azure Cosmos DB client integration",
+    "author": "thomhurst",
+    "state": "closed",
+    "head_branch": "cosmos-client-healthcheck-12934",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18554"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Orleans / Hosting.Orleans (windows-latest)",
+      "id": 95856498978,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856498978",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / TerminalHost / TerminalHost (ubuntu-latest)",
+      "id": 95856503951,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856503951",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Milvus.Client / Milvus.Client (windows-latest)",
+      "id": 95856514534,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856514534",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Azure.Storage.Files.DataLake / Azure.Storage.Files.DataLake (windows-latest)",
+      "id": 95856515246,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856515246",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Hosting.CodeGeneration.Go / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "id": 95856518478,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856518478",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Hosting.Foundry / Hosting.Foundry (windows-latest)",
+      "id": 95856519016,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95856519016",
+      "classification": "transient-infra",
+      "reason": "Failed during 'Set up job' step: codeload.github.com returned 429 (Too Many Requests) when downloading the actions/download-artifact action archive, unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "id": 95859447911,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32181141483/job/95859447911",
+      "classification": "transient-infra",
+      "reason": "Job was cancelled after exceeding max execution time while stuck on the 'Install E2E recorder' step, matching a known recurring runner/network hang unrelated to PR test logic.",
+      "failed_steps": ["Install E2E recorder"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["codeload-download-artifact-429-rate-limit", "vscode-e2e-install-recorder-timeout"]
+}

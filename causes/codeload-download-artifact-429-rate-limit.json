@@ -1,0 +1,16 @@
+{
+  "id": "codeload-download-artifact-429-rate-limit",
+  "type": "infra-failure",
+  "title": "GitHub codeload.github.com rate limiting (429) when downloading actions/download-artifact action archive",
+  "error_pattern": "##[warning]Failed to download action 'https://codeload.github.com/actions/download-artifact/zip/<sha>'. Error: Response status code does not indicate success: 429 (Too Many Requests). ... ##[error]Failed to download archive 'https://codeload.github.com/actions/download-artifact/...' after 3 attempts.",
+  "occurrences": [
+    {
+      "run_id": 32181141483,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32181141483",
+      "job": "Tests / Hosting.Orleans / Hosting.Orleans (windows-latest)",
+      "pr_number": 18554,
+      "observed_at": "2026-08-18T21:57:03Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19480"
+}
