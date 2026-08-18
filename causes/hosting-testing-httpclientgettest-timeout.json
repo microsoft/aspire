@@ -1,0 +1,17 @@
+{
+  "id": "hosting-testing-httpclientgettest-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: TestingFactoryTests.HttpClientGetTest times out intermittently",
+  "test_name": "Aspire.Hosting.Testing.Tests.TestingFactoryTests.HttpClientGetTest",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Hosting.Testing.Tests.TestingFactoryTests.HttpClientGetTest() in /_/tests/Aspire.Hosting.Testing.Tests/TestingFactoryTests.cs:line 52",
+  "occurrences": [
+    {
+      "run_id": 32091076460,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32091076460",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "pr_number": 1424,
+      "observed_at": "2026-08-18T03:51:54Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19456"
+}

@@ -1,7 +1,7 @@
 {
   "id": "vscode-e2e-zero-to-running-timeout",
   "type": "infra-failure",
-  "title": "VS Code extension E2E test (Linux, zero-to-running) exceeds max job execution time (1h15m) and is cancelled",
+  "title": "VS Code extension E2E test shard exceeds max job execution time (1h15m) and is cancelled",
   "error_pattern": "The job has exceeded the maximum execution time of 1h15m0s\nThe operation was canceled.\n(Failed at step: Install E2E recorder)",
   "occurrences": [
     {
@@ -10,6 +10,13 @@
       "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
       "pr_number": 19440,
       "observed_at": "2026-08-17T22:38:13Z"
+    },
+    {
+      "run_id": 32091076460,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32091076460",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "pr_number": 1424,
+      "observed_at": "2026-08-18T03:51:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19450"

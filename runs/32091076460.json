@@ -1,0 +1,92 @@
+{
+  "run_id": 32091076460,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32091076460",
+  "analyzed_at": "2026-08-18T03:51:54Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 1424,
+    "title": null,
+    "author": null,
+    "state": null,
+    "head_branch": null,
+    "base_branch": null,
+    "url": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "id": 95573669710,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95573669710",
+      "classification": "flaky-test",
+      "reason": "Test failed with System.TimeoutException, a known transient/timing-related pattern for HttpClientGetTest integration test; consistent with timing-sensitive HTTP client readiness checks under CI load.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, apphost-tree)",
+      "id": 95576077776,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077776",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m0s and was cancelled during the 'Install E2E recorder' step, matching a recurring infra pattern of VS Code E2E jobs hanging/timing out.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 95576077796,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077796",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1 and no retrievable job logs or TRX test failures; consistent with known intermittent VS Code E2E shard flakiness unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, launch-profiles)",
+      "id": 95576077830,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077830",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m0s and was cancelled during 'Install E2E recorder', consistent with cascading timeout affecting the VS Code E2E matrix in this run.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-codelens)",
+      "id": 95576077836,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077836",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m0s and was cancelled during 'Install E2E recorder', consistent with cascading timeout affecting the VS Code E2E matrix in this run.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 95576077839,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077839",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m0s and was cancelled during 'Install E2E recorder', consistent with cascading timeout affecting the VS Code E2E matrix in this run.",
+      "failed_steps": ["Install E2E recorder"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 95576077845,
+      "conclusion": "cancelled",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32091076460/job/95576077845",
+      "classification": "transient-infra",
+      "reason": "Job exceeded the maximum execution time of 1h15m0s and was cancelled during 'Install E2E recorder', consistent with cascading timeout affecting the VS Code E2E matrix in this run.",
+      "failed_steps": ["Install E2E recorder"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.TestingFactoryTests.HttpClientGetTest",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Testing.Tests.TestingFactoryTests.HttpClientGetTest() in /_/tests/Aspire.Hosting.Testing.Tests/TestingFactoryTests.cs:line 52\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "PR changed-files list is empty (no association found with Aspire.Hosting.Testing.Tests), and a plain HttpClient GET timeout in an integration test is a classic timing/CI-load flake rather than a code defect."
+    }
+  ],
+  "causes": ["hosting-testing-httpclientgettest-timeout", "vscode-e2e-zero-to-running-timeout", "vscode-e2e-java-apphost-flaky"]
+}
