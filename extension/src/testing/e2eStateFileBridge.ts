@@ -367,7 +367,7 @@ function getE2eErrorMessage(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }
 
-async function executeE2eControlCommand(
+export async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
   dataRepository: AppHostDataRepository,
@@ -422,6 +422,30 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'deployAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.deployAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.publishAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'runPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.runPipelineStepAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'debugPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugPipelineStepAppHost', element);
       markStarted();
       return await commandPromise;
     }
@@ -1872,6 +1896,19 @@ function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
 
 function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): unknown {
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
+}
+
+function getRequiredAppHostActionElement(
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  commandName: string,
+  appHostPath: string,
+): unknown {
+  const element = appHostTreeProvider.findAppHostElement(appHostPath);
+  if (!element) {
+    throw new Error(`Aspire extension E2E ${commandName} could not find AppHost '${appHostPath}'.`);
+  }
+
+  return element;
 }
 
 function getAppHostPathForClipboard(element: unknown): string {

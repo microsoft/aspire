@@ -199,6 +199,10 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
     | { name: 'publishAppHost'; appHostPath?: string }
+    | { name: 'deployAppHostAction'; appHostPath: string }
+    | { name: 'publishAppHostAction'; appHostPath: string }
+    | { name: 'runPipelineStepAppHostAction'; appHostPath: string }
+    | { name: 'debugPipelineStepAppHostAction'; appHostPath: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
