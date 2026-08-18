@@ -365,6 +365,8 @@ suite('AppHostLaunchService', () => {
         const inferredPath = path.join(directory, 'Inferred.csproj');
         assert.strictEqual(service.tryReserveLaunch(explicitTruePath), true);
         assert.strictEqual(service.tryReserveLaunch(explicitFalsePath), true);
+        assert.strictEqual(service.tryReserveLaunch(inferredPath), true);
+        const inferredCancellation = new vscode.CancellationTokenSource();
 
         const explicitTrue = await service.launchFromLifecycleOwner(
             explicitTruePath,
@@ -378,7 +380,7 @@ suite('AppHostLaunchService', () => {
             true,
             false,
             new vscode.CancellationTokenSource().token);
-        await service.launch(inferredPath, 'run', true);
+        await service.launchFromLifecycleOwner(inferredPath, 'run', true, undefined, inferredCancellation.token);
 
         assert.deepStrictEqual(explicitTrue, { effective: true, option: true });
         assert.deepStrictEqual(explicitFalse, { effective: false, option: false });
@@ -504,7 +506,7 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.args, undefined);
     });
 
-    test('launch only infers --isolated for run commands in a linked worktree', async () => {
+    test('launch does not infer --isolated for run commands in a linked worktree', async () => {
         const directory = createAppHostDirectory('Run.csproj', 'Deploy.csproj', 'Publish.csproj', 'Do.csproj');
         fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
         writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
@@ -518,11 +520,31 @@ suite('AppHostLaunchService', () => {
             .map(call => call.args[1] as AspireExtendedDebugConfiguration)
             .map(config => ({ command: config.command, args: config.args, step: config.step }));
         assert.deepStrictEqual(configs, [
-            { command: 'run', args: ['--isolated'], step: undefined },
+            { command: 'run', args: undefined, step: undefined },
             { command: 'deploy', args: undefined, step: undefined },
             { command: 'publish', args: undefined, step: undefined },
             { command: 'do', args: undefined, step: 'deploy' },
         ]);
+    });
+
+    test('launch argument preparation honors explicit --isolated in a linked worktree', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        fs.rmSync(path.join(directory, '.git'), { recursive: true, force: true });
+        writeLinkedWorktreeMetadata(directory, path.join(directory, 'common', '.git'));
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        const cancellation = new vscode.CancellationTokenSource();
+
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            appHostPath,
+            'run',
+            ['--isolated'],
+            cancellation.token,
+            '/path/bin/aspire');
+
+        assert.deepStrictEqual(prepared, {
+            args: ['--isolated'],
+            isolation: { effective: true, option: true },
+        });
     });
 
     test('launch includes step when doStep is provided', async () => {
