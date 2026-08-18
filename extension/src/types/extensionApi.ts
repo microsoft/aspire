@@ -98,6 +98,12 @@ export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
     updatedAt: string;
+    /**
+     * Identifies the E2E run whose extension host produced this file. The state and control files
+     * live at a stable per-shard path, so an extension host left behind by an earlier run can still
+     * be polling them. Readers compare this against their own run id to ignore a foreign writer.
+     */
+    runId?: string;
     state: AspireExtensionStateSnapshot;
     dashboardUrl?: string;
     commandInvocations: readonly AspireExtensionE2ECommandInvocation[];
@@ -167,6 +173,12 @@ export interface AspireExtensionE2EControlStatus {
 
 export interface AspireExtensionE2EControlPayload {
     revision: number;
+    /**
+     * Addresses this payload to a single E2E run. `revision` alone cannot do that: it restarts at 0
+     * in every test process while a freshly launched extension host starts at -1, so a host left
+     * behind by an earlier run would accept another run's commands.
+     */
+    runId?: string;
     aspireCliExecutablePath?: string;
     e2eCliExecutablePath?: string | null;
     forceCliUnavailable?: boolean;
@@ -187,10 +199,6 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
     | { name: 'publishAppHost'; appHostPath?: string }
-    | { name: 'deployAppHostTreeAction'; appHostPath?: string }
-    | { name: 'publishAppHostTreeAction'; appHostPath?: string }
-    | { name: 'runPipelineStepAppHostTreeAction'; appHostPath?: string }
-    | { name: 'debugPipelineStepAppHostTreeAction'; appHostPath?: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
@@ -227,10 +235,15 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
+    | { name: 'setWorkspaceFolders'; folders: readonly { folderPath: string; name?: string }[] }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
+    | { name: 'addWorkspaceFolder'; folderPath: string }
     | { name: 'getActiveEditor' }
     | { name: 'getResourceDebuggerExtensions' }
+    | { name: 'getSupportedCapabilities' }
+    | { name: 'getVisibleExtensionIds' }
+    | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
     | {
         name: 'createResourceDebugConfiguration';
         launchConfig: ExecutableLaunchConfiguration;
@@ -241,5 +254,5 @@ export type AspireExtensionE2EControlCommand =
         debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
         environmentKeys?: readonly string[];
     }
-    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; timeoutMs?: number }
+    | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

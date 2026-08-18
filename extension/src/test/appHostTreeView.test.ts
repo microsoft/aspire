@@ -22,7 +22,9 @@ import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard,
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { lsJsonStreamCapability } from '../types/configInfo';
+import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
+import { removeDirectorySafely } from './testHelpers';
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
         name: 'my-service',
@@ -190,7 +192,7 @@ function createShellProof(): ShellProof {
             assert.strictEqual(fs.existsSync(resourceMarkerPath), false, 'resource payload should not execute');
         },
         dispose(): void {
-            fs.rmSync(directory, { recursive: true, force: true });
+            removeDirectorySafely(directory);
         },
     };
 }
@@ -2572,120 +2574,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    suite('deploy/publish/pipeline step AppHost tree actions', () => {
-        const appHostPath = '/repo/AppHost/AppHost.csproj';
-
-        function makeWorkspaceProviderWithLaunchStub(launchService: AppHostLaunchService): { provider: AspireAppHostTreeProvider; item: unknown } {
-            const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
-            const repository = {
-                viewMode: 'workspace' as ViewMode,
-                appHosts: [],
-                workspaceResources: [],
-                workspaceAppHostPath: undefined,
-                workspaceAppHostCandidatePaths: [appHostPath],
-                workspaceAppHostName: undefined,
-                onDidChangeData,
-            } as unknown as AppHostDataRepository;
-            const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
-            const [item] = provider.getChildren();
-            return { provider, item };
-        }
-
-        test('deployAppHost delegates to launch service with the deploy command', async () => {
-            const launchService = makeLaunchService();
-            const launchStub = sinon.stub(launchService, 'launch').resolves();
-            const { provider, item } = makeWorkspaceProviderWithLaunchStub(launchService);
-
-            await provider.deployAppHost(item as any);
-
-            assert.ok(launchStub.calledOnce, 'Expected launch to be called');
-            assert.strictEqual(launchStub.firstCall.args[0], appHostPath);
-            assert.strictEqual(launchStub.firstCall.args[1], 'deploy');
-            launchStub.restore();
-            provider.dispose();
-        });
-
-        test('publishAppHost delegates to launch service with the publish command', async () => {
-            const launchService = makeLaunchService();
-            const launchStub = sinon.stub(launchService, 'launch').resolves();
-            const { provider, item } = makeWorkspaceProviderWithLaunchStub(launchService);
-
-            await provider.publishAppHost(item as any);
-
-            assert.ok(launchStub.calledOnce, 'Expected launch to be called');
-            assert.strictEqual(launchStub.firstCall.args[0], appHostPath);
-            assert.strictEqual(launchStub.firstCall.args[1], 'publish');
-            launchStub.restore();
-            provider.dispose();
-        });
-
-        test('deployAppHost shows a warning and does not launch when the AppHost path cannot be resolved', async () => {
-            const provider = makeTreeProvider([], 'workspace');
-            const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
-
-            await provider.deployAppHost(undefined as any);
-
-            assert.ok(warningStub.calledOnce, 'Expected a warning message');
-            warningStub.restore();
-            provider.dispose();
-        });
-
-        test('runPipelineStepAppHost prompts for a step on a CLI without pipelines capability, then launches "do" without the debugger', async () => {
-            const sandbox = sinon.createSandbox();
-            sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({ capabilities: [] } as any);
-            const inputStub = sandbox.stub(vscode.window, 'showInputBox').resolves('deploy');
-            const launchService = makeLaunchService();
-            const launchStub = sandbox.stub(launchService, 'launch').resolves();
-            const { provider, item } = makeWorkspaceProviderWithLaunchStub(launchService);
-
-            await provider.runPipelineStepAppHost(item as any);
-
-            assert.ok(inputStub.calledOnce, 'Expected the user to be prompted for a step on an old CLI');
-            assert.ok(launchStub.calledOnce, 'Expected launch to be called');
-            assert.strictEqual(launchStub.firstCall.args[0], appHostPath);
-            assert.strictEqual(launchStub.firstCall.args[1], 'do');
-            assert.strictEqual(launchStub.firstCall.args[2], true);
-            assert.strictEqual(launchStub.firstCall.args[3], 'deploy');
-            sandbox.restore();
-            provider.dispose();
-        });
-
-        test('debugPipelineStepAppHost lets the CLI prompt when the pipelines capability is present, and launches "do" with the debugger', async () => {
-            const sandbox = sinon.createSandbox();
-            sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({ capabilities: ['pipelines'] } as any);
-            const inputStub = sandbox.stub(vscode.window, 'showInputBox');
-            const launchService = makeLaunchService();
-            const launchStub = sandbox.stub(launchService, 'launch').resolves();
-            const { provider, item } = makeWorkspaceProviderWithLaunchStub(launchService);
-
-            await provider.debugPipelineStepAppHost(item as any);
-
-            assert.ok(inputStub.notCalled, 'Expected no prompt when the CLI advertises the pipelines capability');
-            assert.ok(launchStub.calledOnce, 'Expected launch to be called');
-            assert.strictEqual(launchStub.firstCall.args[0], appHostPath);
-            assert.strictEqual(launchStub.firstCall.args[1], 'do');
-            assert.strictEqual(launchStub.firstCall.args[2], false);
-            assert.strictEqual(launchStub.firstCall.args[3], undefined);
-            sandbox.restore();
-            provider.dispose();
-        });
-
-        test('runPipelineStepAppHost throws a CancellationError and never launches when the user dismisses the step prompt', async () => {
-            const sandbox = sinon.createSandbox();
-            sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({ capabilities: [] } as any);
-            sandbox.stub(vscode.window, 'showInputBox').resolves(undefined);
-            const launchService = makeLaunchService();
-            const launchStub = sandbox.stub(launchService, 'launch').resolves();
-            const { provider, item } = makeWorkspaceProviderWithLaunchStub(launchService);
-
-            await assert.rejects(provider.runPipelineStepAppHost(item as any), vscode.CancellationError);
-
-            assert.ok(launchStub.notCalled, 'Expected launch not to be called when the user cancels the prompt');
-            sandbox.restore();
-            provider.dispose();
-        });
-    });
-
     test('workspace mode renders a running AppHost with no resources', () => {
         const hostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
@@ -2748,10 +2636,17 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     });
 
     test('workspace resource commands use the AppHost that owns the resource', async () => {
-        const commands: AspireSubcommand[] = [];
+        const commands: Array<{ command: AspireSubcommand; options: unknown }> = [];
         const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';
         const otherHostPath = '/repo/samples/Store/AppHost.csproj';
+        const otherFolder = {
+            uri: vscode.Uri.file('/repo/samples'),
+            name: 'samples',
+            index: 1,
+        };
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) => uri.fsPath.startsWith(`${otherFolder.uri.fsPath}${path.sep}`) ? otherFolder : undefined);
+        const otherTarget = workspaceFolderCliPathTarget(otherFolder);
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -2774,7 +2669,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => 'aspire',
             createEnvironment: () => ({}),
-            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
+            sendAspireCommandToAspireTerminal: (command: AspireSubcommand, _showTerminal?: boolean, _additionalArgs?: string[], options?: unknown) => commands.push({ command, options }),
         } as unknown as AspireTerminalProvider;
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
 
@@ -2790,11 +2685,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         // Logs and terminal still go through the terminal; restart now runs over the hidden CLI
         // backchannel and must target the AppHost that owns the resource.
         assert.deepStrictEqual(commands, [
-            ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
-            ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
+            {
+                command: ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
+                options: { target: otherTarget },
+            },
+            {
+                command: ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
+                options: { terminalTarget: 'editor', target: otherTarget },
+            },
         ]);
         assert.deepStrictEqual(runResourceCommandCalls, [['cache-b', otherHostPath, 'restart', []]]);
         provider.dispose();
+        getWorkspaceFolderStub.restore();
     });
 
     test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', async () => {
