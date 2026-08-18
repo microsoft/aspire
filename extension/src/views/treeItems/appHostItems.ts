@@ -8,6 +8,10 @@ import {
     appHostOpenSourceActionLabel,
     appHostRunActionLabel,
     appHostDebugActionLabel,
+    appHostDeployActionLabel,
+    appHostPublishActionLabel,
+    appHostRunPipelineStepActionLabel,
+    appHostDebugPipelineStepActionLabel,
     appHostPathLabel,
     resourceCountDescription,
     logFileLabel,
@@ -78,23 +82,47 @@ export class WorkspaceAppHostItem extends vscode.TreeItem {
     }
 }
 
+export type WorkspaceAppHostAction = 'openSource' | 'run' | 'debug' | 'deploy' | 'publish' | 'runPipelineStep' | 'debugPipelineStep';
+
+const actionLabels: Record<WorkspaceAppHostAction, string> = {
+    openSource: appHostOpenSourceActionLabel,
+    run: appHostRunActionLabel,
+    debug: appHostDebugActionLabel,
+    deploy: appHostDeployActionLabel,
+    publish: appHostPublishActionLabel,
+    runPipelineStep: appHostRunPipelineStepActionLabel,
+    debugPipelineStep: appHostDebugPipelineStepActionLabel,
+};
+
+const actionIcons: Record<WorkspaceAppHostAction, string> = {
+    openSource: 'go-to-file',
+    run: 'play',
+    debug: 'debug-alt',
+    deploy: 'cloud-upload',
+    publish: 'package',
+    runPipelineStep: 'run-all',
+    debugPipelineStep: 'debug-all',
+};
+
+const actionCommands: Record<WorkspaceAppHostAction, string> = {
+    openSource: 'aspire-vscode.openAppHostSource',
+    run: 'aspire-vscode.runAppHost',
+    debug: 'aspire-vscode.debugAppHost',
+    deploy: 'aspire-vscode.deployAppHost',
+    publish: 'aspire-vscode.publishAppHost',
+    runPipelineStep: 'aspire-vscode.runPipelineStepAppHost',
+    debugPipelineStep: 'aspire-vscode.debugPipelineStepAppHost',
+};
+
 export class WorkspaceAppHostActionItem extends vscode.TreeItem {
-    constructor(parent: WorkspaceAppHostItem, action: 'openSource' | 'run' | 'debug') {
-        const label = action === 'openSource'
-            ? appHostOpenSourceActionLabel
-            : action === 'run'
-                ? appHostRunActionLabel
-                : appHostDebugActionLabel;
+    constructor(parent: WorkspaceAppHostItem, action: WorkspaceAppHostAction) {
+        const label = actionLabels[action];
         super(label, vscode.TreeItemCollapsibleState.None);
         this.id = `${parent.id}:action:${action}`;
-        this.iconPath = new vscode.ThemeIcon(action === 'debug' ? 'debug-alt' : action === 'run' ? 'play' : 'go-to-file');
+        this.iconPath = new vscode.ThemeIcon(actionIcons[action]);
         this.contextValue = `workspaceAppHostAction:${action}`;
         this.command = {
-            command: action === 'openSource'
-                ? 'aspire-vscode.openAppHostSource'
-                : action === 'run'
-                    ? 'aspire-vscode.runAppHost'
-                    : 'aspire-vscode.debugAppHost',
+            command: actionCommands[action],
             title: label,
             arguments: [parent]
         };

@@ -141,6 +141,10 @@ export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');
 export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source');
 export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
 export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
+export const appHostDeployActionLabel = vscode.l10n.t('Deploy AppHost');
+export const appHostPublishActionLabel = vscode.l10n.t('Publish AppHost');
+export const appHostRunPipelineStepActionLabel = vscode.l10n.t('Run pipeline step');
+export const appHostDebugPipelineStepActionLabel = vscode.l10n.t('Debug pipeline step');
 export const appHostPathLabel = vscode.l10n.t('Path');
 export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied to clipboard.');
 export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
@@ -231,6 +235,7 @@ export const aspireRestoreFailed = (configPath: string, error: string) => vscode
 export const aspireRestoreFailedStatusBar = vscode.l10n.t('Aspire restore failed (click to retry)');
 export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
+export const pipelineStepRequired = vscode.l10n.t('Enter a pipeline step name.');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
 export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
