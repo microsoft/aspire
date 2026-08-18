@@ -1409,7 +1409,7 @@ aspire-managed (self-contained)
 2. **Build Aspire.Dashboard** as a Native AOT executable
 3. **Download and copy DCP** binaries
 4. **Create archive** with both executables and Dashboard static assets
-4. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
+5. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
 
 ### Self-Extracting Binary Build
 

@@ -2,9 +2,13 @@
 
   <PropertyGroup>
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <TargetFramework>net11.0</TargetFramework>
     <PublishAot>true</PublishAot>
+    <!-- Native archives use the outer build configuration for artifact routing. Keep RID publishes
+         optimized even in Debug CI builds; the unoptimized win-arm64 image exceeds linker branch limits. -->
+    <Optimize Condition="'$(RuntimeIdentifier)' != ''">true</Optimize>
+    <OptimizationPreference Condition="'$(RuntimeIdentifier)' == 'win-arm64'">Size</OptimizationPreference>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>

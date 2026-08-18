@@ -2943,6 +2943,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CreateStartInfo_WithNativeDashboard_SetsTerminalHostFromManagedLayout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var managedDirectory = Assert.IsType<string>(layout.GetComponentPath(LayoutComponent.Managed));
+        var dashboardPath = Path.Combine(
+            managedDirectory,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(dashboardPath, startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("terminalhost", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_WithTerminalHostOverrides_PreservesOverrides()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.TerminalHostPathEnvVar] = "custom-terminal-host",
+            [BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "custom-args"
+        };
+
+        var startInfo = server.CreateStartInfo(123, environmentVariables);
+
+        Assert.Equal("custom-terminal-host", startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("custom-args", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+    }
+
+    [Fact]
     public void CreateStartInfo_SetsCliLogFilePathEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -99,6 +99,13 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
+      - name: Smoke test Native AOT Dashboard
+        shell: pwsh
+        run: |
+          $extension = if ('${{ runner.os }}' -eq 'Windows') { '.exe' } else { '' }
+          $dashboardPath = (Join-Path '${{ github.workspace }}' 'artifacts/bin/Aspire.Dashboard/${{ matrix.targets.rids }}/${{ inputs.configuration }}/net11.0/${{ matrix.targets.rids }}/publish/Aspire.Dashboard') + $extension
+          ./eng/scripts/test-native-dashboard.ps1 -DashboardPath $dashboardPath
+
       - name: Build CLI packages
         run: >
           ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}

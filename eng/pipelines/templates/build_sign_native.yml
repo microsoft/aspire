@@ -247,7 +247,7 @@ jobs:
           - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
             - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
-                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
               displayName: 🟣Restore execute permissions on managed executables
 
           # Package the already-published/signed Dashboard without republishing it,

@@ -182,7 +182,7 @@
       <_ExtractedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ExtractedNativeBinaryPath).exe</_ExtractedNativeBinaryPath>
       <_CliToolPublishBaseDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish'))</_CliToolPublishBaseDir>
       <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), '$(CliRuntime)'))</_CliToolPublishDir>
-      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer'))</_CliToolPointerPublishDir>
+      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer-$(CliRuntime)'))</_CliToolPointerPublishDir>
       <_CliNpmPackageStagingDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'npm-packages', '$(CliRuntime)'))</_CliNpmPackageStagingDir>
       <_CliNpmPackageStagingDirArg>$(_CliNpmPackageStagingDir.TrimEnd('\').TrimEnd('/'))</_CliNpmPackageStagingDirArg>
       <_PackageOutputPathArg>$(PackageOutputPath.TrimEnd('\').TrimEnd('/'))</_PackageOutputPathArg>
@@ -190,9 +190,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <_SharedPackToolProperties Include="CreateRidSpecificToolPackages=true" />
       <_SharedPackToolProperties Include="PreBuiltCliBinaryPath=$(_ExtractedNativeBinaryPath)" />
-      <_SharedPackToolProperties Include="PublishAot=true" />
       <_SharedPackToolProperties Include="BundlePayloadPath=" />
       <_SharedPackToolProperties Include="Configuration=$(Configuration)" />
       <_SharedPackToolProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
@@ -223,6 +221,8 @@
   <Target Name="_PackRidSpecificDotnetTool">
     <ItemGroup>
       <_PackToolProperties Include="@(_SharedPackToolProperties)" />
+      <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackToolProperties Include="PublishAot=true" />
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
       <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
     </ItemGroup>
@@ -244,6 +244,8 @@
   <Target Name="_PackPointerDotnetTool">
     <ItemGroup>
       <_PackPointerProperties Include="@(_SharedPackToolProperties)" />
+      <_PackPointerProperties Include="CreateRidSpecificToolPackages=false" />
+      <_PackPointerProperties Include="PublishAot=false" />
       <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
       <_PackPointerProperties Include="NoBuild=true" />
     </ItemGroup>
