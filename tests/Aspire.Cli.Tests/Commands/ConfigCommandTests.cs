@@ -527,6 +527,14 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(KnownFeatures.ShowAllTemplates, output);
         // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not appear.
         Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
+
+        var configInfo = JsonNode.Parse(output)?.AsObject();
+        Assert.NotNull(configInfo);
+        Assert.True(configInfo["capabilities"] is JsonArray);
+        var capabilities = configInfo["capabilities"]!.AsArray().Select(capability => capability?.GetValue<string>()).OfType<string>().ToArray();
+        Assert.Contains("deploy-command.v1", capabilities);
+        Assert.Contains("publish-command.v1", capabilities);
+        Assert.Contains("do-command.v1", capabilities);
     }
 
     [Fact]
