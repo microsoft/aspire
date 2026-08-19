@@ -212,11 +212,11 @@ public class BackingResourceProjectionTests
         var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", secret: true);
-            var cacheA = b.AddRedis("cachea", password: shared);
-            var cacheB = b.AddRedis("cacheb", password: shared);
+            var sqlA = b.AddSqlServer("sqla", password: shared);
+            var sqlB = b.AddSqlServer("sqlb", password: shared);
             b.AddContainer("api", "myapp/api", "latest")
-                .WithReference(cacheA)
-                .WithReference(cacheB);
+                .WithReference(sqlA)
+                .WithReference(sqlB);
         }));
 
         Assert.Contains("its own parameter", ex.Message, StringComparison.Ordinal);

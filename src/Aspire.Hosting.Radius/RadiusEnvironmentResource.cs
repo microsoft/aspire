@@ -163,8 +163,9 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         // Guard the two address-bearing properties that never evaluate the lazy host below: Port
         // and TargetPort. The other four (Url, Host, IPV4Host, HostAndPort) reach
         // GetHostAddressExpression through `host`, which guards them there. Scheme and TlsEnabled
-        // are deliberately *not* guarded: they are copied straight off the endpoint annotation and
-        // describe no address, so a recipe-provisioned resource can answer them correctly.
+        // carry no address, so the *address* guard does not apply to them — but transport security
+        // is guarded separately below, because a TLS-enabled endpoint makes them describe how the
+        // resource runs locally rather than how its recipe deploys it.
         //
         // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
         // port), a Radius peer is reachable on the recipe Service's port, which equals the container
@@ -174,6 +175,8 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         // Lazy because ResolveServicePort delegates to ResourceExtensions.ResolveEndpoints, which
         // *allocates* a port for an otherwise-portless endpoint as a side effect. A Scheme or
         // TlsEnabled query needs no port and must not burn an allocation.
+        ThrowIfTransportSecurityIsNotRecipeBacked(endpointReference, property);
+
         var resolvedServicePort = new Lazy<int?>(() => RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name));
         var port = new Lazy<int>(() => resolvedServicePort.Value ?? GetDefaultPort(scheme, endpoint));
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
@@ -207,6 +210,41 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         return build();
     }
 
+    // Rejects transport-security metadata for a TLS-enabled backing resource, mirroring the guard
+    // the Radius publisher applies when it projects the same endpoint (ASPIRERADIUS081).
+    //
+    // No mapped Radius type publishes a transport-security output, so the recipe decides the
+    // deployed transport on its own and Scheme/TlsEnabled/Url read off the local EndpointAnnotation
+    // would describe how the resource runs locally instead. That reasoning is publisher-independent:
+    // a Kubernetes, Azure Container Apps, or App Service consumer routed here through
+    // ComputeEnvironmentEndpointResolver would otherwise be told `rediss`/`True` for a broker the
+    // recipe deploys without TLS, so it is rejected here too rather than only on the Radius path.
+    private static void ThrowIfTransportSecurityIsNotRecipeBacked(EndpointReference endpointReference, EndpointProperty property)
+    {
+        if (!endpointReference.EndpointAnnotation.TlsEnabled ||
+            property is not (EndpointProperty.Scheme or EndpointProperty.TlsEnabled or EndpointProperty.Url))
+        {
+            return;
+        }
+
+        // Child resources (a database on a server, say) are represented by their parent in the
+        // Radius model, so classify against the resource Radius actually emits.
+        var resource = endpointReference.Resource is IResourceWithParent child ? child.Parent : endpointReference.Resource;
+
+        if (ResourceTypeMapper.TryGetEmittedBackingType(resource) is not { } radiusType)
+        {
+            return;
+        }
+
+        throw new RadiusBackingResourceEndpointException(
+            resource,
+            $"Endpoint '{endpointReference.EndpointName}' of resource '{resource.Name}' is TLS-enabled, but the Radius " +
+            $"type '{radiusType}' that provisions it publishes no transport-security output, so '{property}' would " +
+            $"describe how '{resource.Name}' runs locally rather than how the recipe deploys it. Remove the TLS " +
+            $"configuration for publishing, or provision the resource yourself if the deployed workload must use TLS. " +
+            $"Diagnostic: ASPIRERADIUS081.");
+    }
+
     // A backing resource maps to a Radius recipe type (Applications.Datastores/*, Radius.Data/*,
     // ...) rather than Radius.Compute/containers. Its Kubernetes objects and credentials are owned
     // by the recipe, so every *address* for it is wrong. Fail loudly instead of emitting an address
@@ -222,8 +260,10 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
     //
     // It deliberately does *not* cover endpoint metadata that carries no address: Scheme comes from
     // EndpointAnnotation.UriScheme and TlsEnabled from EndpointAnnotation.TlsEnabled, neither of
-    // which can mislead a consumer, and both answered correctly through IComputeEnvironmentResource
-    // before backing-resource projection existed.
+    // which describes where the resource lives. They are instead guarded by
+    // ThrowIfTransportSecurityIsNotRecipeBacked, which rejects them only when the endpoint is
+    // TLS-enabled — the one case in which the local endpoint declaration can disagree with what the
+    // recipe actually deploys.
     private static void ThrowIfBackingResource(IResource resource)
     {
         // Child resources (a database on a server, say) are represented by their parent in the
