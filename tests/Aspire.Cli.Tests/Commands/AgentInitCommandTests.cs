@@ -884,7 +884,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assets = [.. manifestSkills]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsBundleDescriptors.Skills.ManifestTypeInfo);
+        manifest.AdditionalProperties[AspireSkillsBundleDescriptor.Skills.ManifestAssetsPropertyName] =
+            JsonSerializer.SerializeToElement(manifest.Assets, AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray);
+        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
         var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
         await File.WriteAllTextAsync(manifestPath, manifestJson);
         return await new AspireSkillsBundleProvider().LoadAsync(

@@ -29,7 +29,7 @@ public class AspireSkillsBundleTests
     [Theory]
     [InlineData("skills")]
     [InlineData("customAssets")]
-    public void ManifestTypeInfo_MapsDescriptorPropertyToAssets(string manifestAssetsPropertyName)
+    public void Manifest_MapsDescriptorPropertyToAssets(string manifestAssetsPropertyName)
     {
         var json =
             $$"""
@@ -51,17 +51,12 @@ public class AspireSkillsBundleTests
 
         var manifest = JsonSerializer.Deserialize(
             json,
-            descriptor.ManifestTypeInfo);
+            AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
 
         Assert.NotNull(manifest);
-        var asset = Assert.Single(manifest.Assets);
+        var asset = Assert.Single(manifest.GetAssets(descriptor.ManifestAssetsPropertyName));
         Assert.NotNull(asset);
         Assert.Equal("aspire", asset.Name);
-
-        var serializedManifest = JsonSerializer.Serialize(manifest, descriptor.ManifestTypeInfo);
-        using var document = JsonDocument.Parse(serializedManifest);
-        Assert.True(document.RootElement.TryGetProperty(manifestAssetsPropertyName, out var serializedAssets));
-        Assert.Equal(JsonValueKind.Array, serializedAssets.ValueKind);
     }
 
     [Fact]
@@ -944,13 +939,15 @@ public class AspireSkillsBundleTests
 
     private static Task WriteManifestAsync(string bundleDirectory, SkillBundleManifest manifest)
     {
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsBundleDescriptors.Skills.ManifestTypeInfo);
+        manifest.AdditionalProperties[AspireSkillsBundleDescriptor.Skills.ManifestAssetsPropertyName] =
+            JsonSerializer.SerializeToElement(manifest.Assets, AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray);
+        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
         return File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
     }
 
     private static AspireSkillsBundleDescriptor CreateDescriptor(string manifestAssetsPropertyName)
     {
-        var skillsDescriptor = AspireSkillsBundleDescriptors.Skills;
+        var skillsDescriptor = AspireSkillsBundleDescriptor.Skills;
         return new(
             skillsDescriptor.AssetKind,
             skillsDescriptor.AssetPrefix,

@@ -1291,7 +1291,7 @@ internal sealed class AspireSkillsInstaller : IAspireSkillsInstaller
                 configuration,
                 features,
                 telemetry,
-                AspireSkillsBundleDescriptors.Skills,
+                AspireSkillsBundleDescriptor.Skills,
                 logger),
         };
     }

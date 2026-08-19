@@ -15,7 +15,29 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
+    [JsonIgnore]
     public SkillBundleAsset?[] Assets { get; init; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> AdditionalProperties { get; set; } = [];
+
+    /// <summary>
+    /// Gets the assets from the collection property named by the bundle descriptor.
+    /// </summary>
+    public SkillBundleAsset?[] GetAssets(string propertyName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
+
+        foreach (var property in AdditionalProperties)
+        {
+            if (string.Equals(property.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                return property.Value.Deserialize(AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray) ?? [];
+            }
+        }
+
+        return [];
+    }
 }
 
 /// <summary>
@@ -89,6 +111,7 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(SkillBundleManifest))]
+[JsonSerializable(typeof(SkillBundleAsset[]))]
 [JsonSerializable(typeof(EmbeddedAspireSkillsBundleMetadata))]
 internal sealed partial class AspireSkillsJsonSerializerContext : JsonSerializerContext
 {
