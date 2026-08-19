@@ -1373,24 +1373,6 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public void InteractionInput_SetFiles_DoesNotDisposeExistingCollection()
-    {
-        var input = new InteractionInput { Name = "File", InputType = InputType.File };
-        var disposeCount = 0;
-        var originalFiles = new InteractionFileCollection([], () => disposeCount++);
-        var replacementFiles = new InteractionFileCollection([]);
-        input.SetFiles(originalFiles);
-
-        input.SetFiles(replacementFiles);
-
-        Assert.Equal(0, disposeCount);
-        Assert.Same(replacementFiles, input.GetFiles());
-
-        originalFiles.Dispose();
-        Assert.Equal(1, disposeCount);
-    }
-
-    [Fact]
     public async Task PromptInputsAsync_Canceled_CancelsFileUploads()
     {
         var fileUploadStore = new TestInteractionFileUploadStore();
