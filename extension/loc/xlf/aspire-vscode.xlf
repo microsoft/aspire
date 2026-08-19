@@ -109,6 +109,9 @@
     <trans-unit id="aspire-vscode.strings.azureFunctionsCmdPercentArgument">
       <source xml:lang="en">Azure Functions launch arguments containing &quot;%&quot; are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.azureFunctionsInvalidProcessId">
+      <source xml:lang="en">Azure Functions returned an invalid worker process ID: {0}.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.azureFunctionsTaskExitedBeforeStartup">
       <source xml:lang="en">Azure Functions task exited with code {0} before startup completed.</source>
     </trans-unit>

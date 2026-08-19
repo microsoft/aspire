@@ -83,6 +83,7 @@
   "aspire-vscode.strings.azureFunctionsUnsupportedTaskShell": "The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.",
   "aspire-vscode.strings.azureFunctionsCmdPercentArgument": "Azure Functions launch arguments containing \"%\" are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.",
   "aspire-vscode.strings.azureFunctionsCmdDelayedExpansion": "Azure Functions launch arguments containing \"!\" are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.",
+  "aspire-vscode.strings.azureFunctionsInvalidProcessId": "Azure Functions returned an invalid worker process ID: {0}.",
   "aspire-vscode.strings.azureFunctionsTaskExitedBeforeStartup": "Azure Functions task exited with code {0} before startup completed.",
   "aspire-vscode.strings.azureFunctionsHostStartupTimedOut": "Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.",
   "aspire-vscode.strings.azureFunctionsWorkerStartupTimedOut": "Timed out after {0} seconds waiting for the Azure Functions worker process to start.",
