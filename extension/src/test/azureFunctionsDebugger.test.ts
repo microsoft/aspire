@@ -730,6 +730,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         fsMkdtempSync.returns(debugTempPath);
         fsReadFileSync.withArgs(workerPidPath, 'utf8').returns([
+            'null',
             JSON.stringify({ name: 'unrelated-event', workerProcessId: 1111 }),
             JSON.stringify({ name: 'dotnet-worker-startup', workerProcessId: 4242 }),
             JSON.stringify({ name: 'dotnet-worker-startup', workerProcessId: 4343 }),

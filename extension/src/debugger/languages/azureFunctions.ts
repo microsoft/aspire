@@ -496,14 +496,19 @@ function readWorkerProcessId(discovery: WorkerProcessIdDiscovery): number | unde
             continue;
         }
 
-        let event: { name?: unknown; workerProcessId?: unknown };
+        let parsed: unknown;
         try {
-            event = JSON.parse(line) as { name?: unknown; workerProcessId?: unknown };
+            parsed = JSON.parse(line) as unknown;
         } catch {
             // The final NDJSON line may still be in flight.
             continue;
         }
 
+        if (typeof parsed !== 'object' || parsed === null) {
+            continue;
+        }
+
+        const event = parsed as { name?: unknown; workerProcessId?: unknown };
         if (event.name !== 'dotnet-worker-startup') {
             continue;
         }
