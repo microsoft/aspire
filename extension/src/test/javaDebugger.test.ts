@@ -434,7 +434,7 @@ suite('Java Debugger Extension Tests', () => {
         sinon.assert.calledOnce(showErrorMessage);
         assert.strictEqual(
             showErrorMessage.firstCall.args[0],
-            javaAppHostCommandNotRecognized('java -Xmx512m'));
+            javaAppHostCommandNotRecognized());
     });
 
     test('always redacts resolved Java environments from persistent configuration logs', async () => {

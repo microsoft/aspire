@@ -22,6 +22,12 @@ function createEditor(filePath: string): vscode.TextEditor {
     } as vscode.TextEditor;
 }
 
+function createLaunchService(): AppHostLaunchService {
+    return new AppHostLaunchService({
+        getCapabilityStatus: async () => 'supported',
+    });
+}
+
 suite('AspireEditorCommandProvider', () => {
     let tempDir: string;
     let activeEditor: vscode.TextEditor | undefined;
@@ -85,7 +91,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(projectPath, '<Project Sdk="Microsoft.NET.Sdk" />');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(projectPath), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), projectPath);
         }
@@ -99,7 +105,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, '#:sdk Aspire.AppHost.Sdk\nvar builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -113,7 +119,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'typescript/nodejs'), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -127,7 +133,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(appHostPath, 'fn main() {}');
         activeEditor = createEditor(appHostPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath, 'rust'), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), appHostPath);
         }
@@ -141,7 +147,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
         try {
             await provider.processDocument(activeEditor.document);
 
@@ -158,7 +164,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
         try {
             assert.strictEqual(await provider.getAppHostPath(), null);
         }
@@ -177,7 +183,7 @@ suite('AspireEditorCommandProvider', () => {
         fs.writeFileSync(programPath, 'var builder = DistributedApplication.CreateBuilder(args);');
         activeEditor = createEditor(programPath);
 
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), new AppHostLaunchService());
+        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
         try {
             await provider.tryExecuteRunAppHost(true);
 

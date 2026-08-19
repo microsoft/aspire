@@ -73,7 +73,30 @@ export function isFullyQualifiedWindowsPath(cliPath: string): boolean {
 }
 
 function isAbsoluteCliPath(cliPath: string): boolean {
-    return path.posix.isAbsolute(cliPath) || isFullyQualifiedWindowsPath(cliPath);
+    if (isFullyQualifiedWindowsPath(cliPath)) {
+        return true;
+    }
+
+    // A POSIX-rooted path is not absolute on Windows. Windows paths remain recognizable on
+    // other hosts so tests and Settings Sync can preserve an explicit cross-platform pin.
+    return process.platform !== 'win32' && path.posix.isAbsolute(cliPath);
+}
+
+function expandWindowsEnvironmentVariables(
+    value: string,
+    environment: NodeJS.ProcessEnv = process.env,
+): string {
+    if (process.platform !== 'win32') {
+        return value;
+    }
+
+    const environmentVariables = new Map(
+        Object.entries(environment).map(([name, environmentValue]) => [name.toLowerCase(), environmentValue]),
+    );
+
+    return value.replace(/%([^%]+)%/g, (match, name: string) => {
+        return environmentVariables.get(name.toLowerCase()) ?? match;
+    });
 }
 
 function containsCliPath(paths: readonly string[], candidate: string): boolean {
@@ -161,9 +184,10 @@ interface CliPathLookupOptions {
 /**
  * Finds an executable Aspire CLI on PATH.
  *
- * Windows command shims must be resolved to their concrete path so downstream
- * process launches can route them through cmd.exe instead of passing the bare
- * command name to Node's executable-only spawn path.
+ * PATH lookups return a concrete path so capability negotiation, launch, and
+ * restart all target the same executable. Windows command shims additionally
+ * need their concrete path so downstream process launches can route them through
+ * cmd.exe instead of passing the bare command name to Node's executable-only spawn path.
  */
 export async function findCliOnPath(options: CliPathLookupOptions = {}): Promise<string | undefined> {
     const platform = options.platform ?? process.platform;
@@ -176,11 +200,14 @@ export async function findCliOnPath(options: CliPathLookupOptions = {}): Promise
     const candidateExists = options.fileExists ?? fileExists;
     if (platform !== 'win32') {
         for (const pathEntry of pathValue.split(path.posix.delimiter)) {
-            if (!path.posix.isAbsolute(pathEntry)) {
+            // The extension probes candidates with `--version` before workspace trust is checked.
+            // Ignore entries that could resolve through the Extension Host's workspace-controlled cwd.
+            const directory = pathEntry.trim();
+            if (!directory || !path.posix.isAbsolute(directory)) {
                 continue;
             }
 
-            const candidate = path.posix.join(pathEntry, 'aspire');
+            const candidate = path.posix.join(directory, 'aspire');
             if (await candidateExists(candidate) && await tryExecute(candidate)) {
                 return candidate;
             }
@@ -311,8 +338,10 @@ const defaultDependencies: CliPathDependencies = {
     isConfiguredPathAutoConfigured: (configuredPath, defaultPaths, target) => {
         const resource = target.kind === 'workspaceFolder' ? target.workspaceFolder.uri : undefined;
         const inspection = vscode.workspace.getConfiguration('aspire', resource).inspect<string>('aspireCliExecutablePath');
-        const hasWorkspaceOverride = inspection?.workspaceValue !== undefined
-            || inspection?.workspaceFolderValue !== undefined;
+        // Restricted Mode ignores repository-owned values when choosing the configured path,
+        // so those same values cannot change the provenance of the trusted global setting.
+        const hasWorkspaceOverride = vscode.workspace.isTrusted
+            && (inspection?.workspaceValue !== undefined || inspection?.workspaceFolderValue !== undefined);
 
         // Older versions only wrote this setting globally. A workspace-scoped value is
         // therefore an explicit user pin even when it happens to equal a legacy default.
@@ -634,9 +663,15 @@ export class CliPathResolver implements vscode.Disposable {
             }
             else {
                 // No-token paths return `resolvedPath === undefined`; use the raw value unchanged.
-                const effectiveCandidate = expanded.resolvedPath ?? configuredPath;
-
-                if (isAbsoluteCliPath(effectiveCandidate)) {
+                const workspaceExpandedCandidate = expanded.resolvedPath ?? configuredPath;
+                const effectiveCandidate = expandWindowsEnvironmentVariables(workspaceExpandedCandidate);
+                if (process.platform === 'win32' && /%[^%]+%/.test(effectiveCandidate)) {
+                    // cmd.exe removes unknown %NAME% references before invoking a command shim, so
+                    // probing an unresolved token would validate a different path than the configured pin.
+                    extensionLogOutputChannel.warn(`Configured CLI path contains an unresolved environment variable and will not be probed: ${configuredPath}`);
+                    this.updateRejectedConfiguredCliPath(state, target, configuredPath, configuredPath, generation, deps);
+                }
+                else if (isAbsoluteCliPath(effectiveCandidate)) {
                     let matchedCandidate: string | undefined;
                     for (const candidate of deps.getExecutableCandidates(effectiveCandidate)) {
                         if (await deps.tryExecute(candidate)) {

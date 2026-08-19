@@ -1322,7 +1322,9 @@ export class AppHostDataRepository {
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;
-            terminateCliProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true });
+            void terminateCliProcess(childProcess, `aspire describe --follow (${appHostPath})`, { suppressTimeoutWarning: true }).catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate aspire describe --follow (${appHostPath}): ${String(error)}`);
+            });
         }
     }
 

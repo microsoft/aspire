@@ -8,7 +8,7 @@ import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, LaunchOptions, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, DebugConfigurationArguments, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, LaunchOptions, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
@@ -271,20 +271,98 @@ function collectProfileDotnetHostEnvVarNames(profile: LaunchProfile | null | und
     return names;
 }
 
+function parseSdkSerializedArguments(argumentsText: string): string[] {
+    // `dotnet run-api` exposes ProcessStartInfo.Arguments after the SDK serializes an argument array,
+    // for example:
+    //   exec "/workspace/output with spaces/apphost.dll"
+    // Use the same CRT-compatible parser as src/Shared/CommandLineArgsParser.cs. That helper is copied
+    // from System.Diagnostics.Process: Windows processes use these rules natively, while the .NET runtime
+    // deliberately applies the same rules to ProcessStartInfo.Arguments before exec on Unix.
+    // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Diagnostics.Process/src/System/Diagnostics/Process.Unix.cs
+    const parsedArguments: string[] = [];
+    let index = 0;
+
+    while (index < argumentsText.length) {
+        while (index < argumentsText.length && (argumentsText[index] === ' ' || argumentsText[index] === '\t')) {
+            index++;
+        }
+
+        if (index === argumentsText.length) {
+            break;
+        }
+
+        let currentArgument = '';
+        let inQuotes = false;
+
+        while (index < argumentsText.length) {
+            let backslashCount = 0;
+            while (index < argumentsText.length && argumentsText[index] === '\\') {
+                index++;
+                backslashCount++;
+            }
+
+            if (backslashCount > 0) {
+                if (index >= argumentsText.length || argumentsText[index] !== '"') {
+                    currentArgument += '\\'.repeat(backslashCount);
+                } else {
+                    currentArgument += '\\'.repeat(Math.floor(backslashCount / 2));
+                    if (backslashCount % 2 !== 0) {
+                        currentArgument += '"';
+                        index++;
+                    }
+                }
+
+                continue;
+            }
+
+            const character = argumentsText[index];
+            if (character === '"') {
+                if (inQuotes && index < argumentsText.length - 1 && argumentsText[index + 1] === '"') {
+                    currentArgument += '"';
+                    index++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+
+                index++;
+                continue;
+            }
+
+            if ((character === ' ' || character === '\t') && !inQuotes) {
+                break;
+            }
+
+            currentArgument += character;
+            index++;
+        }
+
+        parsedArguments.push(currentArgument);
+    }
+
+    return parsedArguments;
+}
+
 // Combine the SDK host arguments from `dotnet run-api` (the built app DLL that is passed to the `dotnet`
 // launcher) with the user/launch-profile application arguments that were already resolved onto the debug
 // configuration. `hostArguments` is present only when the program is the `dotnet` launcher; 
 // for an apphost-executable build it is undefined and only the application arguments remain.
-// The host arguments must come first because they identify what to run; the user application arguments
-// follow and are passed to the app. The result is kept as a single command-line string so the quoting the
-// SDK already applied to CommandLineArguments is preserved.
-function combineRunApiArguments(hostArguments: string | undefined, applicationArguments: string | string[] | undefined): string | string[] | undefined {
-    const applicationArgumentsText = Array.isArray(applicationArguments) ? applicationArguments.join(' ') : applicationArguments;
-    const combined = [hostArguments, applicationArgumentsText]
-        .filter((part): part is string => part !== undefined && part.length > 0)
-        .join(' ');
+// The host arguments must come first because they identify what to run. Preserve the existing string form
+// when application arguments are absent or launch-profile-authored text, but deserialize SDK host text when
+// the application arguments are already tokens so the complete result can remain losslessly tokenized.
+function combineRunApiArguments(hostArguments: string | undefined, applicationArguments: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
+    if (!hostArguments) {
+        return applicationArguments;
+    }
 
-    return combined.length > 0 ? combined : undefined;
+    if (applicationArguments === undefined) {
+        return hostArguments;
+    }
+
+    if (Array.isArray(applicationArguments)) {
+        return [...parseSdkSerializedArguments(hostArguments), ...applicationArguments];
+    }
+
+    return `${hostArguments} ${applicationArguments}`;
 }
 
 function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
@@ -379,9 +457,25 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
     return dotnetRunArgs;
 }
 
+function expandDebugConfigurationArguments(argumentsValue: DebugConfigurationArguments | undefined): DebugConfigurationArguments | undefined {
+    if (argumentsValue === undefined) {
+        return undefined;
+    }
+
+    if (Array.isArray(argumentsValue)) {
+        // Run-session arguments are already serialized argv tokens. Expanding them here would
+        // reinterpret literal `$(NAME)` and `%NAME%` values that the AppHost intended to receive.
+        return [...argumentsValue];
+    }
+
+    // Launch-profile arguments are authored as one command-line string and Visual Studio expands
+    // their environment-variable references before starting an Executable profile.
+    return expandEnvironmentVariables(argumentsValue);
+}
+
 function configureDotNetRunDebugConfiguration(
     debugConfiguration: AspireResourceExtendedDebugConfiguration,
-    args: string[] | string,
+    args: DebugConfigurationArguments,
     environment: NodeJS.ProcessEnv,
     processWorkingDirectory?: string): void {
     debugConfiguration.program = 'dotnet';
@@ -544,7 +638,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
             // Configure debug session with launch profile settings
             debugConfiguration.cwd = determineWorkingDirectory(projectPath, baseProfile);
-            debugConfiguration.args = determineArguments(baseProfile?.commandLineArgs, args);
+            let resolvedArguments = determineArguments(baseProfile?.commandLineArgs, args);
+            debugConfiguration.args = resolvedArguments;
             debugConfiguration.executablePath = baseProfile?.executablePath;
             debugConfiguration.checkForDevCert = baseProfile?.useSSL;
 
@@ -594,12 +689,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 }
 
                 debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
-                if (debugConfiguration.args) {
-                    debugConfiguration.args = expandEnvironmentVariables(debugConfiguration.args);
-                } else if (baseProfile.commandLineArgs) {
-                    // Fall back to launch profile args if run session args were empty
-                    debugConfiguration.args = expandEnvironmentVariables(baseProfile.commandLineArgs);
-                }
+                resolvedArguments = expandDebugConfigurationArguments(resolvedArguments);
+                debugConfiguration.args = resolvedArguments;
                 debugConfiguration.env = createProjectEnvironment(
                     launchSettings,
                     baseProfile,
@@ -699,7 +790,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                     debugConfiguration.program = runApiConfig.executablePath;
 
                     const hostArguments = isDotnetLauncher(runApiConfig.executablePath) ? runApiConfig.commandLineArguments : undefined;
-                    debugConfiguration.args = combineRunApiArguments(hostArguments, debugConfiguration.args);
+                    resolvedArguments = combineRunApiArguments(hostArguments, resolvedArguments);
+                    debugConfiguration.args = resolvedArguments;
 
                     // Intentionally do NOT consume run-api's WorkingDirectory: it carries the SDK default profile's
                     // working directory, whereas cwd was already resolved from the (possibly different) selected

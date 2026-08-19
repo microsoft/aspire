@@ -940,7 +940,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const result = await checkCliAvailableOrRedirect(
             'debug_gate',
             target,
-            candidateTarget => this._terminalProvider.resolveAspireCliPath(candidateTarget),
+            { resolver: candidateTarget => this._terminalProvider.resolveAspireCliPath(candidateTarget) },
         );
         if (!result.available) {
             throw new vscode.CancellationError();

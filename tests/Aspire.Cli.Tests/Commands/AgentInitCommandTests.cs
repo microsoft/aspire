@@ -883,8 +883,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
+        await File.WriteAllTextAsync(manifestPath, manifestJson);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            bundleDirectory,
+            CancellationToken.None);
     }
 
     private static string ComputeSha512(string path)

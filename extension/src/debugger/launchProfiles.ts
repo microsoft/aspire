@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { DebugConfigurationArguments, ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments, parseTree, findNodeAtLocation } from 'jsonc-parser';
@@ -307,18 +307,19 @@ export function mergeEnvironmentVariables(
 }
 
 /**
- * Determines the final arguments array according to launch profile rules
+ * Determines the final debugger arguments according to launch profile rules.
+ * Launch-profile-authored text stays a string, while forwarded run-session tokens stay tokenized.
  * If run session args are present (including empty array), they completely replace launch profile args
  * If run session args are absent/null, launch profile args are used if available
  */
 export function determineArguments(
     baseProfileArgs: string | undefined,
     runSessionArgs: string[] | undefined | null
-): string | undefined {
+): DebugConfigurationArguments | undefined {
     // If run session args are explicitly provided (including empty array), use them
     if (runSessionArgs !== undefined && runSessionArgs !== null) {
-        extensionLogOutputChannel.debug(`Using run session arguments: ${JSON.stringify(runSessionArgs)}`);
-        return runSessionArgs.join(' ');
+        extensionLogOutputChannel.debug(`Using run session arguments (count: ${runSessionArgs.length})`);
+        return [...runSessionArgs];
     }
 
     // If run session args are absent/null, use launch profile args if available

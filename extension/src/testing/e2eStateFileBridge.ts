@@ -6,7 +6,7 @@ import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { projectDebuggerExtension } from '../debugger/languages/dotnet';
-import { spawnCliProcess } from '../utils/process/cliProcess';
+import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
@@ -604,6 +604,16 @@ export async function executeE2eControlCommand(
       markStarted();
       return getE2eBreakpoints();
     }
+    case 'startDebugging': {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
+      }
+
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      markStarted();
+      return await commandPromise;
+    }
     case 'stopDebugging': {
       markStarted();
       await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
@@ -850,9 +860,7 @@ export async function executeE2eControlCommand(
         Promise.allSettled(debugSessions.map(session => session.requestCliStopForExtensionShutdown())),
         delay(5000),
       ]);
-      for (const session of debugSessions) {
-        session.terminateCliProcessTree({ force: true });
-      }
+      await Promise.allSettled(debugSessions.map(session => session.terminateCliProcessTree({ force: true })));
 
       return undefined;
     }
@@ -871,6 +879,22 @@ export async function executeE2eControlCommand(
     case 'getActiveEditor': {
       markStarted();
       return getActiveEditorInfo();
+    }
+    case 'runAspireCli': {
+      if (!Array.isArray(command.args) || !command.args.every(argument => typeof argument === 'string')) {
+        throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
+      }
+
+      const workingDirectory = getE2eRunAspireCliWorkingDirectory(command.workingDirectory);
+      const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+      const commandPromise = runAspireCliForE2E(
+        terminalProvider,
+        [...command.args],
+        workingDirectory,
+        timeoutMs,
+        terminalProvider.createEnvironment());
+      markStarted();
+      return await commandPromise;
     }
     default:
       throw new Error(`Unsupported Aspire extension E2E control command: ${getUnknownCommandName(command)}`);
@@ -1334,7 +1358,7 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
       resourceStartTimeoutMs,
-      aspireDebugSession.debugSessionId);
+      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false));
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
@@ -1459,8 +1483,15 @@ function redactDebugAdapterArguments(value: unknown): unknown {
   return copy;
 }
 
-async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args: string[], workingDirectory: string, timeoutMs: number, debugSessionId: string): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+async function runAspireCliForE2E(
+  terminalProvider: AspireTerminalProvider,
+  args: string[],
+  workingDirectory: string,
+  timeoutMs: number,
+  environment: Record<string, string | undefined>
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
+  const diagnosticCommand = [cliPath, ...redactCliArgsForLogging(args)].join(' ');
   return await new Promise((resolve, reject) => {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -1471,8 +1502,10 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
       }
 
       completed = true;
-      child.kill('SIGTERM');
-      reject(new Error(`${cliPath} ${args.join(' ')} timed out after ${timeoutMs}ms.\nstdout:\n${stdout.join('')}\nstderr:\n${stderr.join('')}`));
+      void terminateCliProcess(child, 'Aspire extension E2E CLI command', { force: true, suppressTimeoutWarning: true })
+        .then(
+          () => reject(new Error(`${diagnosticCommand} timed out after ${timeoutMs}ms.`)),
+          reject);
     }, timeoutMs);
 
     const child = spawnCliProcess(terminalProvider, cliPath, args, {
@@ -1490,7 +1523,7 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
         if (code === 0) {
           resolve(result);
         } else {
-          reject(new Error(`${cliPath} ${args.join(' ')} exited with code ${code}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`));
+          reject(new Error(`${diagnosticCommand} exited with code ${code}.`));
         }
       },
       errorCallback: error => {
@@ -1503,7 +1536,8 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
         reject(error);
       },
       noExtensionVariables: true,
-      env: Object.entries(terminalProvider.createDcpRunSessionEnvironment(debugSessionId, false))
+      createProcessGroup: true,
+      env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
     });
   });
@@ -1825,13 +1859,30 @@ function getE2eRunPath(filePath: unknown): string {
   return filePath;
 }
 
-// `addWorkspaceFolder` deliberately targets a folder that is NOT yet part of the workspace, so it
-// cannot reuse getE2eWorkspacePath (which requires containment in an already-open folder) and it
-// cannot reuse getE2eWorkspaceFolderPath (which only permits the workspace root itself). Validate
-// against the harness-configured roots instead, exactly as getE2eRunPath does: those roots are the
-// real sandbox boundary, and they stay meaningful before any folder has been opened.
-// Exported so the guard can be unit tested. The whole module is removed from production builds by
-// webpack (see e2eBridgeProductionGate.test.ts), so this export never ships.
+function getE2eRunAspireCliWorkingDirectory(directoryPath: unknown): string {
+  if (typeof directoryPath !== 'string' || directoryPath.length === 0 || path.isAbsolute(directoryPath)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must be workspace-relative.');
+  }
+
+  const workspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT;
+  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+    throw new Error('Aspire extension E2E runAspireCli requires the configured E2E workspace root.');
+  }
+
+  const resolvedDirectory = path.resolve(workspaceRoot, directoryPath);
+  if (!isPathWithinDirectory(resolvedDirectory, workspaceRoot)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must stay inside the configured E2E workspace root.');
+  }
+
+  if (!fs.existsSync(resolvedDirectory) || !fs.statSync(resolvedDirectory).isDirectory()) {
+    throw new Error(`Aspire extension E2E runAspireCli requires an existing workingDirectory: ${directoryPath}`);
+  }
+
+  return resolvedDirectory;
+}
+
+// `addWorkspaceFolder` targets a folder that is not part of the workspace yet, so validate it
+// against the harness roots rather than requiring containment in an already-open workspace folder.
 export function getE2eAddableWorkspaceFolderPath(folderPath: unknown): string {
   if (typeof folderPath !== 'string' || folderPath.length === 0 || !path.isAbsolute(folderPath)) {
     throw new Error('Aspire extension E2E addWorkspaceFolder requires an absolute folder path.');
@@ -1853,7 +1904,8 @@ export function getE2eAddableWorkspaceFolderPath(folderPath: unknown): string {
   return folderPath;
 }
 
-function getE2eBreakpointLine(line: unknown): number {  if (typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
+function getE2eBreakpointLine(line: unknown): number {
+  if (typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
     throw new Error('Aspire extension E2E setSourceBreakpoint requires a zero-based non-negative integer line.');
   }
 

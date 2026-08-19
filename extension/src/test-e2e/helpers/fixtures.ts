@@ -246,6 +246,55 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     });
 }
 
+export function writeTokenlessStableCliWrapper(invocationLogPath: string): string {
+    removePath(invocationLogPath, { force: true });
+    if (process.platform !== 'win32') {
+        return writeTokenlessStablePosixCliWrapper(invocationLogPath);
+    }
+
+    return writeCliWrapper('aspire-tokenless-stable-13-2', {
+        configInfoJson: createConfigInfo(),
+        invocationLogPath,
+        versionOutput: '13.2.0',
+    }, path.dirname(getCliPath()));
+}
+
+function writeTokenlessStablePosixCliWrapper(invocationLogPath: string): string {
+    // AppHost targets validate that AspireCliPath belongs to a complete CLI bundle. Keep this
+    // capability/version shim beside the isolated real CLI so the configured path retains that
+    // bundle identity while the wrapper still controls the probe responses.
+    const wrapperDirectory = path.dirname(getCliPath());
+    const wrapperPath = path.join(wrapperDirectory, 'aspire-tokenless-stable-13-2');
+    const logInvocationScript = `require('fs').appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + '\\n')`;
+    fs.mkdirSync(wrapperDirectory, { recursive: true });
+
+    // The F5 argv assertion is tied to the configured CLI path. After handling the simulated
+    // version and capability probes, replace the shell with the real CLI while preserving that
+    // configured path as argv[0], so the long-lived process has the same identity as a native CLI.
+    fs.writeFileSync(wrapperPath, [
+        '#!/usr/bin/env bash',
+        `${quotePosixShellArgument(process.execPath)} -e ${quotePosixShellArgument(logInvocationScript)} ${quotePosixShellArgument(invocationLogPath)} "$@"`,
+        'if [ "$1" = "--version" ]; then',
+        '  echo "13.2.0"',
+        '  exit 0',
+        'fi',
+        'if [ "$1" = "config" ] && [ "$2" = "info" ]; then',
+        `  printf "%s\\n" ${quotePosixShellArgument(JSON.stringify(createConfigInfo()))}`,
+        '  exit 0',
+        'fi',
+        'for argument in "$@"; do',
+        '  if [ "$argument" = "--include-disabled-commands" ]; then',
+        '    echo "simulated old CLI does not support --include-disabled-commands" >&2',
+        '    exit 123',
+        '  fi',
+        'done',
+        `exec -a "$0" ${quotePosixShellArgument(getCliPath())} "$@"`,
+        '',
+    ].join('\n'), { mode: 0o755 });
+
+    return wrapperPath;
+}
+
 export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
     return writeCliWrapper('aspire-streaming-discovery', {
         configInfoJson: createConfigInfo([lsJsonStreamCapability]),
@@ -830,9 +879,10 @@ function writeCliWrapper(
         psSnapshotReleaseFilePath?: string;
         psSnapshotAppHostPath?: string;
         psSnapshotAppHostPid?: number;
+        versionOutput?: string;
     },
+    wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers'),
 ): string {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
 
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
@@ -855,6 +905,14 @@ function waitForReleaseFile(filePath, description) {
   }
 }
 
+${options.versionOutput === undefined
+        ? ''
+        : `if (args.length === 1 && args[0] === '--version') {
+  console.log(${JSON.stringify(options.versionOutput)});
+  process.exit(0);
+}
+
+`}
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);
@@ -977,6 +1035,10 @@ ${options.streamedLsCandidate === undefined ? '' : '}'}
     fs.chmodSync(wrapperPath, 0o755);
 
     return wrapperPath;
+}
+
+function quotePosixShellArgument(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function getPackageSourceArgs(): string[] {

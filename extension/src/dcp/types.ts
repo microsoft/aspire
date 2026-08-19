@@ -172,10 +172,12 @@ export interface RunSessionPayload {
     args?: string[];
 }
 
+export type DebugConfigurationArguments = string | string[];
+
 export interface DebugLaunchSettings {
     [key: string]: unknown;
     env?: { [key: string]: string };
-    args?: string[];
+    args?: DebugConfigurationArguments;
     launchProfile?: string;
     disableLaunchProfile?: boolean;
 }

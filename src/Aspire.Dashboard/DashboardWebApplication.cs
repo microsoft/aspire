@@ -529,7 +529,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
     {
         var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-        var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+        var suppressBrowserToken = _app.Configuration.GetBool(KnownConfigNames.DashboardSuppressBrowserTokenInOutput) ?? false;
+        var token = !suppressBrowserToken && options.Frontend.AuthMode == FrontendAuthMode.BrowserToken
+            ? options.Frontend.BrowserToken
+            : null;
         var frontendAddress = frontendEndpointInfo?.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);

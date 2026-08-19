@@ -108,7 +108,7 @@ export async function activate(context: vscode.ExtensionContext) {
   engagement = new MeaningfulEngagementReporter(appHostDiscoveryService);
   context.subscriptions.push(engagement);
 
-  const appHostLaunchService = new AppHostLaunchService();
+  const appHostLaunchService = new AppHostLaunchService(configInfoProvider);
   context.subscriptions.push(appHostLaunchService);
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);

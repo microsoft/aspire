@@ -50,7 +50,7 @@ suite('utils/workspace tests', () => {
             });
             const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath');
 
-            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, resolver);
+            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, { resolver });
 
             assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
             assert.ok(resolver.calledOnceWith(windowCliPathTarget));

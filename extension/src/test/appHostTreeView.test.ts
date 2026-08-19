@@ -61,7 +61,9 @@ function makeAppHost(overrides: Partial<AppHostDisplayInfo> = {}): AppHostDispla
 }
 
 function makeLaunchService(): AppHostLaunchService {
-    return new AppHostLaunchService();
+    return new AppHostLaunchService({
+        getCapabilityStatus: async () => 'supported',
+    });
 }
 
 function makeTerminalProvider(): AspireTerminalProvider {
@@ -2587,7 +2589,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const secondaryTarget = workspaceFolderCliPathTarget(secondaryFolder);
         const cliPath = '/repo/secondary/tools/aspire';
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri =>
-            uri.fsPath.startsWith(`${secondaryFolder.uri.fsPath}${path.sep}`) ? secondaryFolder : undefined);
+            uri.path.startsWith(`${secondaryFolder.uri.path}/`) ? secondaryFolder : undefined);
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,

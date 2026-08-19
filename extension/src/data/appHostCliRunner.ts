@@ -117,7 +117,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        terminateCliProcess(cliProcess, command);
+                        void terminateCliProcess(cliProcess, command).catch(error => {
+                            extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                        });
                     }
                 } else {
                     settledBeforeTracking = true;
@@ -166,7 +168,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 // never track it, and terminate it if it is somehow still alive (a cancellation or
                 // timeout that raced the spawn would otherwise orphan a live process).
                 if (cliProcess.exitCode === null && !cliProcess.killed) {
-                    terminateCliProcess(cliProcess, command);
+                    void terminateCliProcess(cliProcess, command).catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                    });
                 }
 
                 return;
@@ -178,7 +182,9 @@ export class AppHostCliRunner implements vscode.Disposable {
 
     stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            terminateCliProcess(process, 'one-shot aspire command');
+            void terminateCliProcess(process, 'one-shot aspire command').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate one-shot aspire command: ${String(error)}`);
+            });
         }
         this._oneShotProcesses.clear();
     }

@@ -42,6 +42,8 @@ internal sealed class AppHostLauncher(
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
+    private const string DefaultDiscoverySelectionOrigin = "default-discovery";
+    private const string UserSelectionOrigin = "user-selection";
     private const int MaxDisplayedChildLogLines = 80;
     private const int MaxParentLogReplayLines = 200;
     private static readonly TimeSpan s_legacyDetachedStartupStabilityWindow = TimeSpan.FromSeconds(2);
@@ -80,11 +82,37 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
+    /// Gets the explicitly supplied isolated option value, or <see langword="null"/> when omitted.
+    /// </summary>
+    internal static bool? GetExplicitIsolated(ParseResult parseResult)
+    {
+        return parseResult.GetResult(s_isolatedOption) is { Implicit: false }
+            ? parseResult.GetValue(s_isolatedOption)
+            : null;
+    }
+
+    /// <summary>
+    /// Gets the isolated option value to propagate to another CLI invocation.
+    /// </summary>
+    internal static bool? ResolveIsolatedOption(bool? explicitIsolated)
+    {
+        return explicitIsolated;
+    }
+
+    /// <summary>
+    /// Resolves whether the AppHost should run isolated from the explicit CLI option.
+    /// </summary>
+    internal static bool ResolveIsolated(ParseResult parseResult)
+    {
+        return ResolveIsolatedOption(GetExplicitIsolated(parseResult)) ?? false;
+    }
+
+    /// <summary>
     /// Launches an AppHost in detached mode, waits for the backchannel, and displays the result.
     /// </summary>
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
-    /// <param name="isolated">Whether to run in isolated mode.</param>
+    /// <param name="isolated">The explicitly supplied isolated option value, or <see langword="null"/> when omitted.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
@@ -96,7 +124,7 @@ internal sealed class AppHostLauncher(
     public async Task<CommandResult> LaunchDetachedAsync(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
-        bool isolated,
+        bool? isolated,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -132,7 +160,19 @@ internal sealed class AppHostLauncher(
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
         }
 
+        // The detached child receives the selected file rather than the directory that caused the
+        // prompt, so carry the prompt provenance explicitly to persist the user's choice.
+        var appHostSelectionOrigin = searchResult.WasExplicitDirectorySelectionPrompted
+            ? UserSelectionOrigin
+            : configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        if (string.IsNullOrEmpty(appHostSelectionOrigin) && passedAppHostProjectFile is null)
+        {
+            appHostSelectionOrigin = DefaultDiscoverySelectionOrigin;
+        }
+
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
+
+        var isolatedOption = ResolveIsolatedOption(isolated);
 
         // Check for running instance and stop it if found (same behavior as regular run)
         await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);
@@ -140,7 +180,7 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         executionContext.AppHostCliLogFilePath = childLogFile;
-        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
+        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
         // Compute the expected socket prefix for backchannel detection. The AppHost keys its
         // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
@@ -175,7 +215,7 @@ internal sealed class AppHostLauncher(
         {
             launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -291,7 +331,7 @@ internal sealed class AppHostLauncher(
     private (string ExecutablePath, List<string> ChildArgs) BuildChildProcessArgs(
         FileInfo effectiveAppHostFile,
         string childLogFile,
-        bool isolated,
+        bool? isolated,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs)
     {
@@ -307,9 +347,13 @@ internal sealed class AppHostLauncher(
 
         args.AddRange(globalArgs);
 
-        if (isolated)
+        if (isolated is not null)
         {
             args.Add(s_isolatedOption.Name);
+            if (!isolated.Value)
+            {
+                args.Add("false");
+            }
         }
 
         foreach (var token in additionalArgs)
@@ -331,8 +375,10 @@ internal sealed class AppHostLauncher(
 
         childArgs.AddRange(args);
 
+        // childArgs ends with the caller's "-- <appHostArgs>" tail, which is user-supplied AppHost
+        // input rather than CLI options, so it must not be written to the log verbatim.
         logger.LogDebug("Spawning child CLI: {Executable} (isDotnetHost={IsDotnetHost}) with args: {Args}",
-            dotnetPath, isDotnetHost, string.Join(" ", childArgs));
+            dotnetPath, isDotnetHost, AppHostArgumentRedactor.RedactToString(childArgs));
         logger.LogDebug("Working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
 
         return (dotnetPath, childArgs);
@@ -390,6 +436,7 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         IReadOnlyList<string> legacyHashes,
+        string? appHostSelectionOrigin,
         TimeSpan timeout,
         Action<string> updateStatus,
         CancellationToken cancellationToken)
@@ -409,7 +456,7 @@ internal sealed class AppHostLauncher(
                 childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
                     childArgs.ToArray(),
-                    CreateDetachedChildEnvironment(Activity.Current, configuration[KnownConfigNames.CliAppHostSelectionOrigin]),
+                    CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin),
                     executionContext.WorkingDirectory,
                     options);
 
