@@ -51,17 +51,11 @@ public class BackingResourceContractTests
             .Select(t => t.EmittedType)
             .ToHashSet(StringComparer.Ordinal);
 
-        // Dapr's UDT names are listed alongside their legacy names so the table stays total if the
-        // legacy fallback is dropped; both spellings are explicitly "not projected", so neither can
-        // regress a connection string.
-        var allowedNonEmitted = new HashSet<string>(StringComparer.Ordinal)
-        {
-            RadiusResourceTypes.DaprStateStores,
-            RadiusResourceTypes.DaprPubSubBrokers,
-        };
-
+        // No allowlist: every row in the schema table must correspond to a type the mapper can
+        // actually emit. The Radius.Dapr/* rows that used to be exempted here were fictional —
+        // Radius has no such namespace — and Dapr is now mapped directly to its legacy type.
         var stale = RadiusBackingConnections.KnownTypes
-            .Where(t => !emitted.Contains(t) && !allowedNonEmitted.Contains(t))
+            .Where(t => !emitted.Contains(t))
             .OrderBy(t => t, StringComparer.Ordinal)
             .ToList();
 

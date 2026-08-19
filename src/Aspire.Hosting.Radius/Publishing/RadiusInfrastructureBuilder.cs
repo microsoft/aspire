@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
@@ -27,7 +28,7 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// (environments, applications, recipe packs, resource type instances, containers) that are
 /// compiled to Bicep via <c>Infrastructure.Build().Compile()</c>.
 /// </summary>
-internal sealed class RadiusInfrastructureBuilder
+internal sealed partial class RadiusInfrastructureBuilder
 {
     private readonly RadiusEnvironmentResource _environment;
     private readonly DistributedApplicationModel _model;
@@ -104,33 +105,41 @@ internal sealed class RadiusInfrastructureBuilder
     private readonly List<ProjectedEnvValue> _projectedEnvValues = [];
     private readonly List<ProjectedTypeProperty> _projectedTypeProperties = [];
 
+    // Radius.Security/secrets resources emitted to carry a credential that a UDT backing resource
+    // consumes by resource ID, paired with the resource and property that consume them. Recorded so
+    // a ConfigureRadiusInfrastructure callback that renames either side can be repaired — the
+    // `<secret>.id` reference would otherwise silently point at a symbol that no longer exists.
+    private readonly List<SecretResourceCredential> _secretResourceCredentials = [];
+    private readonly List<ContainerEnvSecret> _containerEnvSecrets = [];
+    private readonly List<ContainerEnvSecretReference> _containerEnvSecretReferences = [];
+
     /// <summary>
     /// Default recipe template paths per resource type.
     /// </summary>
     private static readonly Dictionary<string, string> s_defaultRecipeTemplates = new(StringComparer.Ordinal)
     {
-        [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/recipes/local-dev/rediscaches:latest",
         // The Radius.* UDT recipes are published under kube-recipes/, not the legacy
-        // recipes/local-dev/ prefix that serves the Applications.* portable types. The UDT recipe is
-        // the one that reads username/password/database from context.resource.properties, so pairing
-        // this type with a local-dev recipe both fails to pull (there is no
-        // recipes/local-dev/postgresqldatabases artifact) and would ignore the credentials Aspire
-        // sets. See https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep.
+        // recipes/local-dev/ prefix that serves the Applications.* portable types. Pairing a UDT
+        // with a local-dev recipe both fails to pull and would ignore the credentials Aspire sets,
+        // because only the UDT recipe reads them from context.resource.properties.
+        [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/kube-recipes/rediscaches:latest",
+        // See https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep.
         [RadiusResourceTypes.PostgreSqlDatabases] = "ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest",
         [RadiusResourceTypes.MongoDatabases] = "ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest",
-        [RadiusResourceTypes.RabbitMQQueues] = "ghcr.io/radius-project/recipes/local-dev/rabbitmqqueues:latest",
+        [RadiusResourceTypes.RabbitMQ] = "ghcr.io/radius-project/kube-recipes/rabbitmq:latest",
+        // Radius.Security/secrets is recipe-backed like any other type. Registered on demand when
+        // a resource's credential is carried by a secret resource — see the call site in BuildAsync.
+        [RadiusResourceTypes.SecuritySecrets] = "ghcr.io/radius-project/kube-recipes/secrets:latest",
         // The Radius.Compute/containers UDT needs a recipe registered in the env's recipe pack;
         // shipped Radius does not include one by default, so register the published container
         // recipe so native containers deploy without a manually-authored recipe.
         [RadiusResourceTypes.Containers] = "ghcr.io/radius-project/kube-recipes/containers:latest",
         // Legacy fallback types also get default recipes
-        [RadiusResourceTypes.LegacyRedisCaches] = "ghcr.io/radius-project/recipes/local-dev/rediscaches:latest",
         [RadiusResourceTypes.LegacyMongoDatabases] = "ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest",
         // Paired with LegacySqlDatabases, which is what SqlServerServerResource emits. The
         // Radius.Data/sqlServerDatabases UDT has no published kube-recipes artifact yet, so there is
         // no default recipe to register for it.
         [RadiusResourceTypes.LegacySqlDatabases] = "ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest",
-        [RadiusResourceTypes.LegacyRabbitMQQueues] = "ghcr.io/radius-project/recipes/local-dev/rabbitmqqueues:latest",
         [RadiusResourceTypes.LegacyDaprStateStores] = "ghcr.io/radius-project/recipes/local-dev/daprstatestores:latest",
         [RadiusResourceTypes.LegacyDaprPubSubBrokers] = "ghcr.io/radius-project/recipes/local-dev/daprpubsubbrokers:latest",
     };
@@ -193,6 +202,23 @@ internal sealed class RadiusInfrastructureBuilder
             else
             {
                 AddRecipeEntry(udtRecipeEntries, resourceType);
+
+                // Radius.Security/secrets is itself a recipe-backed type, not a control-plane
+                // primitive: the official Kubernetes pack registers it alongside the workload
+                // types (see recipe-packs/kubernetes/default-recipepack.bicep in
+                // radius-project/resource-types-contrib). A resource whose credential is carried
+                // by a secret resource therefore pulls a *second* recipe into the pack, and
+                // omitting it leaves the secret with no recipe to resolve — the deploy fails on
+                // the secret, not on the resource that referenced it.
+                //
+                // This is decided here, before the pack is built, rather than in
+                // ApplySecretResourceCredentialsAsync where the secret constructs are actually
+                // created, because the pack is already sealed by then.
+                if (RadiusBackingConnections.GetSchema(resourceType)?.Credentials
+                    is RadiusBackingConnections.RadiusCredentialMode.SecretResourceReference)
+                {
+                    AddRecipeEntry(udtRecipeEntries, RadiusResourceTypes.SecuritySecrets);
+                }
             }
         }
 
@@ -310,7 +336,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         // 4b. Wire backing-resource credentials before any container env var is resolved, so the
         // substitutions below are in place by the time connection strings are composed.
-        await ApplyBackingResourceCredentialsAsync(radiusResources).ConfigureAwait(false);
+        await ApplyBackingResourceCredentialsAsync(radiusResources, options, envConstruct, appConstruct).ConfigureAwait(false);
 
         // 5. Container workloads always route to the UDT compute container type
         // (Radius.Compute/containers) parented to the UDT application.
@@ -335,7 +361,8 @@ internal sealed class RadiusInfrastructureBuilder
             // same way the Kubernetes publisher does, so the deployed container behaves like the
             // local run. Secret/parameter values are routed to Bicep `param`s (never literals).
             var projectedStart = _projectedEnvValues.Count;
-            var env = await ResolveEnvironmentAsync(resource).ConfigureAwait(false);
+            var secretRefStart = _containerEnvSecretReferences.Count;
+            var env = await ResolveEnvironmentAsync(resource, options, envConstruct, appConstruct).ConfigureAwait(false);
             var ports = ResolvePorts(resource);
 
             var containerConstruct = CreateContainerConstruct(
@@ -348,6 +375,11 @@ internal sealed class RadiusInfrastructureBuilder
             {
                 _projectedEnvValues[i].Container = containerConstruct;
             }
+
+            for (var i = secretRefStart; i < _containerEnvSecretReferences.Count; i++)
+            {
+                _containerEnvSecretReferences[i].Container = containerConstruct;
+            }
             options.Containers.Add(containerConstruct);
             containerConnectionTargets[containerConstruct] = connectionTargets;
             containerPortSnapshots[resource.Name] = ports.ToDictionary(
@@ -357,6 +389,15 @@ internal sealed class RadiusInfrastructureBuilder
                     ((IBicepValue)kv.Value.Protocol).LiteralValue is string literalProtocol ? literalProtocol : string.Empty),
                 StringComparer.Ordinal);
         }
+
+        // A container whose environment carries a credential emits its own Radius.Security/secrets
+        // resource, and that is only known once every container's environment has been resolved —
+        // after the pack was built above. Top the pack up here rather than pre-scanning: resolving
+        // an environment runs the resource's EnvironmentCallbackAnnotation callbacks, so a pre-pass
+        // would run every user callback twice. Still before ConfigureRadiusInfrastructure, so a
+        // callback sees the finished pack. No-op when the entry is already present (a backing
+        // resource with a SecretResourceReference credential registers it above).
+        EnsureSecretsRecipeRegistered(options, recipePackConstruct, udtRecipeEntries);
 
         // Emit the Bicep parameters allocated for secret/parameter-backed container env vars as
         // top-level `param`s, before ConfigureRadiusInfrastructure runs so callbacks can see them.
@@ -410,6 +451,19 @@ internal sealed class RadiusInfrastructureBuilder
         // renames a store construct or the legacy application/environment it is scoped to.
         RewireSecretStoreReferences(secretStoresForScope, secretStoreConstructs,
             legacyAppConstruct, legacyEnvConstruct, identifierSnapshot);
+
+        // Radius.Security/secrets resources are consumed by `<secret>.id` on the resource whose
+        // credential they carry. A callback that renamed the secret leaves that reference pointing
+        // at a symbol that no longer exists, so repair it the same way.
+        RewireSecretResourceCredentials(options, envConstruct, appConstruct);
+
+        // Containers read credential-bearing env values from their own Radius.Security/secrets
+        // resource, by resource *name*. Repair those references, and the secrets' scope references.
+        RewireContainerEnvSecrets(options, envConstruct, appConstruct);
+
+        // A callback can add a Radius.Security/secrets resource of its own, and the type is
+        // recipe-backed, so the pack may need the entry even when the publisher emitted no secret.
+        EnsureSecretsRecipeRegistered(options, recipePackConstruct, udtRecipeEntries);
 
         // Surface recipe-parameter scopes that target a resource type with no emitted recipe
         // entry, and register any ParameterResource-backed recipe/inline-secret Bicep params.
@@ -688,11 +742,193 @@ internal sealed class RadiusInfrastructureBuilder
         }
     }
 
+    /// <summary>
+    /// After callbacks run, repair the <c>&lt;secret&gt;.id</c> references that credential-carrying
+    /// <c>Radius.Security/secrets</c> resources are consumed through, and the secrets' own scope
+    /// references, when a callback renamed either side.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="RewireIdReferences"/>: a reference the callback set itself is preserved
+    /// (last-write-wins), and only a value still exactly as the publisher generated it is repaired.
+    /// A callback that removed the secret outright is rejected — the consuming property is required,
+    /// so silently leaving a dangling reference would fail only at deploy time.
+    /// </remarks>
+    private void RewireSecretResourceCredentials(
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct)
+    {
+        if (_secretResourceCredentials.Count == 0)
+        {
+            return;
+        }
+
+        var liveSecrets = new HashSet<RadiusSecuritySecretConstruct>(options.SecuritySecrets);
+        var liveInstances = new HashSet<RadiusResourceTypeConstruct>(options.ResourceTypeInstances);
+
+        foreach (var credential in _secretResourceCredentials)
+        {
+            // The consumer is gone: the callback owns that decision, and the secret it no longer
+            // consumes is left alone rather than second-guessed.
+            if (!liveInstances.Contains(credential.Consumer))
+            {
+                continue;
+            }
+
+            if (!liveSecrets.Contains(credential.Secret))
+            {
+                throw new InvalidOperationException(
+                    $"Radius resource '{credential.Consumer.BicepIdentifier}' reads its '{credential.PropertyName}' from " +
+                    $"the '{RadiusResourceTypes.SecuritySecrets}' resource '{credential.OriginalSecretIdentifier}', but a " +
+                    $"ConfigureRadiusInfrastructure callback removed it. The property is required, so the deployment would " +
+                    $"be rejected. Keep the secret, or set '{credential.PropertyName}' explicitly in the callback. " +
+                    $"Diagnostic: ASPIRERADIUS074.");
+            }
+
+            // Keep the secret's own scope references pointing at the right symbols if the
+            // environment or application construct was renamed — but only when the callback has not
+            // set them itself. `options.SecuritySecrets` is part of the callback surface, so an
+            // author can legitimately re-scope a generated secret; overwriting unconditionally would
+            // discard that silently. Same last-write-wins comparison used for the consumer property
+            // below and for container env values.
+            if (envConstruct is not null &&
+                string.Equals(RenderBicepValue(credential.Secret.EnvironmentId), credential.OriginalEnvironmentId, StringComparison.Ordinal))
+            {
+                credential.Secret.EnvironmentId = BuildIdExpression(envConstruct);
+            }
+
+            if (appConstruct is not null &&
+                credential.Secret.ApplicationId is { } currentApplicationId &&
+                string.Equals(RenderBicepValue(currentApplicationId), credential.OriginalApplicationId, StringComparison.Ordinal))
+            {
+                credential.Secret.ApplicationId = BuildIdExpression(appConstruct);
+            }
+
+            if (string.Equals(credential.Secret.BicepIdentifier, credential.OriginalSecretIdentifier, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The callback assigned the property itself — last-write-wins, exactly as for container
+            // env values and projected type properties.
+            if (credential.Consumer.GetSchemaProperty(credential.PropertyName) is not { } current ||
+                !string.Equals(RenderBicepValue(current), credential.OriginalPropertyValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            credential.Consumer.SetSchemaProperty(
+                credential.PropertyName,
+                new BicepValue<object>(BuildIdExpression(credential.Secret)));
+        }
+    }
+
+    /// <summary>
+    /// After callbacks run, repair the container-to-secret references behind
+    /// <c>valueFrom.secretKeyRef</c> environment variables, and the secrets' own scope references.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="RewireSecretResourceCredentials"/>. The reference names the secret by
+    /// <em>resource name</em> rather than by Bicep identifier, so renaming the symbol needs no
+    /// repair — but renaming the resource, removing the secret, or removing the key it points at
+    /// all leave the container reading a Kubernetes <c>Secret</c> that is never created. Radius
+    /// accepts that artifact and the failure surfaces as a pod that will not start, so it is
+    /// rejected here instead, while the cause is still attributable to a callback.
+    /// </remarks>
+    private void RewireContainerEnvSecrets(
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct)
+    {
+        if (_containerEnvSecretReferences.Count == 0)
+        {
+            return;
+        }
+
+        var liveSecrets = new HashSet<RadiusSecuritySecretConstruct>(options.SecuritySecrets);
+        var liveContainers = new HashSet<RadiusContainerConstruct>(options.Containers);
+
+        // Scope references are repaired per *secret*, not per reference: a secret holds many
+        // entries, and the last-write-wins comparison below only holds against the value the
+        // publisher wrote, so repairing it once per entry would mis-detect after the first repair.
+        foreach (var tracked in _containerEnvSecrets)
+        {
+            if (!liveSecrets.Contains(tracked.Secret))
+            {
+                continue;
+            }
+
+            // Only repair a scope the callback has not set itself — `options.SecuritySecrets` is
+            // part of the callback surface, so re-scoping a generated secret is legitimate.
+            if (envConstruct is not null &&
+                string.Equals(RenderBicepValue(tracked.Secret.EnvironmentId), tracked.OriginalEnvironmentId, StringComparison.Ordinal))
+            {
+                tracked.Secret.EnvironmentId = BuildIdExpression(envConstruct);
+            }
+
+            if (appConstruct is not null &&
+                tracked.Secret.ApplicationId is { } currentApplicationId &&
+                string.Equals(RenderBicepValue(currentApplicationId), tracked.OriginalApplicationId, StringComparison.Ordinal))
+            {
+                tracked.Secret.ApplicationId = BuildIdExpression(appConstruct);
+            }
+        }
+
+        foreach (var reference in _containerEnvSecretReferences)
+        {
+            // A callback that dropped or replaced the workload, removed the variable, or replaced
+            // the variable's construct owns the result — last-write-wins, as everywhere else.
+            if (reference.Container is null ||
+                !liveContainers.Contains(reference.Container) ||
+                !reference.Container.Env.TryGetValue(reference.Key, out var currentEnvVar) ||
+                // BicepDictionary wraps each entry, so unwrap before comparing construct identity.
+                !ReferenceEquals(currentEnvVar?.Value, reference.EnvVar))
+            {
+                continue;
+            }
+
+            // The callback re-pointed the reference itself.
+            if (!string.Equals(RenderBicepValue(reference.EnvVar.SecretName), reference.OriginalSecretName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!liveSecrets.Contains(reference.Secret))
+            {
+                throw new InvalidOperationException(
+                    $"Environment variable '{reference.Key}' on container '{reference.ResourceName}' holds a credential " +
+                    $"and reads it from the '{RadiusResourceTypes.SecuritySecrets}' resource " +
+                    $"'{reference.Secret.BicepIdentifier}', but a ConfigureRadiusInfrastructure callback removed that " +
+                    $"resource. Keep the resource, or set '{reference.Key}' explicitly in the callback. " +
+                    $"Diagnostic: ASPIRERADIUS084.");
+            }
+
+            if (!reference.Secret.Data.TryGetValue(reference.SecretKey, out var liveEntry))
+            {
+                throw new InvalidOperationException(
+                    $"Environment variable '{reference.Key}' on container '{reference.ResourceName}' holds a credential " +
+                    $"and reads it from key '{reference.SecretKey}' of the '{RadiusResourceTypes.SecuritySecrets}' " +
+                    $"resource '{reference.Secret.BicepIdentifier}', but a ConfigureRadiusInfrastructure callback " +
+                    $"removed that key. Keep the key, or set '{reference.Key}' explicitly in the callback. " +
+                    $"Diagnostic: ASPIRERADIUS084.");
+            }
+
+            // A callback that supplied its own entry for this key owns the value; the reference
+            // still resolves, so there is nothing to repair.
+            if (!ReferenceEquals(liveEntry?.Value, reference.Entry))
+            {
+                continue;
+            }
+
+            // Re-sync if the callback renamed the secret *resource* — the reference is by name.
+            reference.EnvVar.SecretName = reference.Secret.SecretName;
+        }
+    }
+
     private (string ResourceType, string ApiVersion) ResolveResourceType(IResource resource)
     {
         return _typeMapper.MapResource(resource);
     }
-
     private (List<IResource> radiusResources, List<IResource> computeResources, Dictionary<IResource, (string ResourceType, string ApiVersion)> resolvedTypes) ClassifyResources()
     {
         var radiusTypes = new List<IResource>();
@@ -898,6 +1134,46 @@ internal sealed class RadiusInfrastructureBuilder
         }
     }
 
+    /// <summary>
+    /// Registers the <c>Radius.Security/secrets</c> recipe in the pack when any such resource is
+    /// emitted and the entry is not already present.
+    /// </summary>
+    /// <remarks>
+    /// <c>Radius.Security/secrets</c> is recipe-backed rather than a control-plane primitive (see
+    /// <c>recipe-packs/kubernetes/default-recipepack.bicep</c> in
+    /// <c>radius-project/resource-types-contrib</c>), so a secret with no registered recipe fails
+    /// the deploy on the secret rather than on whatever referenced it.
+    /// <para>
+    /// Called twice: once after container environments are resolved (the pack is built before that,
+    /// and pre-scanning would run every user <c>EnvironmentCallbackAnnotation</c> twice), and again
+    /// after <c>ConfigureRadiusInfrastructure</c>, which can add a secret of its own. A callback
+    /// that supplied its own entry for the type keeps it — the <c>ContainsKey</c> check makes this
+    /// last-write-wins like the rest of the escape hatch.
+    /// </para>
+    /// </remarks>
+    private void EnsureSecretsRecipeRegistered(
+        RadiusInfrastructureOptions options,
+        RadiusRecipePackConstruct? recipePackConstruct,
+        Dictionary<string, RecipeEntry> udtRecipeEntries)
+    {
+        // A callback can replace the pack wholesale, in which case it owns its contents.
+        if (recipePackConstruct is null ||
+            !options.RecipePacks.Contains(recipePackConstruct) ||
+            options.SecuritySecrets.Count == 0 ||
+            recipePackConstruct.Recipes.ContainsKey(RadiusResourceTypes.SecuritySecrets))
+        {
+            return;
+        }
+
+        AddRecipeEntry(udtRecipeEntries, RadiusResourceTypes.SecuritySecrets);
+        var entry = udtRecipeEntries[RadiusResourceTypes.SecuritySecrets];
+        recipePackConstruct.Recipes[RadiusResourceTypes.SecuritySecrets] = new RecipeEntryConstruct
+        {
+            RecipeKind = entry.RecipeKind,
+            RecipeLocation = entry.RecipeLocation,
+        };
+    }
+
     private RadiusRecipePackConstruct CreateRecipePackConstruct(
         string identifier, Dictionary<string, RecipeEntry> recipeEntries)
     {
@@ -1070,7 +1346,11 @@ internal sealed class RadiusInfrastructureBuilder
     /// Because both mechanisms operate on the *values* Aspire's own connection-string expressions
     /// are built from, no connection-string format is duplicated here.
     /// </remarks>
-    private async Task ApplyBackingResourceCredentialsAsync(List<IResource> radiusResources)
+    private async Task ApplyBackingResourceCredentialsAsync(
+        List<IResource> radiusResources,
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct)
     {
         var referencedResourceNames = GetReferencedResourceNames();
 
@@ -1113,6 +1393,12 @@ internal sealed class RadiusInfrastructureBuilder
                 case RadiusBackingConnections.RadiusCredentialMode.RecipeInputProperties:
                     await ApplyRecipeInputPropertyCredentialsAsync(
                         resource, withConnectionString, construct, referencedResourceNames).ConfigureAwait(false);
+                    break;
+
+                case RadiusBackingConnections.RadiusCredentialMode.SecretResourceReference(var propertyName, var secretKey):
+                    await ApplySecretResourceCredentialsAsync(
+                        resource, withConnectionString, construct, options, envConstruct, appConstruct,
+                        propertyName, secretKey).ConfigureAwait(false);
                     break;
 
                 case RadiusBackingConnections.RadiusCredentialMode.NoCredential(var noCredentialReason):
@@ -1462,6 +1748,173 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         await SetTypePropertyAsync(construct, "database", databaseChild, "databasename").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Wires a type whose credential is supplied as the resource ID of a separate
+    /// <c>Radius.Security/secrets</c> resource rather than as a literal property value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// As with <see cref="ApplyRecipeInputPropertyCredentialsAsync"/>, the value written is Aspire's
+    /// own parameter, so the credential the recipe provisions and the one Aspire composes into the
+    /// connection string agree by construction. The difference is purely mechanical: the property
+    /// expects a secret <em>resource ID</em>, so writing the password there directly would be
+    /// rejected by Radius at deploy time.
+    /// </para>
+    /// <para>
+    /// The emitted secret is dedicated to this one credential. It deliberately does not hold a
+    /// composed connection string: a resource cannot consume a secret that is itself composed from
+    /// that resource's outputs without creating a cycle in the deployment graph.
+    /// </para>
+    /// </remarks>
+    private async Task ApplySecretResourceCredentialsAsync(
+        IResource resource,
+        IResourceWithConnectionString withConnectionString,
+        RadiusResourceTypeConstruct construct,
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct,
+        string propertyName,
+        string secretKey)
+    {
+        // The secret's environment scope is required by the type. A resource emitted as a Radius.*
+        // UDT is always parented to the UDT environment, so this is unreachable in practice —
+        // assert it rather than emitting a secret Radius would reject for a missing required scope.
+        if (envConstruct is null)
+        {
+            throw new RadiusBackingResourceEndpointException(
+                resource,
+                $"Resource '{resource.Name}' is emitted as a Radius type whose credential requires a " +
+                $"'{RadiusResourceTypes.SecuritySecrets}' resource, but no Radius environment was emitted to scope it to. " +
+                $"Diagnostic: ASPIRERADIUS071.");
+        }
+
+        BicepValue<object>? secretValue = null;
+
+        var credentialParameter = TryGetCredentialParameter(withConnectionString, propertyName);
+        if (credentialParameter is not null)
+        {
+            RegisterRecipeCredential(credentialParameter, resource, isProjectionSubstitution: false);
+            secretValue = GetOrAddEnvParameter(credentialParameter);
+        }
+        else if (await TryResolveConnectionPropertyAsync(withConnectionString, propertyName).ConfigureAwait(false) is { } resolved)
+        {
+            // Not a bare parameter (a composed expression, or a literal). The resolved value is
+            // still built from `@secure()` param references, so no credential lands in the artifact
+            // as a literal.
+            secretValue = resolved.Value;
+        }
+
+        if (secretValue is null)
+        {
+            throw new RadiusBackingResourceEndpointException(
+                resource,
+                $"Resource '{resource.Name}' is emitted as a Radius type that requires '{propertyName}', but " +
+                $"'{resource.Name}' exposes no '{propertyName}' connection property for Aspire to supply it, so the " +
+                $"deployment would be rejected by schema validation. Set the value explicitly with " +
+                $"ConfigureRadiusInfrastructure, or map the resource to a type that does not require it. " +
+                $"Diagnostic: ASPIRERADIUS076.");
+        }
+
+        // The `_secret` suffix keeps this clear of the Bicep identifier the resource's own password
+        // parameter claims: AddRabbitMQ("rabbit") generates a parameter named `rabbit-password`,
+        // which sanitizes to `rabbit_password` — exactly what `{resource}_{property}` would produce.
+        // A remaining collision is still caught by ASPIRERADIUS056 rather than silently emitted.
+        var secretIdentifier = BicepPostProcessor.SanitizeIdentifier($"{resource.Name}_{propertyName}_secret");
+        var secret = new RadiusSecuritySecretConstruct(secretIdentifier)
+        {
+            SecretName = $"{resource.Name}-{propertyName}-secret",
+            EnvironmentId = BuildIdExpression(envConstruct),
+        };
+
+        if (appConstruct is not null)
+        {
+            secret.ApplicationId = BuildIdExpression(appConstruct);
+        }
+
+        secret.Data[secretKey] = new RadiusSecuritySecretDataEntryConstruct
+        {
+            // The 0.60 vocabulary is `string`/`base64` — the legacy secret-store `raw` is rejected.
+            Encoding = "string",
+            Value = new BicepValue<string>(secretValue.Compile()),
+        };
+
+        options.SecuritySecrets.Add(secret);
+
+        var idExpression = new BicepValue<object>(BuildIdExpression(secret));
+        construct.SetSchemaProperty(propertyName, idExpression);
+
+        _secretResourceCredentials.Add(new SecretResourceCredential(
+            secret,
+            construct,
+            propertyName,
+            secret.BicepIdentifier,
+            RenderBicepValue(idExpression)!,
+            RenderBicepValue(secret.EnvironmentId),
+            secret.ApplicationId is { } applicationId ? RenderBicepValue(applicationId) : null));
+
+        // The user name is a plain input on these types, so it is written straight onto the
+        // resource. Omitting it would let the UDT apply its own default (`radius`), which disagrees
+        // with the user name Aspire already composed into the connection string.
+        if (TryGetCredentialParameter(withConnectionString, "username") is { } userNameParameter)
+        {
+            // Both roles are written straight onto the resource here, so RegisterRecipeCredential's
+            // same-owner check alone would not catch one parameter used for both: it only rejects
+            // sharing across *different* owners. A single value published for both is never correct.
+            if (credentialParameter is not null && ReferenceEquals(credentialParameter, userNameParameter))
+            {
+                throw new InvalidOperationException(
+                    $"Parameter '{userNameParameter.Name}' is used as both the user name and the password of " +
+                    $"'{resource.Name}'. Give the user name and the password their own parameters. " +
+                    $"Diagnostic: ASPIRERADIUS070.");
+            }
+
+            RegisterRecipeCredential(userNameParameter, resource, isProjectionSubstitution: false);
+        }
+
+        await SetTypePropertyAsync(construct, "username", withConnectionString, "username").ConfigureAwait(false);
+
+        if (construct.GetSchemaProperty("username") is null)
+        {
+            throw new RadiusBackingResourceEndpointException(
+                resource,
+                $"Resource '{resource.Name}' is emitted as a Radius type that requires 'username' as a schema property, " +
+                $"but '{resource.Name}' exposes no 'username' connection property for Aspire to supply it, so the " +
+                $"deployment would be rejected by schema validation. Set the value explicitly with " +
+                $"ConfigureRadiusInfrastructure, or map the resource to a type that does not require it. " +
+                $"Diagnostic: ASPIRERADIUS076.");
+        }
+
+        // `guest` cannot be deployed. RabbitMQ restricts the `guest` account to loopback
+        // connections, so a broker provisioned with it rejects every client running in another Pod
+        // — which is every client in a Radius deployment. The type's schema says so explicitly
+        // ("Avoid `guest`, which RabbitMQ restricts to loopback connections") and defaults the
+        // property to `radius` for exactly this reason.
+        //
+        // Neither alternative can be made correct silently:
+        //   - emitting `guest` provisions a broker no workload can authenticate against;
+        //   - emitting `radius` instead leaves the connection string Aspire already composed saying
+        //     `guest`, because a default user name arrives as literal text inside the format string
+        //     with no value provider to substitute (the same gap DefaultUserName_RemainsALiteral
+        //     pins), so the two would disagree.
+        // So this fails the publish instead, and names the one-line fix.
+        if (construct.GetSchemaProperty("username") is { } emittedUserName &&
+            RenderBicepValue(emittedUserName) is "'guest'")
+        {
+            throw new RadiusBackingResourceEndpointException(
+                resource,
+                $"Resource '{resource.Name}' would be deployed with the user name 'guest', which RabbitMQ restricts to " +
+                $"loopback connections — the deployed broker would reject every workload that connects to it. Supply an " +
+                $"explicit user name, for example AddRabbitMQ(\"{resource.Name}\", userName: builder.AddParameter(\"{resource.Name}user\")), " +
+                $"so the same value is both provisioned on the broker and composed into the connection string. " +
+                $"Diagnostic: ASPIRERADIUS082.");
+        }
+
+        // `queue` is deliberately not emitted. It is optional on the type, and Aspire's model has no
+        // queue concept to map from — AddRabbitMQ declares a broker, not a queue — so any value here
+        // would be invented. The UDT's own default (`jobs`) applies instead, and consumers create
+        // the queues they need through the AMQP client.
     }
 
     /// <summary>
@@ -2176,7 +2629,11 @@ internal sealed class RadiusInfrastructureBuilder
     /// <see cref="RadiusEnvironmentResource.GetHostAddressExpression"/>, and secret/parameter
     /// values are routed to Bicep <c>param</c>s so no literal secret is written to the artifact.
     /// </summary>
-    private async Task<Dictionary<string, ContainerEnvVarConstruct>> ResolveEnvironmentAsync(IResource resource)
+    private async Task<Dictionary<string, ContainerEnvVarConstruct>> ResolveEnvironmentAsync(
+        IResource resource,
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct)
     {
         var result = new Dictionary<string, ContainerEnvVarConstruct>(StringComparer.Ordinal);
         if (resource is not IResourceWithEnvironment)
@@ -2213,6 +2670,9 @@ internal sealed class RadiusInfrastructureBuilder
 
         var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
 
+        // Created on demand: a container with no credential-bearing variable emits no secret.
+        RadiusSecuritySecretConstruct? containerSecret = null;
+
         foreach (var (key, rawValue) in context.EnvironmentVariables)
         {
             var parts = new List<EnvPart>();
@@ -2238,7 +2698,45 @@ internal sealed class RadiusInfrastructureBuilder
                 continue;
             }
 
-            var envVar = new ContainerEnvVarConstruct { Value = BuildEnvBicepValue(parts) };
+            var value = BuildEnvBicepValue(parts);
+            var envVar = new ContainerEnvVarConstruct();
+            RadiusSecuritySecretDataEntryConstruct? secretEntry = null;
+            string? secretKey = null;
+
+            if (parts.Any(IsSensitive))
+            {
+                // The composed expression is written into a secret and referenced instead of being
+                // assigned to `value`, so the resolved credential never reaches the Deployment spec.
+                // Composition still happens in Bicep, which is what preserves each part's own
+                // `uriComponent()` escaping — kubelet's `$(VAR)` expansion could not have.
+                containerSecret ??= CreateContainerEnvSecret(resource, options, envConstruct, appConstruct);
+                secretEntry = new RadiusSecuritySecretDataEntryConstruct
+                {
+                    Encoding = "string",
+                    Value = value,
+                };
+                secretKey = ToSecretKey(resource, key);
+                containerSecret.Data[secretKey] = secretEntry;
+                envVar.SecretName = containerSecret.SecretName;
+                envVar.SecretKey = secretKey;
+
+                // Tracked independently of _projectedEnvValues, which only records values that read
+                // a backing resource's outputs. A value built purely from a secret parameter has no
+                // projection, but its reference to the secret is just as breakable by a callback.
+                _containerEnvSecretReferences.Add(new ContainerEnvSecretReference(
+                    envVar,
+                    containerSecret,
+                    secretEntry,
+                    resource.Name,
+                    key,
+                    secretKey,
+                    RenderBicepValue(envVar.SecretName)));
+            }
+            else
+            {
+                envVar.Value = value;
+            }
+
             result[key] = envVar;
 
             // Track values that name a backing resource's Bicep identifier so they can be repaired
@@ -2250,16 +2748,120 @@ internal sealed class RadiusInfrastructureBuilder
                     parts,
                     resource.Name,
                     key,
-                    RenderBicepValue(envVar.Value),
+                    RenderBicepValue(secretEntry is null ? envVar.Value : secretEntry.Value),
                     parts.Where(p => p.Projection is not null)
                         .Select(p => p.Projection!.Target)
                         .Distinct()
                         .Select(t => (t, t.BicepIdentifier))
-                        .ToList()));
+                        .ToList())
+                {
+                    SecretEntry = secretEntry,
+                    Secret = secretEntry is null ? null : containerSecret,
+                    SecretKey = secretKey,
+                });
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Whether this part carries a credential, and so must not be written into the container's
+    /// <c>value</c> block.
+    /// </summary>
+    /// <remarks>
+    /// Routing to an <c>@secure()</c> Bicep <c>param</c> only keeps a credential out of the
+    /// published <em>artifact</em>. The deployed <c>Deployment</c> spec still holds the resolved
+    /// string, where it is readable by anyone who can read the Deployment or its rollout history,
+    /// and it is retained in the rollout history after a rotation. Only
+    /// <c>valueFrom.secretKeyRef</c> keeps it out of both.
+    /// </remarks>
+    /// <summary>
+    /// The character set Kubernetes allows in a <c>Secret</c> <c>data</c> key.
+    /// See https://kubernetes.io/docs/concepts/configuration/secret/#restriction-names-data.
+    /// </summary>
+    [GeneratedRegex(@"^[-._a-zA-Z0-9]+$")]
+    private static partial Regex SecretKeyPattern();
+
+    private static bool IsSensitive(EnvPart part)
+        => part.Parameter?.IsSecure == true || part.Projection?.IsSecret == true;
+
+    /// <summary>
+    /// Maps an environment-variable name to a key of the container's secret.
+    /// </summary>
+    /// <remarks>
+    /// Kubernetes restricts <c>Secret</c> data keys to <c>[-._a-zA-Z0-9]+</c>, which is narrower
+    /// than what an environment-variable name may contain. Aspire's own names (<c>services__*</c>,
+    /// <c>ConnectionStrings__*</c>, <c>OTEL_*</c>) all satisfy it, but a name supplied through
+    /// <c>WithEnvironment</c> need not, and an invalid key is rejected by the API server at deploy
+    /// time rather than at publish time. Reject it here instead, where the name can be attributed.
+    /// </remarks>
+    private static string ToSecretKey(IResource resource, string envVarName)
+    {
+        if (!SecretKeyPattern().IsMatch(envVarName))
+        {
+            throw new InvalidOperationException(
+                $"Environment variable '{envVarName}' on resource '{resource.Name}' holds a credential, so it is " +
+                $"published as a Kubernetes secret key, but its name contains characters that a secret key may not " +
+                $"contain (allowed: letters, digits, '-', '_' and '.'). Rename the variable. " +
+                $"Diagnostic: ASPIRERADIUS083.");
+        }
+
+        return envVarName;
+    }
+
+    /// <summary>
+    /// Creates the single <c>Radius.Security/secrets</c> resource holding every credential-bearing
+    /// environment value of one container.
+    /// </summary>
+    /// <remarks>
+    /// One secret per container rather than one per variable keeps the emitted artifact
+    /// proportional to the number of workloads instead of the number of variables.
+    /// <para>
+    /// This secret is only ever consumed by its own container, so it cannot create the
+    /// <c>secret → resource → secret</c> cycle that <see cref="SecretResourceCredential"/> guards
+    /// against: its values may read a backing resource's outputs, which orders it
+    /// <em>after</em> that resource, and nothing orders the backing resource after it.
+    /// </para>
+    /// </remarks>
+    private RadiusSecuritySecretConstruct CreateContainerEnvSecret(
+        IResource resource,
+        RadiusInfrastructureOptions options,
+        RadiusEnvironmentConstruct? envConstruct,
+        RadiusApplicationConstruct? appConstruct)
+    {
+        // The environment scope is required by the type. A container is always parented to the UDT
+        // environment, so this is unreachable in practice — fail rather than emit a secret Radius
+        // would reject for a missing required scope.
+        if (envConstruct is null)
+        {
+            throw new InvalidOperationException(
+                $"Container '{resource.Name}' has environment variables holding credentials, which are published as a " +
+                $"'{RadiusResourceTypes.SecuritySecrets}' resource, but no Radius environment was emitted to scope it to. " +
+                $"Diagnostic: ASPIRERADIUS071.");
+        }
+
+        var secret = new RadiusSecuritySecretConstruct(
+            BicepPostProcessor.SanitizeIdentifier($"{resource.Name}_env_secret"))
+        {
+            SecretName = $"{resource.Name}-env-secret",
+            EnvironmentId = BuildIdExpression(envConstruct),
+        };
+
+        if (appConstruct is not null)
+        {
+            secret.ApplicationId = BuildIdExpression(appConstruct);
+        }
+
+        options.SecuritySecrets.Add(secret);
+
+        _containerEnvSecrets.Add(new ContainerEnvSecret(
+            secret,
+            resource.Name,
+            RenderBicepValue(secret.EnvironmentId),
+            secret.ApplicationId is { } applicationId ? RenderBicepValue(applicationId) : null));
+
+        return secret;
     }
 
     /// <summary>
@@ -2276,6 +2878,19 @@ internal sealed class RadiusInfrastructureBuilder
     {
         /// <summary>The container the value belongs to, attached once the construct exists.</summary>
         public RadiusContainerConstruct? Container { get; set; }
+
+        /// <summary>
+        /// The secret entry holding the composed value when the variable is emitted as a
+        /// <c>valueFrom.secretKeyRef</c>, in which case the container's own <c>value</c> is unset
+        /// and it is this entry that has to be repaired after a rename.
+        /// </summary>
+        public RadiusSecuritySecretDataEntryConstruct? SecretEntry { get; set; }
+
+        /// <summary>The secret owning <see cref="SecretEntry"/>.</summary>
+        public RadiusSecuritySecretConstruct? Secret { get; set; }
+
+        /// <summary>The key of <see cref="SecretEntry"/> within <see cref="Secret"/>'s data map.</summary>
+        public string? SecretKey { get; set; }
     }
 
     /// <summary>
@@ -2295,6 +2910,60 @@ internal sealed class RadiusInfrastructureBuilder
         List<EnvPart> Parts,
         string? OriginalValue,
         List<(RadiusResourceTypeConstruct Target, string OriginalIdentifier)> TargetIdentifiers);
+
+    /// <summary>
+    /// The <c>Radius.Security/secrets</c> resource emitted to hold one container's
+    /// credential-bearing environment values.
+    /// </summary>
+    /// <param name="Secret">The emitted secret.</param>
+    /// <param name="ResourceName">The container the secret belongs to.</param>
+    /// <param name="OriginalEnvironmentId">The scope reference the publisher wrote, used to detect a callback edit.</param>
+    /// <param name="OriginalApplicationId">As <paramref name="OriginalEnvironmentId"/>, for the application scope.</param>
+    private sealed record ContainerEnvSecret(
+        RadiusSecuritySecretConstruct Secret,
+        string ResourceName,
+        string? OriginalEnvironmentId,
+        string? OriginalApplicationId);
+
+    /// <summary>
+    /// One container environment variable emitted as a <c>valueFrom.secretKeyRef</c>.
+    /// </summary>
+    /// <remarks>
+    /// Tracked separately from <see cref="ProjectedEnvValue"/>, which only records values that read
+    /// a backing resource's outputs: a value composed purely from secret parameters has no
+    /// projection but its reference to the secret is broken by a callback in exactly the same ways.
+    /// </remarks>
+    private sealed record ContainerEnvSecretReference(
+        ContainerEnvVarConstruct EnvVar,
+        RadiusSecuritySecretConstruct Secret,
+        RadiusSecuritySecretDataEntryConstruct Entry,
+        string ResourceName,
+        string Key,
+        string SecretKey,
+        string? OriginalSecretName)
+    {
+        /// <summary>The container the value belongs to, attached once the construct exists.</summary>
+        public RadiusContainerConstruct? Container { get; set; }
+    }
+
+    /// <summary>
+    /// A <c>Radius.Security/secrets</c> resource emitted to carry a credential that
+    /// <paramref name="Consumer"/> reads by resource ID from <paramref name="PropertyName"/>.
+    /// </summary>
+    /// <remarks>
+    /// This secret exists solely to satisfy the consuming resource's own property. It must stay a
+    /// distinct resource from any secret composed *from* that resource's outputs (e.g. a full
+    /// connection string), or the deployment graph becomes <c>secret → resource → secret</c> and
+    /// Radius cannot order it.
+    /// </remarks>
+    private sealed record SecretResourceCredential(
+        RadiusSecuritySecretConstruct Secret,
+        RadiusResourceTypeConstruct Consumer,
+        string PropertyName,
+        string OriginalSecretIdentifier,
+        string OriginalPropertyValue,
+        string? OriginalEnvironmentId,
+        string? OriginalApplicationId);
 
     /// <summary>
     /// Renders a Bicep value to a comparable string, so a value a callback overwrote can be told
@@ -2701,12 +3370,26 @@ internal sealed class RadiusInfrastructureBuilder
             // A callback that dropped or replaced the workload, removed the variable, or set the
             // variable itself owns the result — last-write-wins. Only values still exactly as the
             // publisher generated them are ours to repair or reject.
+            // A secret-backed value lives in the secret's data entry, not on the env var, so that
+            // is what is compared and repaired.
+            var valueHolder = projected.SecretEntry is { } entry ? entry.Value : projected.EnvVar.Value;
+
             if (projected.Container is null ||
                 !liveContainers.Contains(projected.Container) ||
                 !projected.Container.Env.TryGetValue(projected.Key, out var currentEnvVar) ||
                 // BicepDictionary wraps each entry, so unwrap before comparing construct identity.
                 !ReferenceEquals(currentEnvVar?.Value, projected.EnvVar) ||
-                !string.Equals(RenderBicepValue(projected.EnvVar.Value), projected.OriginalValue, StringComparison.Ordinal))
+                !string.Equals(RenderBicepValue(valueHolder), projected.OriginalValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // A callback may have replaced the secret's data entry, in which case the callback owns
+            // the value and rebuilding our now-orphaned entry would change nothing that is emitted.
+            if (projected.Secret is { } secret &&
+                (!options.SecuritySecrets.Contains(secret) ||
+                 !secret.Data.TryGetValue(projected.SecretKey!, out var liveEntry) ||
+                 !ReferenceEquals(liveEntry?.Value, projected.SecretEntry)))
             {
                 continue;
             }
@@ -2732,7 +3415,15 @@ internal sealed class RadiusInfrastructureBuilder
 
             if (changed)
             {
-                projected.EnvVar.Value = BuildEnvBicepValue(projected.Parts);
+                var rebuilt = BuildEnvBicepValue(projected.Parts);
+                if (projected.SecretEntry is { } secretEntry)
+                {
+                    secretEntry.Value = rebuilt;
+                }
+                else
+                {
+                    projected.EnvVar.Value = rebuilt;
+                }
             }
         }
 

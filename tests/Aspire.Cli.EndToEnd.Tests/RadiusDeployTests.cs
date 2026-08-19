@@ -235,12 +235,11 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
     /// <remarks>
     /// <para>
     /// <see cref="DeployRadiusContainerToKind"/> covers only a container workload, and the AKS
-    /// deployment test covers Redis, which is emitted as a legacy <c>Applications.*</c> type and
-    /// therefore exercises the <c>listSecrets()</c> branch. Neither proves anything about the
-    /// <c>Radius.*</c> UDT branch, where Aspire has to write <c>username</c>/<c>password</c>/
-    /// <c>database</c> onto the resource for the recipe to consume. Only a real deployment can show
-    /// that the targeted Radius version accepts those properties and that the credential handed to
-    /// the consumer is the one the recipe provisioned.
+    /// deployment test covers Redis. Neither proves anything about the <c>Radius.*</c> UDT branch,
+    /// where Aspire has to write <c>username</c>/<c>password</c>/<c>database</c> onto the resource
+    /// for the recipe to consume. Only a real deployment can show that the targeted Radius version
+    /// accepts those properties and that the credential handed to the consumer is the one the
+    /// recipe provisioned.
     /// </para>
     /// <para>
     /// The check runs <c>psql</c> from a throwaway pod using the values read back out of the
@@ -261,18 +260,12 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
         // https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep
         const string PostgresImage = "postgres:16-alpine";
 
-        // `rad install kubernetes` registers the built-in Radius.Compute/*, Radius.Core/* and
-        // Applications.* types, but the Radius.Data/* types Aspire emits for PostgreSQL live in
-        // resource-types-contrib and are installed per cluster. Pinned to a commit
-        // rather than main so an upstream schema change cannot silently alter what this asserts.
-        const string PostgresTypeManifestUrl =
-            "https://raw.githubusercontent.com/radius-project/resource-types-contrib/39f65be914c931acce42bc730ebdedff6fcc7af7/Data/postgreSqlDatabases/postgreSqlDatabases.yaml";
-
-        // The value bound to the @secure() `pg_password` parameter Aspire emits. Passing it
-        // explicitly is what makes the assertion meaningful: the same literal has to come back out
-        // of the deployed container's environment *and* authenticate against the database the
-        // recipe provisioned, which is only true if it reached the resource's `password` property.
-        const string PostgresPassword = "AspireE2E-pg-1";
+        // `rad install kubernetes` on Radius 0.60 registers Radius.Data/postgreSqlDatabases, and the
+        // pinned Bicep extension carries its types, so no per-cluster type registration is needed.
+        // The type is still absent from the default Kubernetes recipe pack
+        // (https://github.com/radius-project/resource-types-contrib/issues/276), so Aspire pins
+        // `kube-recipes/postgresqldatabases` in the recipe pack it emits — which is exactly what
+        // `aspire deploy` below exercises.
 
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -302,10 +295,6 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
             await auto.InstallRadCliAsync(counter);
             await auto.InstallRadiusControlPlaneAsync(counter, clusterName);
-
-            await auto.TypeAsync($"curl -fsSL -o /tmp/postgresqldatabases.yaml {PostgresTypeManifestUrl} && rad resource-type create postgreSqlDatabases --from-file /tmp/postgresqldatabases.yaml");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
             // =================================================================
             // Phase 2: Scaffold the AppHost
@@ -379,47 +368,21 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // The Bicep extension `rad` resolves (br:biceptypes.azurecr.io/radius:<version>) carries
-            // types only for the built-in namespaces at 0.59, so a contrib type such as
-            // Radius.Data/postgreSqlDatabases compiles to a *classic* ARM resource (BCP081, "does
-            // not have types available") and the deployment engine routes it to the Azure provider:
-            //   "Azure deployment failed, please ensure you have configured an Azure provider..."
-            // Registering the type with the control plane is not enough; the compiler needs it too.
-            // Generating a local extension from the same manifest and importing it is the supported
-            // workaround, and it is what a user deploying an Aspire-generated Radius app with a
-            // PostgreSQL resource has to do today (see the README's PostgreSQL prerequisites).
+            // Radius 0.60 ships Radius.Data/postgreSqlDatabases in the pinned `radius` Bicep
+            // extension and registers it at `rad install kubernetes`, so the artifacts Aspire
+            // generated deploy as-is: no local extension to publish, no import to splice in, and
+            // therefore no reason to bypass `aspire deploy`.
             //
-            // This is a Radius 0.59-only workaround. Radius 0.60 carries
-            // Radius.Data/postgreSqlDatabases in the pinned `radius` Bicep extension *and* registers
-            // it by default at install time, so both this step and the `rad resource-type create`
-            // above disappear once RadiusBicepExtension.Version moves to 0.60. A recipe still has to
-            // be registered for the type until it is added to the default Kubernetes recipe pack
-            // (https://github.com/radius-project/resource-types-contrib/issues/276), so the type
-            // registration below is what goes away first, not the recipe registration.
-            await auto.TypeAsync("rad bicep publish-extension --from-file /tmp/postgresqldatabases.yaml --target radius-output/aspire-udt.tgz --force");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
-
-            await auto.TypeAsync("sed -i 's#\"extensions\": {#\"extensions\": {\\n        \"aspireudt\": \"./aspire-udt.tgz\",#' radius-output/bicepconfig.json && " +
-                "sed -i '1a extension aspireudt' radius-output/app.bicep && head -3 radius-output/app.bicep");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            // Supply the parameter through an owner-only ARM JSON parameters file rather than
-            // `-p name=value`, mirroring what RadiusDeploymentPipelineStep does on the shipped
-            // path — and keeping the credential out of the terminal capture and the failure
-            // artifacts this test uploads.
-            await auto.TypeAsync(
-                "PGPARAMS=$(mktemp -d)/parameters.json && " +
-                $"printf '%s' '{{\"$schema\":\"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#\",\"contentVersion\":\"1.0.0.0\",\"parameters\":{{\"pg_password\":{{\"value\":\"{PostgresPassword}\"}}}}}}' > \"$PGPARAMS\" && " +
-                "chmod 600 \"$PGPARAMS\" && echo \"wrote $PGPARAMS\"");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            // `rad deploy` on the published output rather than `aspire deploy`, because the latter
-            // republishes and would discard the extension import added above. The artifacts under
-            // test are still exactly the ones Aspire generated.
-            await auto.TypeAsync("rad deploy radius-output/app.bicep --group default --parameters @\"$PGPARAMS\"");
+            // `aspire deploy` regenerates the artifacts and runs `rad deploy app.bicep`. It
+            // generates its own owner-only parameters file for the @secure() `pg_password`
+            // parameter and cannot consume an externally supplied one, so the password is never
+            // known to this test — see the verification below for how the agreement is proven
+            // without it.
+            //
+            // Wait on this command's own sequence-numbered prompt with the full deploy budget
+            // rather than WaitForPipelineSuccessAsync, which would match the stale "Pipeline
+            // succeeded" left by the earlier `aspire publish`.
+            await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
 
@@ -454,12 +417,15 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // The consumer must receive the very parameter that was written onto the resource's
-            // `password` property, not a recipe-generated one — that agreement is what makes the
-            // connection string usable.
-            await auto.TypeAsync($"test \"$PGPASSWORD\" = '{PostgresPassword}' && echo PWMATCH''_OK");
+            // The password is generated by `aspire deploy` into its own owner-only parameters file,
+            // so this test cannot compare it against a known literal. The agreement under test is
+            // preserved by proving it *authenticates*: the value projected to the consumer must be
+            // the same one written onto the resource's `password` property that the recipe consumed,
+            // or the psql login below fails. Assert it is non-empty first so an empty projection
+            // fails here with a clear message rather than as a confusing psql auth error.
+            await auto.TypeAsync("test -n \"$PGPASSWORD\" && echo PWPRESENT''_OK");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PWMATCH_OK", timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitUntilTextAsync("PWPRESENT_OK", timeout: TimeSpan.FromSeconds(60));
             await auto.WaitForSuccessPromptAsync(counter);
 
             // A wrong password, user, or database name fails here rather than producing a silently
@@ -480,6 +446,301 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
                 "echo \"Attempt $i: psql could not connect, retrying...\"; sleep 10; done");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("PGVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+
+            await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
+        }
+        finally
+        {
+            await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
+        }
+    }
+
+    /// <summary>
+    /// Deploys Redis and RabbitMQ, which moved from the legacy <c>Applications.*</c> portable types
+    /// onto their <c>Radius.*</c> UDTs in Radius 0.60, and proves the credentials Aspire projects
+    /// are the ones the deployed servers actually enforce.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These two types are the only ones whose migration cannot be validated from a Bicep snapshot.
+    /// RabbitMQ's <c>password</c> property takes the <em>resource ID of a
+    /// <c>Radius.Security/secrets</c> resource</em>, not a password string, so the snapshot can only
+    /// show that a reference was emitted — not that Radius dereferenced it, materialized the secret,
+    /// and handed the value to the recipe. A wrong secret shape fails at deploy time or, worse,
+    /// provisions a broker with a credential the consumer was never told about. Only a real deploy
+    /// distinguishes those.
+    /// </para>
+    /// <para>
+    /// Redis is the mirror case: its recipe deploys an <em>unauthenticated</em> server, so the
+    /// correct behaviour is that no credential is projected at all (ASPIRERADIUS075). That is a
+    /// claim about the deployed server's configuration, which the generated Bicep cannot make.
+    /// </para>
+    /// <para>
+    /// Both checks read from the <em>deployed</em> consumer's env rather than the generated Bicep,
+    /// because only the deployed spec shows what Radius resolved the recipe outputs and the
+    /// <c>@secure()</c> parameter to.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DeployRadiusRedisAndRabbitMqBackingResourcesToKind()
+    {
+        const string ProjectName = "AspireRadiusCacheQueueDeployTest";
+
+        // Matches the image tag the Radius Kubernetes Redis recipe deploys, so the verification pod
+        // runs from an image already present on the node.
+        // https://github.com/radius-project/resource-types-contrib/blob/main/Data/redisCaches/recipes/kubernetes/bicep/kubernetes-redis.bicep
+        const string RedisImage = "redis:7-alpine";
+
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
+        var radiusNamespace = $"radius-{clusterName[..16]}";
+
+        output.WriteLine($"Cluster name: {clusterName}");
+        output.WriteLine($"Radius namespace: {radiusNamespace}");
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.VerifyPullRequestCliVersionAsync(counter);
+
+        try
+        {
+            // =================================================================
+            // Phase 1: Cluster + Radius control plane
+            // =================================================================
+            await auto.InstallKindAndHelmAsync(counter);
+            await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
+            await auto.InstallRadCliAsync(counter);
+            await auto.InstallRadiusControlPlaneAsync(counter, clusterName);
+
+            // =================================================================
+            // Phase 2: Scaffold the AppHost
+            // =================================================================
+            await auto.AspireNewCSharpEmptyAppHostAsync(ProjectName, counter);
+
+            await auto.TypeAsync($"cd {ProjectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Radius");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.RabbitMQ");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            var appHostFilePath = Path.Combine(
+                workspace.WorkspaceRoot.FullName,
+                ProjectName,
+                "apphost.cs");
+            var content = File.ReadAllText(appHostFilePath);
+            const string buildRunPattern = "builder.Build().Run();";
+            Assert.Contains(buildRunPattern, content);
+            var radiusWiring = $$"""
+                builder.AddRadiusEnvironment("radius").WithNamespace("{{radiusNamespace}}");
+                var cache = builder.AddRedis("cache");
+                // An explicit non-`guest` user name is required: RabbitMQ restricts `guest` to
+                // loopback connections, so a broker provisioned with it would reject the `web` pod.
+                // Publishing a bare AddRabbitMQ fails with ASPIRERADIUS082 for that reason.
+                var queue = builder.AddRabbitMQ("queue", userName: builder.AddParameter("queueuser", "appuser"));
+                builder.AddContainer("web", "{{ContainerImage}}", "{{ContainerImageTag}}")
+                    .WithImageSHA256("{{ContainerImageDigest}}")
+                    .WithHttpEndpoint(targetPort: {{ContainerPort}})
+                    .WithReference(cache)
+                    .WithReference(queue);
+                """;
+            content = content.Replace(buildRunPattern, radiusWiring + Environment.NewLine + Environment.NewLine + buildRunPattern);
+            File.WriteAllText(appHostFilePath, content);
+
+            await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // =================================================================
+            // Phase 3: Publish and assert the emitted resource shape
+            // =================================================================
+            await auto.TypeAsync("aspire publish -o radius-output --non-interactive");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+
+            var appBicepPath = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName, "radius-output", "app.bicep");
+            Assert.True(File.Exists(appBicepPath), $"Expected generated Bicep at '{appBicepPath}'.");
+            var appBicep = File.ReadAllText(appBicepPath);
+
+            // The 0.60 UDTs, not the legacy portable types they replaced.
+            Assert.Contains("Radius.Data/redisCaches", appBicep);
+            Assert.Contains("Radius.Messaging/rabbitMQ@", appBicep);
+            Assert.DoesNotContain("Applications.Datastores/redisCaches", appBicep);
+            Assert.DoesNotContain("Applications.Messaging/rabbitMQQueues", appBicep);
+
+            // RabbitMQ's password is a reference to a secret resource, never a literal on the
+            // broker. If this ever regresses to an inline password the deploy below still succeeds
+            // — Radius would store the string as the "secret ID" — so pin the shape here and let
+            // the deploy prove it resolves.
+            Assert.Contains("Radius.Security/secrets", appBicep);
+            Assert.Contains("password: queue_password_secret.id", appBicep);
+
+            // Radius.Security/secrets is recipe-backed, so emitting one obliges the pack to carry
+            // its recipe. Without this entry the deploy below fails resolving a recipe for the
+            // secret rather than for the broker that pulled it in.
+            Assert.Contains("ghcr.io/radius-project/kube-recipes/secrets:latest", appBicep);
+
+            // The consumer's credentials are secret references too, not clear-text container env.
+            // `QUEUE_USERNAME` stays a plain value: it is not a credential, and routing it through a
+            // secret would make the deployed spec needlessly unreadable.
+            Assert.Contains("resource web_env_secret 'Radius.Security/secrets@", appBicep);
+            Assert.Contains("secretName: 'web-env-secret'", appBicep);
+
+            // =================================================================
+            // Phase 4: Create the app namespace, then deploy
+            // =================================================================
+            await auto.TypeAsync($"kubectl create namespace {radiusNamespace} --context kind-{clusterName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            await auto.TypeAsync("aspire deploy");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
+
+            // =================================================================
+            // Phase 5: Verify against the deployed servers
+            // =================================================================
+            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=cache --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=queue --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod -n {radiusNamespace} -l radapp.io/resource=web --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            var webDeployment = $"kubectl get deployment -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}'";
+            await auto.TypeAsync($"WEB_DEPLOY=$({webDeployment}) && echo \"Resolved deployment: $WEB_DEPLOY\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // `WithReference(...)` splats each resource's connection properties as CACHE_*/QUEUE_*
+            // alongside ConnectionStrings__cache / ConnectionStrings__queue. Only the non-credential
+            // ones carry a `.value`; the password is a secret reference and is read further down.
+            var envValue = $"kubectl get deployment -n {radiusNamespace} $WEB_DEPLOY -o jsonpath=";
+            await auto.TypeAsync(
+                $"REDIS_HOST=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"CACHE_HOST\")].value}}') && " +
+                $"REDIS_PORT=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"CACHE_PORT\")].value}}') && " +
+                $"MQ_USER=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"QUEUE_USERNAME\")].value}}') && " +
+                "echo \"projected redis=$REDIS_HOST:$REDIS_PORT mq_user=$MQ_USER\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // ---------------------------------------------------------------
+            // Credentials reach the pod as a secret reference, not as clear text
+            // ---------------------------------------------------------------
+            // This is the claim that can only be proven against a real cluster: the publisher emits
+            // `valueFrom.secretKeyRef`, but whether Radius's container recipe carries that through
+            // to the Deployment, and whether the secrets recipe created a Kubernetes Secret under
+            // the name the reference uses, is decided by the recipes rather than by Aspire.
+            await auto.TypeAsync(
+                $"MQ_SECRET=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"QUEUE_PASSWORD\")].valueFrom.secretKeyRef.name}}') && " +
+                $"MQ_SECRET_KEY=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"QUEUE_PASSWORD\")].valueFrom.secretKeyRef.key}}') && " +
+                "test -n \"$MQ_SECRET\" && test \"$MQ_SECRET_KEY\" = QUEUE_PASSWORD && " +
+                "echo \"secret ref: $MQ_SECRET/$MQ_SECRET_KEY\" && echo SECRETREF''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("SECRETREF_OK", timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The Deployment spec must not carry the credential in any form. This is the whole point
+            // of the secret reference: the spec and its rollout history are readable by anyone with
+            // `get deployment` in the namespace.
+            await auto.TypeAsync(
+                $"kubectl get deployment -n {radiusNamespace} $WEB_DEPLOY -o json > /tmp/webdeploy.json && " +
+                "kubectl get secret -n " + radiusNamespace + " \"$MQ_SECRET\" -o jsonpath='{.data.QUEUE_PASSWORD}' | base64 -d > /tmp/mqpw.txt && " +
+                "MQ_PASSWORD=$(cat /tmp/mqpw.txt) && test -n \"$MQ_PASSWORD\" && " +
+                "grep -q -- \"$MQ_PASSWORD\" /tmp/webdeploy.json && echo LEAKED || echo NOPLAINTEXT''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("NOPLAINTEXT_OK", timeout: TimeSpan.FromSeconds(120));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // Finally, the value the *process* sees. A reference that resolves to nothing would
+            // still satisfy every assertion above, and the broker check below would then fail as a
+            // confusing authentication error rather than as a missing value.
+            await auto.TypeAsync(
+                $"WEB_POD=$(kubectl get pod -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}') && " +
+                $"MQ_PASSWORD=$(kubectl exec -n {radiusNamespace} \"$WEB_POD\" -- printenv QUEUE_PASSWORD) && " +
+                "test \"$MQ_PASSWORD\" = \"$(cat /tmp/mqpw.txt)\" && echo \"mq_password_length=${#MQ_PASSWORD}\" && echo INJECTED''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("INJECTED_OK", timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // ---------------------------------------------------------------
+            // Redis: reachable, and intentionally unauthenticated
+            // ---------------------------------------------------------------
+            // A bare PING succeeding is the whole claim: it proves the projected host/port address
+            // the deployed server *and* that the server accepts commands without AUTH. If a future
+            // recipe starts Redis with --requirepass, PING returns NOAUTH and this fails — which is
+            // the signal that ASPIRERADIUS075 and the NoCredential mapping have to be revisited,
+            // not a flake.
+            await auto.TypeAsync("for i in $(seq 1 12); do " +
+                $"if kubectl run rediscacheck$i -n {radiusNamespace} --rm -i --restart=Never --image={RedisImage} " +
+                "--image-pull-policy=IfNotPresent --command -- " +
+                "redis-cli -h \"$REDIS_HOST\" -p \"$REDIS_PORT\" ping | grep -q '^PONG$'; " +
+                "then echo REDISVERIFY''_OK; break; fi; " +
+                "echo \"Attempt $i: redis-cli could not connect, retrying...\"; sleep 10; done");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("REDISVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+
+            // ---------------------------------------------------------------
+            // RabbitMQ: the projected credentials authenticate
+            // ---------------------------------------------------------------
+            // The password is generated by `aspire deploy` into its own owner-only parameters file,
+            // so it cannot be compared against a known literal — proving it *authenticates* is the
+            // equivalent guarantee. Non-emptiness was already established above.
+
+            // The user name the AppHost supplied must be the one both provisioned on the broker
+            // and projected to the consumer. If the emission regresses to the UDT default the
+            // broker is provisioned as `radius` and this mismatch surfaces here.
+            await auto.TypeAsync("test \"$MQ_USER\" = appuser && echo MQUSER''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("MQUSER_OK", timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // `rabbitmqctl authenticate_user` runs inside the broker pod and checks the credential
+            // against the broker's own user database, which is exactly the question being asked:
+            // did the value Aspire put in the Radius.Security/secrets resource reach the recipe and
+            // get provisioned as this user's password? Running it in-pod also avoids depending on
+            // the management plugin or on an AMQP client image.
+            //
+            // Being in-pod means this does not exercise RabbitMQ's loopback restriction, which
+            // applies to the `guest` account and would reject a client in another pod. That is
+            // covered structurally instead: publishing refuses to emit `guest` at all
+            // (ASPIRERADIUS082), so no deployment can reach that state.
+            await auto.TypeAsync($"MQ_POD=$(kubectl get pod -n {radiusNamespace} -l radapp.io/resource=queue -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved broker pod: $MQ_POD\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("for i in $(seq 1 12); do " +
+                $"if kubectl exec -n {radiusNamespace} \"$MQ_POD\" -- " +
+                "rabbitmqctl authenticate_user \"$MQ_USER\" \"$MQ_PASSWORD\"; " +
+                "then echo MQVERIFY''_OK; break; fi; " +
+                "echo \"Attempt $i: broker not ready or credentials rejected, retrying...\"; sleep 10; done");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("MQVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);

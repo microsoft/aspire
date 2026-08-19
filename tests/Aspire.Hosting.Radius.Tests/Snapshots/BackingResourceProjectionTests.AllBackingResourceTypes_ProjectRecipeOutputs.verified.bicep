@@ -3,17 +3,34 @@
 @secure()
 param pg_password string
 
+@secure()
+param rabbit_password string
+
+param rabbituser string
+
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
+      'Radius.Data/redisCaches': {
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/rediscaches:latest'
+      }
       'Radius.Data/postgreSqlDatabases': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
+      }
+      'Radius.Messaging/rabbitMQ': {
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/rabbitmq:latest'
+      }
+      'Radius.Security/secrets': {
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/secrets:latest'
       }
       'Radius.Compute/containers': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/containers:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/containers:latest'
       }
     }
   }
@@ -48,22 +65,10 @@ resource myenv_legacy 'Applications.Core/environments@2023-10-01-preview' = {
       namespace: 'default'
     }
     recipes: {
-      'Applications.Datastores/redisCaches': {
-        default: {
-          templateKind: 'bicep'
-          templatePath: 'ghcr.io/radius-project/recipes/local-dev/rediscaches:latest'
-        }
-      }
       'Applications.Datastores/mongoDatabases': {
         default: {
           templateKind: 'bicep'
           templatePath: 'ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest'
-        }
-      }
-      'Applications.Messaging/rabbitMQQueues': {
-        default: {
-          templateKind: 'bicep'
-          templatePath: 'ghcr.io/radius-project/recipes/local-dev/rabbitmqqueues:latest'
         }
       }
       'Applications.Datastores/sqlDatabases': {
@@ -83,11 +88,83 @@ resource app_legacy 'Applications.Core/applications@2023-10-01-preview' = {
   }
 }
 
-resource cache 'Applications.Datastores/redisCaches@2023-10-01-preview' = {
+resource rabbit_password_secret 'Radius.Security/secrets@2025-08-01-preview' = {
+  name: 'rabbit-password-secret'
+  properties: {
+    environment: myenv.id
+    application: app.id
+    data: {
+      password: {
+        value: rabbit_password
+        encoding: 'string'
+      }
+    }
+  }
+}
+
+resource api_env_secret 'Radius.Security/secrets@2025-08-01-preview' = {
+  name: 'api-env-secret'
+  properties: {
+    environment: myenv.id
+    application: app.id
+    data: {
+      ConnectionStrings__pgdb: {
+        value: 'Host=${pg.properties.host};Port=${pg.properties.port};Username=postgres;Password=${pg_password};Database=pgdb'
+        encoding: 'string'
+      }
+      PGDB_PASSWORD: {
+        value: pg_password
+        encoding: 'string'
+      }
+      PGDB_URI: {
+        value: 'postgresql://postgres:${uriComponent(pg_password)}@${pg.properties.host}:${pg.properties.port}/pgdb'
+        encoding: 'string'
+      }
+      ConnectionStrings__mongo: {
+        value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+        encoding: 'string'
+      }
+      MONGO_PASSWORD: {
+        value: mongo.listSecrets().password
+        encoding: 'string'
+      }
+      MONGO_URI: {
+        value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+        encoding: 'string'
+      }
+      ConnectionStrings__rabbit: {
+        value: 'amqp://${uriComponent(rabbituser)}:${uriComponent(rabbit_password)}@${rabbit.properties.host}:${rabbit.properties.port}'
+        encoding: 'string'
+      }
+      RABBIT_PASSWORD: {
+        value: rabbit_password
+        encoding: 'string'
+      }
+      RABBIT_URI: {
+        value: 'amqp://${uriComponent(rabbituser)}:${uriComponent(rabbit_password)}@${rabbit.properties.host}:${rabbit.properties.port}'
+        encoding: 'string'
+      }
+      ConnectionStrings__sqlserver: {
+        value: 'Server=${sqlserver.properties.server},${sqlserver.properties.port};User ID=sa;Password=${sqlserver.listSecrets().password};TrustServerCertificate=true'
+        encoding: 'string'
+      }
+      SQLSERVER_PASSWORD: {
+        value: sqlserver.listSecrets().password
+        encoding: 'string'
+      }
+      SQLSERVER_URI: {
+        value: 'mssql://sa:${uriComponent(sqlserver.listSecrets().password)}@${sqlserver.properties.server}:${sqlserver.properties.port}'
+        encoding: 'string'
+      }
+    }
+  }
+}
+
+resource cache 'Radius.Data/redisCaches@2025-08-01-preview' = {
   name: 'cache'
   properties: {
-    application: app_legacy.id
-    environment: myenv_legacy.id
+    application: app.id
+    environment: myenv.id
   }
 }
 
@@ -110,11 +187,13 @@ resource mongo 'Applications.Datastores/mongoDatabases@2023-10-01-preview' = {
   }
 }
 
-resource rabbit 'Applications.Messaging/rabbitMQQueues@2023-10-01-preview' = {
+resource rabbit 'Radius.Messaging/rabbitMQ@2025-08-01-preview' = {
   name: 'rabbit'
   properties: {
-    application: app_legacy.id
-    environment: myenv_legacy.id
+    application: app.id
+    environment: myenv.id
+    username: rabbituser
+    password: rabbit_password_secret.id
   }
 }
 
@@ -149,7 +228,12 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'redis://:@${cache.properties.host}:${cache.properties.port}'
           }
           ConnectionStrings__pgdb: {
-            value: 'Host=${pg.properties.host};Port=${pg.properties.port};Username=postgres;Password=${pg_password};Database=pgdb'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'ConnectionStrings__pgdb'
+              }
+            }
           }
           PGDB_HOST: {
             value: pg.properties.host
@@ -161,10 +245,20 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'postgres'
           }
           PGDB_PASSWORD: {
-            value: pg_password
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'PGDB_PASSWORD'
+              }
+            }
           }
           PGDB_URI: {
-            value: 'postgresql://postgres:${uriComponent(pg_password)}@${pg.properties.host}:${pg.properties.port}/pgdb'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'PGDB_URI'
+              }
+            }
           }
           PGDB_JDBCCONNECTIONSTRING: {
             value: 'jdbc:postgresql://${pg.properties.host}:${pg.properties.port}/pgdb'
@@ -173,7 +267,12 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'pgdb'
           }
           ConnectionStrings__mongo: {
-            value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'ConnectionStrings__mongo'
+              }
+            }
           }
           MONGO_HOST: {
             value: mongo.properties.host
@@ -185,7 +284,12 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'admin'
           }
           MONGO_PASSWORD: {
-            value: mongo.listSecrets().password
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'MONGO_PASSWORD'
+              }
+            }
           }
           MONGO_AUTHENTICATIONDATABASE: {
             value: 'admin'
@@ -194,10 +298,20 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'SCRAM-SHA-256'
           }
           MONGO_URI: {
-            value: 'mongodb://admin:${uriComponent(mongo.listSecrets().password)}@${mongo.properties.host}:${mongo.properties.port}/?authSource=admin&authMechanism=SCRAM-SHA-256'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'MONGO_URI'
+              }
+            }
           }
           ConnectionStrings__rabbit: {
-            value: 'amqp://guest:${uriComponent(rabbit.listSecrets().password)}@${rabbit.properties.host}:${rabbit.properties.port}'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'ConnectionStrings__rabbit'
+              }
+            }
           }
           RABBIT_HOST: {
             value: rabbit.properties.host
@@ -206,16 +320,31 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: string(rabbit.properties.port)
           }
           RABBIT_USERNAME: {
-            value: 'guest'
+            value: rabbituser
           }
           RABBIT_PASSWORD: {
-            value: rabbit.listSecrets().password
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'RABBIT_PASSWORD'
+              }
+            }
           }
           RABBIT_URI: {
-            value: 'amqp://guest:${uriComponent(rabbit.listSecrets().password)}@${rabbit.properties.host}:${rabbit.properties.port}'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'RABBIT_URI'
+              }
+            }
           }
           ConnectionStrings__sqlserver: {
-            value: 'Server=${sqlserver.properties.server},${sqlserver.properties.port};User ID=sa;Password=${sqlserver.listSecrets().password};TrustServerCertificate=true'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'ConnectionStrings__sqlserver'
+              }
+            }
           }
           SQLSERVER_HOST: {
             value: sqlserver.properties.server
@@ -227,10 +356,20 @@ resource api 'Radius.Compute/containers@2025-08-01-preview' = {
             value: 'sa'
           }
           SQLSERVER_PASSWORD: {
-            value: sqlserver.listSecrets().password
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'SQLSERVER_PASSWORD'
+              }
+            }
           }
           SQLSERVER_URI: {
-            value: 'mssql://sa:${uriComponent(sqlserver.listSecrets().password)}@${sqlserver.properties.server}:${sqlserver.properties.port}'
+            valueFrom: {
+              secretKeyRef: {
+                secretName: 'api-env-secret'
+                key: 'SQLSERVER_URI'
+              }
+            }
           }
           SQLSERVER_JDBCCONNECTIONSTRING: {
             value: 'jdbc:sqlserver://${sqlserver.properties.server}:${sqlserver.properties.port};trustServerCertificate=true'

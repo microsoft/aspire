@@ -18,7 +18,7 @@ public class BicepGenerationMultiResourceTests
         builder.AddRedis("cache");
         builder.AddSqlServer("sqlserver");
         builder.AddMongoDB("mongo");
-        builder.AddRabbitMQ("messaging");
+        builder.AddRabbitMQ("messaging", userName: builder.AddParameter("messaginguser"));
         builder.AddContainer("api", "myapp/api", "latest");
 
         using var app = builder.Build();
@@ -28,12 +28,13 @@ public class BicepGenerationMultiResourceTests
         var context = new RadiusBicepPublishingContext(radiusEnv);
         var bicep = context.GenerateBicep(model);
 
-        // Each resource type instance should be present
-        // Note: Redis, MongoDB, and RabbitMQ use legacy fallback types per ResourceTypeMapper
-        Assert.Contains("Applications.Datastores/redisCaches@2023-10-01-preview", bicep);
+        // Each resource type instance should be present. Redis and RabbitMQ moved onto their
+        // Radius.* UDTs in Radius 0.60; MongoDB and SQL Server still emit the legacy portable type
+        // because no Kubernetes recipe is published for their UDTs.
+        Assert.Contains("Radius.Data/redisCaches@2025-08-01-preview", bicep);
+        Assert.Contains("Radius.Messaging/rabbitMQ@2025-08-01-preview", bicep);
         Assert.Contains("Applications.Datastores/sqlDatabases@2023-10-01-preview", bicep);
         Assert.Contains("Applications.Datastores/mongoDatabases@2023-10-01-preview", bicep);
-        Assert.Contains("Applications.Messaging/rabbitMQQueues@2023-10-01-preview", bicep);
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public class BicepGenerationMultiResourceTests
         var bicep = context.GenerateBicep(model);
 
         // Recipe pack should have entries for each resource type
-        Assert.Contains("ghcr.io/radius-project/recipes/local-dev/rediscaches:latest", bicep);
+        Assert.Contains("ghcr.io/radius-project/kube-recipes/rediscaches:latest", bicep);
         Assert.Contains("ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest", bicep);
     }
 
