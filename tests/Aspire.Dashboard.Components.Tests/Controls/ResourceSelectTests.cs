@@ -32,6 +32,8 @@ public sealed class ResourceSelectTests : DashboardTestContext
         var select = cut.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
         Assert.NotNull(select.Instance.OptionText);
         Assert.Equal("frontend", select.Instance.OptionText!(selectedResource));
+        Assert.Null(select.Instance.OptionText(null));
+        Assert.False(select.Instance.OptionDisabled!(null));
         Assert.Equal("frontend", cut.Find("fluent-option").GetAttribute("text"));
     }
 }

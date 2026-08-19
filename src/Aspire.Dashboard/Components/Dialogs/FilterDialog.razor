@@ -19,8 +19,8 @@
                           @bind-Value:after="ParameterChangedAsync"
                           Width="100%"
                           Height="400px"
-                          OptionText="@((SelectViewModel<string> c) => c.Name)"
-                          OptionDisabled="@((SelectViewModel<string> c) => c.Id is null)"
+                          OptionText="@((SelectViewModel<string>? c) => c?.Name)"
+                          OptionDisabled="@((SelectViewModel<string>? c) => c is not null && c.Id is null)"
                           OptionTitle="@((SelectViewModel<string> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
             </FluentSelect>
         </div>
@@ -30,7 +30,7 @@
                           Items="@_filterConditions"
                           @bind-Value="@_formModel.Condition"
                           Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
-                          OptionText="@((SelectViewModel<FilterCondition> i) => i.Name)"
+                          OptionText="@((SelectViewModel<FilterCondition>? i) => i?.Name)"
                           Width="100%" />
         </div>
 
@@ -84,20 +84,20 @@
                                 Items="@_filteredValues"
                                 Width="100%"
                                 Height="400px"
-                                OptionText="@((SelectViewModel<FieldValue> c) => c.Name)"
-                                OptionValue="@((SelectViewModel<FieldValue> c) => c.Name)"
+                                OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)"
+                                OptionValue="@((SelectViewModel<FieldValue>? c) => GetOptionValue(c))"
                                 OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                Immediate="true"
-                                ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
+                                @oninput="OnValueInput"
                                 Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
                     <OptionTemplate Context="optionContext">
-                        <FluentBadge Circular=true Appearance="BadgeAppearance.Tint" Slot="end">
+                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                        <FluentBadge Circular=true Appearance="BadgeAppearance.Tint">
                             @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
                             @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
                             @* Workaround this issue by inserting extra text using CSS. *@
                             <span data-filtercount="@optionContext.Id!.Count"></span>
                         </FluentBadge>
-                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                     </OptionTemplate>
                 </FluentCombobox>
                 <ValidationMessage For="() => _formModel.Value" />

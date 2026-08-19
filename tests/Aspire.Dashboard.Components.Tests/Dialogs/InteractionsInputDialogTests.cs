@@ -103,6 +103,47 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public async Task Render_CustomChoiceTypingFiltersAndHighlightsOptions()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var viewModel = CreateChoiceViewModel(allowCustomChoice: true);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters
+        {
+            Title = "Choose a color"
+        });
+        var cut = getCut();
+        var combobox = cut.Find("fluent-dropdown[type='combobox']");
+
+        await combobox.InputAsync(new ChangeEventArgs { Value = "blu" });
+
+        Assert.Equal("blu", viewModel.Inputs[0].Value);
+        var option = Assert.Single(combobox.QuerySelectorAll("fluent-option"));
+        Assert.Equal("Blue", option.GetAttribute("text"));
+        Assert.Equal("Blu", Assert.Single(option.QuerySelectorAll("mark")).TextContent);
+
+        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, string>>());
+        Assert.Null(component.Instance.OptionValue!(null));
+        Assert.Null(component.Instance.OptionText!(null));
+    }
+
+    [Fact]
+    public async Task Render_ChoiceCallbacksAcceptNullOption()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateChoiceViewModel(allowCustomChoice: false), new DialogParameters
+        {
+            Title = "Choose a color"
+        });
+        var cut = getCut();
+
+        var component = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, string>>());
+        Assert.Null(component.Instance.OptionValue!(null));
+        Assert.Null(component.Instance.OptionText!(null));
+    }
+
     private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
@@ -112,6 +153,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentTextField(this);
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentInputFile(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentCombobox(this);
 
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
@@ -153,6 +196,32 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
             Label = "Password",
             InputType = InputType.SecretText
         });
+
+        return new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+    }
+
+    private static InteractionsInputsDialogViewModel CreateChoiceViewModel(bool allowCustomChoice)
+    {
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        var input = new InteractionInput
+        {
+            Name = "color",
+            Label = "Color",
+            InputType = InputType.Choice,
+            AllowCustomChoice = allowCustomChoice
+        };
+        input.Options.Add("red", "Red");
+        input.Options.Add("blue", "Blue");
+        interaction.InputsDialog.InputItems.Add(input);
 
         return new InteractionsInputsDialogViewModel
         {

@@ -230,6 +230,12 @@ public partial class FilterDialog : IAsyncDisposable
         }
     }
 
+    private void OnValueInput(ChangeEventArgs e)
+    {
+        _formModel.Value = e.Value?.ToString();
+        ValueChanged();
+    }
+
     private void Cancel()
     {
         Dialog!.CancelAsync();
@@ -312,6 +318,11 @@ public partial class FilterDialog : IAsyncDisposable
     {
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
+
+    /// <summary>
+    /// Gets an option value while tolerating the null sentinel emitted when a combobox is cleared.
+    /// </summary>
+    internal static string? GetOptionValue<T>(SelectViewModel<T>? option) => option?.Name;
 
     private sealed class FieldValue
     {

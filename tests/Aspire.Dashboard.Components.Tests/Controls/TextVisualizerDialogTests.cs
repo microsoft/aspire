@@ -108,6 +108,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatSelect.Instance.AriaLabel);
         Assert.Equal(DashboardUIHelpers.XmlFormat, formatSelect.Instance.Value?.Id);
+        Assert.Null(formatSelect.Instance.OptionText!(null));
+        Assert.False(formatSelect.Instance.OptionDisabled!(null));
 
         var formatOptions = formatSelect.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
         var plaintextOption = formatOptions.Single(o => o.Id == DashboardUIHelpers.PlaintextFormat);

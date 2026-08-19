@@ -90,8 +90,8 @@
                                                   Placeholder="@input.ViewModel.Input.Placeholder"
                                                   Required="input.ViewModel.Input.Required"
                                                   Items="input.ViewModel.SelectOptions"
-                                                  OptionValue="@((SelectViewModel<string> vm) => vm.Id)"
-                                                  OptionText="@((SelectViewModel<string> vm) => vm.Name)"
+                                                  OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
+                                                  OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
                                                   OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                   Height="250px"
                                                   Position="SelectPosition.Below"
@@ -108,14 +108,14 @@
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
                                                     Required="input.ViewModel.Input.Required"
                                                     Items="@input.ViewModel.FilteredOptions()"
-                                                    OptionValue="@((SelectViewModel<string> vm) => vm.Id)"
-                                                    OptionText="@((SelectViewModel<string> vm) => vm.Name)"
+                                                    OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
+                                                    OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
                                                     OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                     Height="250px"
                                                     Position="SelectPosition.Below"
                                                     Disabled="input.ViewModel.InputDisabled"
-                                                    Immediate="true"
-                                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                                    @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
+                                                    @oninput="@(e => OnChoiceInput(input.ViewModel, e))"
                                                     aria-describedby="@input.DescriptionId">
                                         <OptionTemplate Context="optionContext">
                                             <FluentHighlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />

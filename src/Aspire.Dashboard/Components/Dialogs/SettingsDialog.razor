@@ -28,7 +28,7 @@
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
-                OptionText="@(c => c!.NativeName.Humanize())"
+                OptionText="@(c => c?.NativeName.Humanize())"
                 @bind-Value="@_selectedUiCulture"
                 @bind-Value:after="@OnLanguageChanged"
                 Class="language-select"/>

@@ -59,7 +59,7 @@
                               Class="toolbar-select"
                               Id="@_selectDurationId"
                               Items="@_durations"
-                              OptionText="@(c => c.Name)"
+                              OptionText="@(c => c?.Name)"
                               @bind-Value="PageViewModel.SelectedDuration"
                               @bind-Value:after="HandleSelectedDurationChangedAsync"
                               AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>

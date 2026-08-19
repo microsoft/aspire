@@ -181,6 +181,12 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             string.IsNullOrWhiteSpace(inputModel.Value);
     }
 
+    private void OnChoiceInput(InputViewModel inputModel, ChangeEventArgs e)
+    {
+        inputModel.Value = e.Value?.ToString();
+        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+    }
+
     private async Task SubmitAsync()
     {
         // The workflow is:
