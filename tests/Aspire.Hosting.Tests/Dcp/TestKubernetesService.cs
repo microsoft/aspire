@@ -9,10 +9,10 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text;
 using k8s.Models;
 using k8s.Autorest;
-using Json.Patch;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -335,7 +335,7 @@ internal sealed class TestKubernetesService : IKubernetesService
 
         if (patch.Type == V1Patch.PatchType.JsonPatch)
         {
-            Json.Patch.JsonPatch jsonPatch = (Json.Patch.JsonPatch)patch.Content;
+            var jsonPatch = (JsonArray)patch.Content;
 
             var res = CreatedResources.OfType<T>().FirstOrDefault(r =>
                 r.Metadata.Name == obj.Metadata.Name &&
@@ -346,7 +346,10 @@ internal sealed class TestKubernetesService : IKubernetesService
                 throw new ArgumentException($"Resource '{obj.Metadata.NamespaceProperty}/{obj.Metadata.Name}' not found");
             }
 
-            var result = jsonPatch.Apply<T, T>(res);
+            // Serialize against the runtime type because callers can patch through the CustomResource base type.
+            var resourceType = res.GetType();
+            var resultNode = JsonPatch.Apply(JsonSerializer.SerializeToNode(res, resourceType), jsonPatch);
+            var result = (T)JsonSerializer.Deserialize(resultNode, resourceType)!;
 
             // A patch changes the stored object, so it needs a new resource version. No watch event is
             // emitted here - tests push one themselves when they need it - but leaving the version behind
