@@ -1136,14 +1136,25 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var result = await resultTask;
         var resultInput = Assert.IsType<InteractionInput>(result.Data);
         var files = resultInput.GetFiles();
-        Assert.Equal(filePath, Assert.Single(files).FilePath);
+        var file = Assert.Single(files);
+        Assert.Equal(filePath, file.FilePath);
         Assert.True(File.Exists(filePath));
+        Assert.Equal("content", Encoding.UTF8.GetString(await file.ReadAllBytesAsync()));
+        await using (var stream = file.OpenRead())
+        using (var reader = new StreamReader(stream))
+        {
+            Assert.Equal("content", await reader.ReadToEndAsync());
+        }
 
         files.Dispose();
         files.Dispose();
 
         Assert.False(File.Exists(filePath));
         Assert.Null(fileUploadStore.GetFilePath(fileId, interaction.InteractionId, input.Name));
+        Assert.Throws<ObjectDisposedException>(file.OpenRead);
+        await Assert.ThrowsAsync<ObjectDisposedException>(ReadAllBytesAfterDisposeAsync);
+
+        Task ReadAllBytesAfterDisposeAsync() => file.ReadAllBytesAsync();
     }
 
     [Fact]

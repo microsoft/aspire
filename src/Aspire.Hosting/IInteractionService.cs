@@ -508,7 +508,18 @@ public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, 
     /// </summary>
     public void Dispose()
     {
-        Interlocked.Exchange(ref _dispose, null)?.Invoke();
+        var dispose = Interlocked.Exchange(ref _dispose, null);
+        if (dispose is null)
+        {
+            return;
+        }
+
+        foreach (var file in _files)
+        {
+            file.MarkDisposed();
+        }
+
+        dispose();
     }
 }
 
@@ -517,6 +528,8 @@ public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, 
 /// </summary>
 public sealed class InteractionFile
 {
+    private int _disposed;
+
     internal InteractionFile(string id, string name, string filePath)
     {
         Id = id;
@@ -543,14 +556,26 @@ public sealed class InteractionFile
     /// Opens a read-only stream for the file content.
     /// </summary>
     /// <returns>A <see cref="Stream"/> for reading the file.</returns>
-    public Stream OpenRead() => new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Stream OpenRead()
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+    }
 
     /// <summary>
     /// Reads all bytes of the file asynchronously.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A byte array containing the file content.</returns>
-    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(FilePath, cancellationToken);
+    /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        return File.ReadAllBytesAsync(FilePath, cancellationToken);
+    }
+
+    internal void MarkDisposed() => Interlocked.Exchange(ref _disposed, 1);
 }
 
 /// <summary>
