@@ -77,8 +77,8 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             if (!Guid.TryParse(oid, out var principalId))
             {
                 throw new InvalidOperationException(
-                    "The access token returned by the credential does not contain a valid 'oid' (object id) claim, " +
-                    "so the Azure principal being provisioned as could not be determined.");
+                    "Unable to determine the Azure identity to provision as: the access token returned by " +
+                    "the credential does not contain a valid 'oid' (object id) claim.");
             }
 
             // `upn` is the user principal name; `email` is the fallback for accounts that don't
