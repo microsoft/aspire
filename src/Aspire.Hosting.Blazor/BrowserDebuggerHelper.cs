@@ -53,6 +53,7 @@ internal static class BrowserDebuggerHelper
         // Toggled by the start/stop command handlers and reset when the resource stops
         // (e.g., user closes the browser).
         var debugSessionActive = false;
+        var debugSessionGeneration = 0;
         var watcherCts = new CancellationTokenSource();
         // Commands can be invoked concurrently by dashboard, CLI, or MCP clients. Serialize the
         // complete state transition so duplicate starts and overlapping start/stop requests cannot
@@ -125,9 +126,7 @@ internal static class BrowserDebuggerHelper
                     // StartResourceAsync expects the DCP metadata name (e.g., "gateway-app-debugger-abc123"),
                     // not the model resource name (e.g., "gateway-app-debugger").
                     var dcpInstanceName = GetDcpInstanceName(debuggerResource);
-                    var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
-                    await orchestrator.StartResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
-                    debugSessionActive = true;
+                    var currentGeneration = Interlocked.Increment(ref debugSessionGeneration);
 
                     // Cancel the previous watcher to signal it to stop, then dispose the old CTS
                     // before creating a new one to avoid leaking CTS registrations and timers
@@ -136,14 +135,34 @@ internal static class BrowserDebuggerHelper
                     watcherCts.Dispose();
                     watcherCts = new CancellationTokenSource();
 
-                    // Publish a no-op update on the command target to force the dashboard to
-                    // re-evaluate UpdateState callbacks and toggle command visibility.
                     var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
-                    await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
+                    var minimumSnapshotVersion = notificationService.TryGetCurrentState(dcpInstanceName, out var currentState)
+                        ? currentState.Snapshot.Version
+                        : 0;
+
+                    var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
+                    await orchestrator.StartResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
+                    debugSessionActive = true;
 
                     // Watch for the debugger resource to stop (e.g., user closes the browser)
                     // so we can flip the flag and re-show the "Debug in Browser" command.
-                    _ = WatchForDebuggerStopAsync(context.Services, commandTarget.Resource, debuggerResource, watcherCts.Token, () => debugSessionActive = false);
+                    _ = WatchForDebuggerStopAsync(
+                        context.Services,
+                        commandTarget.Resource,
+                        debuggerResource,
+                        minimumSnapshotVersion,
+                        watcherCts.Token,
+                        () =>
+                        {
+                            if (Volatile.Read(ref debugSessionGeneration) == currentGeneration)
+                            {
+                                debugSessionActive = false;
+                            }
+                        });
+
+                    // Publish a no-op update on the command target to force the dashboard to
+                    // re-evaluate UpdateState callbacks and toggle command visibility.
+                    await notificationService.PublishUpdateAsync(commandTarget.Resource, s => s).ConfigureAwait(false);
 
                     return CommandResults.Success();
                 }
@@ -185,12 +204,14 @@ internal static class BrowserDebuggerHelper
                         return CommandResults.Success();
                     }
 
-                    // Cancel the watcher so it doesn't race with our state reset.
-                    await watcherCts.CancelAsync().ConfigureAwait(false);
-
                     var dcpInstanceName = GetDcpInstanceName(debuggerResource);
                     var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
                     await orchestrator.StopResourceAsync(dcpInstanceName, context.CancellationToken).ConfigureAwait(false);
+
+                    // Invalidate and cancel the watcher after the stop succeeds. If stopping fails,
+                    // the existing watcher must remain active so a later terminal state is observed.
+                    Interlocked.Increment(ref debugSessionGeneration);
+                    await watcherCts.CancelAsync().ConfigureAwait(false);
                     debugSessionActive = false;
 
                     // Force dashboard to re-evaluate command visibility.
@@ -231,38 +252,32 @@ internal static class BrowserDebuggerHelper
         IServiceProvider serviceProvider,
         IResource commandTargetResource,
         IResource debuggerResource,
+        long minimumSnapshotVersion,
         CancellationToken cancellationToken,
         Action onStopped)
     {
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
-        var wasStarted = false;
 
         try
         {
             await foreach (var evt in resourceNotificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (evt.Resource != debuggerResource)
+                if (evt.Resource != debuggerResource || evt.Snapshot.Version <= minimumSnapshotVersion)
                 {
                     continue;
                 }
 
                 var state = evt.Snapshot.State?.Text;
 
-                if (state == KnownResourceStates.Running || state == KnownResourceStates.Starting)
-                {
-                    wasStarted = true;
-                    continue;
-                }
-
-                // Reset when the resource reaches a terminal state — either after running
-                // (normal browser close / crash) or immediately (failed to start).
+                // The snapshot version boundary ensures these states belong to the current start,
+                // even when the watcher subscribes after a rapid Starting -> terminal transition.
                 // DCP executables use "Terminated" (killed by controller) and "Finished" (ran to completion).
                 // Explicit-start resources may also transition back to "NotStarted" after stopping.
                 var isTerminal = state == KnownResourceStates.Exited
                     || state == KnownResourceStates.Finished
                     || state == KnownResourceStates.FailedToStart
                     || state == "Terminated"
-                    || (wasStarted && state == KnownResourceStates.NotStarted);
+                    || state == KnownResourceStates.NotStarted;
 
                 if (isTerminal)
                 {
