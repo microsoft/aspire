@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Security;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Aspire.Hosting.Tasks;
 using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
@@ -766,7 +767,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
         var buildResult = await RunDotNetWithArgumentsAsync(
             project.ProjectDirectory,
-            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=100", "-warnaserror"],
+            ["build", "-nologo", project.ProjectFile, "-p:_AspireCliBundleSetupTimeout=1000", "-warnaserror"],
             environment);
 
         Assert.True(buildResult.ExitCode == 0, buildResult.Output);
@@ -805,6 +806,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <Error Condition="'$(CommandTimedOut)' != 'true'" Text="The command did not report a timeout." />
                 <Error Condition="'$(CommandFailureMessage)' == ''" Text="The command did not report a timeout failure." />
                 <Message Text="CommandTimedOut=$(CommandTimedOut)" Importance="High" />
+                <Message Text="CommandFailureMessage=$(CommandFailureMessage)" Importance="High" />
               </Target>
             </Project>
             """);
@@ -824,6 +826,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
             Assert.True(result.ExitCode == 0, result.Output);
             Assert.Contains("CommandTimedOut=true", result.Output, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("CommandFailureMessage=The command timed out", result.Output, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(childPidPath), $"The child process did not record its PID. MSBuild output:{Environment.NewLine}{result.Output}");
 
             childProcessId = int.Parse(await File.ReadAllTextAsync(childPidPath), CultureInfo.InvariantCulture);
@@ -840,6 +843,74 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 {
                     childProcess.Kill(entireProcessTree: true);
                 }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RunAspireCliCommandReportsWhenProcessDoesNotExitAfterTermination()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var commandPath = Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "hang.cmd" : "hang");
+        await File.WriteAllTextAsync(
+            commandPath,
+            OperatingSystem.IsWindows()
+                ? "@echo off\r\nping -n 3601 127.0.0.1 > nul\r\n"
+                : "#!/bin/sh\nsleep 3600\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(commandPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var terminationRequested = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = new RunAspireCliCommand
+        {
+            FileName = commandPath,
+            TimeoutMilliseconds = 1,
+            TestTerminateProcess = process =>
+            {
+                terminationRequested.TrySetResult(process.Id);
+                return true;
+            }
+        };
+
+        int? processId = null;
+        Task<bool>? executionTask = null;
+        try
+        {
+            executionTask = Task.Run(task.Execute);
+            processId = await terminationRequested.Task.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+            var result = await executionTask.WaitAsync(
+                TimeSpan.FromSeconds(10),
+                TestContext.Current.CancellationToken);
+
+            using var survivingProcess = TryGetProcessById(processId.Value);
+            Assert.NotNull(survivingProcess);
+            Assert.False(survivingProcess.HasExited);
+            Assert.True(result);
+            Assert.True(task.TimedOut);
+            Assert.NotNull(task.FailureMessage);
+            Assert.Contains($"The command '{commandPath}' timed out", task.FailureMessage, StringComparison.Ordinal);
+            Assert.Contains("did not exit within", task.FailureMessage, StringComparison.Ordinal);
+            Assert.Contains("after termination was requested", task.FailureMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (processId is { } startedProcessId)
+            {
+                using var process = TryGetProcessById(startedProcessId);
+                if (process is not null && !process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+
+            if (executionTask is not null)
+            {
+                _ = await executionTask.WaitAsync(TimeSpan.FromSeconds(5));
             }
         }
     }

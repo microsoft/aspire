@@ -362,6 +362,47 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 "--unknown-option", "value"
             ],
             options.Args);
+        Assert.Equal("explicit-cli", options.AppHostSelectionOrigin);
+    }
+
+    [Fact]
+    public async Task StartCommand_WhenRunningInExtensionWithoutAppHost_UsesDefaultDiscoverySelectionOrigin()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string? projectFile = null;
+        bool? debug = null;
+        DebugSessionOptions? options = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (_, pf, dbg, debugSessionOptions) =>
+                {
+                    projectFile = pf;
+                    debug = dbg;
+                    options = debugSessionOptions;
+                };
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("start");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Null(projectFile);
+        Assert.False(debug);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.Empty(options.Args!);
+        Assert.Equal("default-discovery", options.AppHostSelectionOrigin);
     }
 
     [Fact]

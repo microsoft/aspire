@@ -68,6 +68,9 @@ internal sealed class EnvVar
 /// </summary>
 internal sealed class DebugSessionOptions
 {
+    internal const string ExplicitCliAppHostSelectionOrigin = "explicit-cli";
+    internal const string DefaultDiscoveryAppHostSelectionOrigin = "default-discovery";
+
     /// <summary>
     /// Gets or sets the command type for the debug session (e.g., "run", "deploy", "publish", "do").
     /// </summary>
@@ -85,4 +88,10 @@ internal sealed class DebugSessionOptions
     /// </summary>
     [JsonPropertyName("env")]
     public Dictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value describing how the AppHost was selected.
+    /// </summary>
+    [JsonPropertyName("appHostSelectionOrigin")]
+    public string? AppHostSelectionOrigin { get; set; }
 }

@@ -9,6 +9,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Tests;
@@ -205,6 +206,49 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData(false, null, false, "default-discovery")]
+    [InlineData(false, "", false, "default-discovery")]
+    [InlineData(true, null, false, null)]
+    [InlineData(true, "", false, null)]
+    [InlineData(false, "user-selection", false, "user-selection")]
+    [InlineData(true, "explicit-launch-configuration", false, "explicit-launch-configuration")]
+    [InlineData(true, null, true, "user-selection")]
+    [InlineData(true, "explicit-cli", true, "user-selection")]
+    public async Task LaunchDetachedAsync_PropagatesPersistentSelectionOriginToChild(
+        bool passedAppHost,
+        string? inheritedOrigin,
+        bool selectionWasPrompted,
+        string? expectedOrigin)
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper, inheritedOrigin, selectionWasPrompted);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            passedAppHost ? harness.AppHostFile : null,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        var hasOrigin = harness.ProcessFactory.CreatedEnvironmentVariables.TryGetValue(
+            KnownConfigNames.CliAppHostSelectionOrigin,
+            out var actualOrigin);
+        Assert.Equal(expectedOrigin is not null, hasOrigin);
+        Assert.Equal(expectedOrigin, actualOrigin);
     }
 
     [Fact]
@@ -1131,9 +1175,31 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public TestDetachedProcessFactory ProcessFactory { get; }
 
-        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, TimeProvider? timeProvider = null)
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper) =>
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, TimeProvider.System);
+
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, TimeProvider timeProvider) =>
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, timeProvider);
+
+        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, string? appHostSelectionOrigin)
         {
-            timeProvider ??= TimeProvider.System;
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted: false, TimeProvider.System);
+        }
+
+        public static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted)
+        {
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, TimeProvider.System);
+        }
+
+        private static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted,
+            TimeProvider timeProvider)
+        {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
             var hivesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("hives");
@@ -1163,8 +1229,16 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 executionContext, new TestEnvironment(),
                 NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 timeProvider);
+            var projectLocator = new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile])
+                    {
+                        WasExplicitDirectorySelectionPrompted = selectionWasPrompted
+                    })
+            };
             var launcher = new AppHostLauncher(
-                new TestProjectLocator(),
+                projectLocator,
                 executionContext,
                 interactionService,
                 monitor,
@@ -1174,7 +1248,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 fileLoggerProvider,
                 processShutdownService,
                 processFactory,
-                new ConfigurationBuilder().Build(),
+                CreateConfiguration((KnownConfigNames.CliAppHostSelectionOrigin, appHostSelectionOrigin)),
                 NullLogger<AppHostLauncher>.Instance,
                 timeProvider);
 
@@ -1255,6 +1329,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public IReadOnlyList<string>? CreatedArguments => CreatedExecution?.Arguments;
 
         public int CreatedExecutionDisposeCount => CreatedExecution?.DisposeCount ?? 0;
+
+        public IReadOnlyDictionary<string, string?> CreatedEnvironmentVariables =>
+            CreatedExecution?.EnvironmentVariables ?? throw new InvalidOperationException("Expected a detached process execution.");
 
         public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<IProcessExecution>>? StartHandler { get; set; }
 

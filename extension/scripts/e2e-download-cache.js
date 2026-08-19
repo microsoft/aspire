@@ -32,6 +32,12 @@ const UNREADABLE_DIRECTORY_ERROR_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 
 const MAX_PUBLISH_ATTEMPTS = 8;
 const MAX_CANDIDATE_CREATE_ATTEMPTS = 3;
 
+// A late writer racing cleanup settles within a few hundred milliseconds once its process is gone,
+// so a handful of sweeps covers it while still failing fast against a process that never stops
+// writing. See removeDirectoryContentsAndSelf for why re-sweeping is what clears ENOTEMPTY.
+const MAX_DIRECTORY_SWEEP_RETRIES = 5;
+const DIRECTORY_SWEEP_RETRY_DELAY_MS = 100;
+
 // Candidates only exist while a download is in flight, so a non-generation group child this old is
 // debris left by a crash or by an older cache layout. Published generations are never swept on
 // age; see sweepAbandonedGroupChildren.
@@ -549,11 +555,51 @@ function removePathWithoutFollowingLinks(targetPath, options = {}) {
     return;
   }
 
-  for (const entry of fs.readdirSync(targetPath)) {
-    removePathWithoutFollowingLinks(path.join(targetPath, entry), options);
-  }
+  removeDirectoryContentsAndSelf(targetPath, options);
+}
 
-  removeEmptyDirectory(targetPath, options);
+/**
+ * Empties a directory and removes it, re-listing it when `rmdir` reports it is not empty.
+ *
+ * A directory can gain an entry between the listing and the `rmdir`: the Java language server and
+ * Maven/Gradle daemons keep writing for a moment after a test finishes, so a tree that was walked
+ * empty is not empty by the time it is removed. Observed in CI as a shard that passed its tests and
+ * then failed in cleanup with `ENOTEMPTY: directory not empty, rmdir`.
+ *
+ * Retrying the `rmdir` alone cannot clear that, because the entry that appeared is still on disk -
+ * only a fresh listing can remove it - which is why this re-sweeps instead of leaning on the
+ * `maxRetries` budget. That budget stays useful for its own case: on Windows a removed entry can
+ * linger until the last handle closes, and there retrying the same `rmdir` does eventually succeed.
+ */
+function removeDirectoryContentsAndSelf(directoryPath, options) {
+  for (let sweep = 0; ; sweep++) {
+    let entries;
+    try {
+      entries = fs.readdirSync(directoryPath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        return;
+      }
+
+      throw error;
+    }
+
+    for (const entry of entries) {
+      removePathWithoutFollowingLinks(path.join(directoryPath, entry), options);
+    }
+
+    try {
+      removeEmptyDirectory(directoryPath, options);
+      return;
+    } catch (error) {
+      // Bounded so a process writing continuously fails the cleanup instead of hanging the shard.
+      if (!error || error.code !== 'ENOTEMPTY' || sweep >= MAX_DIRECTORY_SWEEP_RETRIES) {
+        throw error;
+      }
+
+      sleepSync((sweep + 1) * DIRECTORY_SWEEP_RETRY_DELAY_MS);
+    }
+  }
 }
 
 function removeEmptyDirectory(directoryPath, options) {

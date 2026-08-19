@@ -45,7 +45,7 @@ internal static class ProvisioningTestHelpers
         IResourceGroupResource? resourceGroup = null,
         ITenantResource? tenant = null,
         AzureLocation? location = null,
-        UserPrincipal? principal = null,
+        AzurePrincipal? principal = null,
         DistributedApplicationExecutionContext? executionContext = null)
     {
         return new ProvisioningContext(
@@ -55,7 +55,7 @@ internal static class ProvisioningTestHelpers
             resourceGroup ?? new TestResourceGroupResource(),
             tenant ?? new TestTenantResource(),
             location ?? AzureLocation.WestUS2,
-            principal ?? new UserPrincipal(Guid.NewGuid(), "test@example.com"),
+            principal ?? new AzurePrincipal(Guid.NewGuid(), "test@example.com"),
             executionContext ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
     }
 
@@ -85,7 +85,7 @@ internal static class ProvisioningTestHelpers
     public static ISecretClientProvider CreateSecretClientProvider() => new TestSecretClientProvider(CreateTokenCredentialProvider());
     public static IBicepCompiler CreateBicepCompiler() => new TestBicepCompiler();
     public static IDeploymentStateManager CreateUserSecretsManager() => new TestUserSecretsManager();
-    public static IUserPrincipalProvider CreateUserPrincipalProvider() => new TestUserPrincipalProvider();
+    public static IAzurePrincipalProvider CreateAzurePrincipalProvider() => new TestAzurePrincipalProvider();
     public static TokenCredential CreateTokenCredential() => new TestTokenCredential();
 
     /// <summary>
@@ -1057,11 +1057,11 @@ internal sealed class TestUserSecretsManager : IDeploymentStateManager
     public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
-internal sealed class TestUserPrincipalProvider : IUserPrincipalProvider
+internal sealed class TestAzurePrincipalProvider : IAzurePrincipalProvider
 {
-    public Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default)
+    public Task<AzurePrincipal> GetPrincipalAsync(CancellationToken cancellationToken = default)
     {
-        var principal = new UserPrincipal(Guid.Parse("11111111-2222-3333-4444-555555555555"), "test@example.com");
+        var principal = new AzurePrincipal(Guid.Parse("11111111-2222-3333-4444-555555555555"), "test@example.com");
         return Task.FromResult(principal);
     }
 }

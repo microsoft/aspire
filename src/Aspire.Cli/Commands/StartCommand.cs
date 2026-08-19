@@ -91,7 +91,10 @@ internal sealed class StartCommand : BaseCommand
                 new DebugSessionOptions
                 {
                     Command = "run",
-                    Args = [.. debugSessionArguments.Tokens]
+                    Args = [.. debugSessionArguments.Tokens],
+                    AppHostSelectionOrigin = passedAppHostProjectFile is not null
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin
                 });
             _profileCaptureState.MarkTransferred();
 

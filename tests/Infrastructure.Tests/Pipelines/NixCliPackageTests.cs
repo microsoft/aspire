@@ -112,6 +112,89 @@ public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    [RequiresTools(["bash", "base64", "xxd"])]
+    public async Task UpdateVersionsUsesSuppliedSha512OverridesWithoutReadingRelease()
+    {
+        var outputPath = Path.Combine(_workspace.Path, "versions.json");
+        var fakeBinPath = Path.Combine(_workspace.Path, "bin");
+        Directory.CreateDirectory(fakeBinPath);
+
+        // A curl stub that always fails. Offline mode (--sha512 supplied) must
+        // never invoke curl, so its presence here proves no network read happens.
+        var curlPath = Path.Combine(fakeBinPath, "curl");
+        await File.WriteAllTextAsync(curlPath, """
+            #!/usr/bin/env bash
+            echo 'curl should not be called in offline mode' >&2
+            exit 1
+            """);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(curlPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        // Distinct digest per RID so a mismapped override would fail the assert.
+        var hexByRid = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["osx-arm64"] = new string('a', 128),
+            ["osx-x64"] = new string('b', 128),
+            ["linux-arm64"] = new string('c', 128),
+            ["linux-x64"] = new string('d', 128),
+        };
+
+        var arguments = new List<string> { "--version", "13.4.0", "--output-path", outputPath };
+        foreach (var (rid, hex) in hexByRid)
+        {
+            arguments.Add("--sha512");
+            arguments.Add($"{rid}={hex}");
+        }
+
+        var result = await RunBashAsync(
+            Path.Combine(RepoRoot.Path, "eng", "nix", "update-versions.sh"),
+            arguments.ToArray(),
+            new Dictionary<string, string?>
+            {
+                ["PATH"] = fakeBinPath + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            });
+
+        Assert.True(result.ExitCode == 0, $"Expected update-versions.sh to succeed in offline mode.{Environment.NewLine}{result.Output}");
+
+        var manifest = await ReadJsonObjectAsync(outputPath);
+        var systems = GetRequiredObject(manifest, "systems");
+
+        foreach (var (system, rid) in s_expectedSystems)
+        {
+            var entry = GetRequiredObject(systems, system);
+            var expectedHash = "sha512-" + Convert.ToBase64String(Convert.FromHexString(hexByRid[rid]));
+            Assert.Equal(expectedHash, GetRequiredString(entry, "hash"));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "base64", "xxd"])]
+    public async Task UpdateVersionsRejectsPartialSha512Overrides()
+    {
+        var outputPath = Path.Combine(_workspace.Path, "versions.json");
+
+        // Supply only one platform's digest. Offline mode requires all four, so
+        // the script must fail rather than silently curl the missing three.
+        var result = await RunBashAsync(
+            Path.Combine(RepoRoot.Path, "eng", "nix", "update-versions.sh"),
+            ["--version", "13.4.0", "--output-path", outputPath, "--sha512", $"osx-arm64={new string('a', 128)}"],
+            new Dictionary<string, string?>
+            {
+                ["PATH"] = Environment.GetEnvironmentVariable("PATH")
+            });
+
+        Assert.False(result.ExitCode == 0, $"Expected update-versions.sh to fail with a partial override set.{Environment.NewLine}{result.Output}");
+        Assert.Contains("no --sha512 override supplied for rid", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath), "versions.json must not be written when the override set is incomplete.");
+    }
+
+    [Fact]
     public async Task FlakeLockPinsNixpkgsInput()
     {
         var flakeLock = await ReadJsonObjectAsync("flake.lock");

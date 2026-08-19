@@ -20,11 +20,13 @@
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
+    <!-- Build all task target frameworks for tests that load target-specific assemblies. -->
     <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Sdk.Tests.FakeCommand\Aspire.Hosting.Sdk.Tests.FakeCommand.csproj"
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
@@ -46,6 +48,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Match the task's Microsoft.Build.Utilities.Core dependency so a net8.0 runtime asset is available to the test host. -->
+    <PackageReference Include="Microsoft.Build.Framework" VersionOverride="17.9.5" />
     <PackageReference Include="NuGet.ProjectModel" />
   </ItemGroup>
 

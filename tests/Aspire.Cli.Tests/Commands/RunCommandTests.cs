@@ -3748,6 +3748,68 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DebugSessionOptions_SerializesAppHostSelectionOriginUsingWireContract()
+    {
+        var options = new DebugSessionOptions
+        {
+            AppHostSelectionOrigin = DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+        };
+
+        var json = JsonSerializer.Serialize(options, BackchannelJsonSerializerContext.Default.DebugSessionOptions);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("explicit-cli", document.RootElement.GetProperty("appHostSelectionOrigin").GetString());
+    }
+
+    [Theory]
+    [InlineData(false, "default-discovery")]
+    [InlineData(true, "explicit-cli")]
+    public async Task RunCommand_WhenDelegatingToExtension_CarriesAppHostSelectionOrigin(bool explicitAppHost, string expectedOrigin)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? workingDirectory = null;
+        string? projectFile = null;
+        bool? debug = null;
+        DebugSessionOptions? options = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (wd, pf, dbg, debugSessionOptions) =>
+                {
+                    workingDirectory = wd;
+                    projectFile = pf;
+                    debug = dbg;
+                    options = debugSessionOptions;
+                };
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(explicitAppHost ? $"run --apphost \"{appHostFile.FullName}\"" : "run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
+        Assert.Equal(explicitAppHost ? appHostFile.FullName : null, projectFile);
+        Assert.False(debug);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.Empty(options.Args!);
+        Assert.Equal(expectedOrigin, options.AppHostSelectionOrigin);
+    }
+
+    [Fact]
     public async Task RunCommand_WhenRunningInExtension_ForwardsExplicitArgumentsInSemanticOrder()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
