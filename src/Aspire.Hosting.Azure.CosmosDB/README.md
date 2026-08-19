@@ -53,6 +53,22 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(cosmosdb);
 ```
 
+### Emulator usage
+
+Use `RunAsEmulator` to run the Linux-based Azure Cosmos DB emulator with the `vnext-latest` image tag:
+
+```csharp
+var cosmosdb = builder.AddAzureCosmosDB("cdb")
+                      .RunAsEmulator();
+```
+
+Use `RunAsClassicEmulator` to run the classic emulator with the `stable` image tag:
+
+```csharp
+var cosmosdb = builder.AddAzureCosmosDB("cdb")
+                      .RunAsClassicEmulator();
+```
+
 ## Connection Properties
 
 When you reference Azure Cosmos DB resources using `WithReference`, the following connection properties are made available to the consuming project:
