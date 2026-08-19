@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREEXTENSION001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -278,7 +277,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         gateway.WithBlazorClientApp(wasmApp);
 
         var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
-        var launchConfiguration = await InvokeLaunchConfigurationAnnotatorAsync(debuggerResource);
+        var launchConfiguration = await CreateBrowserLaunchConfigurationAsync(debuggerResource);
 
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
         Assert.Equal("https://localhost:7443/store/", launchConfiguration.Url);
@@ -414,17 +413,10 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             name => Assert.Equal("public", name));
     }
 
-    private static async Task<BrowserLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    private static async Task<BrowserLaunchConfiguration> CreateBrowserLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var executable = Executable.Create("test", "browser");
-        await supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug, CancellationToken.None);
-
-        Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigurations));
-        return Assert.Single(launchConfigurations);
+        var launchConfiguration = await resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug);
+        return Assert.IsType<BrowserLaunchConfiguration>(launchConfiguration);
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata
