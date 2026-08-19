@@ -37,7 +37,7 @@ suite('pipeline step resolution', () => {
         const step = await resolvePipelineStep(terminalProvider, target, cliPath);
 
         assert.strictEqual(step, null);
-        assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath }));
+        assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath, suppressErrors: true }));
         assert.strictEqual(showInputBoxStub.called, false);
     });
 
@@ -92,7 +92,7 @@ suite('pipeline step resolution', () => {
 
         await doCommand(terminalProvider, editorCommandProvider, appHostPath, target, cliPath);
 
-        assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath }));
+        assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath, suppressErrors: true }));
         assert.ok(tryExecuteDoAppHostStub.calledOnceWithExactly(false, 'release', appHostPath, target, cliPath));
     });
 

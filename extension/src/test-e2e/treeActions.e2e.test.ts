@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeNoCapabilitiesCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeConfigInfoUnsupportedCliWrapper, writeNoCapabilitiesCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
 import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -101,7 +101,7 @@ suite('Aspire tree action command E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
-        await setE2eCliPathForE2E(writeNoCapabilitiesCliWrapper('aspire-legacy-pipeline-actions'));
+        await setE2eCliPathForE2E(writeConfigInfoUnsupportedCliWrapper('aspire-legacy-pipeline-actions'));
         await setDebugLaunchSuppressedForE2E(true);
 
         const validLaunchBefore = getDebugLaunchCount();
@@ -123,14 +123,14 @@ suite('Aspire tree action command E2E', function () {
         await waitForWorkbenchText('Enter a pipeline step name.');
         assert.strictEqual(getDebugLaunchCount(), whitespaceLaunchBefore);
         await cancelActiveInput();
-        await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'success', 60000, whitespaceInvocationBefore);
+        await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'canceled', 60000, whitespaceInvocationBefore);
         assert.strictEqual(getDebugLaunchCount(), whitespaceLaunchBefore);
 
         const canceledLaunchBefore = getDebugLaunchCount();
         const canceledInvocationBefore = getCommandInvocationCount('aspire-vscode.debugPipelineStepAppHost');
         await executeE2eControlCommand({ name: 'debugPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
         await cancelActiveInput();
-        await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'success', 60000, canceledInvocationBefore);
+        await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'canceled', 60000, canceledInvocationBefore);
         assert.strictEqual(getDebugLaunchCount(), canceledLaunchBefore);
     });
 

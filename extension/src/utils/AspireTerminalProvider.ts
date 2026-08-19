@@ -6,7 +6,7 @@ import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
-import { CliPathResolver, resolveCliPath } from './cliPath';
+import { CliPathResolutionResult, CliPathResolver, resolveCliPath } from './cliPath';
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
 import path from 'path';
@@ -489,10 +489,14 @@ export class AspireTerminalProvider implements vscode.Disposable {
     }
 
 
-    async getAspireCliExecutablePath(target: CliPathResolutionTarget = windowCliPathTarget): Promise<string> {
-        const result = this._cliPathResolver
+    async resolveAspireCliPath(target: CliPathResolutionTarget = windowCliPathTarget): Promise<CliPathResolutionResult> {
+        return this._cliPathResolver
             ? await this._cliPathResolver.resolve(target)
             : await resolveCliPath(target);
+    }
+
+    async getAspireCliExecutablePath(target: CliPathResolutionTarget = windowCliPathTarget): Promise<string> {
+        const result = await this.resolveAspireCliPath(target);
         return result.cliPath;
     }
 

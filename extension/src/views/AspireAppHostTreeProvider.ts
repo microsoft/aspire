@@ -1,8 +1,9 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
-import { getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 import { resolvePipelineStep } from '../utils/pipelineStep';
+import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { compareResourceCommands } from '../utils/resourceDisplay';
 import {
     pidDescription,
@@ -617,6 +618,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             if (!element.launching && !element.stopping) {
                 items.push(new WorkspaceAppHostActionItem(element, 'run'));
                 items.push(new WorkspaceAppHostActionItem(element, 'debug'));
+                items.push(new WorkspaceAppHostActionItem(element, 'deploy'));
+                items.push(new WorkspaceAppHostActionItem(element, 'publish'));
+                items.push(new WorkspaceAppHostActionItem(element, 'runPipelineStep'));
+                items.push(new WorkspaceAppHostActionItem(element, 'debugPipelineStep'));
             }
             items.push(new WorkspaceAppHostPathItem(element));
 
@@ -910,8 +915,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+        const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
         await this._launchService.launch(appHostPath, command, noDebug, undefined, target, cliPath);
     }
 
@@ -922,14 +926,27 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+        const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
         const step = await resolvePipelineStep(this._terminalProvider, target, cliPath);
         if (step === undefined) {
-            return;
+            throw new vscode.CancellationError();
         }
 
         await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, target, cliPath);
+    }
+
+    private async _resolveAppHostCli(appHostPath: string): Promise<{ target: CliPathResolutionTarget; cliPath: string }> {
+        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        const result = await checkCliAvailableOrRedirect(
+            'debug_gate',
+            target,
+            candidateTarget => this._terminalProvider.resolveAspireCliPath(candidateTarget),
+        );
+        if (!result.available) {
+            throw new vscode.CancellationError();
+        }
+
+        return { target, cliPath: result.cliPath };
     }
 
     private _getAppHostPath(element: AppHostActionElement): string | undefined {

@@ -256,6 +256,10 @@ suite('Aspire AppHost tree E2E', function () {
         const idleItem = await waitForTreeItem(section, appHostLabel);
         await idleItem.expand();
 
+        for (const actionLabel of ['Deploy AppHost', 'Publish AppHost', 'Run pipeline step', 'Debug pipeline step']) {
+            assert.ok(await waitForChildTreeItem(idleItem, actionLabel), `Expected '${actionLabel}' under the idle AppHost.`);
+        }
+
         // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
         // E2E host runs in English so the literals are stable, mirroring other tree-item labels
         // asserted in this suite (e.g. 'Run AppHost').

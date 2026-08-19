@@ -15,7 +15,7 @@ export async function resolvePipelineStep(
     cliPath: string,
 ): Promise<string | null | undefined> {
     const configInfoProvider = new ConfigInfoProvider(terminalProvider);
-    if (await configInfoProvider.hasCapability('pipelines', { target, cliPath })) {
+    if (await configInfoProvider.hasCapability('pipelines', { target, cliPath, suppressErrors: true })) {
         return null;
     }
 

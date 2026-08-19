@@ -66,6 +66,7 @@ function makeLaunchService(): AppHostLaunchService {
 
 function makeTerminalProvider(): AspireTerminalProvider {
     return {
+        resolveAspireCliPath: async () => ({ cliPath: 'aspire', available: true, source: 'path' }),
         getAspireCliExecutablePath: async () => 'aspire',
         createEnvironment: () => ({}),
         sendAspireCommandToAspireTerminal: () => { },
@@ -2253,12 +2254,20 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             'workspaceAppHostAction:openSource',
             'workspaceAppHostAction:run',
             'workspaceAppHostAction:debug',
+            'workspaceAppHostAction:deploy',
+            'workspaceAppHostAction:publish',
+            'workspaceAppHostAction:runPipelineStep',
+            'workspaceAppHostAction:debugPipelineStep',
             'workspaceAppHostPath',
         ]);
         assert.deepStrictEqual(appHostChildren.map(item => item.command?.command), [
             'aspire-vscode.openAppHostSource',
             'aspire-vscode.runAppHost',
             'aspire-vscode.debugAppHost',
+            'aspire-vscode.deployAppHost',
+            'aspire-vscode.publishAppHost',
+            'aspire-vscode.runPipelineStepAppHost',
+            'aspire-vscode.debugPipelineStepAppHost',
             'aspire-vscode.copyAppHostPath',
         ]);
         // Clicking the Path row copies the AppHost path via the same handler as the right-click
@@ -2590,9 +2599,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostDescription: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const getCliPathStub = sandbox.stub().resolves(cliPath);
+        const resolveCliPathStub = sandbox.stub().resolves({
+            cliPath,
+            available: true,
+            source: 'configured',
+        });
         const terminalProvider = {
-            getAspireCliExecutablePath: getCliPathStub,
+            resolveAspireCliPath: resolveCliPathStub,
         } as unknown as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
@@ -2608,13 +2621,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         await callbacks.get('aspire-vscode.runPipelineStepAppHost')!(secondaryAppHost);
         await callbacks.get('aspire-vscode.debugPipelineStepAppHost')!(secondaryAppHost);
 
-        assert.strictEqual(getCliPathStub.callCount, 4);
-        for (const call of getCliPathStub.getCalls()) {
+        assert.strictEqual(resolveCliPathStub.callCount, 4);
+        for (const call of resolveCliPathStub.getCalls()) {
             assert.deepStrictEqual(call.args, [secondaryTarget]);
         }
         assert.deepStrictEqual(pipelineCapabilityStub.getCalls().map(call => call.args), [
-            ['pipelines', { target: secondaryTarget, cliPath }],
-            ['pipelines', { target: secondaryTarget, cliPath }],
+            ['pipelines', { target: secondaryTarget, cliPath, suppressErrors: true }],
+            ['pipelines', { target: secondaryTarget, cliPath, suppressErrors: true }],
         ]);
         assert.deepStrictEqual(launchStub.getCalls().map(call => call.args), [
             [secondaryPath, 'deploy', false, undefined, secondaryTarget, cliPath],
@@ -2631,7 +2644,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const target = workspaceFolderCliPathTarget(targetFolder);
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
         const terminalProvider = {
-            getAspireCliExecutablePath: sandbox.stub().resolves('/repo/tools/aspire'),
+            resolveAspireCliPath: sandbox.stub().resolves({
+                cliPath: '/repo/tools/aspire',
+                available: true,
+                source: 'configured',
+            }),
         } as unknown as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
@@ -2705,7 +2722,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const terminalProvider = {
-            getAspireCliExecutablePath: sandbox.stub().resolves('/repo/tools/aspire'),
+            resolveAspireCliPath: sandbox.stub().resolves({
+                cliPath: '/repo/tools/aspire',
+                available: true,
+                source: 'configured',
+            }),
         } as unknown as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
@@ -2738,7 +2759,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const terminalProvider = {
-            getAspireCliExecutablePath: sandbox.stub().resolves('/repo/tools/aspire'),
+            resolveAspireCliPath: sandbox.stub().resolves({
+                cliPath: '/repo/tools/aspire',
+                available: true,
+                source: 'configured',
+            }),
         } as unknown as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').rejects(launchError);
@@ -2753,6 +2778,50 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         assert.strictEqual(launchStub.callCount, 1);
         assert.strictEqual(showErrorMessageStub.called, false);
+        provider.dispose();
+    });
+
+    test('selected AppHost actions stop at the CLI availability gate', async () => {
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const targetFolder = createWorkspaceFolder('repo', '/repo');
+        const target = workspaceFolderCliPathTarget(targetFolder);
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
+        const resolveCliPathStub = sandbox.stub().resolves({
+            cliPath: 'aspire',
+            available: false,
+            source: 'not-found',
+        });
+        const terminalProvider = {
+            resolveAspireCliPath: resolveCliPathStub,
+        } as unknown as AspireTerminalProvider;
+        const launchService = makeLaunchService();
+        const launchStub = sandbox.stub(launchService, 'launch').resolves();
+        const capabilityStub = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
+        const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox').resolves('deploy');
+        const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+        const callbacks = registerTreeCommandCallbacks(sandbox, provider, repository);
+        const [appHostItem] = provider.getChildren();
+
+        await callbacks.get('aspire-vscode.deployAppHost')!(appHostItem);
+        await callbacks.get('aspire-vscode.runPipelineStepAppHost')!(appHostItem);
+
+        assert.deepStrictEqual(resolveCliPathStub.getCalls().map(call => call.args), [[target], [target]]);
+        assert.strictEqual(showErrorMessageStub.callCount, 2);
+        assert.strictEqual(capabilityStub.called, false);
+        assert.strictEqual(showInputBoxStub.called, false);
+        assert.strictEqual(launchStub.called, false);
         provider.dispose();
     });
 

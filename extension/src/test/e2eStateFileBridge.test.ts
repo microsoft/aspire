@@ -36,7 +36,11 @@ suite('E2E state file bridge', () => {
             uri.fsPath.startsWith(secondaryFolder.uri.fsPath) ? secondaryFolder : undefined);
         const repository = createRepository([primaryPath, secondaryPath], primaryPath);
         const terminalProvider = {
-            getAspireCliExecutablePath: sandbox.stub().resolves(cliPath),
+            resolveAspireCliPath: sandbox.stub().resolves({
+                cliPath,
+                available: true,
+                source: 'configured',
+            }),
         } as unknown as AspireTerminalProvider;
         const launchService = new AppHostLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
