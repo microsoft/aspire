@@ -113,6 +113,13 @@ internal sealed class RadiusInfrastructureBuilder
     private readonly List<ContainerEnvSecretReference> _containerEnvSecretReferences = [];
 
     /// <summary>
+    /// The <c>resource-types-contrib</c> commit whose recipe publish is pinned for types that have
+    /// no stable recipe release yet. Every push to that repository's <c>main</c> publishes an
+    /// immutable tag named after its commit SHA, which is the pin Radius itself uses.
+    /// </summary>
+    private const string UnreleasedRecipeSha = "ebdeec9509036f2b2f271e41661e6fcfe45eda89";
+
+    /// <summary>
     /// Default recipe template paths per resource type.
     /// </summary>
     private static readonly Dictionary<string, string> s_defaultRecipeTemplates = new(StringComparer.Ordinal)
@@ -121,11 +128,24 @@ internal sealed class RadiusInfrastructureBuilder
         // recipes/local-dev/ prefix that serves the Applications.* portable types. Pairing a UDT
         // with a local-dev recipe both fails to pull and would ignore the credentials Aspire sets,
         // because only the UDT recipe reads them from context.resource.properties.
-        [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/kube-recipes/rediscaches:latest",
+        //
+        // rediscaches and rabbitmq are pinned by commit SHA rather than :latest because they have
+        // no :latest to pin to. resource-types-contrib moves :latest only on a stable recipe
+        // release and publishes an immutable <sha> tag on every push to main, and these two types
+        // post-date the last stable release — `ghcr.io/radius-project/kube-recipes/rabbitmq:latest`
+        // is a 404, which surfaces as a RecipeDownloadFailed at `rad deploy` rather than at publish.
+        // The SHA below is the newest publish carrying both (resource-types-contrib ebdeec95,
+        // "Make RabbitMQ password optional"), and it is byte-identical to `edge` today; `edge`
+        // itself is unusable here because it floats, and a generated artifact must keep deploying
+        // the recipe it was published against. Move both to :latest once a stable release includes
+        // them. See
+        // https://github.com/radius-project/resource-types-contrib/blob/main/.github/workflows/publish-bicep-recipes.yaml
+        // for the tag contract.
+        [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/kube-recipes/rediscaches:" + UnreleasedRecipeSha,
         // See https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep.
         [RadiusResourceTypes.PostgreSqlDatabases] = "ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest",
         [RadiusResourceTypes.MongoDatabases] = "ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest",
-        [RadiusResourceTypes.RabbitMQ] = "ghcr.io/radius-project/kube-recipes/rabbitmq:latest",
+        [RadiusResourceTypes.RabbitMQ] = "ghcr.io/radius-project/kube-recipes/rabbitmq:" + UnreleasedRecipeSha,
         // Radius.Security/secrets is recipe-backed like any other type. Registered on demand when
         // a resource's credential is carried by a secret resource — see the call site in BuildAsync.
         [RadiusResourceTypes.SecuritySecrets] = "ghcr.io/radius-project/kube-recipes/secrets:latest",

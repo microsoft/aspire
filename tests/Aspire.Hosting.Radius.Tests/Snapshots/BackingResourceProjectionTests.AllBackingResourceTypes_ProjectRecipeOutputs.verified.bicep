@@ -14,7 +14,7 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
     recipes: {
       'Radius.Data/redisCaches': {
         kind: 'bicep'
-        source: 'ghcr.io/radius-project/kube-recipes/rediscaches:latest'
+        source: 'ghcr.io/radius-project/kube-recipes/rediscaches:ebdeec9509036f2b2f271e41661e6fcfe45eda89'
       }
       'Radius.Data/postgreSqlDatabases': {
         kind: 'bicep'
@@ -22,7 +22,7 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
       }
       'Radius.Messaging/rabbitMQ': {
         kind: 'bicep'
-        source: 'ghcr.io/radius-project/kube-recipes/rabbitmq:latest'
+        source: 'ghcr.io/radius-project/kube-recipes/rabbitmq:ebdeec9509036f2b2f271e41661e6fcfe45eda89'
       }
       'Radius.Security/secrets': {
         kind: 'bicep'
