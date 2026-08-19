@@ -60,6 +60,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 throw new InvalidOperationException($"Interaction '{interactionId}' is not accepting file uploads for input '{inputName}'.");
             }
 
+            // Each client submits one file selection per input during an interaction. Multi-file selections upload
+            // their files sequentially as part of that single selection, so every upload counts toward this limit.
             // Count uploads in progress as reserved slots so concurrent requests cannot exceed the input's limit.
             var fileCount = interaction.Files.Values.Count(entry => string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName));
             if (fileCount >= maxFileCount)
@@ -278,7 +280,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
                 continue;
             }
-            var fileName = string.IsNullOrEmpty(fileRef.Name) ? store.GetFileName(interactionId, fileRef.Id) ?? "" : fileRef.Name;
+            var fileName = store.GetFileName(interactionId, fileRef.Id) ?? "";
             files.Add(new InputFileDto(fileRef.Id, fileName, filePath, () => store.RemoveEntry(interactionId, fileRef.Id)));
         }
 

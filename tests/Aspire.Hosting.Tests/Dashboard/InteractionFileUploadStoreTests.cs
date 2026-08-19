@@ -366,6 +366,22 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
+    public void ResolveFileReferences_ClientProvidedName_UsesStoredFileName()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+
+        var (fileId, _) = CreateEntry(fileUploadStore, "../../../cert.pem", "CertInput");
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"../../target\"}}]";
+
+        var resolvedFiles = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "CertInput", NullLogger.Instance);
+
+        var file = Assert.Single(resolvedFiles!);
+        Assert.Equal("cert.pem", file.Name);
+    }
+
+    [Fact]
     public void ResolveFileReferences_DifferentInputName_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
