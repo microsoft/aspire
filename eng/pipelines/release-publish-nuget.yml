@@ -2186,7 +2186,9 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
 
-                  npm install -g @vscode/vsce@3.7.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+                  # Azure Identity 4.13.2 depends on @azure/core-process, which is not yet
+                  # available in dotnet-public-npm. Remove this pin after 1.0.0 is mirrored.
+                  npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
                   vsce --version
                 displayName: 'Install vsce'
 

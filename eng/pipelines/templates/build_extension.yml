@@ -74,7 +74,9 @@ jobs:
           inputs:
             targetType: 'inline'
             script: |
-              npm install -g @vscode/vsce@3.7.1
+              # Azure Identity 4.13.2 depends on @azure/core-process, which is not yet
+              # available in dotnet-public-npm. Remove this pin after 1.0.0 is mirrored.
+              npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1
               vsce --version
             workingDirectory: '$(Build.SourcesDirectory)'
 
