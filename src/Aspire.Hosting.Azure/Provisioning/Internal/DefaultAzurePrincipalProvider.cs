@@ -11,9 +11,11 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 /// </summary>
 internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tokenCredentialProvider) : IAzurePrincipalProvider
 {
-    // Microsoft Entra principal-type values surfaced via the `idtyp` claim on access tokens.
+    // Microsoft Entra reports the token's identity type in the `idtyp` claim: "app" for app-only
+    // (service principal / managed identity / federated workload identity) tokens and "user" for
+    // user-delegated ones. Only "app" needs matching here because every other value — including
+    // "user" and the claim being absent entirely — falls through to the User default below.
     // See: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference#payload-claims
-    private const string IdTypUser = "user";
     private const string IdTypApp = "app";
 
     // Values accepted by the `principalType` property on Microsoft.Authorization/roleAssignments.
@@ -28,17 +30,6 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
 
         static AzurePrincipal ParseToken(in AccessToken response)
         {
-            // Decode the JWT payload (the middle segment of "header.payload.signature"). JWTs use
-            // base64url with stripped padding, so swap the URL-safe characters back and re-pad
-            // to a length divisible by four before base64-decoding. Example payload shape:
-            //   { "oid":"<guid>","upn":"user@contoso.com","idtyp":"user","iss":"..." }
-            // For app-only (service principal) tokens the `upn` claim is absent and `idtyp` is "app".
-            var oid = string.Empty;
-            var upn = string.Empty;
-            // Default to "User" so older tokens (and any flow that omits `idtyp`) keep the
-            // historical behavior — a hardcoded "User" principalType — instead of regressing
-            // to an empty value.
-            var principalType = PrincipalTypeUser;
             // A JWT is "header.payload.signature". The token credential should always return
             // that shape, but guard explicitly so a malformed token surfaces as a clear error
             // instead of a confusing IndexOutOfRangeException deep in the parser.
@@ -48,8 +39,14 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
                 throw new InvalidOperationException(
                     $"The access token returned by the credential is not a valid JWT (expected 3 '.'-separated segments, found {parts.Length}).");
             }
+
+            // Decode the JWT payload (the middle segment). JWTs use base64url with stripped
+            // padding (RFC 7515 §2), so swap the URL-safe characters back and re-pad to a length
+            // divisible by four before base64-decoding. Example payload shape:
+            //   { "oid":"<guid>","upn":"user@contoso.com","idtyp":"user","iss":"..." }
+            // For app-only (service principal) tokens the `upn` claim is absent and `idtyp` is "app".
             var part = parts[1];
-            var convertedToken = part.ToString().Replace('_', '/').Replace('-', '+');
+            var convertedToken = part.Replace('_', '/').Replace('-', '+');
 
             switch (part.Length % 4)
             {
@@ -60,47 +57,57 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
                     convertedToken += "=";
                     break;
             }
+
             var bytes = Convert.FromBase64String(convertedToken);
-            Utf8JsonReader reader = new(bytes);
-            while (reader.Read())
+
+            // Read claims from the root object only. JWT claims are top-level by definition, but a
+            // claim's *value* can itself be an object or array — Entra emits `_claim_sources` that
+            // way for the groups-overage case, and RFC 8693 delegation tokens nest identity claims
+            // under `act`. A streaming reader that walks every token would treat a nested "oid" or
+            // "idtyp" as if it were a real claim, and last-write-wins would silently swap the
+            // principal these values describe. That matters here because they become the
+            // principalId/principalType of an ARM role assignment, so picking up the wrong one
+            // would grant access to the wrong identity. Microsoft also documents that new claims
+            // may be added without notice, so scope the lookup structurally rather than relying on
+            // today's payloads happening to be flat.
+            using var document = JsonDocument.Parse(bytes);
+            var root = document.RootElement;
+
+            var oid = GetRootString(root, "oid");
+            if (!Guid.TryParse(oid, out var principalId))
             {
-                if (reader.TokenType == JsonTokenType.PropertyName)
-                {
-                    var header = reader.GetString();
-                    if (header == "oid")
-                    {
-                        reader.Read();
-                        oid = reader.GetString()!;
-                    }
-                    else if (header is "upn" or "email")
-                    {
-                        reader.Read();
-                        upn = reader.GetString()!;
-                    }
-                    else if (header == "idtyp")
-                    {
-                        reader.Read();
-                        // `idtyp` values are lower-case per Entra spec, but compare case-insensitively
-                        // for resilience against future producers that may emit different casing.
-                        var idtyp = reader.GetString();
-                        if (string.Equals(idtyp, IdTypApp, StringComparison.OrdinalIgnoreCase))
-                        {
-                            principalType = PrincipalTypeServicePrincipal;
-                        }
-                        else if (string.Equals(idtyp, IdTypUser, StringComparison.OrdinalIgnoreCase))
-                        {
-                            principalType = PrincipalTypeUser;
-                        }
-                    }
-                    else
-                    {
-                        reader.Read();
-                    }
-                }
+                throw new InvalidOperationException(
+                    "The access token returned by the credential does not contain a valid 'oid' (object id) claim, " +
+                    "so the Azure principal being provisioned as could not be determined.");
             }
-            return new AzurePrincipal(Guid.Parse(oid), upn, principalType);
+
+            // `upn` is the user principal name; `email` is the fallback for accounts that don't
+            // carry one (for example guests). Neither is present on app-only tokens, which is why
+            // an empty name is tolerated here.
+            var upn = GetRootString(root, "upn") ?? GetRootString(root, "email") ?? string.Empty;
+
+            // Default to "User" so older tokens — and any flow that omits `idtyp` — keep the
+            // historical behavior of a hardcoded "User" principalType instead of regressing to an
+            // empty value. `idtyp` is an optional claim that Entra only emits for app-only tokens
+            // unless the resource opts in via `include_user_token`, so absence is not evidence of
+            // a user identity; it just means we can't tell and fall back to the previous default.
+            // The comparison is case-insensitive for resilience against future producers that emit
+            // different casing than the lower-case values Entra documents.
+            var principalType = string.Equals(GetRootString(root, "idtyp"), IdTypApp, StringComparison.OrdinalIgnoreCase)
+                ? PrincipalTypeServicePrincipal
+                : PrincipalTypeUser;
+
+            return new AzurePrincipal(principalId, upn, principalType);
         }
 
         return ParseToken(response);
     }
+
+    // Reads a string claim from the root of the payload. Returns null when the claim is absent or
+    // is not a JSON string, so a structurally unexpected value is treated as "not supplied" rather
+    // than throwing out of the middle of provisioning.
+    private static string? GetRootString(JsonElement root, string claimName) =>
+        root.TryGetProperty(claimName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 }

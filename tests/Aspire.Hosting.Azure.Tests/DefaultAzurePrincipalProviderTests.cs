@@ -150,15 +150,88 @@ public class DefaultAzurePrincipalProviderTests
         Assert.Contains("not a valid JWT", ex.Message);
     }
 
+    [Theory]
+    [InlineData("""{"upn":"test@example.com","idtyp":"user"}""")]
+    [InlineData("""{"oid":"not-a-guid","idtyp":"user"}""")]
+    [InlineData("""{"oid":{"value":"11111111-2222-3333-4444-555555555555"},"idtyp":"user"}""")]
+    public async Task GetPrincipalAsync_ThrowsClearErrorWhenOidClaimIsUnusable(string payloadJson)
+    {
+        // The principal id becomes the `principalId` of an ARM role assignment, so a token without
+        // a usable `oid` must fail loudly here rather than surfacing later as an opaque
+        // "Unrecognized Guid format" FormatException from the middle of provisioning.
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetPrincipalAsync());
+        Assert.Contains("'oid'", ex.Message);
+    }
+
+    [Theory]
+    // A delegation-style `act` claim (RFC 8693 §4.1) carrying a competing identity, positioned
+    // after the real claims so a last-write-wins scan would end up preferring it.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app","act":{"oid":"99999999-9999-9999-9999-999999999999","idtyp":"user"}}
+        """, "ServicePrincipal")]
+    // Same shape but nested inside an array element rather than a bare object.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app","things":[{"oid":"99999999-9999-9999-9999-999999999999","idtyp":"user"}]}
+        """, "ServicePrincipal")]
+    // Entra's groups-overage payload nests an object under `_claim_sources`; this variant hides a
+    // conflicting `idtyp` there while the token itself carries none, so no ordering is involved.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","_claim_sources":{"src1":{"idtyp":"app"}}}
+        """, "User")]
+    public async Task GetPrincipalAsync_IgnoresClaimsNestedInsideOtherClaims(string payloadJson, string expectedPrincipalType)
+    {
+        // Claims are top-level by definition, but a claim's *value* may be an object or array.
+        // Those nested properties must never be mistaken for real claims: the parsed principal is
+        // written straight into the principalId/principalType of an ARM role assignment, so
+        // picking up a nested identity would grant access to the wrong principal.
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal(Guid.Parse("11111111-2222-3333-4444-555555555555"), principal.Id);
+        Assert.Equal(expectedPrincipalType, principal.Type);
+    }
+
+    [Fact]
+    public async Task GetPrincipalAsync_IgnoresNameClaimsNestedInsideOtherClaims()
+    {
+        var payloadJson = """
+            {"oid":"11111111-2222-3333-4444-555555555555","upn":"real@example.com","act":{"upn":"nested@example.com","email":"nested@example.com"}}
+            """;
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("real@example.com", principal.Name);
+    }
+
+    [Fact]
+    public async Task GetPrincipalAsync_PrefersUpnOverEmailWhenBothPresent()
+    {
+        // `email` is only a fallback for accounts that carry no `upn`, so a token with both must
+        // resolve to the `upn` regardless of the order the two claims appear in the payload.
+        var payloadJson = """
+            {"oid":"11111111-2222-3333-4444-555555555555","email":"fallback@example.com","upn":"primary@example.com"}
+            """;
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("primary@example.com", principal.Name);
+    }
+
     // Produces a JWT-shaped string ("header.payload.signature") with the requested claims.
     // All three segments use base64url encoding (RFC 7515 §3) so the helper matches the wire
     // format real Azure AD tokens use, even though the provider currently only decodes the
     // payload segment.
     private static string CreateTestToken(Guid oid, string? upn = null, string? email = null, string? idtyp = null)
     {
-        var headerJson = JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" });
-        var header = Base64UrlEncode(Encoding.UTF8.GetBytes(headerJson));
-
         var payload = new Dictionary<string, object?>
         {
             ["oid"] = oid.ToString(),
@@ -178,10 +251,20 @@ public class DefaultAzurePrincipalProviderTests
             payload["idtyp"] = idtyp;
         }
 
-        var payloadBase64 = Base64UrlEncode(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload)));
+        return CreateTokenFromPayload(JsonSerializer.Serialize(payload));
+    }
+
+    // Wraps a verbatim payload in JWT framing. Tests that care about claim ordering or nesting
+    // supply the JSON directly so the exact wire shape under test is visible in the test itself
+    // rather than depending on how a serializer happens to order a dictionary.
+    private static string CreateTokenFromPayload(string payloadJson)
+    {
+        var headerJson = JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" });
+        var header = Base64UrlEncode(Encoding.UTF8.GetBytes(headerJson));
+        var payload = Base64UrlEncode(Encoding.UTF8.GetBytes(payloadJson));
         var signature = Base64UrlEncode(Encoding.UTF8.GetBytes("test-signature"));
 
-        return $"{header}.{payloadBase64}.{signature}";
+        return $"{header}.{payload}.{signature}";
     }
 
     private static string Base64UrlEncode(byte[] bytes) =>
