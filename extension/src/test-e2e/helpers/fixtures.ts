@@ -462,13 +462,17 @@ export function removeLegacyAspireSettings(): void {
     removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });
 }
 
-export function createAdditionalAppHostCandidate(projectName = 'AspireE2E.SecondAppHost', kind: 'project' | 'single-file' = 'project'): string {
+export function createAdditionalAppHostCandidate(
+    projectName = 'AspireE2E.SecondAppHost',
+    kind: 'project' | 'single-file' = 'project',
+    sdkVersion = getAppHostSdkVersion()
+): string {
     const projectDirectory = path.join(getWorkspaceRoot(), projectName);
     fs.mkdirSync(projectDirectory, { recursive: true });
 
     if (kind === 'single-file') {
         const appHostPath = path.join(projectDirectory, 'apphost.cs');
-        fs.writeFileSync(appHostPath, `${csharpFileHeader}#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}
+        fs.writeFileSync(appHostPath, `${csharpFileHeader}#:sdk Aspire.AppHost.Sdk@${sdkVersion}
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -478,7 +482,7 @@ builder.Build().Run();
         return appHostPath;
     }
 
-    fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${getAppHostSdkVersion()}">
+    fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${sdkVersion}">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

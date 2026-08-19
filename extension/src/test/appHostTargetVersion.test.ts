@@ -204,6 +204,66 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.1');
     });
 
+    test('does not use conditional package references for runtime compatibility', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup Condition="'$(UseCurrentAspire)' == 'true'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseCurrentAspire)' != 'true'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        const version = await getAppHostTargetVersion(appHostPath);
+        assert.strictEqual(version, undefined);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(version), false);
+    });
+
+    test('does not use a package reference with a raw greater-than condition', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup Condition="'$(AspireGeneration)' > '0'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('does not choose between conflicting package versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.0" />
+    <PackageReference Update="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('combines an unversioned package reference with concrete package version metadata', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Update="Aspire.Hosting.AppHost" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.6');
+    });
+
     test('reads the centrally managed older C# AppHost package reference version', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');

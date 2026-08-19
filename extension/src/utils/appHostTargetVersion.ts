@@ -174,6 +174,15 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
         };
     }
 
+    // This parser was originally added for telemetry and deliberately does not evaluate MSBuild.
+    // Runtime compatibility decisions must therefore fail closed when source declarations can
+    // resolve differently after Condition evaluation, or when multiple declarations disagree.
+    if (hasAmbiguousAppHostVersionDeclarations(uncommentedContents)) {
+        return {
+            isCSharpAppHostFile: true,
+        };
+    }
+
     const packageVersion = getAspireHostingPackageVersionFromProject(uncommentedContents);
     if (packageVersion.version) {
         return {
@@ -300,6 +309,60 @@ function getAspireHostingPackageVersionFromItems(contents: string, itemNames: re
     }
 
     return { referencesAspireHostingPackage, hasInlineVersion };
+}
+
+function hasAmbiguousAppHostVersionDeclarations(contents: string): boolean {
+    // MSBuild conditions can affect a declaration directly, through a containing ItemGroup,
+    // or through a property used by the version. This lightweight source parser cannot evaluate
+    // any of those forms, so do not use a conditioned project for a runtime compatibility gate.
+    if (/\bCondition\s*=/i.test(contents)) {
+        return true;
+    }
+
+    const versions = new Set(getAppHostVersionDeclarations(contents).map(version => version ?? unknownVersion));
+    return versions.size > 1;
+}
+
+function getAppHostVersionDeclarations(contents: string): Array<string | undefined> {
+    const versions: Array<string | undefined> = [];
+
+    const projectSdkMatch = /<Project\b[^>]*\bSdk\s*=\s*(["'])(?<sdks>.*?)\1/is.exec(contents);
+    for (const sdk of projectSdkMatch?.groups?.sdks?.split(';') ?? []) {
+        const sdkMatch = /^Aspire\.AppHost\.Sdk(?:\/(?<version>[^;\s"']+))?$/i.exec(sdk.trim());
+        if (sdkMatch?.groups?.version !== undefined) {
+            versions.push(normalizeVersion(sdkMatch.groups?.version));
+        }
+    }
+
+    const sdkElementRegex = /<Sdk\b(?=[^>]*\bName\s*=\s*(["'])Aspire\.AppHost\.Sdk\1)[^>]*>/gis;
+    for (const match of contents.matchAll(sdkElementRegex)) {
+        const version = getXmlAttribute(match[0], 'Version');
+        if (version !== undefined) {
+            versions.push(normalizeVersion(version));
+        }
+    }
+
+    for (const itemName of ['PackageReference', 'AspireProjectOrPackageReference', 'PackageVersion']) {
+        for (const item of getMsBuildItems(contents, itemName)) {
+            if (isAspireHostingPackageId(getMsBuildItemIdentity(item))) {
+                const versionMetadata = getMsBuildVersionMetadata(item);
+                if (versionMetadata.hasVersion) {
+                    versions.push(versionMetadata.version);
+                }
+            }
+        }
+    }
+
+    const propertyRegex = /<AspireHostingSDKVersion\b[^>]*>\s*(?<version>[^<\s]+)\s*<\/AspireHostingSDKVersion>/gi;
+    for (const match of contents.matchAll(propertyRegex)) {
+        versions.push(normalizeVersion(match.groups?.version));
+    }
+
+    return versions;
+}
+
+function isAspireHostingPackageId(value: string | undefined): boolean {
+    return value === 'Aspire.Hosting' || value === 'Aspire.Hosting.AppHost';
 }
 
 function getMsBuildItems(contents: string, itemName: string): string[] {
@@ -509,9 +572,10 @@ async function readAspireHostingPackageVersionFromDirectoryPackages(packagesPath
         return { foundConfig: false };
     }
 
-    const packageVersion = getAspireHostingPackageVersionFromPackageVersionsFile(contents);
     return {
-        version: packageVersion.version,
+        version: hasAmbiguousAppHostVersionDeclarations(contents)
+            ? undefined
+            : getAspireHostingPackageVersionFromPackageVersionsFile(contents).version,
         foundConfig: true,
     };
 }
