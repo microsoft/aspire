@@ -1,0 +1,29 @@
+{
+  "run_id": 32205890727,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32205890727",
+  "analyzed_at": "2026-08-19T02:39:41Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19474,
+    "title": "Stabilize the Java extension E2E shards: cache the Maven distribution, bound the recorder install, and fix a cleanup race",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "fix/java-e2e-maven-wrapper-cache",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19474"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "id": 95930935474,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32205890727/job/95930935474",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' and no retrievable job logs or TRX test failures. The PR's changes only touch the Java extension E2E shard (Maven cache, recorder install, cleanup race) and its supporting scripts/tests; the failing shard is the unrelated 'apphost-tree' shard on Windows. This matches the recurring pattern of intermittent, unretrievable-log failures seen across multiple other VS Code extension E2E shards (java-apphost, settings-files, apphost-lifecycle-tools).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-apphost-tree-flaky"]
+}
