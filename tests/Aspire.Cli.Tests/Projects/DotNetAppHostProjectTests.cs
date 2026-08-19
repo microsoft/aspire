@@ -1267,6 +1267,91 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_ProjectAppHostSelectedLaunchProfileWithInvalidCommandNameCasingFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": { "commandName": "project" }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not accept an SDK-invalid command name.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, options, _) =>
+        {
+            Assert.Equal("E2E", options.LaunchProfile);
+            return Task.FromResult(129);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(129, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDuplicateSelectedLaunchProfileFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": { "commandName": "Project", "environmentVariables": { "PROFILE": "first" } },
+                "E2E": { "commandName": "Project", "environmentVariables": { "PROFILE": "second" } }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not collapse duplicate profile properties.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        {
+            Assert.Equal("e2e", options.LaunchProfile);
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey("PROFILE"));
+            return Task.FromResult(130);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "e2e",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(130, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostDirectLaunchSetsWorkloadIdAndPreservesLaunchProfileInputs()
     {
         var appHostFile = CreateProjectAppHost();

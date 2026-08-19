@@ -6,12 +6,6 @@ using System.Text.Json.Serialization;
 
 namespace Aspire.Cli.Projects;
 
-internal sealed class AppHostLaunchSettings
-{
-    [JsonPropertyName("profiles")]
-    public Dictionary<string, AppHostLaunchProfile> Profiles { get; set; } = [];
-}
-
 internal sealed class AppHostLaunchProfile
 {
     [JsonPropertyName("commandName")]
@@ -33,7 +27,7 @@ internal sealed class AppHostLaunchProfile
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
 }
 
-[JsonSerializable(typeof(AppHostLaunchSettings))]
+[JsonSerializable(typeof(AppHostLaunchProfile))]
 [JsonSourceGenerationOptions(ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]
 internal sealed partial class AppHostLaunchSettingsSerializerContext : JsonSerializerContext
 {
