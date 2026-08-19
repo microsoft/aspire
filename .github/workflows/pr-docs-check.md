@@ -125,12 +125,12 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: agent
           path: /tmp/gh-aw/
@@ -312,7 +312,7 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v4
+          uses: actions/checkout@v4.3.1
           with:
             path: _validator
             sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
@@ -574,7 +574,7 @@ pre-agent-steps:
     # For a merged pull_request:closed event, the default `ref` is the updated
     # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
     # Both select the helper version associated with the workflow being run.
-    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    uses: actions/checkout@v6.0.2
     with:
       repository: microsoft/aspire
       path: _repos/aspire
