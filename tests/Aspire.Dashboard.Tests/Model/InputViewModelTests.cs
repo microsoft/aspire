@@ -10,6 +10,23 @@ namespace Aspire.Dashboard.Tests.Model;
 public class InputViewModelTests
 {
     [Fact]
+    public void Value_NullIsNormalizedToEmptyString()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose Color",
+            InputType = InputType.Choice,
+            Value = "blue"
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.Value = null;
+
+        Assert.Equal(string.Empty, viewModel.Value);
+        Assert.Equal(string.Empty, input.Value);
+    }
+
+    [Fact]
     public void InputViewModel_ChoiceWithoutPlaceholder_DefaultsToFirstOption()
     {
         // Arrange

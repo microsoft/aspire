@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -97,10 +98,11 @@ public sealed class InputViewModel
         return filteredValues;
     }
 
-    public string? Value
+    [AllowNull]
+    public string Value
     {
         get => Input.Value;
-        set => Input.Value = value;
+        set => Input.Value = value ?? string.Empty;
     }
 
     // Used when binding to FluentCheckbox.

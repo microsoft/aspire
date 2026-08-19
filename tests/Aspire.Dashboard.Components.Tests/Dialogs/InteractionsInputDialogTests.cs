@@ -127,6 +127,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, string>>());
         Assert.Null(component.Instance.OptionValue!(null));
         Assert.Null(component.Instance.OptionText!(null));
+        await component.InvokeAsync(() => component.Instance.ValueChanged.InvokeAsync(null));
+        Assert.Equal(string.Empty, viewModel.Inputs[0].Value);
     }
 
     [Fact]
@@ -134,7 +136,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     {
         var getCut = SetUpDialog(out var dialogService);
 
-        await dialogService.ShowDialogAsync<InteractionsInputDialog>(CreateChoiceViewModel(allowCustomChoice: false), new DialogParameters
+        var viewModel = CreateChoiceViewModel(allowCustomChoice: false);
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters
         {
             Title = "Choose a color"
         });
@@ -143,6 +146,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var component = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, string>>());
         Assert.Null(component.Instance.OptionValue!(null));
         Assert.Null(component.Instance.OptionText!(null));
+        await component.InvokeAsync(() => component.Instance.ValueChanged.InvokeAsync(null));
+        Assert.Equal(string.Empty, viewModel.Inputs[0].Value);
     }
 
     private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
