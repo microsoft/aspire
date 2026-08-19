@@ -42,18 +42,14 @@ suite('utils/workspace tests', () => {
             assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
         });
 
-        test('uses the supplied resolver for the availability decision', async () => {
-            const resolver = sandbox.stub().resolves({
-                cliPath: '/repo/a/bin/aspire',
-                available: true,
-                source: 'configured' as const,
-            });
+        test('uses pinnedCliPath without re-resolving the CLI', async () => {
             const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath');
+            const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
 
-            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, { resolver });
+            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/a/bin/aspire' });
 
             assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
-            assert.ok(resolver.calledOnceWith(windowCliPathTarget));
+            assert.ok(tryExecuteCliStub.calledOnceWithExactly('/repo/a/bin/aspire'));
             assert.strictEqual(resolveCliPathStub.called, false);
         });
     });

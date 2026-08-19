@@ -252,24 +252,22 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @param target The resolution scope to check availability for: the workspace folder that
  * owns the operation, or the window scope for operations with no single owning folder.
- * @param options Optional CLI resolution policy or the exact CLI previously selected for a
- * restart or resumed operation.
+ * @param options Optional exact CLI previously selected for a restart or resumed operation.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
 export async function checkCliAvailableOrRedirect(
     operation: 'command_gate' | 'debug_gate',
     target: CliPathResolutionTarget,
     options?: {
-        resolver?: (target: CliPathResolutionTarget) => Promise<CliPathResolutionResult>;
         pinnedCliPath?: string;
     },
 ): Promise<{ cliPath: string; available: boolean }> {
     // A restart validates the executable that its already-negotiated arguments target.
-    // Ordinary launches resolve fresh through the caller's CLI selection policy because
-    // settings or PATH may have changed.
+    // Ordinary launches resolve fresh through the canonical CLI path resolver because settings or
+    // PATH may have changed.
     const startTime = Date.now();
     const result: CliPathResolutionResult = options?.pinnedCliPath === undefined
-        ? await (options?.resolver ?? resolveCliPath)(target)
+        ? await resolveCliPath(target)
         : {
             cliPath: options.pinnedCliPath,
             available: await tryExecuteCli(options.pinnedCliPath),

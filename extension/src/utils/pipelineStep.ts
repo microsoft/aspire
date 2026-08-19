@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { enterPipelineStep, pipelineStepRequired } from '../loc/strings';
-import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { CliPathResolutionTarget } from './cliPathVariables';
 import { ConfigInfoProvider } from './configInfoProvider';
 
@@ -10,11 +9,10 @@ import { ConfigInfoProvider } from './configInfoProvider';
  * Returns undefined when the user cancels the compatibility prompt.
  */
 export async function resolvePipelineStep(
-    terminalProvider: AspireTerminalProvider,
+    configInfoProvider: ConfigInfoProvider,
     target: CliPathResolutionTarget,
     cliPath: string,
 ): Promise<string | null | undefined> {
-    const configInfoProvider = new ConfigInfoProvider(terminalProvider);
     if (await configInfoProvider.hasCapability('pipelines', { target, cliPath, suppressErrors: true })) {
         return null;
     }

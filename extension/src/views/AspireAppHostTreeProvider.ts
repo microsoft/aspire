@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { resolvePipelineStep } from '../utils/pipelineStep';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { compareResourceCommands } from '../utils/resourceDisplay';
@@ -117,6 +118,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         private readonly _launchService: AppHostLaunchService,
         private readonly _secretWarningState?: vscode.Memento,
         private readonly _clipboard: Clipboard = vscode.env.clipboard,
+        private readonly _configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(_terminalProvider),
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._clearLaunchingPathsForRunningAppHosts();
@@ -927,7 +929,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
-        const step = await resolvePipelineStep(this._terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(this._configInfoProvider, target, cliPath);
         if (step === undefined) {
             throw new vscode.CancellationError();
         }
@@ -937,11 +939,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private async _resolveAppHostCli(appHostPath: string): Promise<{ target: CliPathResolutionTarget; cliPath: string }> {
         const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
-        const result = await checkCliAvailableOrRedirect(
-            'debug_gate',
-            target,
-            { resolver: candidateTarget => this._terminalProvider.resolveAspireCliPath(candidateTarget) },
-        );
+        const result = await checkCliAvailableOrRedirect('debug_gate', target);
         if (!result.available) {
             throw new vscode.CancellationError();
         }

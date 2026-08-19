@@ -2601,14 +2601,12 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostDescription: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
-        const resolveCliPathStub = sandbox.stub().resolves({
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
             cliPath,
             available: true,
             source: 'configured',
         });
-        const terminalProvider = {
-            resolveAspireCliPath: resolveCliPathStub,
-        } as unknown as AspireTerminalProvider;
+        const terminalProvider = {} as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
         const pipelineCapabilityStub = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
@@ -2645,6 +2643,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const targetFolder = createWorkspaceFolder('repo', '/repo');
         const target = workspaceFolderCliPathTarget(targetFolder);
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
+        sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/repo/tools/aspire',
+            available: true,
+            source: 'configured',
+        });
         const terminalProvider = {
             resolveAspireCliPath: sandbox.stub().resolves({
                 cliPath: '/repo/tools/aspire',
@@ -2788,14 +2791,12 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const targetFolder = createWorkspaceFolder('repo', '/repo');
         const target = workspaceFolderCliPathTarget(targetFolder);
         sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
-        const resolveCliPathStub = sandbox.stub().resolves({
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
             cliPath: 'aspire',
             available: false,
             source: 'not-found',
         });
-        const terminalProvider = {
-            resolveAspireCliPath: resolveCliPathStub,
-        } as unknown as AspireTerminalProvider;
+        const terminalProvider = {} as AspireTerminalProvider;
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
         const capabilityStub = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
