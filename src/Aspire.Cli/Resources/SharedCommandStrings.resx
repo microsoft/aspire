@@ -179,6 +179,13 @@
   <data name="IsolatedOptionDescription" xml:space="preserve">
     <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
   </data>
+  <data name="LaunchProfileOptionDescription" xml:space="preserve">
+    <value>The .NET launch profile to use when starting the AppHost</value>
+  </data>
+  <data name="LaunchProfileNotSupported" xml:space="preserve">
+    <value>The --launch-profile option is not supported for {0} AppHosts.</value>
+    <comment>{0} is the AppHost project type display name.</comment>
+  </data>
   <data name="UsingAppHost" xml:space="preserve">
     <value>Using AppHost: {0}</value>
   </data>

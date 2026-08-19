@@ -52,6 +52,16 @@
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
         <note />
       </trans-unit>
+      <trans-unit id="LaunchProfileNotSupported">
+        <source>The --launch-profile option is not supported for {0} AppHosts.</source>
+        <target state="new">The --launch-profile option is not supported for {0} AppHosts.</target>
+        <note>{0} is the AppHost project type display name.</note>
+      </trans-unit>
+      <trans-unit id="LaunchProfileOptionDescription">
+        <source>The .NET launch profile to use when starting the AppHost</source>
+        <target state="new">The .NET launch profile to use when starting the AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LsAllOptionDescription">
         <source>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</source>
         <target state="new">Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</target>

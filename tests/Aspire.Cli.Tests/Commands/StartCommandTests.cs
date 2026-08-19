@@ -100,6 +100,23 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
+    [Theory]
+    [InlineData("--launch-profile")]
+    [InlineData("-lp")]
+    public void StartCommand_ParsesLaunchProfileOption(string optionName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["start", optionName, "E2E"]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("E2E", result.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Empty(result.UnmatchedTokens);
+    }
+
     [Fact]
     public async Task StartCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
@@ -134,11 +151,14 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("start -- --custom-arg value");
+        var result = command.Parse("start -- --custom-arg value --launch-profile E2E");
 
         Assert.Empty(result.Errors);
+        Assert.Null(result.GetValue(AppHostLauncher.s_launchProfileOption));
         Assert.Contains("--custom-arg", result.UnmatchedTokens);
         Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Contains("--launch-profile", result.UnmatchedTokens);
+        Assert.Contains("E2E", result.UnmatchedTokens);
     }
 
     [Fact]
@@ -170,6 +190,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             "start",
             "--apphost", appHostFile.FullName,
             "--no-build",
+            "--launch-profile", "E2E",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -177,7 +198,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
 
-        AssertDetachedChildArguments(command, processFactory.LastArguments, expectedAppHostArguments);
+        AssertDetachedChildArguments(command, processFactory.LastArguments, "E2E", expectedAppHostArguments);
     }
 
     [Fact]
@@ -328,6 +349,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             "--capture-profile",
             "--format=table",
             "--no-build",
+            "--launch-profile", "E2E",
             "--isolated=false",
             "--wait-for-debugger",
             "--non-interactive=false",
@@ -353,6 +375,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 "--debug",
                 "--capture-profile",
                 "--no-build",
+                "--launch-profile", "E2E",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--log-level", "Debug",
@@ -590,7 +613,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         return appHostFile;
     }
 
-    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string[] expectedAppHostArguments)
+    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string expectedLaunchProfile, string[] expectedAppHostArguments)
     {
         var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
         var separatorIndex = Array.IndexOf(forwardedArguments, "--");
@@ -600,11 +623,12 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", "--launch-profile", expectedLaunchProfile, "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(["run", .. forwardedArguments[noBuildIndex..]]);
 
         Assert.Empty(childParseResult.Errors);
+        Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));
         Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
     }
 

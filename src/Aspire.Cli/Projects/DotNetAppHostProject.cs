@@ -127,6 +127,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public string DisplayName => "C# (.NET)";
 
+    /// <inheritdoc />
+    public bool SupportsLaunchProfiles => true;
+
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════
@@ -1541,6 +1544,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             KillOnParentExit = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
+            LaunchProfile = context.LaunchProfile,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1555,7 +1559,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
-            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
+            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
@@ -1776,6 +1780,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         string[] unmatchedTokens,
         bool noLaunchProfile,
+        string? launchProfile,
         CancellationToken cancellationToken)
     {
         if (await IsDirectLaunchDisabledAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false))
@@ -1806,6 +1811,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 directEnv,
                 arguments,
                 noLaunchProfile,
+                launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
                 hasRunArguments))
         {
@@ -1945,6 +1951,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
+        string? launchProfile,
         bool hasExplicitApplicationArgs,
         bool hasRunArguments)
     {
@@ -1957,16 +1964,20 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             if (!TryGetLaunchSettingsPath(effectiveAppHostFile, out var launchSettingsPath))
             {
-                return true;
+                // An explicitly selected profile must not be silently ignored. Let the SDK path
+                // remain authoritative for its missing launch-settings/profile diagnostic.
+                return string.IsNullOrEmpty(launchProfile);
             }
 
             var launchSettings = LaunchSettingsReader.ReadLaunchSettingsFile(
                 launchSettingsPath,
                 $"AppHost project '{effectiveAppHostFile.FullName}'",
                 AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchSettings);
-            if (!TryGetDefaultSupportedLaunchProfile(launchSettings, out var profileName, out var profile))
+            if (!TryGetLaunchProfile(launchSettings, launchProfile, out var profileName, out var profile))
             {
-                _logger.LogDebug("Falling back to dotnet run for {Project}; launch settings do not contain a supported profile.", effectiveAppHostFile.FullName);
+                _logger.LogDebug(
+                    "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
+                    effectiveAppHostFile.FullName);
                 return false;
             }
 
@@ -2072,7 +2083,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
-    private static bool TryGetDefaultSupportedLaunchProfile(AppHostLaunchSettings? launchSettings, out string profileName, out AppHostLaunchProfile profile)
+    private static bool TryGetLaunchProfile(
+        AppHostLaunchSettings? launchSettings,
+        string? requestedProfileName,
+        out string profileName,
+        out AppHostLaunchProfile profile)
     {
         if (launchSettings?.Profiles is null)
         {
@@ -2082,6 +2097,41 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             profileName = null!;
             profile = null!;
             return false;
+        }
+
+        if (!string.IsNullOrEmpty(requestedProfileName))
+        {
+            KeyValuePair<string, AppHostLaunchProfile>? match = null;
+            foreach (var candidate in launchSettings.Profiles)
+            {
+                if (!string.Equals(candidate.Key, requestedProfileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // The .NET SDK rejects launch settings that contain multiple profile names which
+                // differ only by casing. Fall back to dotnet run so it remains the authority for
+                // that diagnostic instead of choosing one based on JSON order.
+                if (match is not null)
+                {
+                    profileName = null!;
+                    profile = null!;
+                    return false;
+                }
+
+                match = candidate;
+            }
+
+            if (match is null || match.Value.Value is null)
+            {
+                profileName = null!;
+                profile = null!;
+                return false;
+            }
+
+            profileName = match.Value.Key;
+            profile = match.Value.Value;
+            return true;
         }
 
         foreach (var (candidateProfileName, candidateProfile) in launchSettings.Profiles)

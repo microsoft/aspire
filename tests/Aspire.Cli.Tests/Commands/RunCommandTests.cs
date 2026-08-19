@@ -52,6 +52,94 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
+    [Theory]
+    [InlineData("--launch-profile")]
+    [InlineData("-lp")]
+    public void RunCommand_ParsesLaunchProfileOption(string optionName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", optionName, "E2E"]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("E2E", result.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Empty(result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public async Task RunCommand_RejectsLaunchProfileForUnsupportedAppHostType()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            DisplayName = "TypeScript (Node.js)",
+            SupportsLaunchProfiles = false
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, projectFactory.DisplayName),
+            interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_PassesSelectedLaunchProfileToProjectContext()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        string? launchProfile = null;
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                launchProfile = context.LaunchProfile;
+                context.BuildCompletionSource?.TrySetResult(false);
+                return Task.FromResult(42);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        Assert.Equal("E2E", launchProfile);
+    }
+
     [Fact]
     public async Task RunCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
@@ -955,6 +1043,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--detach",
             "--apphost", appHostFile.FullName,
             "--no-build",
+            "--launch-profile", "E2E",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -962,7 +1051,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
 
-        AssertDetachedChildArguments(command, processFactory.LastArguments, expectedAppHostArguments);
+        AssertDetachedChildArguments(command, processFactory.LastArguments, "E2E", expectedAppHostArguments);
     }
 
     [Fact]
@@ -3532,11 +3621,14 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run -- --custom-arg value");
+        var result = command.Parse("run -- --custom-arg value --launch-profile E2E");
 
         Assert.Empty(result.Errors);
+        Assert.Null(result.GetValue(AppHostLauncher.s_launchProfileOption));
         Assert.Contains("--custom-arg", result.UnmatchedTokens);
         Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Contains("--launch-profile", result.UnmatchedTokens);
+        Assert.Contains("E2E", result.UnmatchedTokens);
     }
 
     [Fact]
@@ -3732,6 +3824,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--capture-profile",
             "--detach=false",
             "--no-build",
+            "--launch-profile", "E2E",
             "--isolated=false",
             "--format=table",
             "--wait-for-debugger",
@@ -3757,6 +3850,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 "--debug",
                 "--capture-profile",
                 "--no-build",
+                "--launch-profile", "E2E",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,
@@ -4099,7 +4193,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         return appHostFile;
     }
 
-    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string[] expectedAppHostArguments)
+    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string expectedLaunchProfile, string[] expectedAppHostArguments)
     {
         var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
         var separatorIndex = Array.IndexOf(forwardedArguments, "--");
@@ -4109,11 +4203,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", "--launch-profile", expectedLaunchProfile, "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(["run", .. forwardedArguments[noBuildIndex..]]);
 
         Assert.Empty(childParseResult.Errors);
+        Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));
         Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
     }
 

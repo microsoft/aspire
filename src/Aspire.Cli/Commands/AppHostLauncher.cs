@@ -71,6 +71,14 @@ internal sealed class AppHostLauncher(
     };
 
     /// <summary>
+    /// Shared option for selecting the AppHost launch profile.
+    /// </summary>
+    internal static readonly Option<string?> s_launchProfileOption = new("--launch-profile", "-lp")
+    {
+        Description = SharedCommandStrings.LaunchProfileOptionDescription
+    };
+
+    /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
     /// </summary>
@@ -79,6 +87,7 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_appHostOption);
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
+        command.Options.Add(s_launchProfileOption);
     }
 
     /// <summary>

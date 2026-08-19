@@ -20,6 +20,7 @@ public sealed class ProcessInvocationOptionsTests
             StandardOutputCallback = _ => { },
             StandardErrorCallback = _ => { },
             NoLaunchProfile = true,
+            LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
             SuppressLogging = true,
