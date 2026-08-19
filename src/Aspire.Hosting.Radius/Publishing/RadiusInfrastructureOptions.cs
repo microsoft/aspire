@@ -42,7 +42,7 @@ public sealed class RadiusInfrastructureOptions
 
     /// <summary>
     /// Gets the list of resource type instance constructs
-    /// (e.g., <c>Radius.Data/redisCaches</c>, <c>Radius.Messaging/rabbitMQQueues</c>).
+    /// (e.g., <c>Radius.Data/redisCaches</c>, <c>Radius.Messaging/rabbitMQ</c>).
     /// </summary>
     public List<RadiusResourceTypeConstruct> ResourceTypeInstances { get; } = [];
 
@@ -54,7 +54,7 @@ public sealed class RadiusInfrastructureOptions
     /// <summary>
     /// Gets the list of legacy <c>Applications.Core/environments</c> constructs
     /// emitted when one or more targeted resources fall back to a legacy
-    /// <c>Applications.*</c> type (e.g., Redis, Mongo, RabbitMQ, Dapr).
+    /// <c>Applications.*</c> type (e.g., Mongo, SQL Server, Dapr).
     /// </summary>
     public List<LegacyApplicationEnvironmentConstruct> LegacyEnvironments { get; } = [];
 
@@ -76,6 +76,19 @@ public sealed class RadiusInfrastructureOptions
     /// Radius secret stores declared via <c>AddRadiusSecretStore</c> / <c>WithSecretStore</c>.
     /// </summary>
     public List<RadiusSecretStoreConstruct> SecretStores { get; } = [];
+
+    /// <summary>
+    /// Gets the list of <c>Radius.Security/secrets</c> constructs — the <c>Radius.*</c> UDT secret
+    /// primitive, emitted for credentials a UDT backing resource consumes by resource ID (for
+    /// example the RabbitMQ <c>properties.password</c>).
+    /// </summary>
+    /// <remarks>
+    /// Exposed for the same reason as the other collections: <c>ConfigureRadiusInfrastructure</c>
+    /// can rename a construct, and callers that rename one of these must be able to see it. The
+    /// publisher repairs the consuming resource's ID reference after the callbacks run, so a
+    /// rename here does not dangle.
+    /// </remarks>
+    public List<RadiusSecuritySecretConstruct> SecuritySecrets { get; } = [];
 
     /// <summary>
     /// Gets the validated committed <c>SealedSecret</c> manifests referenced by sealed secret

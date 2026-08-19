@@ -329,7 +329,7 @@ public class BackingResourceValueResolutionTests
     {
         var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
         {
-            var rabbit = b.AddRabbitMQ("rabbit").WithManagementPlugin();
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser")).WithManagementPlugin();
 
             b.AddContainer("api", "myapp/api", "latest")
                 .WithEnvironment("MGMT_URL", rabbit.GetEndpoint("management").Property(EndpointProperty.Url));
@@ -348,7 +348,7 @@ public class BackingResourceValueResolutionTests
     {
         var (bicep, _) = GenerateBicep(b =>
         {
-            var rabbit = b.AddRabbitMQ("rabbit").WithManagementPlugin();
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser")).WithManagementPlugin();
 
             b.AddContainer("api", "myapp/api", "latest")
                 .WithEnvironment("AMQP_HOST", rabbit.GetEndpoint("tcp").Property(EndpointProperty.Host));
@@ -435,25 +435,103 @@ public class BackingResourceValueResolutionTests
     /// the AppHost author chose is a decision being overridden, so it has to be reported — otherwise
     /// they debug a credential mismatch against a value that never reached the cluster.
     /// </summary>
+    /// <remarks>
+    /// Based on MongoDB rather than RabbitMQ: RabbitMQ moved onto its Radius.Messaging UDT in
+    /// Radius 0.60, where the password Aspire supplies is carried into the deployment through a
+    /// Radius.Security/secrets resource instead of being replaced by a recipe-generated one. See
+    /// <see cref="UserSuppliedRabbitMqPassword_IsCarriedIntoASecretRatherThanReplaced"/>. MongoDB
+    /// still emits the legacy portable type and its listSecrets() credential.
+    /// </remarks>
     [Fact]
     public void UserSuppliedPassword_IsReportedWhenReplacedByTheRecipeSecret()
     {
         var (_, logger) = GenerateBicep(b =>
         {
-            var password = b.AddParameter("rabbitpassword", "hunter2", secret: true);
-            var rabbit = b.AddRabbitMQ("rabbit", password: password);
+            var password = b.AddParameter("mongopassword", "hunter2", secret: true);
+            var mongo = b.AddMongoDB("mongo", password: password);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(mongo);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "mongopassword", "is not used when deploying"));
+    }
+
+    /// <summary>
+    /// Radius.Security/secrets is recipe-backed like every other type, so emitting one obliges the
+    /// recipe pack to carry its recipe too. Without that entry the deploy fails resolving a recipe
+    /// for the secret — a failure that names the secret, not the resource that pulled it in.
+    /// </summary>
+    /// <remarks>
+    /// The official pack registers it the same way, see `recipe-packs/kubernetes/default-recipepack.bicep`
+    /// in radius-project/resource-types-contrib.
+    /// </remarks>
+    [Fact]
+    public void EmittingACredentialSecret_AlsoRegistersTheSecretsRecipe()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var user = b.AddParameter("rabbituser");
+            var rabbit = b.AddRabbitMQ("rabbit", userName: user);
             b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
         });
 
-        Assert.Single(logger.Matching(LogLevel.Warning, "rabbitpassword", "is not used when deploying"));
+        Assert.Contains("'Radius.Security/secrets': {", bicep, StringComparison.Ordinal);
+        Assert.Contains("ghcr.io/radius-project/kube-recipes/secrets:latest", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// RabbitMQ restricts the `guest` account to loopback connections, so a broker provisioned with
+    /// it rejects every workload Pod. Aspire cannot silently substitute a different name either,
+    /// because the default user name is baked into the connection string as literal text. So the
+    /// publish fails and names the fix rather than deploying a broker nothing can connect to.
+    /// </summary>
+    [Fact]
+    public void DefaultRabbitMqUserName_FailsThePublishBecauseGuestIsLoopbackOnly()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var rabbit = b.AddRabbitMQ("rabbit");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
+        }));
+
+        Assert.Contains("ASPIRERADIUS082", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("guest", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("userName:", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The RabbitMQ UDT takes its password as the resource ID of a Radius.Security/secrets resource,
+    /// so — unlike the listSecrets() types — the password the AppHost author chose is the one the
+    /// recipe provisions. Nothing is overridden, so nothing is reported.
+    /// </summary>
+    [Fact]
+    public void UserSuppliedRabbitMqPassword_IsCarriedIntoASecretRatherThanReplaced()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var password = b.AddParameter("rabbitpassword", "hunter2", secret: true);
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser"), password: password);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
+        });
+
+        Assert.Empty(logger.Matching(LogLevel.Warning, "rabbitpassword", "is not used when deploying"));
+
+        // The credential travels as a secret resource the broker references by ID, never as a
+        // literal on the broker itself.
+        Assert.Contains("Radius.Security/secrets", bicep, StringComparison.Ordinal);
+        Assert.Contains("password: rabbit_password_secret.id", bicep, StringComparison.Ordinal);
+
+        // The value is a reference to the valueless @secure() param, so no credential is written
+        // into the published artifact.
+        Assert.Contains("value: rabbitpassword", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// Redis is the one mapped type whose recipe deploys an <em>unauthenticated</em> server: the
-    /// pinned <c>local-dev/rediscaches</c> recipe starts a bare <c>redis</c> image and publishes only
-    /// <c>host</c>/<c>port</c>, with no secrets block. Emitting <c>listSecrets().password</c> for it
-    /// would fail the deployment on a property the returned object does not have, so the credential
-    /// resolves to the empty value the deployed server actually has - and says so.
+    /// pinned <c>kube-recipes/rediscaches</c> recipe starts a bare <c>redis</c> image with no
+    /// <c>--requirepass</c> and publishes only <c>host</c>/<c>port</c>. There is no deployed
+    /// credential to project, so it resolves to the empty value the deployed server actually has -
+    /// and says so.
     /// </summary>
     [Fact]
     public void RedisPasswordIsNotProjected_BecauseTheRecipeDeploysAnUnauthenticatedServer()

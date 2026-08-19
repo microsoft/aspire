@@ -8,12 +8,12 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   properties: {
     recipes: {
       'Radius.Data/postgreSqlDatabases': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
       }
       'Radius.Compute/containers': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/containers:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/containers:latest'
       }
     }
   }

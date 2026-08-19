@@ -71,6 +71,23 @@ internal static class RadiusBackingConnections
         internal sealed record RecipeInputProperties : RadiusCredentialMode;
 
         /// <summary>
+        /// The credential is passed to the recipe as the <em>resource ID</em> of a separate
+        /// <c>Radius.Security/secrets</c> resource, rather than as a literal on the consuming
+        /// resource. Aspire emits the secret holding its own <c>@secure()</c> parameter and assigns
+        /// <c><paramref name="PropertyName"/>: &lt;secret&gt;.id</c>, so — as with
+        /// <see cref="RecipeInputProperties"/> — the deployed credential is the one Aspire already
+        /// composed into the connection string.
+        /// </summary>
+        /// <remarks>
+        /// Distinct from <see cref="RecipeInputProperties"/> because that mode writes the value
+        /// straight onto the property. A property that expects a secret <em>resource ID</em> would
+        /// then receive a password string, which Radius rejects at deploy time.
+        /// </remarks>
+        /// <param name="PropertyName">The resource property that takes the secret's ID.</param>
+        /// <param name="SecretKey">The key under the secret's <c>data</c> map holding the value.</param>
+        internal sealed record SecretResourceReference(string PropertyName, string SecretKey) : RadiusCredentialMode;
+
+        /// <summary>
         /// The recipe deploys the workload with <em>no</em> authentication, so there is no
         /// credential to project. Any password Aspire generated for run mode resolves to an empty
         /// value, and <paramref name="Reason"/> is written into the publish-time warning that
@@ -133,23 +150,8 @@ internal static class RadiusBackingConnections
     private static readonly Dictionary<string, RadiusConnectionSchema> s_schemas = new(StringComparer.Ordinal)
     {
         // Legacy portable types expose host/port as plain properties and their credentials through
-        // a first-class listSecrets() action. Mongo and RabbitMQ also expose a user name.
-        //
-        // Redis is the exception: the recipe the environment pins for it
-        // (ghcr.io/radius-project/recipes/local-dev/rediscaches) deploys a bare `redis` image with
-        // no `requirepass` and its `output result` carries only `values: { host, port }` — no
-        // `secrets` block at all. So `cache.listSecrets().password` is not merely empty, it is a
-        // property the returned object does not have, which fails the deployment when ARM evaluates
-        // it. The Redis Aspire deploys here is unauthenticated, and modelling it as such is what
-        // keeps the projected values honest.
-        // See https://github.com/radius-project/recipes/blob/main/local-dev/rediscaches.bicep.
-        [RadiusResourceTypes.LegacyRedisCaches] =
-            new("host", "port", null, new RadiusCredentialMode.NoCredential(
-                "the 'local-dev/rediscaches' recipe deploys Redis without authentication and publishes no password " +
-                "secret, so there is no deployed credential to hand to consumers")),
+        // a first-class listSecrets() action. Mongo also exposes a user name.
         [RadiusResourceTypes.LegacyMongoDatabases] =
-            new("host", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
-        [RadiusResourceTypes.LegacyRabbitMQQueues] =
             new("host", "port", "username", new RadiusCredentialMode.ListSecrets("password")),
 
         // Applications.Datastores/sqlDatabases names the address property `server`, not `host`
@@ -165,6 +167,23 @@ internal static class RadiusBackingConnections
         [RadiusResourceTypes.PostgreSqlDatabases] =
             new("host", "port", null, new RadiusCredentialMode.RecipeInputProperties()),
 
+        // Radius 0.60's kube-recipes/rediscaches still deploys Redis with no `--requirepass`, so
+        // there is no deployed credential to project. The type exposes readOnly host/port and no
+        // listSecrets() action; emitting a password accessor would fail the deployment on a
+        // property the recipe never records. Modelling it as unauthenticated is what keeps the
+        // projected values honest — see ASPIRERADIUS075.
+        [RadiusResourceTypes.RedisCaches] =
+            new("host", "port", null, new RadiusCredentialMode.NoCredential(
+                "the 'kube-recipes/rediscaches' recipe deploys Redis without authentication and publishes no password " +
+                "secret, so there is no deployed credential to hand to consumers")),
+
+        // RabbitMQ's UDT takes `password` as the *resource ID* of a Radius.Security/secrets
+        // resource, not as a literal, so it cannot use RecipeInputProperties. `username` is a
+        // plain required input (an input, not a readable output, so there is no UserNameProperty —
+        // the same reasoning as postgreSqlDatabases above).
+        [RadiusResourceTypes.RabbitMQ] =
+            new("host", "port", null, new RadiusCredentialMode.SecretResourceReference("password", "password")),
+
         // Deliberately absent: Radius.Data/sqlServerDatabases. The contrib manifest exists, but its
         // Kubernetes recipe is not published (ghcr.io/radius-project/kube-recipes/sqlserverdatabases
         // returns 403), so ResourceTypeMapper still emits the legacy type above. Adding the row here
@@ -173,18 +192,16 @@ internal static class RadiusBackingConnections
         // Dapr types are backing resources by classification but are consumed through the Dapr
         // sidecar's component configuration, not through an address or credential Aspire composes.
         // They are listed explicitly so the schema table stays total over everything
-        // ResourceTypeMapper classifies as a backing resource.
+        // ResourceTypeMapper classifies as a backing resource. Only the legacy types appear:
+        // Radius 0.60 has no Radius.Dapr/* namespace, so there is no UDT counterpart to key on.
         [RadiusResourceTypes.LegacyDaprStateStores] = s_daprNotProjected,
         [RadiusResourceTypes.LegacyDaprPubSubBrokers] = s_daprNotProjected,
-        [RadiusResourceTypes.DaprStateStores] = s_daprNotProjected,
-        [RadiusResourceTypes.DaprPubSubBrokers] = s_daprNotProjected,
 
-        // Deliberately absent: Radius.Data/redisCaches, Radius.Data/mongoDatabases and
-        // Radius.Messaging/rabbitMQQueues. Those UDT manifests were never verified to publish the
-        // host/port outputs and credential inputs this projection needs, and today they are
-        // unreachable because ResourceTypeMapper always emits the legacy type for Redis, Mongo and
-        // RabbitMQ. Leaving them out means a future migration that drops the legacy fallback fails
-        // loudly here instead of quietly reverting to the pre-fix behaviour.
+        // Deliberately absent: Radius.Data/mongoDatabases. That UDT manifest ships in the 0.60
+        // Bicep extension, but no Kubernetes recipe is published for it, so ResourceTypeMapper
+        // still emits the legacy type for MongoDB. Leaving it out means a future migration that
+        // drops the legacy fallback fails loudly here instead of quietly reverting to the
+        // pre-fix behaviour.
     };
 
     /// <summary>
