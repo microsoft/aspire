@@ -52,7 +52,9 @@ internal sealed class ResourceTypeMapper
         // since those packages are not referenced by this project.
         // Redis and RabbitMQ moved onto their Radius.* UDTs in Radius 0.60: both
         // kube-recipes/rediscaches and kube-recipes/rabbitmq are published, so the UDT is
-        // deployable and the legacy fallback is gone.
+        // deployable and the legacy fallback is gone. Neither recipe is in a stable release yet,
+        // so both are pinned by commit SHA rather than :latest — see s_defaultRecipeTemplates in
+        // RadiusInfrastructureBuilder.
         ["RedisResource"] = new(
             RadiusResourceTypes.RedisCaches,
             RadiusResourceTypes.RadiusApiVersion),
