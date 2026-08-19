@@ -65,15 +65,38 @@ internal static class BlazorDotNetCliRunner
             // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
-            return new(
-                startInfo.FileName,
-                true,
-                process.ExitCode,
-                await stdoutTask.ConfigureAwait(false),
-                await stderrTask.ConfigureAwait(false),
-                null);
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+                return new(
+                    startInfo.FileName,
+                    true,
+                    process.ExitCode,
+                    await stdoutTask.ConfigureAwait(false),
+                    await stderrTask.ConfigureAwait(false),
+                    null);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Canceling WaitForExitAsync only stops waiting. Terminate the complete process tree
+                // so dotnet/MSBuild child processes cannot outlive AppHost shutdown and retain files.
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process can exit between HasExited and Kill.
+                }
+
+                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
         }
     }
 }
