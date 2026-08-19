@@ -16,6 +16,7 @@ const {
   runWithRetries,
   terminateOrphanedDescendants,
 } = require('./e2e-download-retry');
+const { assertShardExecutedTests } = require('./e2e-shard-results');
 const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');
 const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');
 
@@ -123,6 +124,13 @@ const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTER
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const nodeAppProjectName = 'AspireE2E.NodeApp';
+const nodeAppScript = path.join(workspaceRoot, nodeAppProjectName, 'app.js');
+// The resource-debugger spec needs the Node fixture and the `e2e-node` resource in the shared
+// AppHost, and no other shard should get them. Select on the actual matched spec files rather than
+// the shard name so the fixture is also provisioned when the documented full-suite glob (which
+// leaves shardName as "all") includes the spec.
+const includeNodeResourceFixture = matchedTestSpecs.some(file => path.basename(file) === 'resourceDebugger.e2e.test.js');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
@@ -149,7 +157,10 @@ function prepareRunDirectories() {
 }
 
 function getRunTestsTimeoutMs() {
-  const configured = Number(process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS || 2400000);
+  // The default full-suite glob includes the resource debugger spec. Preserve the previous
+  // 40-minute suite budget plus that spec's 54-minute bounded worst case and shutdown slack.
+  const defaultRunTestsTimeoutMs = includeNodeResourceFixture ? 6000000 : 2400000;
+  const configured = Number(process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS || defaultRunTestsTimeoutMs);
   if (!Number.isFinite(configured) || configured <= 0) {
     throw new Error(`ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS must be a positive number. Got '${process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS}'.`);
   }
@@ -300,6 +311,7 @@ function logE2eConfiguration() {
   console.log('Aspire extension E2E configuration:');
   console.log(`  shard: ${shardName}`);
   console.log(`  spec: ${testSpec}`);
+  console.log(`  node resource fixture: ${includeNodeResourceFixture ? nodeAppScript : 'not included for this shard'}`);
   console.log(`  matched specs: ${matchedTestSpecs.map(file => path.relative(extensionRoot, file)).join(', ')}`);
   console.log(`  VS Code: ${vscodeVersion}`);
   console.log(`  ExTester: ${extesterVersion}`);
@@ -633,6 +645,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
+      ASPIRE_EXTENSION_E2E_NODE_APP_SCRIPT: includeNodeResourceFixture ? nodeAppScript : undefined,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
@@ -704,6 +717,9 @@ async function main() {
         timeout: getRunTestsTimeoutMs(),
         useShell: shouldUseShellForCommand(process.execPath),
       });
+      // ExTester can exit 0 when Mocha only discovers pending tests, so opted-in proof shards must
+      // validate the reporter output before the runner treats the process exit as success.
+      assertShardExecutedTests({ shardName, results: readMochaResults() });
     }
     catch (error) {
       testFailure = error;
@@ -1285,6 +1301,10 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
     writeAzureFunctionsProject('AspireE2E.Functions');
   }
   writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E);
+  if (includeNodeResourceFixture) {
+    writeNodeAppFixture(nodeAppProjectName);
+  }
+
   writeNuGetConfigIfLocalPackageSourcesExist();
 
   const vscodeDirectory = path.join(workspaceRoot, '.vscode');
@@ -1340,6 +1360,10 @@ function restoreWorkspaceFixture() {
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   fs.mkdirSync(projectDirectory, { recursive: true });
+  const nodeHostingPackageReference = includeNodeResourceFixture
+    ? `
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="${resolvedAppHostSdkVersion}" />`
+    : '';
   const azureFunctionsPackageReference = includeAzureFunctions
     ? `    <PackageReference Include="Aspire.Hosting.Azure.Functions" Version="${resolvedAppHostSdkVersion}" />\n`
     : '';
@@ -1353,11 +1377,19 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />
+    <ProjectReference Include="../AspireE2E.Worker/AspireE2E.Worker.csproj" />${nodeHostingPackageReference}
 ${azureFunctionsPackageReference}  </ItemGroup>
 
 </Project>
 `);
+
+  // AddNodeApp with an explicit script path launches `node app.js` directly, so the fixture needs
+  // node on PATH but no package.json, no package manager, and no install step.
+  const nodeResourceRegistration = includeNodeResourceFixture
+    ? `
+builder.AddNodeApp("e2e-node", "../${nodeAppProjectName}", "app.js");
+`
+    : '';
 
   const azureFunctionsResource = includeAzureFunctions
     ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
@@ -1432,6 +1464,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+${nodeResourceRegistration}
 
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
@@ -1444,6 +1477,42 @@ ${azureFunctionsResource}
 builder.Build().Run();
 
 sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
+`);
+}
+
+function writeNodeAppFixture(projectName) {
+  const projectDirectory = path.join(workspaceRoot, projectName);
+  fs.mkdirSync(projectDirectory, { recursive: true });
+
+  // Deliberately CommonJS with no package.json: AddNodeApp only requires a package manager when the
+  // app directory has a package.json or a run script, and this fixture must stay installable-free so
+  // the shard needs nothing beyond node on PATH.
+  //
+  // The breakpoint line is found at runtime by the E2E test from the marker comment below, so
+  // editing this script cannot silently move the breakpoint onto an unrelated statement.
+  fs.writeFileSync(path.join(projectDirectory, 'app.js'), `'use strict';
+
+const { spawn } = require('child_process');
+
+// A grandchild of the debug adapter, so stopping the session has to tear down the whole process
+// tree rather than only the process js-debug launched directly.
+const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000);'], { stdio: 'ignore' });
+
+console.log('ASPIRE_E2E_NODE_PID=' + process.pid);
+console.log('ASPIRE_E2E_NODE_CHILD_PID=' + child.pid);
+
+function reportIteration(iteration) {
+  const marker = 'aspire-e2e-node-iteration-' + iteration; // aspire-e2e-breakpoint
+  return marker;
+}
+
+let iteration = 0;
+
+// Repeats so the breakpoint is hit again after js-debug finishes binding it, instead of depending on
+// the debugger being attached before a single one-shot call runs.
+setInterval(() => {
+  console.log(reportIteration(iteration++));
+}, 1000);
 `);
 }
 
@@ -2060,6 +2129,7 @@ function copyWorkspaceProjectSources() {
     const destinationDirectory = path.join(workspaceDiagnosticsDir, entry.name);
     copyIfExists(path.join(sourceDirectory, 'AppHost.cs'), path.join(destinationDirectory, 'AppHost.cs'));
     copyIfExists(path.join(sourceDirectory, 'Program.cs'), path.join(destinationDirectory, 'Program.cs'));
+    copyIfExists(path.join(sourceDirectory, 'app.js'), path.join(destinationDirectory, 'app.js'));
     copyIfExists(path.join(sourceDirectory, `${entry.name}.csproj`), path.join(destinationDirectory, `${entry.name}.csproj`));
   }
 }

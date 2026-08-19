@@ -75,8 +75,9 @@ jobs:
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
     needs: verify_extester_feed
     runs-on: ${{ matrix.runner }}
-    # The Java AppHost shard imports a multi-project Gradle build and then runs the whole
-    # application under a debugger, so it needs more than the shared budget.
+    # Most shards fit the shared budget. A few need more: the Java AppHost shards import a
+    # multi-project Gradle build and then run the whole application under a debugger, and the
+    # resource-debugger shards drive long debugger attach/detach flows.
     timeout-minutes: ${{ matrix.timeoutMinutes || 75 }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -370,6 +371,33 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          # The resource-debugger shard debugs a Node resource with VS Code's built-in js-debug, so it
+          # needs node on PATH and nothing else: both hosted runners ship it. Adding a language whose
+          # debugger lives in a marketplace extension (Python, Go, Rust, MAUI) would need that
+          # extension installed into the E2E VS Code instance first, which this matrix does not do.
+          # Its two bounded proof runs and three bounded teardowns can total 54 minutes in the worst
+          # case. The process gets six more minutes for Mocha/browser shutdown, and the job keeps
+          # another 30 minutes for setup plus post-timeout diagnostics.
+          - name: Linux
+            shardName: resource-debugger
+            spec: out/test-e2e/test-e2e/resourceDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            runTestsTimeoutMs: 3600000
+            timeoutMinutes: 90
+          - name: Windows
+            shardName: resource-debugger
+            spec: out/test-e2e/test-e2e/resourceDebugger.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            runTestsTimeoutMs: 3600000
+            timeoutMinutes: 90
     defaults:
       run:
         shell: pwsh
@@ -803,6 +831,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
           ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
+          ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS: ${{ matrix.runTestsTimeoutMs || 2400000 }}
           ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
           # and useful for diagnosing timing-sensitive flakes after the fact.

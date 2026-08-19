@@ -12,6 +12,20 @@ function readSourcePattern(source: string, name: string): RegExp {
     return new RegExp(declaration[1]);
 }
 
+function normalizeLineEndings(source: string): string {
+    return source.replace(/\r\n/g, '\n');
+}
+
+function readRunnerSource(extensionRoot: string): string {
+    return normalizeLineEndings(
+        fs.readFileSync(path.resolve(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8'));
+}
+
+function readResourceDebuggerSource(extensionRoot: string): string {
+    return normalizeLineEndings(
+        fs.readFileSync(path.resolve(extensionRoot, 'src', 'test-e2e', 'resourceDebugger.e2e.test.ts'), 'utf8'));
+}
+
 /**
  * Removes block and line comments so a statement-level assertion is not satisfied or defeated by
  * prose. The comments in `run-e2e.js` discuss `throw` and `fs.` precisely because the code around
@@ -19,6 +33,978 @@ function readSourcePattern(source: string, name: string): RegExp {
  */
 function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+const resourceDebuggerDeadlineProtectedCalls = new Set([
+    'clearBreakpoints',
+    'executeE2eControlCommand',
+    'openAspireView',
+    'stopPrimaryAppHostIfRunning',
+    'waitForNoDebugSessions',
+    'waitForNoRunningAppHost',
+    'waitForProcessExit',
+    'waitForRepositoryIdle',
+    'waitForWorkspaceAppHost',
+]);
+
+const resourceDebuggerCallsRequiringTimeoutArgument = new Set([
+    'executeE2eControlCommand',
+    'waitForNoDebugSessions',
+    'waitForNoRunningAppHost',
+    'waitForProcessExit',
+    'waitForRepositoryIdle',
+    'waitForWorkspaceAppHost',
+]);
+
+function assertResourceDebuggerUsesBoundedDeadlines(source: string): void {
+    const sourceFile = ts.createSourceFile('resourceDebugger.e2e.test.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const wrapperDeclaration = sourceFile.statements.find(statement =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'runResourceDebuggerPhase');
+    assert.ok(wrapperDeclaration && ts.isFunctionDeclaration(wrapperDeclaration) && wrapperDeclaration.body,
+        'Expected the resource debugger to define its shared-deadline phase wrapper.');
+    const cleanupWrapperDeclaration = sourceFile.statements.find(statement =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'runResourceDebuggerCleanupPhase');
+    assert.ok(cleanupWrapperDeclaration && ts.isFunctionDeclaration(cleanupWrapperDeclaration) && cleanupWrapperDeclaration.body,
+        'Expected the resource debugger to define its independent cleanup phase wrapper.');
+
+    const wrapperText = wrapperDeclaration.getText(sourceFile);
+    assert.ok(wrapperText.includes('getRemainingE2eDeadlineMs('), 'The phase wrapper must derive its timeout from the shared deadline.');
+    assert.ok(
+        wrapperText.includes('const phaseDeadline = Math.min(deadline, Date.now() + timeoutMs);'),
+        'The phase wrapper must derive a phase deadline without extending the shared deadline.');
+    assert.ok(
+        wrapperText.includes('runWithE2eDeadline(description, phaseDeadline,'),
+        'The phase wrapper must bound operations that do not accept a timeout argument by the derived phase deadline.');
+    const cleanupWrapperText = cleanupWrapperDeclaration.getText(sourceFile);
+    assert.ok(
+        cleanupWrapperText.includes('const deadline = Date.now() + phaseCeilingMs;'),
+        'Each cleanup phase must receive a fresh deadline after the proof deadline expires.');
+    assert.ok(
+        cleanupWrapperText.includes('runResourceDebuggerPhase(description, deadline, phaseCeilingMs, operation)'),
+        'Cleanup phases must retain the same per-operation timeout enforcement as proof phases.');
+    let teardownCallback: ts.ArrowFunction | undefined;
+    const findTeardownCallback = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)
+            && ts.isIdentifier(node.expression)
+            && node.expression.text === 'teardown'
+            && ts.isArrowFunction(node.arguments[0])) {
+            teardownCallback = node.arguments[0];
+            return;
+        }
+
+        ts.forEachChild(node, findTeardownCallback);
+    };
+    findTeardownCallback(sourceFile);
+    assert.ok(teardownCallback, 'Expected the resource debugger suite to register teardown cleanup.');
+    const teardownText = teardownCallback.getText(sourceFile);
+    assert.ok(teardownText.includes('runResourceDebuggerCleanupPhase('),
+        'Teardown cleanup must run through the independent cleanup phase wrapper.');
+    assert.ok(!teardownText.includes('resourceDebuggerDeadline'),
+        'Teardown cleanup must not reuse the proof deadline.');
+    let waitsOnAppHostStateMirror = false;
+    const findAppHostStateWait = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)
+            && ts.isIdentifier(node.expression)
+            && node.expression.text === 'waitForNoRunningAppHost') {
+            waitsOnAppHostStateMirror = true;
+            return;
+        }
+
+        ts.forEachChild(node, findAppHostStateWait);
+    };
+    findAppHostStateWait(teardownCallback);
+    assert.ok(!waitsOnAppHostStateMirror,
+        'Teardown must not wait on the extension state AppHost mirror after process-aware stopping has completed.');
+
+    const requiredPhaseCeilings = [
+        'openAspireView',
+        'repositoryIdle',
+        'workspaceAppHost',
+        'proof',
+        'proofControl',
+        'stopDebuggingControl',
+        'processExit',
+        'debugSessions',
+        'appHostStop',
+        'appHostExit',
+    ];
+    for (const phase of requiredPhaseCeilings) {
+        assert.ok(source.includes(`${phase}:`), `Expected a centralized timeout ceiling for the ${phase} phase.`);
+    }
+
+    assert.ok(
+        source.includes('this.timeout(resourceDebuggerDeadlineTimeoutMs + resourceDebuggerTeardownTimeoutMs);'),
+        'The Mocha timeout must include the independently bounded teardown budget.');
+    const deadlineTimeoutMatch = /const resourceDebuggerDeadlineTimeoutMs = (\d+);/.exec(source);
+    const teardownTimeoutMatch = /const resourceDebuggerTeardownTimeoutMs = (\d+);/.exec(source);
+    assert.ok(deadlineTimeoutMatch, 'Expected a numeric shared resource debugger deadline.');
+    assert.ok(teardownTimeoutMatch, 'Expected a numeric resource debugger teardown timeout.');
+    assert.ok(Number(teardownTimeoutMatch[1]) > 0, 'The Mocha timeout must exceed the shared resource debugger deadline.');
+    assert.ok(Number(teardownTimeoutMatch[1]) <= 600000, 'The teardown timeout must remain bounded below the workflow timeout.');
+
+    let protectedCallCount = 0;
+    const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && resourceDebuggerDeadlineProtectedCalls.has(node.expression.text)) {
+            protectedCallCount++;
+            const callName = node.expression.text;
+            let callback: ts.ArrowFunction | ts.FunctionExpression | undefined;
+            let current: ts.Node | undefined = node.parent;
+            while (current && !ts.isFunctionDeclaration(current)) {
+                if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+                    const parent: ts.Node = current.parent;
+                    if (ts.isCallExpression(parent)
+                        && ts.isIdentifier(parent.expression)) {
+                        const callbackIndex = parent.expression.text === 'runResourceDebuggerPhase'
+                            ? 3
+                            : parent.expression.text === 'runResourceDebuggerCleanupPhase'
+                                ? 2
+                                : -1;
+                        if (parent.arguments[callbackIndex] === current) {
+                            callback = current;
+                            break;
+                        }
+                    }
+                }
+                current = current.parent;
+            }
+
+            assert.ok(callback, `Expected ${callName} to execute through runResourceDebuggerPhase.`);
+            const timeoutParameter = callback.parameters[0];
+            if (resourceDebuggerCallsRequiringTimeoutArgument.has(callName)) {
+                assert.ok(timeoutParameter && ts.isIdentifier(timeoutParameter.name),
+                    `Expected the ${callName} phase callback to receive its remaining timeout.`);
+                const timeoutName = timeoutParameter.name.text;
+                let usesTimeout = false;
+                const findTimeoutUse = (candidate: ts.Node): void => {
+                    if (candidate !== timeoutParameter.name && ts.isIdentifier(candidate) && candidate.text === timeoutName) {
+                        usesTimeout = true;
+                    }
+                    ts.forEachChild(candidate, findTimeoutUse);
+                };
+                findTimeoutUse(node);
+                assert.ok(usesTimeout, `Expected ${callName} to use the remaining timeout supplied by runResourceDebuggerPhase.`);
+            }
+        }
+
+        ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+
+    assert.ok(protectedCallCount > 0, 'Expected to validate resource debugger deadline-bound calls.');
+}
+
+interface ExTesterAwait {
+    runWithProcessTreeTimeout: ts.Identifier;
+    process: ts.Identifier;
+    runTestsArgs: ts.Identifier;
+    extesterCli: ts.Identifier;
+    testSpec: ts.Identifier;
+    extestEnv: ts.Identifier;
+    getRunTestsTimeoutMs: ts.Identifier;
+}
+
+interface MainInvocation {
+    main: ts.Identifier;
+    failureHandler: ts.Expression;
+}
+
+const protectedFunctionNames = [
+    'main',
+    'getRunTestsTimeoutMs',
+    'readMochaResults',
+    'readJsonIfExists',
+    'sanitizePathSegment',
+] as const;
+
+const protectedTopLevelBindingNames = [
+    'assertShardExecutedTests',
+    'extesterCli',
+    'runWithProcessTreeTimeout',
+    'shardName',
+    'testSpec',
+] as const;
+
+const protectedMainBindingNames = [
+    'cleanupFailed',
+    'extestEnv',
+    'recording',
+    'runTestsArgs',
+    'testFailure',
+] as const;
+
+function assertShardResultGuardWiring(
+    source: string,
+    expectedSyntax = fs.readFileSync(
+        path.resolve(__dirname, '..', '..', 'src', 'test', 'e2eLaunchProfile.runner-wiring.txt'),
+        'utf8')): void {
+    const { sourceFile, checker } = createRunnerProgram(source);
+    assertUniqueProtectedDeclarations(sourceFile);
+    assert.strictEqual(
+        getProtectedRunnerSyntax(sourceFile).replace(/\r\n/g, '\n'),
+        expectedSyntax.replace(/\r\n/g, '\n'),
+        'The protected runner syntax allowlist must match the normalized production skeleton.');
+
+    const guardBinding = findTopLevelShardResultGuardBinding(sourceFile);
+    assert.ok(guardBinding, 'run-e2e.js must actively require assertShardExecutedTests from e2e-shard-results.');
+    assert.ok(
+        guardBinding.declarationList.flags & ts.NodeFlags.Const,
+        'Required E2E wiring bindings must be immutable and never reassigned.');
+    const requireSymbol = checker.getSymbolAtLocation(guardBinding.requireIdentifier);
+    assert.ok(
+        requireSymbol &&
+        !requireSymbol.declarations?.length,
+        'The shard result guard import must use the intrinsic CommonJS require binding.');
+    const shardNameDeclaration = findTopLevelShardNameDeclaration(sourceFile);
+    const shardNameInitializer = shardNameDeclaration && getExpectedShardNameInitializer(shardNameDeclaration);
+    assert.ok(
+        shardNameDeclaration && shardNameInitializer,
+        'The top-level shardName binding must use the intended shardName initializer expression.');
+    const testSpecDeclaration = findConstVariableDeclaration(sourceFile.statements, 'testSpec');
+    assert.ok(testSpecDeclaration, 'run-e2e.js must define the protected testSpec binding.');
+
+    const main = sourceFile.statements.find(statement =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'main');
+    assert.ok(main && ts.isFunctionDeclaration(main) && main.body, 'run-e2e.js must define main.');
+    const mainSymbol = main.name && checker.getSymbolAtLocation(main.name);
+    const mainInvocations = sourceFile.statements
+        .map(getTopLevelMainInvocation)
+        .filter((invocation): invocation is MainInvocation => invocation !== undefined);
+    assert.ok(
+        mainSymbol &&
+        mainInvocations.length === 1 &&
+        checker.getSymbolAtLocation(mainInvocations[0].main) === mainSymbol,
+        'run-e2e.js must invoke main unconditionally through the top-level production binding.');
+    assert.ok(
+        isExpectedMainFailureHandler(mainInvocations[0].failureHandler, sourceFile, checker),
+        'run-e2e.js must report main failures with a nonzero exit code.');
+
+    const mainTryStatements = main.body.statements.filter((statement): statement is ts.TryStatement =>
+        ts.isTryStatement(statement));
+    assert.strictEqual(
+        mainTryStatements.length,
+        1,
+        'The expected reachable main try path must contain exactly one exact ExTester run-tests command.');
+    const mainTry = mainTryStatements[0];
+    const mainTryIndex = main.body.statements.indexOf(mainTry);
+    assert.ok(
+        main.body.statements.length === 6 &&
+        mainTryIndex === 3 &&
+        isSingleVariableStatement(main.body.statements[0], 'recording', ts.NodeFlags.Let) &&
+        isSingleVariableStatement(main.body.statements[1], 'testFailure', ts.NodeFlags.Let) &&
+        isSingleVariableStatement(main.body.statements[2], 'cleanupFailed', ts.NodeFlags.Let),
+        'The production main function must preserve the expected top-level control-flow skeleton.');
+
+    const testFailureDeclaration = getSingleVariableDeclaration(main.body.statements[1], 'testFailure');
+    const testFailureSymbol = testFailureDeclaration && checker.getSymbolAtLocation(testFailureDeclaration.name);
+    assert.ok(testFailureSymbol, 'The production testFailure binding must resolve to a symbol.');
+
+    const mainTryBody = mainTry.tryBlock.statements;
+    const runTestsTryIndex = mainTryBody.length - 1;
+    const runTestsTry = mainTryBody[runTestsTryIndex];
+    assert.ok(
+        ts.isTryStatement(runTestsTry) &&
+        isRecordingStartStatement(mainTryBody[runTestsTryIndex - 1]),
+        'The expected reachable main try path must contain exactly one exact ExTester run-tests command.');
+
+    const runTestsStatements = runTestsTry.tryBlock.statements;
+    const exTesterAwaitCandidates = runTestsStatements
+        .map((statement, index) => ({ exTesterAwait: getSuccessfulExTesterAwait(statement), index }))
+        .filter((candidate): candidate is { exTesterAwait: ExTesterAwait; index: number } =>
+            candidate.exTesterAwait !== undefined);
+    assert.strictEqual(
+        exTesterAwaitCandidates.length,
+        1,
+        'The expected reachable main try path must contain exactly one exact ExTester run-tests command.');
+    const { exTesterAwait, index: awaitIndex } = exTesterAwaitCandidates[0];
+    const guardStatement = runTestsTry.tryBlock.statements[awaitIndex + 1];
+    assert.ok(
+        guardStatement &&
+        ts.isExpressionStatement(guardStatement) &&
+        isCallTo(guardStatement.expression, 'assertShardExecutedTests'),
+        'The shard result guard must be a direct statement immediately after the successful ExTester await.');
+    const guardCall = guardStatement.expression;
+    assert.ok(ts.isIdentifier(guardCall.expression));
+    assert.ok(
+        hasExpectedRunTestsFailurePropagation(runTestsTry, checker, testFailureSymbol),
+        'The run-tests catch must preserve run-tests failures.');
+    assert.ok(
+        mainTry.catchClause === undefined &&
+        mainTry.finallyBlock &&
+        hasExpectedCleanupFailurePropagation(mainTry.finallyBlock, checker, testFailureSymbol),
+        'The main finally block must preserve cleanup failures.');
+    assert.ok(
+        hasExpectedTestFailureRethrow(main.body.statements[mainTryIndex + 1], checker, testFailureSymbol),
+        'The main function must rethrow recorded test failures after finally cleanup.');
+
+    const guardBindingSymbol = checker.getSymbolAtLocation(guardBinding.binding.name);
+    assert.ok(guardBindingSymbol, 'The top-level shard result guard binding must resolve to a symbol.');
+    assert.ok(
+        checker.getSymbolAtLocation(guardCall.expression) === guardBindingSymbol,
+        'The shard result guard call must resolve to the top-level shard result guard binding.');
+
+    const runWithProcessTreeTimeoutBinding = findTopLevelRequiredBinding(
+        sourceFile,
+        './e2e-process-runner.cjs',
+        'runWithProcessTreeTimeout');
+    const runWithProcessTreeTimeoutSymbol = runWithProcessTreeTimeoutBinding &&
+        checker.getSymbolAtLocation(runWithProcessTreeTimeoutBinding.name);
+    assert.ok(
+        runWithProcessTreeTimeoutSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.runWithProcessTreeTimeout) === runWithProcessTreeTimeoutSymbol,
+        'The ExTester await must resolve to the production runWithProcessTreeTimeout binding.');
+
+    const extesterCliDeclaration = findConstVariableDeclaration(sourceFile.statements, 'extesterCli');
+    const extestEnvDeclaration = findConstVariableDeclaration(mainTry.tryBlock.statements, 'extestEnv');
+    const runTestsArgsDeclaration = findConstVariableDeclaration(runTestsStatements, 'runTestsArgs');
+    const getRunTestsTimeoutMsDeclaration = findTopLevelFunctionDeclaration(sourceFile, 'getRunTestsTimeoutMs');
+    const testSpecInitializer = testSpecDeclaration && getExpectedTestSpecInitializer(testSpecDeclaration);
+    assert.ok(
+        testSpecInitializer &&
+        checker.getSymbolAtLocation(testSpecInitializer.process) === undefined,
+        'The top-level testSpec binding must use the intended testSpec initializer expression.');
+    const extesterCliSymbol = extesterCliDeclaration && checker.getSymbolAtLocation(extesterCliDeclaration.name);
+    const testSpecSymbol = testSpecDeclaration && checker.getSymbolAtLocation(testSpecDeclaration.name);
+    const extestEnvSymbol = extestEnvDeclaration && checker.getSymbolAtLocation(extestEnvDeclaration.name);
+    const runTestsArgsSymbol = runTestsArgsDeclaration && checker.getSymbolAtLocation(runTestsArgsDeclaration.name);
+    const getRunTestsTimeoutMsSymbol = getRunTestsTimeoutMsDeclaration?.name &&
+        checker.getSymbolAtLocation(getRunTestsTimeoutMsDeclaration.name);
+    assert.ok(
+        extesterCliSymbol &&
+        testSpecSymbol &&
+        extestEnvSymbol &&
+        runTestsArgsSymbol &&
+        getRunTestsTimeoutMsSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.process) === undefined &&
+        checker.getSymbolAtLocation(exTesterAwait.runTestsArgs) === runTestsArgsSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.extesterCli) === extesterCliSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.testSpec) === testSpecSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.extestEnv) === extestEnvSymbol &&
+        checker.getSymbolAtLocation(exTesterAwait.getRunTestsTimeoutMs) === getRunTestsTimeoutMsSymbol,
+        'The ExTester await arguments must resolve to the production ExTester await dependencies.');
+
+    const guardArguments = getExactShardResultArguments(guardCall);
+    assert.ok(guardArguments, 'The shard result guard argument must contain exactly the shardName and results properties.');
+
+    const shardNameSymbol = shardNameDeclaration && checker.getSymbolAtLocation(shardNameDeclaration.name);
+    assert.ok(
+        shardNameSymbol && checker.getShorthandAssignmentValueSymbol(guardArguments.shardName) === shardNameSymbol,
+        'The shard result guard argument must resolve to the top-level shardName binding.');
+
+    const readMochaResultsDeclaration = sourceFile.statements.find((statement): statement is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'readMochaResults');
+    const readMochaResultsSymbol = readMochaResultsDeclaration?.name &&
+        checker.getSymbolAtLocation(readMochaResultsDeclaration.name);
+    assert.ok(
+        readMochaResultsSymbol && checker.getSymbolAtLocation(guardArguments.readMochaResults) === readMochaResultsSymbol,
+        'The shard result guard argument must resolve to the top-level readMochaResults declaration.');
+
+    const sanitizePathSegmentDeclaration = findTopLevelFunctionDeclaration(sourceFile, 'sanitizePathSegment');
+    const sanitizePathSegmentSymbol = sanitizePathSegmentDeclaration?.name &&
+        checker.getSymbolAtLocation(sanitizePathSegmentDeclaration.name);
+    assert.ok(
+        sanitizePathSegmentSymbol &&
+        checker.getSymbolAtLocation(shardNameInitializer.sanitizePathSegment) === sanitizePathSegmentSymbol &&
+        checker.getSymbolAtLocation(shardNameInitializer.process) === undefined,
+        'The top-level shardName binding must use the intended shardName initializer expression.');
+
+    assert.ok(
+        runTestsStatements.length === 4 &&
+        awaitIndex === 2 &&
+        isCallStatement(runTestsStatements[0], 'logStep', 'Running VS Code extension E2E tests'),
+        'The production run-tests try must preserve the expected direct control-flow skeleton.');
+}
+
+function createRunnerProgram(source: string): { sourceFile: ts.SourceFile; checker: ts.TypeChecker } {
+    const fileName = 'run-e2e.js';
+    const options: ts.CompilerOptions = {
+        allowJs: true,
+        module: ts.ModuleKind.CommonJS,
+        noLib: true,
+        noResolve: true,
+        target: ts.ScriptTarget.Latest,
+    };
+    const host = ts.createCompilerHost(options, true);
+    host.fileExists = candidate => candidate === fileName;
+    host.readFile = candidate => candidate === fileName ? source : undefined;
+    host.getSourceFile = (candidate, languageVersion) =>
+        candidate === fileName
+            ? ts.createSourceFile(candidate, source, languageVersion, true, ts.ScriptKind.JS)
+            : undefined;
+
+    const program = ts.createProgram([fileName], options, host);
+    const sourceFile = program.getSourceFile(fileName);
+    assert.ok(sourceFile, 'The TypeScript program must contain run-e2e.js.');
+    return { sourceFile, checker: program.getTypeChecker() };
+}
+
+function assertUniqueProtectedDeclarations(sourceFile: ts.SourceFile): void {
+    const countDeclarations = (root: ts.Node, names: ReadonlySet<string>): Map<string, number> => {
+        const declarationCounts = new Map([...names].map(name => [name, 0]));
+        const recordBindingName = (name: ts.BindingName): void => {
+            if (ts.isIdentifier(name)) {
+                if (names.has(name.text)) {
+                    declarationCounts.set(name.text, declarationCounts.get(name.text)! + 1);
+                }
+                return;
+            }
+
+            for (const element of name.elements) {
+                if (ts.isBindingElement(element)) {
+                    recordBindingName(element.name);
+                }
+            }
+        };
+        const visit = (node: ts.Node): void => {
+            if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) {
+                recordBindingName(node.name);
+            }
+            else if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+                recordBindingName(node.name);
+            }
+
+            node.forEachChild(visit);
+        };
+        root.forEachChild(visit);
+
+        return declarationCounts;
+    };
+
+    const globalNames = new Set<string>([
+        ...protectedFunctionNames,
+        ...protectedTopLevelBindingNames,
+        'process',
+        'require',
+    ]);
+    const globalDeclarationCounts = countDeclarations(sourceFile, globalNames);
+    for (const name of [...protectedFunctionNames, ...protectedTopLevelBindingNames]) {
+        assert.strictEqual(
+            globalDeclarationCounts.get(name),
+            1,
+            `The protected runner syntax allowlist requires exactly one protected declaration for ${name}.`);
+    }
+    for (const name of ['process', 'require']) {
+        assert.strictEqual(
+            globalDeclarationCounts.get(name),
+            0,
+            `The protected runner syntax allowlist requires the intrinsic ${name} binding.`);
+    }
+
+    const main = sourceFile.statements.find((statement): statement is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === 'main');
+    assert.ok(main, 'The protected runner syntax allowlist requires the top-level main declaration.');
+    const mainDeclarationCounts = countDeclarations(main, new Set(protectedMainBindingNames));
+    for (const name of protectedMainBindingNames) {
+        assert.strictEqual(
+            mainDeclarationCounts.get(name),
+            1,
+            `The protected runner syntax allowlist requires exactly one protected declaration for ${name}.`);
+    }
+}
+
+function getProtectedRunnerSyntax(sourceFile: ts.SourceFile): string {
+    const printer = ts.createPrinter({
+        newLine: ts.NewLineKind.LineFeed,
+        removeComments: true,
+    });
+    const print = (node: ts.Node): string =>
+        printer.printNode(ts.EmitHint.Unspecified, node, sourceFile);
+    const executableStatements = sourceFile.statements
+        .filter(statement => !ts.isFunctionDeclaration(statement))
+        .map(print)
+        .join('\n');
+    const sections = [`[top-level executable]\n${executableStatements}`];
+
+    for (const functionName of protectedFunctionNames) {
+        const declaration = sourceFile.statements.find((statement): statement is ts.FunctionDeclaration =>
+            ts.isFunctionDeclaration(statement) && statement.name?.text === functionName);
+        sections.push(`[function ${functionName}]\n${declaration ? print(declaration) : '<missing>'}`);
+    }
+
+    return `${sections.join('\n\n')}\n`;
+}
+
+function findTopLevelShardResultGuardBinding(sourceFile: ts.SourceFile): {
+    binding: ts.BindingElement;
+    declarationList: ts.VariableDeclarationList;
+    requireIdentifier: ts.Identifier;
+} | undefined {
+    for (const statement of sourceFile.statements) {
+        if (!ts.isVariableStatement(statement)) {
+            continue;
+        }
+
+        for (const declaration of statement.declarationList.declarations) {
+            if (!declaration.initializer ||
+                !isCallTo(declaration.initializer, 'require') ||
+                declaration.initializer.arguments.length !== 1 ||
+                !ts.isStringLiteral(declaration.initializer.arguments[0]) ||
+                declaration.initializer.arguments[0].text !== './e2e-shard-results' ||
+                !ts.isObjectBindingPattern(declaration.name)) {
+                continue;
+            }
+
+            const binding = declaration.name.elements.find(element =>
+                element.propertyName === undefined &&
+                ts.isIdentifier(element.name) &&
+                element.name.text === 'assertShardExecutedTests');
+            if (binding && ts.isIdentifier(declaration.initializer.expression)) {
+                return {
+                    binding,
+                    declarationList: statement.declarationList,
+                    requireIdentifier: declaration.initializer.expression,
+                };
+            }
+        }
+    }
+
+    return undefined;
+}
+
+function findTopLevelRequiredBinding(
+    sourceFile: ts.SourceFile,
+    modulePath: string,
+    bindingName: string): ts.BindingElement | undefined {
+    for (const statement of sourceFile.statements) {
+        if (!ts.isVariableStatement(statement)) {
+            continue;
+        }
+
+        for (const declaration of statement.declarationList.declarations) {
+            if (!declaration.initializer ||
+                !isCallTo(declaration.initializer, 'require') ||
+                declaration.initializer.arguments.length !== 1 ||
+                !ts.isStringLiteral(declaration.initializer.arguments[0]) ||
+                declaration.initializer.arguments[0].text !== modulePath ||
+                !ts.isObjectBindingPattern(declaration.name)) {
+                continue;
+            }
+
+            return declaration.name.elements.find(element =>
+                element.propertyName === undefined &&
+                ts.isIdentifier(element.name) &&
+                element.name.text === bindingName);
+        }
+    }
+
+    return undefined;
+}
+
+function findTopLevelShardNameDeclaration(sourceFile: ts.SourceFile): ts.VariableDeclaration | undefined {
+    return findConstVariableDeclaration(sourceFile.statements, 'shardName');
+}
+
+function findTopLevelFunctionDeclaration(sourceFile: ts.SourceFile, functionName: string): ts.FunctionDeclaration | undefined {
+    return sourceFile.statements.find((statement): statement is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(statement) && statement.name?.text === functionName);
+}
+
+function findConstVariableDeclaration(statements: readonly ts.Statement[], variableName: string): ts.VariableDeclaration | undefined {
+    for (const statement of statements) {
+        if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) {
+            continue;
+        }
+
+        const declaration = statement.declarationList.declarations.find(candidate =>
+            ts.isIdentifier(candidate.name) && candidate.name.text === variableName);
+        if (declaration) {
+            return declaration;
+        }
+    }
+
+    return undefined;
+}
+
+function getSuccessfulExTesterAwait(statement: ts.Statement): ExTesterAwait | undefined {
+    if (!ts.isExpressionStatement(statement) ||
+        !ts.isAwaitExpression(statement.expression) ||
+        !isCallTo(statement.expression.expression, 'runWithProcessTreeTimeout')) {
+        return undefined;
+    }
+
+    const call = statement.expression.expression;
+    if (call.arguments.length !== 3 ||
+        !ts.isPropertyAccessExpression(call.arguments[0]) ||
+        !ts.isIdentifier(call.arguments[0].expression) ||
+        call.arguments[0].expression.text !== 'process' ||
+        call.arguments[0].name.text !== 'execPath' ||
+        !ts.isIdentifier(call.arguments[1]) ||
+        call.arguments[1].text !== 'runTestsArgs' ||
+        !ts.isObjectLiteralExpression(call.arguments[2])) {
+        return undefined;
+    }
+
+    const options = call.arguments[2];
+    const spawnOptionsProperty = options.properties.find(property =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === 'spawnOptions' &&
+        ts.isObjectLiteralExpression(property.initializer));
+    const timeoutProperty = options.properties.find(property =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === 'timeout' &&
+        isCallTo(property.initializer, 'getRunTestsTimeoutMs') &&
+        property.initializer.arguments.length === 0);
+    if (!spawnOptionsProperty ||
+        !ts.isPropertyAssignment(spawnOptionsProperty) ||
+        !ts.isObjectLiteralExpression(spawnOptionsProperty.initializer) ||
+        !timeoutProperty ||
+        !ts.isPropertyAssignment(timeoutProperty) ||
+        !ts.isCallExpression(timeoutProperty.initializer) ||
+        !ts.isIdentifier(timeoutProperty.initializer.expression)) {
+        return undefined;
+    }
+
+    const environmentProperty = spawnOptionsProperty.initializer.properties.find(property =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === 'env' &&
+        ts.isObjectLiteralExpression(property.initializer));
+    if (!environmentProperty ||
+        !ts.isPropertyAssignment(environmentProperty) ||
+        !ts.isObjectLiteralExpression(environmentProperty.initializer)) {
+        return undefined;
+    }
+
+    const extestEnvSpread = environmentProperty.initializer.properties.find(property =>
+        ts.isSpreadAssignment(property) &&
+        ts.isIdentifier(property.expression) &&
+        property.expression.text === 'extestEnv');
+    if (!extestEnvSpread ||
+        !ts.isSpreadAssignment(extestEnvSpread) ||
+        !ts.isIdentifier(extestEnvSpread.expression) ||
+        !ts.isIdentifier(call.expression)) {
+        return undefined;
+    }
+
+    const runTestsArgsDeclaration = findConstVariableDeclaration(
+        statement.parent && ts.isBlock(statement.parent) ? statement.parent.statements : [],
+        'runTestsArgs');
+    if (!runTestsArgsDeclaration ||
+        !runTestsArgsDeclaration.initializer ||
+        !ts.isArrayLiteralExpression(runTestsArgsDeclaration.initializer)) {
+        return undefined;
+    }
+
+    const commandArguments = runTestsArgsDeclaration.initializer.elements;
+    if (commandArguments.length < 3 ||
+        !ts.isIdentifier(commandArguments[0]) ||
+        commandArguments[0].text !== 'extesterCli' ||
+        !ts.isStringLiteral(commandArguments[1]) ||
+        commandArguments[1].text !== 'run-tests' ||
+        !ts.isIdentifier(commandArguments[2]) ||
+        commandArguments[2].text !== 'testSpec') {
+        return undefined;
+    }
+
+    return {
+        runWithProcessTreeTimeout: call.expression,
+        process: call.arguments[0].expression,
+        runTestsArgs: call.arguments[1],
+        extesterCli: commandArguments[0],
+        testSpec: commandArguments[2],
+        extestEnv: extestEnvSpread.expression,
+        getRunTestsTimeoutMs: timeoutProperty.initializer.expression,
+    };
+}
+
+function getExpectedShardNameInitializer(declaration: ts.VariableDeclaration): {
+    sanitizePathSegment: ts.Identifier;
+    process: ts.Identifier;
+    environmentValue: ts.PropertyAccessExpression;
+} | undefined {
+    if (!declaration.initializer ||
+        !isCallTo(declaration.initializer, 'sanitizePathSegment') ||
+        declaration.initializer.arguments.length !== 1 ||
+        !ts.isIdentifier(declaration.initializer.expression)) {
+        return undefined;
+    }
+
+    const value = declaration.initializer.arguments[0];
+    if (!ts.isBinaryExpression(value) ||
+        value.operatorToken.kind !== ts.SyntaxKind.BarBarToken ||
+        !ts.isStringLiteral(value.right) ||
+        value.right.text !== 'all' ||
+        !ts.isPropertyAccessExpression(value.left) ||
+        value.left.name.text !== 'ASPIRE_EXTENSION_E2E_SHARD' ||
+        !ts.isPropertyAccessExpression(value.left.expression) ||
+        value.left.expression.name.text !== 'env' ||
+        !ts.isIdentifier(value.left.expression.expression) ||
+        value.left.expression.expression.text !== 'process') {
+        return undefined;
+    }
+
+    return {
+        sanitizePathSegment: declaration.initializer.expression,
+        process: value.left.expression.expression,
+        environmentValue: value.left,
+    };
+}
+
+function getExpectedTestSpecInitializer(declaration: ts.VariableDeclaration): {
+    process: ts.Identifier;
+} | undefined {
+    const value = declaration.initializer;
+    if (!value ||
+        !ts.isBinaryExpression(value) ||
+        value.operatorToken.kind !== ts.SyntaxKind.BarBarToken ||
+        !ts.isStringLiteral(value.right) ||
+        value.right.text !== 'out/test-e2e/**/*.e2e.test.js' ||
+        !ts.isPropertyAccessExpression(value.left) ||
+        value.left.name.text !== 'ASPIRE_EXTENSION_E2E_SPEC' ||
+        !ts.isPropertyAccessExpression(value.left.expression) ||
+        value.left.expression.name.text !== 'env' ||
+        !ts.isIdentifier(value.left.expression.expression) ||
+        value.left.expression.expression.text !== 'process') {
+        return undefined;
+    }
+
+    return { process: value.left.expression.expression };
+}
+
+function getExactShardResultArguments(call: ts.CallExpression): {
+    shardName: ts.ShorthandPropertyAssignment;
+    readMochaResults: ts.Identifier;
+} | undefined {
+    if (call.arguments.length !== 1 || !ts.isObjectLiteralExpression(call.arguments[0])) {
+        return undefined;
+    }
+
+    const options = call.arguments[0];
+    if (options.properties.length !== 2) {
+        return undefined;
+    }
+
+    const shardNameProperty = options.properties.find(property =>
+        ts.isShorthandPropertyAssignment(property) && property.name.text === 'shardName');
+    const resultProperty = options.properties.find(property =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === 'results' &&
+        isCallTo(property.initializer, 'readMochaResults') &&
+        property.initializer.arguments.length === 0);
+    if (!shardNameProperty ||
+        !ts.isShorthandPropertyAssignment(shardNameProperty) ||
+        !resultProperty ||
+        !ts.isPropertyAssignment(resultProperty) ||
+        !ts.isCallExpression(resultProperty.initializer) ||
+        !ts.isIdentifier(resultProperty.initializer.expression)) {
+        return undefined;
+    }
+
+    return {
+        shardName: shardNameProperty,
+        readMochaResults: resultProperty.initializer.expression,
+    };
+}
+
+function isCallTo(node: ts.Node, functionName: string): node is ts.CallExpression {
+    return ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === functionName;
+}
+
+function getTopLevelMainInvocation(statement: ts.Statement): MainInvocation | undefined {
+    if (!ts.isExpressionStatement(statement) ||
+        !ts.isCallExpression(statement.expression) ||
+        !ts.isPropertyAccessExpression(statement.expression.expression) ||
+        statement.expression.expression.name.text !== 'catch' ||
+        !ts.isCallExpression(statement.expression.expression.expression) ||
+        statement.expression.expression.expression.arguments.length !== 0 ||
+        !ts.isIdentifier(statement.expression.expression.expression.expression) ||
+        statement.expression.expression.expression.expression.text !== 'main' ||
+        statement.expression.arguments.length !== 1) {
+        return undefined;
+    }
+
+    return {
+        main: statement.expression.expression.expression.expression,
+        failureHandler: statement.expression.arguments[0],
+    };
+}
+
+function isExpectedMainFailureHandler(
+    handler: ts.Expression,
+    sourceFile: ts.SourceFile,
+    checker: ts.TypeChecker): boolean {
+    if (!ts.isArrowFunction(handler) ||
+        handler.parameters.length !== 1 ||
+        !ts.isIdentifier(handler.parameters[0].name) ||
+        !ts.isBlock(handler.body) ||
+        handler.body.statements.length !== 2 ||
+        handler.body.statements[0].getText(sourceFile) !==
+            'console.error(error instanceof Error ? error.stack ?? error.message : String(error));') {
+        return false;
+    }
+
+    const exitCodeStatement = handler.body.statements[1];
+    return ts.isExpressionStatement(exitCodeStatement) &&
+        ts.isBinaryExpression(exitCodeStatement.expression) &&
+        exitCodeStatement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isPropertyAccessExpression(exitCodeStatement.expression.left) &&
+        ts.isIdentifier(exitCodeStatement.expression.left.expression) &&
+        exitCodeStatement.expression.left.expression.text === 'process' &&
+        checker.getSymbolAtLocation(exitCodeStatement.expression.left.expression) === undefined &&
+        exitCodeStatement.expression.left.name.text === 'exitCode' &&
+        ts.isNumericLiteral(exitCodeStatement.expression.right) &&
+        exitCodeStatement.expression.right.text === '1';
+}
+
+function getSingleVariableDeclaration(
+    statement: ts.Statement,
+    variableName: string): ts.VariableDeclaration | undefined {
+    if (!ts.isVariableStatement(statement) ||
+        statement.declarationList.declarations.length !== 1) {
+        return undefined;
+    }
+
+    const declaration = statement.declarationList.declarations[0];
+    return ts.isIdentifier(declaration.name) && declaration.name.text === variableName
+        ? declaration
+        : undefined;
+}
+
+function isSingleVariableStatement(
+    statement: ts.Statement,
+    variableName: string,
+    declarationFlag: ts.NodeFlags): boolean {
+    return ts.isVariableStatement(statement) &&
+        getSingleVariableDeclaration(statement, variableName) !== undefined &&
+        (statement.declarationList.flags & declarationFlag) !== 0;
+}
+
+function isRecordingStartStatement(statement: ts.Statement | undefined): boolean {
+    return !!statement &&
+        ts.isExpressionStatement(statement) &&
+        ts.isBinaryExpression(statement.expression) &&
+        statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(statement.expression.left) &&
+        statement.expression.left.text === 'recording' &&
+        isCallTo(statement.expression.right, 'startRecording') &&
+        statement.expression.right.arguments.length === 0;
+}
+
+function isCallStatement(statement: ts.Statement, functionName: string, stringArgument: string): boolean {
+    return ts.isExpressionStatement(statement) &&
+        isCallTo(statement.expression, functionName) &&
+        statement.expression.arguments.length === 1 &&
+        ts.isStringLiteral(statement.expression.arguments[0]) &&
+        statement.expression.arguments[0].text === stringArgument;
+}
+
+function hasExpectedRunTestsFailurePropagation(
+    runTestsTry: ts.TryStatement,
+    checker: ts.TypeChecker,
+    testFailureSymbol: ts.Symbol): boolean {
+    const catchClause = runTestsTry.catchClause;
+    if (!catchClause ||
+        runTestsTry.finallyBlock ||
+        !catchClause.variableDeclaration ||
+        !ts.isIdentifier(catchClause.variableDeclaration.name) ||
+        catchClause.block.statements.length !== 1) {
+        return false;
+    }
+
+    const errorSymbol = checker.getSymbolAtLocation(catchClause.variableDeclaration.name);
+    return !!errorSymbol &&
+        isSymbolAssignment(catchClause.block.statements[0], checker, testFailureSymbol, errorSymbol);
+}
+
+function hasExpectedCleanupFailurePropagation(
+    finallyBlock: ts.Block,
+    checker: ts.TypeChecker,
+    testFailureSymbol: ts.Symbol): boolean {
+    const cleanupFailureIf = finallyBlock.statements.at(-1);
+    if (!cleanupFailureIf ||
+        !ts.isIfStatement(cleanupFailureIf) ||
+        cleanupFailureIf.elseStatement ||
+        !ts.isBlock(cleanupFailureIf.thenStatement) ||
+        cleanupFailureIf.thenStatement.statements.length !== 3) {
+        return false;
+    }
+
+    const cleanupFailureDeclaration = getSingleVariableDeclaration(
+        cleanupFailureIf.thenStatement.statements[1],
+        'cleanupFailure');
+    const cleanupFailureSymbol = cleanupFailureDeclaration &&
+        checker.getSymbolAtLocation(cleanupFailureDeclaration.name);
+    const preserveExistingFailure = cleanupFailureIf.thenStatement.statements[2];
+    if (!cleanupFailureSymbol ||
+        !ts.isIfStatement(preserveExistingFailure) ||
+        !ts.isIdentifier(preserveExistingFailure.expression) ||
+        checker.getSymbolAtLocation(preserveExistingFailure.expression) !== testFailureSymbol ||
+        !ts.isBlock(preserveExistingFailure.thenStatement) ||
+        preserveExistingFailure.thenStatement.statements.length !== 1 ||
+        !isConsoleErrorOfSymbol(
+            preserveExistingFailure.thenStatement.statements[0],
+            checker,
+            cleanupFailureSymbol) ||
+        !preserveExistingFailure.elseStatement ||
+        !ts.isBlock(preserveExistingFailure.elseStatement) ||
+        preserveExistingFailure.elseStatement.statements.length !== 1) {
+        return false;
+    }
+
+    return isSymbolAssignment(
+        preserveExistingFailure.elseStatement.statements[0],
+        checker,
+        testFailureSymbol,
+        cleanupFailureSymbol);
+}
+
+function hasExpectedTestFailureRethrow(
+    statement: ts.Statement,
+    checker: ts.TypeChecker,
+    testFailureSymbol: ts.Symbol): boolean {
+    if (!ts.isIfStatement(statement) ||
+        statement.elseStatement ||
+        !ts.isIdentifier(statement.expression) ||
+        checker.getSymbolAtLocation(statement.expression) !== testFailureSymbol ||
+        !ts.isBlock(statement.thenStatement) ||
+        statement.thenStatement.statements.length < 2) {
+        return false;
+    }
+
+    const printDiagnostics = statement.thenStatement.statements[0];
+    const rethrow = statement.thenStatement.statements.at(-1);
+    return ts.isExpressionStatement(printDiagnostics) &&
+        isCallTo(printDiagnostics.expression, 'printFailureDiagnosticsSummary') &&
+        printDiagnostics.expression.arguments.length === 0 &&
+        !!rethrow &&
+        ts.isThrowStatement(rethrow) &&
+        !!rethrow.expression &&
+        ts.isIdentifier(rethrow.expression) &&
+        checker.getSymbolAtLocation(rethrow.expression) === testFailureSymbol;
+}
+
+function isSymbolAssignment(
+    statement: ts.Statement,
+    checker: ts.TypeChecker,
+    leftSymbol: ts.Symbol,
+    rightSymbol: ts.Symbol): boolean {
+    return ts.isExpressionStatement(statement) &&
+        ts.isBinaryExpression(statement.expression) &&
+        statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(statement.expression.left) &&
+        checker.getSymbolAtLocation(statement.expression.left) === leftSymbol &&
+        ts.isIdentifier(statement.expression.right) &&
+        checker.getSymbolAtLocation(statement.expression.right) === rightSymbol;
+}
+
+function isConsoleErrorOfSymbol(
+    statement: ts.Statement,
+    checker: ts.TypeChecker,
+    argumentSymbol: ts.Symbol): boolean {
+    if (!ts.isExpressionStatement(statement) ||
+        !ts.isCallExpression(statement.expression) ||
+        !ts.isPropertyAccessExpression(statement.expression.expression) ||
+        !ts.isIdentifier(statement.expression.expression.expression) ||
+        statement.expression.expression.expression.text !== 'console' ||
+        statement.expression.expression.name.text !== 'error' ||
+        statement.expression.arguments.length !== 1 ||
+        !ts.isIdentifier(statement.expression.arguments[0])) {
+        return false;
+    }
+
+    return checker.getSymbolAtLocation(statement.expression.arguments[0]) === argumentSymbol;
 }
 
 function getDirectCallExpression(statement: ts.Statement, name: string): ts.CallExpression | undefined {
@@ -187,7 +1173,7 @@ suite('E2E launch profile', () => {
 
     test('creates nothing in the per-run root that a later module-scope throw could strand', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const runRootDeclaration = runner.indexOf('const shortRunRoot =');
         const moduleScopeAfterRunRoot = stripComments(runner.slice(runner.indexOf('\n', runRootDeclaration), runner.indexOf('\nfunction ')));
 
@@ -290,7 +1276,7 @@ suite('E2E launch profile', () => {
 
     test('uses in-memory secret storage so VS Code does not prompt for OS keychain access', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes("'--disable-keytar'"));
         assert.ok(runner.includes("'--use-inmemory-secretstorage'"));
@@ -301,7 +1287,7 @@ suite('E2E launch profile', () => {
 
     test('opens the E2E workspace as a VS Code startup folder', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes('JSON.stringify(workspaceRoot)'));
         assert.ok(!runner.includes("'--open_resource', workspaceRoot"));
@@ -339,7 +1325,7 @@ suite('E2E launch profile', () => {
 
     test('bounds the ExTester process below the workflow timeout so diagnostics still run', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes("const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');"));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS'));
@@ -350,9 +1336,564 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('process.kill(-pid, signal)'));
     });
 
+    test('checks opted-in shard results after ExTester exits successfully', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot);
+
+        assertShardResultGuardWiring(runner);
+    });
+
+    test('accepts the runner and wiring snapshot with Windows line endings', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(/\r?\n/g, '\r\n');
+        const expectedSyntax = fs.readFileSync(
+            path.join(extensionRoot, 'src', 'test', 'e2eLaunchProfile.runner-wiring.txt'),
+            'utf8')
+            .replace(/\r?\n/g, '\r\n');
+
+        assertShardResultGuardWiring(runner, expectedSyntax);
+    });
+
+    test('applies protected runner mutations with Windows line endings', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = normalizeLineEndings(
+            readRunnerSource(extensionRoot)
+                .replace(/\r?\n/g, '\r\n'))
+            .replace(
+                "main().catch(error => {\n  console.error(error instanceof Error ? error.stack ?? error.message : String(error));\n  process.exitCode = 1;\n});",
+                'main().catch(() => {});');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a commented-out shard result guard import', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const { assertShardExecutedTests } = require('./e2e-shard-results');",
+                "// const { assertShardExecutedTests } = require('./e2e-shard-results');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a commented-out shard result guard invocation', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      assertShardExecutedTests({ shardName, results: readMochaResults() });',
+                '      // assertShardExecutedTests({ shardName, results: readMochaResults() });');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard hidden in an unreachable branch', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      assertShardExecutedTests({ shardName, results: readMochaResults() });',
+                '      if (false) {\n        assertShardExecutedTests({ shardName, results: readMochaResults() });\n      }');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects the complete run-tests path when it is unreachable', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "    recording = startRecording();\n    try {\n      logStep('Running VS Code extension E2E tests');",
+                "    recording = startRecording();\n    if (false) {\n    try {\n      logStep('Running VS Code extension E2E tests');")
+            .replace(
+                '    }\n    completedTests = true;',
+                '    }\n    }\n    completedTests = true;');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a disabled main invocation', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "main().catch(error => {\n  console.error(error instanceof Error ? error.stack ?? error.message : String(error));\n  process.exitCode = 1;\n});",
+                "if (false) {\n  main().catch(error => {\n    console.error(error instanceof Error ? error.stack ?? error.message : String(error));\n    process.exitCode = 1;\n  });\n}");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects an unconditional return before the guarded run-tests path', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '  let cleanupFailed = false;',
+                '  let cleanupFailed = false;\n  return;');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a conditional return that always terminates before the guarded run-tests path', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    assertSpecMatches(testSpec);',
+                '    assertSpecMatches(testSpec);\n    if (true) return;');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a successful process exit before the guarded run-tests path', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    assertSpecMatches(testSpec);',
+                '    assertSpecMatches(testSpec);\n    process.exit(0);');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a successful process exit before the top-level main invocation', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                'main().catch(error => {',
+                'process.exit(0);\nmain().catch(error => {');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects process termination through element access in a protected initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const artifactsDir = path.join(extensionRoot, '.test-artifacts');",
+                "const artifactsDir = (process['exit'](0), path.join(extensionRoot, '.test-artifacts'));");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects aliased process termination in a protected initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const artifactsDir = path.join(extensionRoot, '.test-artifacts');",
+                "const terminateProcess = process.exit.bind(process);\nconst artifactsDir = (terminateProcess(0), path.join(extensionRoot, '.test-artifacts'));");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard after a different awaited command', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      await runWithProcessTreeTimeout(process.execPath, runTestsArgs, {',
+                '      await Promise.resolve(process.execPath, runTestsArgs, {');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects an ExTester await through a shadowed fake runner', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      const runWithProcessTreeTimeout = async () => fs.writeFileSync(path.join(resultsDir, 'mocha.json'), JSON.stringify({ stats: { tests: 1, passes: 1, pending: 0 } }));");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects shadowed ExTester await dependencies', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      const extesterCli = 'fake';\n      const testSpec = 'fake';\n      const extestEnv = {};\n      const getRunTestsTimeoutMs = () => 1;");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard call through a shadowed no-op binding', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      const assertShardExecutedTests = () => undefined;");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a reassigned shard result guard binding', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const { assertShardExecutedTests } = require('./e2e-shard-results');",
+                "let { assertShardExecutedTests } = require('./e2e-shard-results');")
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      assertShardExecutedTests = () => undefined;");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard call with a shadowed shard name', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      const shardName = 'not-resource-debugger';");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a neutralized hardcoded shard name initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "const shardName = sanitizePathSegment('not-resource-debugger');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard call with a shadowed Mocha result reader', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      const readMochaResults = () => ({ stats: { tests: 1, pending: 0 } });");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a duplicate protected function declaration', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                'function sanitizePathSegment(value) {',
+                "function readMochaResults() {\n  return { stats: { tests: 1, passes: 1, pending: 0 } };\n}\n\nfunction sanitizePathSegment(value) {");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects replacing the protected Mocha JSON reader', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "function readJsonIfExists(filePath) {\n  if (!fs.existsSync(filePath)) {\n    return undefined;\n  }\n\n  try {\n    return JSON.parse(fs.readFileSync(filePath, 'utf8'));\n  }\n  catch (error) {\n    console.warn(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`);\n    return undefined;\n  }\n}",
+                "function readJsonIfExists() {\n  return { stats: { tests: 1, passes: 1, pending: 0 } };\n}");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a duplicate protected Mocha JSON reader declaration', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                'function findLatestExtensionLogPath() {',
+                "function readJsonIfExists() {\n  return { stats: { tests: 1, passes: 1, pending: 0 } };\n}\n\nfunction findLatestExtensionLogPath() {");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a reassigned Mocha result reader', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      readMochaResults = () => ({ stats: { tests: 1, passes: 1, pending: 0 } });");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects an inner catch that swallows the shard result guard failure', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    catch (error) {\n      testFailure = error;\n    }',
+                '    catch (error) {\n    }');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects disabling the post-finally test failure throw', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    throw testFailure;',
+                '    return;');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects swallowing cleanup failures in the main finally block', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      else {\n        testFailure = cleanupFailure;\n      }',
+                '      else {\n        console.error(cleanupFailure);\n      }');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects clearing the recorded failure in the main finally block', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    if (cleanupErrors.length > 0) {',
+                '    testFailure = undefined;\n    if (cleanupErrors.length > 0) {');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects returning from the main finally block', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '    if (cleanupErrors.length > 0) {',
+                '    return;\n    if (cleanupErrors.length > 0) {');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a top-level main handler that keeps a zero exit code', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "main().catch(error => {\n  console.error(error instanceof Error ? error.stack ?? error.message : String(error));\n  process.exitCode = 1;\n});",
+                'main().catch(() => {});');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a Mocha result reader reassigned through object destructuring', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      ({ readMochaResults } = { readMochaResults: () => ({ stats: { tests: 1, passes: 1, pending: 0 } }) });");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a Mocha result reader reassigned through array destructuring', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      [readMochaResults] = [() => ({ stats: { tests: 1, passes: 1, pending: 0 } })];");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a process runner reassigned through a for-of initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      for (runWithProcessTreeTimeout of [async () => undefined]) {}");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a Mocha result reader reassigned through a for-in initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "      logStep('Running VS Code extension E2E tests');",
+                "      logStep('Running VS Code extension E2E tests');\n      for (readMochaResults in { replacement: true }) {}");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects CommonJS require reassignment before the guard import', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const { assertShardExecutedTests } = require('./e2e-shard-results');",
+                "require = () => ({ assertShardExecutedTests: () => undefined });\nconst { assertShardExecutedTests } = require('./e2e-shard-results');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a CommonJS require declaration that replaces the intrinsic binding', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const { assertShardExecutedTests } = require('./e2e-shard-results');",
+                "var require = () => ({ assertShardExecutedTests: () => undefined });\nconst { assertShardExecutedTests } = require('./e2e-shard-results');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a hardcoded test spec initializer', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';",
+                "const testSpec = 'out/test-e2e/resourceDebugger.e2e.test.js';");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects direct shard environment reassignment before shard initialization', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "process.env.ASPIRE_EXTENSION_E2E_SHARD = 'all';\nconst shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects Object.assign shard environment mutation before shard initialization', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "Object.assign(process.env, { ASPIRE_EXTENSION_E2E_SHARD: 'all' });\nconst shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard environment alias before shard initialization', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "const shardEnvironment = process.env;\nshardEnvironment.ASPIRE_EXTENSION_E2E_SHARD = 'all';\nconst shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a destructured shard environment alias before shard initialization', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "const { env: shardEnvironment } = process;\nshardEnvironment.ASPIRE_EXTENSION_E2E_SHARD = 'all';\nconst shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a reflected shard environment alias before shard initialization', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                "const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');",
+                "const shardEnvironment = Reflect.get(process, 'env');\nshardEnvironment.ASPIRE_EXTENSION_E2E_SHARD = 'all';\nconst shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');");
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects a shard result guard argument with a trailing override spread', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      assertShardExecutedTests({ shardName, results: readMochaResults() });',
+                '      assertShardExecutedTests({ shardName, results: readMochaResults(), ...{ shardName: null } });');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
+    test('rejects duplicate shard result guard properties', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot)
+            .replace(
+                '      assertShardExecutedTests({ shardName, results: readMochaResults() });',
+                '      assertShardExecutedTests({ shardName, results: readMochaResults(), shardName: null });');
+
+        assert.throws(
+            () => assertShardResultGuardWiring(runner),
+            /protected runner syntax allowlist/);
+    });
+
     test('wires the ExTester process lifecycle into the extracted runner', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const invocationStart = runner.indexOf('await runWithProcessTreeTimeout(process.execPath');
         const invocationEnd = runner.indexOf('\n      });', invocationStart);
         const runnerOptions = runner.slice(invocationStart, invocationEnd);
@@ -367,7 +1908,7 @@ suite('E2E launch profile', () => {
 
     test('bounds retryable runner setup steps so setup failures still collect diagnostics', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes("'get-vscode'"));
         assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5"));
@@ -380,7 +1921,7 @@ suite('E2E launch profile', () => {
 
     test('guards destructive E2E workspace cleanup', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes('assertWorkspaceRootSafeForDeletion();'));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_ALLOW_EXTERNAL_WORKSPACE_ROOT_CLEANUP'));
@@ -390,7 +1931,7 @@ suite('E2E launch profile', () => {
 
     test('redacts sensitive dashboard URLs from runner failure diagnostics', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes('debugSessions: state.state.debugSessions?.map(redactDebugSessionForDiagnostics)'));
         assert.ok(runner.includes('sanitizeDashboardUrlForDiagnostics'));
@@ -423,7 +1964,7 @@ suite('E2E launch profile', () => {
 
     test('defaults to the newest VS Code with the legacy macOS executable path while the internal feed lacks newer ExTester', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const installedPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'package.json'), 'utf8'));
         const extester = require(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'extester.js')) as {
             loadCodeVersion(version: string): string;
@@ -454,7 +1995,7 @@ suite('E2E launch profile', () => {
 
     test('preflights locked ExTester dependency graph before starting the E2E matrix', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
 
         assert.ok(runner.includes('--verify-extester-feed'));
@@ -473,7 +2014,7 @@ suite('E2E launch profile', () => {
 
     test('pins the real Azure Functions toolchain for the offline E2E shard', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
         const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
@@ -500,7 +2041,7 @@ suite('E2E launch profile', () => {
 
     test('wires structured E2E harness failures into advisory handling', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes("const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');"));
         assert.ok(runner.includes("const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';"));
@@ -522,7 +2063,7 @@ suite('E2E launch profile', () => {
 
     test('waits for ffmpeg to flush before reporting E2E recordings as saved', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes('ffmpeg.once(\'close\''));
         assert.ok(runner.includes("await runCleanupStep('stop recording', () => stopRecording(recording, testFailure), cleanupErrors);"));
@@ -552,7 +2093,7 @@ suite('E2E launch profile', () => {
 
     test('opts out of telemetry for all CLI processes spawned by E2E tests', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const envConstruction = runner.slice(runner.indexOf('const extestEnv = getAspireCliEnvironment({'), runner.indexOf("logStep('Downloading VS Code');"));
         const runTestsStart = runner.indexOf("logStep('Running VS Code extension E2E tests');");
         const runTests = runner.slice(runTestsStart, runner.indexOf('catch (error)', runTestsStart));
@@ -573,7 +2114,7 @@ suite('E2E launch profile', () => {
 
     test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes('#pragma warning disable ASPIREINTERACTION001'));
         assert.ok(runner.includes('new InteractionInput'));
@@ -582,7 +2123,7 @@ suite('E2E launch profile', () => {
 
     test('launches VS Code E2E tests with telemetry disabled before extension activation', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const settings = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'test-e2e', 'settings.json'), 'utf8'));
 
         assert.strictEqual(settings['telemetry.telemetryLevel'], 'off');
@@ -591,7 +2132,7 @@ suite('E2E launch profile', () => {
 
     test('does not seed dashboard launch preferences in the E2E harness', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const settings = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'test-e2e', 'settings.json'), 'utf8'));
 
         assert.strictEqual(settings['aspire.dashboardBrowser'], undefined);
@@ -786,6 +2327,158 @@ suite('E2E launch profile', () => {
         assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
+    test('waits for resource debugger child processes in parallel', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const nodeProofTest = getTestBlock(resourceDebugger, 'stopping debugging tears down the Node resource process tree');
+
+        assert.ok(nodeProofTest.includes('await Promise.all(['), 'The two process-exit waits must share the same wall-clock budget.');
+        assert.ok(nodeProofTest.indexOf('waitForProcessExit(debuggeePid') > nodeProofTest.indexOf('await Promise.all(['));
+        assert.ok(nodeProofTest.indexOf('waitForProcessExit(childPid') > nodeProofTest.indexOf('waitForProcessExit(debuggeePid'));
+        assert.ok(nodeProofTest.indexOf(']);') > nodeProofTest.indexOf('waitForProcessExit(childPid'));
+    });
+
+    test('uses bounded operation and cleanup deadlines for every resource debugger phase', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+
+        assertResourceDebuggerUsesBoundedDeadlines(resourceDebugger);
+    });
+
+    test('gives resource debugger shards enough runner time for their bounded suite budget', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot);
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const workflow = normalizeLineEndings(
+            fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8'));
+        const contributing = normalizeLineEndings(
+            fs.readFileSync(path.join(extensionRoot, 'CONTRIBUTING.md'), 'utf8'));
+        const proofTimeoutMatch = /const resourceDebuggerDeadlineTimeoutMs = (\d+);/.exec(resourceDebugger);
+        const teardownTimeoutMatch = /const resourceDebuggerTeardownTimeoutMs = (\d+);/.exec(resourceDebugger);
+        assert.ok(proofTimeoutMatch);
+        assert.ok(teardownTimeoutMatch);
+
+        // The first two tests share one proof, the third test runs another proof, and every test
+        // executes teardown. Keep additional process-runner time for Mocha and browser shutdown.
+        const worstCaseSuiteTimeoutMs = (2 * Number(proofTimeoutMatch[1])) + (3 * Number(teardownTimeoutMatch[1]));
+        const resourceAwareDefaultTimeoutMatch = /const defaultRunTestsTimeoutMs = includeNodeResourceFixture \? (\d+) : 2400000;/.exec(runner);
+        assert.ok(resourceAwareDefaultTimeoutMatch, 'Expected the local runner default to account for the resource debugger spec.');
+        assert.ok(
+            Number(resourceAwareDefaultTimeoutMatch[1]) >= worstCaseSuiteTimeoutMs + 2400000 + 300000,
+            'The full-suite runner timeout must preserve the previous suite budget plus the resource debugger budget and cleanup slack.');
+        const resourceShardBlocks = workflow
+            .split('\n          - name: ')
+            .filter(block => block.includes('\n            shardName: resource-debugger\n'));
+        assert.strictEqual(resourceShardBlocks.length, 2, 'Expected Linux and Windows resource debugger matrix entries.');
+        for (const block of resourceShardBlocks) {
+            const runnerTimeoutMatch = /\n            runTestsTimeoutMs: (\d+)(?:\n|$)/.exec(block);
+            assert.ok(runnerTimeoutMatch, 'Expected the resource debugger matrix entry to override the process-runner timeout.');
+            assert.ok(
+                Number(runnerTimeoutMatch[1]) >= worstCaseSuiteTimeoutMs + 300000,
+                'The resource debugger process-runner timeout must exceed its worst-case Mocha budget by at least five minutes.');
+            const jobTimeoutMatch = /\n            timeoutMinutes: (\d+)(?:\n|$)/.exec(block);
+            assert.ok(jobTimeoutMatch, 'Expected the resource debugger matrix entry to override the job timeout.');
+            assert.ok(
+                Number(jobTimeoutMatch[1]) >= (Number(runnerTimeoutMatch[1]) / 60000) + 30,
+                'The resource debugger job timeout must leave at least 30 minutes for setup and diagnostics.');
+        }
+        assert.ok(
+            workflow.includes('ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS: ${{ matrix.runTestsTimeoutMs || 2400000 }}'),
+            'The workflow must pass the per-shard process-runner timeout override.');
+        assert.ok(
+            workflow.includes('timeout-minutes: ${{ matrix.timeoutMinutes || 75 }}'),
+            'The workflow job must honor the per-shard timeout override.');
+        assert.ok(
+            contributing.includes('ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS=3600000 ASPIRE_EXTENSION_E2E_SHARD=resource-debugger'),
+            'The documented resource debugger command must use the same process-runner timeout as CI.');
+        assert.ok(
+            contributing.includes(`ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS=${resourceAwareDefaultTimeoutMatch[1]} ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e`),
+            'The documented full-suite command must expose its larger resource-aware timeout.');
+    });
+
+    test('applies resource debugger mutations with Windows line endings', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = normalizeLineEndings(
+            readResourceDebuggerSource(extensionRoot)
+                .replace(/\r?\n/g, '\r\n'));
+        const mutation = resourceDebugger.replace(
+            "() => runResourceDebuggerCleanupPhase(\n                'resource debugger teardown stop control',\n                resourceDebuggerPhaseTimeoutMs.stopDebuggingControl,",
+            "() => runResourceDebuggerPhase(\n                'resource debugger teardown stop control',\n                resourceDebuggerDeadline,\n                resourceDebuggerPhaseTimeoutMs.stopDebuggingControl,");
+
+        assert.notStrictEqual(mutation, resourceDebugger, 'Expected to apply the shared teardown deadline mutation.');
+    });
+
+    test('rejects a resource debugger setup wait omitted from the shared deadline', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const mutation = resourceDebugger.replace(
+            "await runResourceDebuggerPhase('repository idle setup', deadline, resourceDebuggerPhaseTimeoutMs.repositoryIdle, timeoutMs => waitForRepositoryIdle(timeoutMs));",
+            'await waitForRepositoryIdle();');
+
+        assert.notStrictEqual(mutation, resourceDebugger, 'Expected to apply the omitted setup deadline mutation.');
+        assert.throws(() => assertResourceDebuggerUsesBoundedDeadlines(mutation), /waitForRepositoryIdle to execute through runResourceDebuggerPhase/);
+    });
+
+    test('rejects a resource debugger control wait omitted from the shared deadline', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const mutation = resourceDebugger.replace(
+            "{ waitFor: 'started', timeoutMs }",
+            "{ waitFor: 'started' }");
+
+        assert.notStrictEqual(mutation, resourceDebugger, 'Expected to apply the omitted control deadline mutation.');
+        assert.throws(() => assertResourceDebuggerUsesBoundedDeadlines(mutation), /executeE2eControlCommand to use the remaining timeout/);
+    });
+
+    test('rejects resource debugger teardown that reuses the proof deadline', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const mutation = resourceDebugger.replace(
+            "() => runResourceDebuggerCleanupPhase(\n                'resource debugger teardown stop control',\n                resourceDebuggerPhaseTimeoutMs.stopDebuggingControl,",
+            "() => runResourceDebuggerPhase(\n                'resource debugger teardown stop control',\n                resourceDebuggerDeadline,\n                resourceDebuggerPhaseTimeoutMs.stopDebuggingControl,");
+
+        assert.notStrictEqual(mutation, resourceDebugger, 'Expected to apply the shared teardown deadline mutation.');
+        assert.throws(() => assertResourceDebuggerUsesBoundedDeadlines(mutation), /Teardown cleanup must not reuse the proof deadline/);
+    });
+
+    test('rejects resource debugger teardown that waits on the AppHost state mirror', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const mutation = resourceDebugger.replace(
+            '                timeoutMs => waitForNoDebugSessions(timeoutMs)),',
+            "                timeoutMs => waitForNoDebugSessions(timeoutMs)),\n            () => runResourceDebuggerCleanupPhase(\n                'renamed lagging state wait',\n                resourceDebuggerPhaseTimeoutMs.appHostExit,\n                timeoutMs => waitForNoRunningAppHost(timeoutMs)),");
+
+        assert.notStrictEqual(mutation, resourceDebugger, 'Expected to add the lagging AppHost state wait.');
+        assert.throws(() => assertResourceDebuggerUsesBoundedDeadlines(mutation), /Teardown must not wait on the extension state AppHost mirror/);
+    });
+
+    test('requires the captured AppHost process to be running before stopping debugging', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const resourceDebugger = readResourceDebuggerSource(extensionRoot);
+        const nodeProofTest = getTestBlock(resourceDebugger, 'stopping debugging tears down the Node resource process tree');
+        const capturedPidAssertion = "assert.ok(appHostPid !== undefined, 'Expected the extension state to report an AppHost pid while the AppHost is running.');";
+        const livePidAssertion = 'assert.ok(isProcessRunning(appHostPid)';
+        const stopDebugging = "timeoutMs => executeE2eControlCommand({ name: 'stopDebugging' }, { waitFor: 'started', timeoutMs }))";
+
+        assert.ok(nodeProofTest.includes(capturedPidAssertion));
+        assert.ok(nodeProofTest.includes(livePidAssertion));
+        assert.ok(nodeProofTest.indexOf(livePidAssertion) > nodeProofTest.indexOf(capturedPidAssertion));
+        assert.ok(nodeProofTest.indexOf(stopDebugging) > nodeProofTest.indexOf(livePidAssertion));
+    });
+
+    test('includes the Node fixture when the full E2E spec glob matches resource debugger tests', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = readRunnerSource(extensionRoot);
+        const paths = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'paths.ts'), 'utf8');
+
+        const matchedSpecsIndex = runner.indexOf('const matchedTestSpecs =');
+        const includeFixtureIndex = runner.indexOf("const includeNodeResourceFixture = matchedTestSpecs.some(file => path.basename(file) === 'resourceDebugger.e2e.test.js');");
+
+        assert.ok(matchedSpecsIndex >= 0, 'The runner must resolve the effective spec glob before fixture selection.');
+        assert.ok(includeFixtureIndex > matchedSpecsIndex, 'Fixture selection must inspect the actual matched spec files, not just the shard name.');
+        assert.ok(paths.includes('Any E2E run that includes the resource debugger spec gets this fixture'));
+    });
+
     test('waits for durable AppHost discovery gates before asserting running state', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
@@ -846,7 +2539,7 @@ suite('E2E launch profile', () => {
 
     test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const browser = fs.readFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'browser.js'), 'utf8');
         const argsDeclaration = /const args = \[[^\n]*`--user-data-dir=\$\{path\.join\(this\.storagePath, 'settings'\)\}`(?:, [^\n]+?)?\];/.exec(browser);
         const cleanArgsDeclaration = "const args = ['--no-sandbox', '--disable-dev-shm-usage', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];";
@@ -891,7 +2584,7 @@ suite('E2E launch profile', () => {
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const paths = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'paths.ts'), 'utf8');
         const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
 
@@ -1002,7 +2695,7 @@ suite('E2E launch profile', () => {
         assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
         assert.ok(waitForCapturedPidCalls.length >= 3);
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
-        assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, `AppHost ${appHostPath}`, 30000);'));
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
         assert.ok(stopAppHost.includes('if (isProcessRunning(runningAppHost.appHostPid))'));
         assert.ok(stopAppHost.includes('await stopProcess(runningAppHost.appHostPid, 30000);'));
@@ -1034,7 +2727,7 @@ suite('E2E launch profile', () => {
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping')"));
         assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting')"));
-        assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
+        assert.ok(fixtures.includes('export async function waitForProcessExit(pid: number, description: string, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
         assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void>'));
@@ -1065,7 +2758,7 @@ suite('E2E launch profile', () => {
     });
     test('reuses immutable VS Code downloads while keeping ExTester state per run', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         assert.ok(runner.includes("require('./e2e-download-cache')"));
         assert.ok(runner.includes('resolveDownloadCacheRoot(repoRoot)'));
@@ -1079,7 +2772,7 @@ suite('E2E launch profile', () => {
 
     test('downloads into the cache staging directory rather than the per-run storage directory', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const populateStart = runner.indexOf('populate(stagingDirectory) {');
         const populateEnd = runner.indexOf('projectDownloadCache(downloadCache, storageDir);');
         const populateBody = runner.slice(populateStart, populateEnd);
@@ -1096,7 +2789,7 @@ suite('E2E launch profile', () => {
 
     test('tears down the per-run root without following projections into the shared cache', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const cleanupStart = runner.indexOf('function cleanupTemporaryRunRoot()');
         const cleanupBody = runner.slice(cleanupStart, runner.indexOf('\n}', cleanupStart));
 
@@ -1110,7 +2803,7 @@ suite('E2E launch profile', () => {
 
     test('pins the VS Code version the download cache is keyed on', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
 
         // ExTester's loadCodeVersion prefers CODE_VERSION over --code_version, so an inherited
         // value would download a version the cache key does not describe and leave a later run
@@ -1133,7 +2826,7 @@ suite('E2E launch profile', () => {
 
     test('cleans only ExTester download archives between setup retries', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const cleanupStart = runner.indexOf('function cleanPartialExtesterDownloads(');
         const cleanupBody = runner.slice(cleanupStart, runner.indexOf('\n}', cleanupStart));
 
@@ -1148,7 +2841,7 @@ suite('E2E launch profile', () => {
 
     test('rejects moving VS Code aliases that a cache key could never invalidate', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const resolverStart = runner.indexOf('function resolveCachedVsCodeVersion(');
         const resolverBody = runner.slice(resolverStart, runner.indexOf('\n}', resolverStart));
 
@@ -1163,7 +2856,7 @@ suite('E2E launch profile', () => {
 
     test('hands ExTester a storage path the command interpreter cannot reinterpret', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const projectionStart = runner.indexOf('function projectCommandSafeStagingDirectory(');
         const projectionBody = runner.slice(projectionStart, runner.indexOf('\n}', projectionStart));
 
@@ -1245,7 +2938,7 @@ suite('E2E launch profile', () => {
 
     test('cleans up orphaned unpack processes before a setup download can be retried', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const runStart = runner.indexOf('function run(command, args, extraEnv = {}, options = {}) {');
         const runBody = runner.slice(runStart, runner.indexOf('\n}\n', runStart));
 
@@ -1267,7 +2960,7 @@ suite('E2E launch profile', () => {
 
     test('keeps setup downloads in the terminal foreground process group', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const runStart = runner.indexOf('function run(command, args, extraEnv = {}, options = {}) {');
         const runBody = runner.slice(runStart, runner.indexOf('\n}', runStart));
 
@@ -1280,7 +2973,7 @@ suite('E2E launch profile', () => {
 
     test('removes ExTester unpack directories abandoned by a killed setup attempt', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const cleanupStart = runner.indexOf('function cleanPartialExtesterDownloads(');
         const cleanupBody = runner.slice(cleanupStart, runner.indexOf('\n}', cleanupStart));
 
@@ -1295,7 +2988,7 @@ suite('E2E launch profile', () => {
 
     test('resolves the download cache root before creating the per-run temporary root', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runner = readRunnerSource(extensionRoot);
         const runRootIndex = runner.indexOf('const shortRunRoot =');
 
         // These run at module scope, outside the cleanup scope `main()` installs, so anything that

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
+import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { projectDebuggerExtension } from '../debugger/languages/dotnet';
@@ -22,7 +23,7 @@ import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
 import { ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
-import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
+import { runWithE2eDeadline } from './e2eDeadline';
 
 let atomicWriteSequence = 0;
 
@@ -733,13 +734,17 @@ async function executeE2eControlCommand(
         cleanupRun(runId);
       }
     }
+    case 'proveResourceDebugging': {
+      markStarted();
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
+    }
     case 'proveAppHostAndResourceDebugging': {
       markStarted();
       return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
     }
     case 'proveMauiResourceDebugging': {
       markStarted();
-      return await proveMauiResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
     }
     case 'getExtensionPackageJson': {
       markStarted();
@@ -939,16 +944,119 @@ function getE2eEnvVars(value: unknown): EnvVar[] {
   return value.map(item => ({ name: item.name, value: item.value }));
 }
 
+type ResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveResourceDebugging' }>;
 type AppHostAndResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }>;
 type MauiResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' }>;
 
-interface DebugSessionSnapshot {
+/**
+ * The validated, language-neutral shape of a resource debug proof request.
+ *
+ * The path fields are still raw here: workspace containment is enforced by the handler because it
+ * needs `vscode.workspace`, while everything below is pure so the contract stays unit testable.
+ */
+export interface ResourceDebugProofRequest {
+  proof: string;
+  appHostPath: string;
+  resourceName: string;
+  sourcePath: string;
+  breakpointLine: number;
+  timeoutMs: number;
+  pauseOnBreakpointMs: number;
+  expectedResourceDebugSessionType?: string;
+  stopDebuggingOnCompletion: boolean;
+  appHostStartupTimeoutMs: number;
+  resourceStartTimeoutMs: number;
+  breakpointTimeoutMs: number;
+}
+
+/**
+ * The wait a single proof phase gets: the smaller of its own ceiling and what is left of the
+ * overall deadline, never negative.
+ *
+ * The phase ceilings alone are not a budget. They sum well past the timeoutMs a caller asks for
+ * (180s + 180s + 240s against a 300s request), so without a shared deadline a proof can outlive the
+ * E2E caller that is polling for it and leave that caller's teardown queued behind a command that
+ * is still, by its own reckoning, within budget.
+ */
+export function resourceDebugProofPhaseBudgetMs(phaseCeilingMs: number, deadlineMs: number, nowMs: number): number {
+  return Math.max(0, Math.min(phaseCeilingMs, deadlineMs - nowMs));
+}
+
+export function getResourceDebugProofRequest(command: ResourceDebugProofCommand): ResourceDebugProofRequest {
+  if (command.name !== 'proveResourceDebugging') {
+    throw new Error(`Unsupported Aspire resource debug proof command: ${getUnknownCommandName(command)}`);
+  }
+
+  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+
+  return {
+    proof: 'aspire-resource-debug-breakpoint-hit',
+    appHostPath: getE2eRequiredString(command.appHostPath, 'Aspire extension E2E resource debug proof requires appHostPath.'),
+    resourceName: getE2eRequiredString(command.resourceName, 'Aspire extension E2E resource debug proof requires resourceName.'),
+    sourcePath: getE2eRequiredString(command.sourcePath, 'Aspire extension E2E resource debug proof requires sourcePath.'),
+    breakpointLine: getE2eBreakpointLine(command.breakpointLine),
+    timeoutMs,
+    pauseOnBreakpointMs: getE2ePositiveInteger(command.pauseOnBreakpointMs, 0, 'pauseOnBreakpointMs'),
+    expectedResourceDebugSessionType: command.expectedResourceDebugSessionType !== undefined
+      ? getE2eRequiredString(command.expectedResourceDebugSessionType, 'Aspire extension E2E resource debug proof expectedResourceDebugSessionType must be a non-empty string when provided.')
+      : undefined,
+    // Leaving the session running is opt-in so callers that only want to prove the breakpoint hit
+    // do not have to remember to tear it down. A teardown test flips this to false because it needs
+    // the debuggee alive when the proof returns so it can observe the stop itself.
+    stopDebuggingOnCompletion: command.stopDebuggingOnCompletion !== false,
+    // Per-phase ceilings so a slow AppHost start cannot silently starve the breakpoint wait. They
+    // are ceilings, not the budget: proveResourceDebugging also anchors every phase to one overall
+    // deadline derived from timeoutMs, so the phases cannot sum past what the caller asked for.
+    appHostStartupTimeoutMs: Math.min(timeoutMs, 180000),
+    resourceStartTimeoutMs: Math.min(timeoutMs, 180000),
+    breakpointTimeoutMs: Math.min(timeoutMs, 240000),
+  };
+}
+
+function getMauiResourceDebugProofRequest(command: MauiResourceDebugProofCommand): ResourceDebugProofRequest {
+  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+
+  return {
+    proof: 'aspire-maui-resource-debug-breakpoint-hit',
+    appHostPath: getE2eRequiredString(command.appHostPath, 'Aspire extension E2E MAUI proof requires appHostPath.'),
+    resourceName: getE2eRequiredString(command.resourceName, 'Aspire extension E2E MAUI proof requires resourceName.'),
+    sourcePath: getE2eRequiredString(command.sourcePath, 'Aspire extension E2E MAUI proof requires sourcePath.'),
+    breakpointLine: getE2eBreakpointLine(command.breakpointLine),
+    timeoutMs,
+    pauseOnBreakpointMs: getE2ePositiveInteger(command.pauseOnBreakpointMs, 0, 'pauseOnBreakpointMs'),
+    stopDebuggingOnCompletion: true,
+    appHostStartupTimeoutMs: Math.min(timeoutMs, 180000),
+    resourceStartTimeoutMs: Math.min(timeoutMs, 180000),
+    breakpointTimeoutMs: Math.min(timeoutMs, 240000),
+  };
+}
+
+export interface DebugSessionSnapshot {
   id: string;
   type: string;
   name: string;
   parentSessionId?: string;
   parentSessionType?: string;
   configuration: Record<string, unknown>;
+}
+
+/**
+ * Resolves the debug session that owns the AppHost process.
+ *
+ * When the extension launches the AppHost itself it creates a real child debugger session marked
+ * with `isApphost: true` by `createDebugSessionConfiguration`, and that session is the AppHost's.
+ * The CLI only delegates that launch when the extension advertises the language's launch capability
+ * (`DotNetCliRunner` gates it on `KnownCapabilities.Project` for a C# AppHost, which the extension
+ * reports only when `ms-dotnettools.csharp` is installed). The E2E VS Code instance installs just
+ * the Aspire VSIX, so there the CLI runs the AppHost with `dotnet run` and the synthetic `aspire`
+ * parent session is the only session that owns it - hence the fallback.
+ */
+export function findAppHostDebugSession(debugSessions: readonly DebugSessionSnapshot[], appHostPath: string): DebugSessionSnapshot | undefined {
+  return debugSessions.find(session => session.configuration.isApphost === true)
+    ?? debugSessions.find(session =>
+      session.type === 'aspire' &&
+      typeof session.configuration.program === 'string' &&
+      isSamePath(session.configuration.program, appHostPath));
 }
 
 interface DebugAdapterLaunchRequest {
@@ -966,19 +1074,108 @@ interface DebugAdapterStoppedEvent {
   threadId?: number;
 }
 
-interface DebugAdapterOutputEvent {
+export interface DebugAdapterOutputEvent {
   sessionId: string;
   sessionType: string;
   output: string;
 }
 
-interface DebugAdapterMessageSummary {
+export interface DebugAdapterOutputCapture {
+  readonly observedOutputEventCount: number;
+  recordOutputEvent(event: DebugAdapterOutputEvent): void;
+  getOutputHeadEvents(): DebugAdapterOutputEvent[];
+  getOutputSampleEvents(limit?: number): DebugAdapterOutputEvent[];
+}
+
+// Debug adapters are noisy during an AppHost proof: the synthetic Aspire parent and AppHost sessions
+// can print before the resource debugger exists. Keep the "head" buffer per session so those early
+// sessions cannot consume the slots that preserve the resource fixture's PID markers.
+export function createDebugAdapterOutputCapture(headLimit = 20, sampleLimit = 200): DebugAdapterOutputCapture {
+  const outputEvents: DebugAdapterOutputEvent[] = [];
+  const outputHeadEventsBySessionId = new Map<string, DebugAdapterOutputEvent[]>();
+  let observedOutputEventCount = 0;
+
+  return {
+    get observedOutputEventCount() {
+      return observedOutputEventCount;
+    },
+    recordOutputEvent(event: DebugAdapterOutputEvent): void {
+      let outputHeadEvents = outputHeadEventsBySessionId.get(event.sessionId);
+      if (!outputHeadEvents) {
+        outputHeadEvents = [];
+        outputHeadEventsBySessionId.set(event.sessionId, outputHeadEvents);
+      }
+
+      if (outputHeadEvents.length < headLimit) {
+        outputHeadEvents.push(event);
+      }
+
+      observedOutputEventCount++;
+      outputEvents.push(event);
+      if (outputEvents.length > sampleLimit) {
+        outputEvents.shift();
+      }
+    },
+    getOutputHeadEvents(): DebugAdapterOutputEvent[] {
+      return Array.from(outputHeadEventsBySessionId.values()).flat();
+    },
+    getOutputSampleEvents(limit?: number): DebugAdapterOutputEvent[] {
+      return limit === undefined ? [...outputEvents] : outputEvents.slice(-limit);
+    },
+  };
+}
+
+export interface DebugAdapterMessageSummary {
   sessionId: string;
   sessionType: string;
   sessionName: string;
   command?: string;
+  /**
+   * `seq` on a request and `requestSeq` (the protocol's `request_seq`) on a response, so a response
+   * can be tied back to the exact request that produced it. Several debug sessions are alive at once
+   * during a proof - the synthetic Aspire parent, the AppHost session, and one session per debugged
+   * resource - and they all issue the same commands, so a response is only meaningful together with
+   * its session and sequence number.
+   * See https://microsoft.github.io/debug-adapter-protocol/specification#Base_Protocol_Response
+   */
+  seq?: number;
+  requestSeq?: number;
   success?: boolean;
   body?: unknown;
+}
+
+/**
+ * The debug adapter `process` event, which reports the operating-system process the adapter is
+ * debugging:
+ *   { "type": "event", "event": "process",
+ *     "body": { "name": "node app.js", "systemProcessId": 4711, "isLocalProcess": true, "startMethod": "launch" } }
+ * Every body field except `name` is optional, so an adapter may report a name and nothing else.
+ * See https://microsoft.github.io/debug-adapter-protocol/specification#Events_Process
+ *
+ * js-debug (`pwa-node`, `pwa-chrome`, `pwa-msedge`) is not such an adapter: it only sends `process`
+ * from its standalone DAP server entry points (`src/vsDebugServer.ts`, `src/flatSessionLauncher.ts`),
+ * where it repurposes the event to rename the session, and it never populates `systemProcessId`.
+ * Running inside VS Code, which is how the extension launches every JavaScript resource, js-debug
+ * sends no `process` event at all. That is why the Node proof reads the debuggee's pid from the
+ * resource's own stdout instead (see resourceDebugger.e2e.test.ts). The event is still captured here
+ * because adapters used by other languages do send it - for example `coreclr` and `debugpy` - so a
+ * future language proof can use it and, in the meantime, it is useful failure diagnostics.
+ */
+interface DebugAdapterProcessEvent {
+  sessionId: string;
+  sessionType: string;
+  sessionName: string;
+  name?: string;
+  systemProcessId?: number;
+  startMethod?: string;
+}
+
+async function proveResourceDebugging(command: ResourceDebugProofCommand | MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
+  const request = command.name === 'proveResourceDebugging'
+    ? getResourceDebugProofRequest(command)
+    : getMauiResourceDebugProofRequest(command);
+
+  return await proveResourceDebuggingCore(request, aspireContext, appHostTreeProvider, terminalProvider);
 }
 
 async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider): Promise<unknown> {
@@ -1197,16 +1394,17 @@ ${JSON.stringify({
   }
 }
 
-async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
-  const appHostPath = getE2eWorkspacePath(command.appHostPath);
-  const sourcePath = getE2eWorkspacePath(command.sourcePath);
-  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E MAUI proof requires resourceName.');
-  const breakpointLine = getE2eBreakpointLine(command.breakpointLine);
-  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
-  const pauseOnBreakpointMs = getE2ePositiveInteger(command.pauseOnBreakpointMs, 0, 'pauseOnBreakpointMs');
-  const appHostStartupTimeoutMs = Math.min(timeoutMs, 180000);
-  const resourceStartTimeoutMs = Math.min(timeoutMs, 180000);
-  const breakpointTimeoutMs = Math.min(timeoutMs, 240000);
+async function proveResourceDebuggingCore(request: ResourceDebugProofRequest, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
+  const appHostPath = getE2eWorkspacePath(request.appHostPath);
+  const sourcePath = getE2eWorkspacePath(request.sourcePath);
+  const { resourceName, breakpointLine, pauseOnBreakpointMs, appHostStartupTimeoutMs, resourceStartTimeoutMs, breakpointTimeoutMs } = request;
+  // The per-phase ceilings above stop one slow phase from silently starving a later one, but they
+  // are ceilings rather than a budget: summed, they exceed the timeoutMs the caller asked for, so a
+  // proof could outlive the E2E caller's own polling limit and leave its teardown queued behind it.
+  // Anchor every phase to one overall deadline as well, so a phase waits for the smaller of its
+  // ceiling and whatever remains, and the whole proof stays inside timeoutMs.
+  const deadline = Date.now() + request.timeoutMs;
+  const remainingBudgetMs = (phaseCeilingMs: number) => resourceDebugProofPhaseBudgetMs(phaseCeilingMs, deadline, Date.now());
   const sourceText = fs.readFileSync(sourcePath, 'utf8');
   const breakpointText = sourceText.split(/\r?\n/)[breakpointLine]?.trim();
 
@@ -1215,9 +1413,11 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
   const launchRequests: DebugAdapterLaunchRequest[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
-  const outputEvents: DebugAdapterOutputEvent[] = [];
+  const outputCapture = createDebugAdapterOutputCapture();
+  const processEvents: DebugAdapterProcessEvent[] = [];
   const breakpointRequests: DebugAdapterMessageSummary[] = [];
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
+  const continueRequests: DebugAdapterMessageSummary[] = [];
   let resourceCommandResult: Awaited<ReturnType<typeof runAspireCliForE2E>> | undefined;
 
   const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
@@ -1242,6 +1442,17 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
+              seq: message.seq,
+              body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && message.command === 'continue') {
+            continueRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              seq: message.seq,
               body: redactDebugAdapterArguments(message.arguments),
             });
           }
@@ -1253,6 +1464,7 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
+              requestSeq: message.request_seq,
               success: message.success,
               body: redactDebugAdapterArguments(message),
             });
@@ -1263,6 +1475,7 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
+              requestSeq: message.request_seq,
               success: message.success,
               body: redactDebugAdapterArguments(message.body),
             });
@@ -1277,14 +1490,28 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
             });
           }
           if (message?.type === 'event' && message.event === 'output') {
-            outputEvents.push({
+            const outputEvent = {
               sessionId: session.id,
               sessionType: session.type,
               output: String(message.body?.output ?? ''),
+            };
+            // The debuggee's own first lines identify it - the Node fixture prints its pid and its
+            // child's pid there - and js-debug is the reason that matters: with `outputCapture: 'std'`
+            // it pipes the debuggee's stdio over DAP instead of sending a `process` event, so the head
+            // is kept per debug session, separately from the ring buffer that holds only the most
+            // recent lines. AppHost and synthetic Aspire session chatter can start earlier, but it
+            // should not evict the resource session's own startup markers.
+            outputCapture.recordOutputEvent(outputEvent);
+          }
+          if (message?.type === 'event' && message.event === 'process') {
+            processEvents.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              name: message.body?.name,
+              systemProcessId: message.body?.systemProcessId,
+              startMethod: message.body?.startMethod,
             });
-            if (outputEvents.length > 200) {
-              outputEvents.shift();
-            }
           }
         }
       };
@@ -1295,14 +1522,18 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
     new vscode.Location(vscode.Uri.file(sourcePath), new vscode.Position(breakpointLine, 0)),
     true);
   vscode.debug.addBreakpoints([breakpoint]);
+  let proofFailure: unknown;
 
   try {
     const appHostElement = getAppHostElement(appHostTreeProvider, appHostPath);
-    await vscode.commands.executeCommand('aspire-vscode.debugAppHost', appHostElement);
+    await runWithE2eDeadline(
+      'debug AppHost command',
+      deadline,
+      () => vscode.commands.executeCommand('aspire-vscode.debugAppHost', appHostElement));
 
     const aspireDebugSession = await waitForE2eValue(
       'Aspire AppHost debug startup completion',
-      appHostStartupTimeoutMs,
+      remainingBudgetMs(appHostStartupTimeoutMs),
       () => aspireContext.aspireDebugSessions.find(session =>
         session.startupCompleted &&
         typeof session.appHostPath === 'string' &&
@@ -1312,14 +1543,14 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       terminalProvider,
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
-      resourceStartTimeoutMs,
+      remainingBudgetMs(resourceStartTimeoutMs),
       terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false));
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
       stoppedEvent = await waitForE2eValue(
-        `MAUI breakpoint in ${sourcePath}:${breakpointLine + 1}`,
-        breakpointTimeoutMs,
+        `resource breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+        remainingBudgetMs(breakpointTimeoutMs),
         async () => {
           for (const stoppedEvent of stoppedEvents) {
             if (stoppedEvent.threadId === undefined) {
@@ -1333,11 +1564,14 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
 
             let stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> } | undefined;
             try {
-              stackTrace = await session.customRequest('stackTrace', {
-                threadId: stoppedEvent.threadId,
-                startFrame: 0,
-                levels: 20,
-              });
+              stackTrace = await runWithE2eDeadline(
+                'resource debug stackTrace request',
+                deadline,
+                () => session.customRequest('stackTrace', {
+                  threadId: stoppedEvent.threadId,
+                  startFrame: 0,
+                  levels: 20,
+                }));
             }
             catch {
               continue;
@@ -1363,20 +1597,36 @@ ${JSON.stringify({
         breakpointRequests,
         breakpointResponses,
         stoppedEvents,
-        outputSample: outputEvents.slice(-40),
+        processEvents,
+        continueRequests,
+        outputHead: outputCapture.getOutputHeadEvents(),
+        outputSample: outputCapture.getOutputSampleEvents(40),
       }, undefined, 2)}`);
     }
 
     if (stoppedEvent.matchingFrame.line !== breakpointLine + 1) {
-      throw new Error(`Expected MAUI breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
+      throw new Error(`Expected resource breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
+    }
+
+    const resourceDebugSession = debugSessions.find(session => session.id === stoppedEvent.stoppedEvent.sessionId);
+    if (request.expectedResourceDebugSessionType !== undefined && resourceDebugSession?.type !== request.expectedResourceDebugSessionType) {
+      throw new Error(`Expected the stopped resource debug session to use debug type '${request.expectedResourceDebugSessionType}', got '${resourceDebugSession?.type ?? '<unknown>'}'.`);
     }
 
     if (pauseOnBreakpointMs > 0) {
-      await delay(pauseOnBreakpointMs);
+      await runWithE2eDeadline(
+        'resource breakpoint pause',
+        deadline,
+        () => delay(pauseOnBreakpointMs));
     }
 
+    // Return without continuing the resource. If the caller owns teardown, it can now stop while the
+    // resource is still suspended; otherwise the finally block below stops the suspended session.
+    // Issue #18957 is specifically about stopping the AppHost while a resource debugger is paused at
+    // a breakpoint, and resuming here would prove a different, easier shutdown path.
+
     return {
-      proof: 'aspire-maui-resource-debug-breakpoint-hit',
+      proof: request.proof,
       appHostPath,
       resourceName,
       timeouts: {
@@ -1391,20 +1641,51 @@ ${JSON.stringify({
       },
       resourceCommandResult,
       debugSessions,
+      // Reported so an assertion can tell the two AppHost shapes apart instead of guessing: the CLI
+      // hands the AppHost launch to the extension only when the matching launch capability is
+      // advertised, so without it there is no `isApphost` session to find.
+      supportedLaunchConfigurations: getSupportedCapabilities(),
+      // The AppHost session is the real child debugger session when the extension launched the
+      // AppHost, and the synthetic Aspire parent when the CLI launched it.
+      appHostDebugSession: findAppHostDebugSession(debugSessions, appHostPath),
+      resourceDebugSession,
       launchRequests,
       debugAdapterResponses,
       breakpointRequests,
       breakpointResponses,
+      continueRequests,
       stoppedEvents,
+      processEvents,
       matchingStackFrame: stoppedEvent.matchingFrame,
       topStackFrame: stoppedEvent.stackTrace?.stackFrames?.[0],
-      outputSample: outputEvents.slice(-40),
+      outputHead: outputCapture.getOutputHeadEvents(),
+      outputSample: outputCapture.getOutputSampleEvents(40),
     };
+  } catch (error) {
+    proofFailure = error;
+    throw error;
   } finally {
     vscode.debug.removeBreakpoints([breakpoint]);
     sessionSubscription.dispose();
     trackerRegistration.dispose();
-    await vscode.debug.stopDebugging();
+    if (request.stopDebuggingOnCompletion) {
+      try {
+        await runWithE2eDeadline(
+          'stop resource debugging request',
+          deadline,
+          () => vscode.debug.stopDebugging());
+      }
+      catch (error) {
+        if (proofFailure === undefined) {
+          throw error;
+        }
+
+        // Do not replace the startup/breakpoint failure that brought us here with a best-effort
+        // cleanup timeout. The outer E2E teardown still owns the full stop path and reports its
+        // own failure separately if the session cannot be cleaned up.
+        extensionLogOutputChannel.warn(`Failed to stop resource debugging after proof failure: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 }
 
@@ -1555,11 +1836,13 @@ async function withResourceTraffic<T>(
   }
 }
 
-async function waitForE2eValue<T>(description: string, timeoutMs: number, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> {  const started = Date.now();
+async function waitForE2eValue<T>(description: string, timeoutMs: number, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
   let lastError: string | undefined;
-  while (Date.now() - started < timeoutMs) {
+  while (Date.now() < deadline) {
     try {
-      const value = await getValue();
+      const value = await runWithE2eDeadline(`${description} probe`, deadline, () => Promise.resolve().then(getValue));
       if (value !== undefined) {
         return value;
       }
@@ -1568,7 +1851,7 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
       lastError = error instanceof Error ? error.message : String(error);
     }
 
-    await delay(500);
+    await delay(Math.min(500, Math.max(1, deadline - Date.now())));
   }
 
   // A poll that returns undefined never sets lastError, so waits that are simply never satisfied
@@ -1576,6 +1859,55 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
   // what they were looking at, which is the difference between an actionable failure and a rerun.
   const state = describeState ? ` State: ${describeState()}` : '';
   throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}. Last error: ${lastError ?? '<none>'}.${state}`);
+}
+
+/**
+ * Stops every session, runs `settle` even when a stop failed, and only then reports the failures.
+ *
+ * The settle step is what leaves the extension quiet for whatever runs next: it requests the AppHost
+ * stop refresh and waits for the state file to drain. Letting a rejected or timed-out stop skip it
+ * strands the AppHost in the state snapshot, so the next E2E test sees a run that never ended and
+ * fails for a reason that has nothing to do with what it is testing.
+ *
+ * Every reason is preserved, including a `settle` failure, because a failed stop usually makes the
+ * settle wait time out too and the timeout on its own does not say why the state never settled.
+ */
+export async function stopSessionsThenSettle(
+  stopSessions: readonly (() => Thenable<void> | Promise<void>)[],
+  settle: () => Promise<void>
+): Promise<void> {
+  const failures: unknown[] = [];
+  const stops = stopSessions.map(stopSession => {
+    try {
+      return Promise.resolve(stopSession());
+    }
+    catch (error) {
+      // A synchronous throw has to become a rejected result; otherwise it escapes before the
+      // remaining stops have been started and before the cleanup has run.
+      return Promise.reject(error);
+    }
+  });
+
+  for (const result of await Promise.allSettled(stops)) {
+    if (result.status === 'rejected') {
+      failures.push(result.reason);
+    }
+  }
+
+  try {
+    await settle();
+  }
+  catch (error) {
+    failures.push(error);
+  }
+
+  if (failures.length === 1) {
+    throw failures[0];
+  }
+
+  if (failures.length > 1) {
+    throw new AggregateError(failures, `${failures.length} failures occurred while stopping Aspire debug sessions for E2E.`);
+  }
 }
 
 async function stopDebuggingForE2E(
@@ -1590,19 +1922,23 @@ async function stopDebuggingForE2E(
     const stoppedAppHostPaths = trackedSessions
       .map(debugSession => debugSession.appHostPath)
       .filter(path => path !== undefined);
-    await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
-    for (const appHostPath of stoppedAppHostPaths) {
-      dataRepository.requestAppHostStopRefresh(appHostPath);
-    }
 
-    await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
-      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
-      const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
-      const stoppedAppHostsAreGone = stoppedAppHostPaths.every(appHostPath => !hasRunningAppHost(state, appHostPath));
-      return stoppedSessionsAreGone && stoppedAppHostsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
-        ? true
-        : undefined;
-    });
+    await stopSessionsThenSettle(
+      trackedSessions.map(debugSession => () => debugSession.stopDebugging()),
+      async () => {
+        for (const appHostPath of stoppedAppHostPaths) {
+          dataRepository.requestAppHostStopRefresh(appHostPath);
+        }
+
+        await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
+          const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+          const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
+          const stoppedAppHostsAreGone = stoppedAppHostPaths.every(appHostPath => !hasRunningAppHost(state, appHostPath));
+          return stoppedSessionsAreGone && stoppedAppHostsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
+            ? true
+            : undefined;
+        });
+      });
 
     return;
   }
@@ -1638,7 +1974,7 @@ function getE2ePositiveInteger(value: unknown, defaultValue: number, propertyNam
   }
 
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error(`Aspire extension E2E MAUI proof ${propertyName} must be a non-negative integer when provided.`);
+    throw new Error(`Aspire extension E2E resource debug proof ${propertyName} must be a non-negative integer when provided.`);
   }
 
   return value;

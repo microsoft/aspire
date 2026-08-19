@@ -1,0 +1,257 @@
+[top-level executable]
+'use strict';
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn, spawnSync } = require('child_process');
+const { ensureDownloadCache, projectDownloadCache, removePathWithoutFollowingLinks, resolveDownloadCacheRoot, } = require('./e2e-download-cache');
+const { markErrorNonRetryable, runWithRetries, terminateOrphanedDescendants, } = require('./e2e-download-retry');
+const { assertShardExecutedTests } = require('./e2e-shard-results');
+const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');
+const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');
+const extensionRoot = path.resolve(__dirname, '..');
+const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
+const repoRoot = path.resolve(extensionRoot, '..');
+const verifyExtesterFeedOnly = process.argv.includes('--verify-extester-feed');
+const artifactsDir = path.join(extensionRoot, '.test-artifacts');
+const shardName = sanitizePathSegment(process.env.ASPIRE_EXTENSION_E2E_SHARD || 'all');
+const resultsDir = path.join(extensionRoot, '.test-results', 'e2e', shardName);
+const runId = `${process.pid}-${Date.now()}`;
+const diagnosticsStorageRoot = path.join(extensionRoot, '.test-storage');
+const requestedTempRoot = verifyExtesterFeedOnly ? '' : process.env.ASPIRE_EXTENSION_E2E_TEMP_ROOT || os.tmpdir();
+const testSpec = process.env.ASPIRE_EXTENSION_E2E_SPEC || 'out/test-e2e/**/*.e2e.test.js';
+const matchedTestSpecs = verifyExtesterFeedOnly ? [] : findSpecMatches(testSpec);
+const enableJavaE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA
+    ? process.env.ASPIRE_EXTENSION_E2E_ENABLE_JAVA === 'true'
+    : matchedTestSpecs.length > 0 && matchedTestSpecs.every(isJavaSpecPath);
+const REQUIRED_JAVA_EXTENSION_IDS = ['redhat.java', 'vscjava.vscode-java-debug', 'vscjava.vscode-java-dependency'];
+const extesterVersion = extensionPackageJson.devDependencies?.['vscode-extension-tester'];
+if (!extesterVersion) {
+    throw new Error('vscode-extension-tester must be pinned in extension/package.json devDependencies.');
+}
+const downloadCacheRoot = verifyExtesterFeedOnly ? '' : resolveDownloadCacheRoot(repoRoot);
+const vscodeVersion = resolveCachedVsCodeVersion(process.env.ASPIRE_EXTENSION_E2E_VSCODE_VERSION || '1.130.0');
+assertVsCodeVersionCompatibleWithExtester(vscodeVersion, extesterVersion);
+if (!verifyExtesterFeedOnly) {
+    fs.mkdirSync(requestedTempRoot, { recursive: true });
+}
+const tempRoot = verifyExtesterFeedOnly ? '' : fs.realpathSync.native(requestedTempRoot);
+const shortRunRoot = verifyExtesterFeedOnly ? '' : fs.mkdtempSync(path.join(tempRoot, 'aev-'));
+const isolatedAspireHome = path.join(shortRunRoot, 'aspire-home');
+const storageDir = path.join(shortRunRoot, 'storage');
+const extensionsDir = path.join(shortRunRoot, 'extensions');
+const javaScratchWorkspaceRoot = path.join(extensionRoot, 'java-e2e-workspace');
+const workspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT
+    ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT)
+    : enableJavaE2E
+        ? javaScratchWorkspaceRoot
+        : path.join(shortRunRoot, 'workspace');
+const workspaceMarkerFile = path.join(workspaceRoot, '.aspire-extension-e2e-workspace');
+const storageDiagnosticsDir = path.join(diagnosticsStorageRoot, shardName, runId);
+const workspaceDiagnosticsDir = path.join(extensionRoot, '.test-workspaces', shardName, runId);
+const recordingsDir = path.join(extensionRoot, '.test-recordings', shardName);
+const defaultVsixPath = path.join(artifactsDir, 'aspire-extension-e2e.vsix');
+const stateFile = path.join(resultsDir, 'extension-state.json');
+const controlFile = path.join(resultsDir, 'extension-control.json');
+const extesterNodeModules = path.join(extensionRoot, 'node_modules');
+const extesterModule = path.join(extesterNodeModules, 'vscode-extension-tester');
+const extesterCli = path.join(extesterModule, 'out', 'cli.js');
+const EXTESTER_UNPACK_DIRECTORY_PREFIX = 'vscode-temp-';
+const POSIX_SHELL_INERT_PATH_PATTERN = /^[A-Za-z0-9._/+,=:@%-]+$/;
+const WINDOWS_COMMAND_INERT_PATH_PATTERN = /^[A-Za-z0-9._\\/:+@~-]+$/;
+const isWindows = process.platform === 'win32';
+const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTERN : POSIX_SHELL_INERT_PATH_PATTERN;
+const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
+const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
+const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const nodeAppProjectName = 'AspireE2E.NodeApp';
+const nodeAppScript = path.join(workspaceRoot, nodeAppProjectName, 'app.js');
+const includeNodeResourceFixture = matchedTestSpecs.some(file => path.basename(file) === 'resourceDebugger.e2e.test.js');
+const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
+const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
+const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
+let cliPathForCleanup;
+const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+`;
+main().catch(error => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exitCode = 1;
+});
+
+[function main]
+async function main() {
+    let recording;
+    let testFailure;
+    let cleanupFailed = false;
+    try {
+        if (verifyExtesterFeedOnly) {
+            verifyExtesterFeed();
+            return;
+        }
+        assertSpecMatches(testSpec);
+        prepareRunDirectories();
+        logE2eConfiguration();
+        const bundledCliPath = resolveCliPath();
+        const cliPath = enableJavaE2E ? bundledCliPath : isolateCliPath(bundledCliPath);
+        cliPathForCleanup = cliPath;
+        validateCliPath(cliPath);
+        const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
+        prepareWorkspaceFixture(cliPath, appHostSdkVersion);
+        copyJavaPlaygroundIntoWorkspace(bundledCliPath);
+        restoreWorkspaceFixture();
+        const vsixPath = process.env.ASPIRE_EXTENSION_E2E_VSIX
+            ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_VSIX)
+            : packageVsix();
+        if (!fs.existsSync(vsixPath)) {
+            throw new Error(`VSIX not found at ${vsixPath}`);
+        }
+        validateVsix(vsixPath);
+        const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
+        if (enableAzureFunctionsE2E) {
+            validateAzureFunctionsCoreTools();
+        }
+        ensureExtester();
+        patchExtesterLaunchLocale();
+        writeVsCodeLocaleFile();
+        const extestEnv = getAspireCliEnvironment({
+            ASPIRE_EXTENSION_E2E_CLI_PATH: cliPath,
+            ASPIRE_EXTENSION_E2E_EXTENSION_ROOT: extensionRoot,
+            ASPIRE_EXTENSION_E2E_REPO_ROOT: repoRoot,
+            ASPIRE_EXTENSION_E2E_RESULTS_DIR: resultsDir,
+            ASPIRE_EXTENSION_E2E_RUN_ROOT: shortRunRoot,
+            ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT: workspaceRoot,
+            ASPIRE_EXTENSION_E2E_STATE_FILE: stateFile,
+            ASPIRE_EXTENSION_E2E_CONTROL_FILE: controlFile,
+            ASPIRE_EXTENSION_E2E_RUN_ID: runId,
+            ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+            ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
+            ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
+            ASPIRE_EXTENSION_E2E_NODE_APP_SCRIPT: includeNodeResourceFixture ? nodeAppScript : undefined,
+            ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
+            ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
+            ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+            VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
+            LANG: 'C.UTF-8',
+            LC_ALL: 'C.UTF-8',
+            NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
+            CODE_VERSION: vscodeVersion,
+            CODE_TYPE: 'stable',
+        });
+        if (process.env.ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT === 'true') {
+            extestEnv.ASPIRE_CLI_START_TIMEOUT = undefined;
+        }
+        const downloadCache = ensureDownloadCache({
+            cacheRoot: downloadCacheRoot,
+            vscodeVersion,
+            extesterVersion,
+            platform: process.platform,
+            architecture: process.arch,
+            populate(stagingDirectory) {
+                const downloadDirectory = projectCommandSafeStagingDirectory(stagingDirectory);
+                const setupDownloadRetryOptions = getSetupDownloadRetryOptions(stagingDirectory, downloadDirectory);
+                logStep('Downloading VS Code');
+                runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', downloadDirectory, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
+                logStep('Downloading ChromeDriver');
+                runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', downloadDirectory, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
+            },
+        });
+        console.log(`Extension E2E download cache ${downloadCache.cacheHit ? 'hit' : 'populated'}: ${downloadCache.cacheDirectory}`);
+        projectDownloadCache(downloadCache, storageDir);
+        installJavaExtensions(extestEnv);
+        logStep('Installing VSIX');
+        run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
+        for (const azureFunctionsVsix of azureFunctionsVsixPaths) {
+            logStep(`Installing ${azureFunctionsVsix.displayName} VSIX`);
+            run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', azureFunctionsVsix.path], extestEnv, { timeout: 300000 });
+        }
+        assertJavaExtensionsRegistered();
+        recording = startRecording();
+        try {
+            logStep('Running VS Code extension E2E tests');
+            const runTestsArgs = [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', path.join(extensionRoot, 'test-e2e', 'settings.json'), '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js'), '--offline'];
+            await runWithProcessTreeTimeout(process.execPath, runTestsArgs, {
+                diagnosticsSuffix: ` Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`,
+                quoteShellArgument: quoteWindowsShellArgument,
+                spawn,
+                spawnOptions: {
+                    cwd: extensionRoot,
+                    env: { ...process.env, ...extestEnv },
+                    stdio: 'inherit',
+                    detached: process.platform !== 'win32',
+                },
+                terminateProcessTree,
+                timeout: getRunTestsTimeoutMs(),
+                useShell: shouldUseShellForCommand(process.execPath),
+            });
+            assertShardExecutedTests({ shardName, results: readMochaResults() });
+        }
+        catch (error) {
+            testFailure = error;
+        }
+    }
+    finally {
+        const cleanupErrors = [];
+        await runCleanupStep('stop recording', () => stopRecording(recording, testFailure), cleanupErrors);
+        await runCleanupStep('stop workspace AppHost', stopWorkspaceAppHost, cleanupErrors);
+        await runCleanupStep('redact extension state', redactStateFileForArtifacts, cleanupErrors);
+        await runCleanupStep('redact test results', () => redactTextFilesForArtifacts(resultsDir), cleanupErrors);
+        await runCleanupStep('copy storage diagnostics', copyStorageDiagnostics, cleanupErrors);
+        await runCleanupStep('copy workspace diagnostics', copyWorkspaceDiagnostics, cleanupErrors);
+        await runCleanupStep('cleanup temporary run root', cleanupTemporaryRunRoot, cleanupErrors);
+        if (cleanupErrors.length > 0) {
+            cleanupFailed = true;
+            const cleanupFailure = new AggregateError(cleanupErrors, `One or more E2E cleanup steps failed:\n  ${cleanupErrors.map(error => error.stack ?? error.message).join('\n  ')}`);
+            if (testFailure) {
+                console.error(cleanupFailure);
+            }
+            else {
+                testFailure = cleanupFailure;
+            }
+        }
+    }
+    if (testFailure) {
+        printFailureDiagnosticsSummary();
+        if (advisoryIssue && shouldAllowAdvisoryTestFailure(testFailure, readMochaResults(), cleanupFailed)) {
+            console.warn(`::warning title=VS Code extension E2E test failure advisory::${shardName} has completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.`);
+            return;
+        }
+        throw testFailure;
+    }
+    printSuccessDiagnosticsSummary();
+}
+
+[function getRunTestsTimeoutMs]
+function getRunTestsTimeoutMs() {
+    const defaultRunTestsTimeoutMs = includeNodeResourceFixture ? 6000000 : 2400000;
+    const configured = Number(process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS || defaultRunTestsTimeoutMs);
+    if (!Number.isFinite(configured) || configured <= 0) {
+        throw new Error(`ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS must be a positive number. Got '${process.env.ASPIRE_EXTENSION_E2E_RUN_TESTS_TIMEOUT_MS}'.`);
+    }
+    return configured;
+}
+
+[function readMochaResults]
+function readMochaResults() {
+    return readJsonIfExists(path.join(resultsDir, 'mocha.json'));
+}
+
+[function readJsonIfExists]
+function readJsonIfExists(filePath) {
+    if (!fs.existsSync(filePath)) {
+        return undefined;
+    }
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+    catch (error) {
+        console.warn(`Failed to parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+        return undefined;
+    }
+}
+
+[function sanitizePathSegment]
+function sanitizePathSegment(value) {
+    return value.replace(/[^A-Za-z0-9_.-]/g, '-');
+}

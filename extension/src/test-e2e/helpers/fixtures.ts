@@ -4,7 +4,7 @@ import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { getCliPath, getNodeAppScriptPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -193,6 +193,26 @@ export async function setSourceBreakpoint(filePath: string, line: number): Promi
 
 export async function clearBreakpoints(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearBreakpoints' });
+}
+
+/** The marker comment the Node E2E fixture puts on the line the resource debugger must stop on. */
+const nodeAppBreakpointMarker = 'aspire-e2e-breakpoint';
+
+/**
+ * The zero-based line of the Node fixture statement the resource debugger must stop on.
+ *
+ * The line is located from a marker comment rather than hardcoded so editing the fixture script
+ * cannot silently move the breakpoint onto an unrelated statement and still "pass".
+ */
+export function getNodeAppBreakpointLine(): number {
+    const scriptPath = getNodeAppScriptPath();
+    const lines = fs.readFileSync(scriptPath, 'utf8').split(/\r?\n/);
+    const line = lines.findIndex(text => text.includes(nodeAppBreakpointMarker));
+    if (line < 0) {
+        throw new Error(`The Node E2E fixture ${scriptPath} has no line marked with '${nodeAppBreakpointMarker}'.`);
+    }
+
+    return line;
 }
 
 export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
@@ -561,7 +581,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         try {
-            await waitForProcessExit(runningAppHost.appHostPid, 30000);
+            await waitForProcessExit(runningAppHost.appHostPid, `AppHost ${appHostPath}`, 30000);
         }
         catch {
             if (isProcessRunning(runningAppHost.appHostPid)) {
@@ -768,20 +788,32 @@ function getRunningAppHostFromState(appHostPath: string) {
         : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
 }
 
+/**
+ * Reads the AppHost pid the extension state file currently reports for `appHostPath`.
+ *
+ * Callers that need to prove an AppHost stopped should capture this while it is still running and
+ * then assert on process liveness. The state file's AppHost list lags the real process after a stop
+ * (see the comment in `waitForNoRunningAppHostPathOrStopKnownProcess`), so the pid is only
+ * trustworthy as an identifier, not as evidence that the AppHost is still alive.
+ */
+export function getAppHostPidFromState(appHostPath: string): number | undefined {
+    return getRunningAppHostFromState(appHostPath)?.appHostPid;
+}
+
 export function isProcessAlive(pid: number): boolean {
     return isProcessRunning(pid);
 }
 
 export async function waitForKnownProcessExit(pid: number, description: string, timeoutMs: number): Promise<void> {
     try {
-        await waitForProcessExit(pid, timeoutMs);
+        await waitForProcessExit(pid, description, timeoutMs);
     }
     catch (error) {
         throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description} ${pid} to exit. Last error: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
-async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
+export async function waitForProcessExit(pid: number, description: string, timeoutMs: number): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
         if (!isProcessRunning(pid)) {
@@ -791,7 +823,7 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>
         await delay(250);
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for process ${pid} to exit.`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description} (pid ${pid}) to exit.`);
 }
 
 async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
@@ -806,10 +838,10 @@ async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
         throw error;
     }
 
-    await waitForProcessExit(pid, timeoutMs);
+    await waitForProcessExit(pid, `process ${pid}`, timeoutMs);
 }
 
-function isProcessRunning(pid: number): boolean {
+export function isProcessRunning(pid: number): boolean {
     if (!Number.isInteger(pid) || pid <= 0) {
         return false;
     }
