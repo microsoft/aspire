@@ -253,7 +253,7 @@ internal sealed class DashboardServiceData : IDisposable
         return new InputDto(i.Name, i.Value, inputType);
     }
 
-    public record InputFileDto(string Id, string Name, string FilePath);
+    public record InputFileDto(string Id, string Name, string FilePath, Action? Delete = null);
 
     public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
 
@@ -289,12 +289,20 @@ internal sealed class DashboardServiceData : IDisposable
                         var interactionFiles = requestInput.Files
                             .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
                             .ToArray();
-                        modelInput.SetFiles(interactionFiles);
+                        modelInput.SetFiles(new InteractionFileCollection(
+                            interactionFiles,
+                            () =>
+                            {
+                                foreach (var file in requestInput.Files)
+                                {
+                                    file.Delete?.Invoke();
+                                }
+                            }));
                     }
                     else
                     {
                         // Clear stale file references when the selection is empty.
-                        modelInput.SetFiles([]);
+                        modelInput.SetFiles(new InteractionFileCollection([]));
                     }
                 }
 

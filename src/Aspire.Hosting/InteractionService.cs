@@ -606,14 +606,15 @@ internal class InteractionService : IInteractionService
                                 break;
                             case InputType.File:
                                 // File input values contain serialized JSON file references (id + name).
-                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
+                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the collection returned by GetFiles().
                                 // Validate that required file inputs actually have resolved files, not just
                                 // a non-empty JSON string like "[]".
-                                if (input.Required && (input.Files is null || input.Files.Count == 0))
+                                var files = input.GetFiles();
+                                if (input.Required && files.Count == 0)
                                 {
                                     context.AddValidationError(input, "Value is required.");
                                 }
-                                else if (input.Files is { Count: var fileCount })
+                                else if (files.Count is var fileCount)
                                 {
                                     var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
                                     if (fileCount > maxFileCount)

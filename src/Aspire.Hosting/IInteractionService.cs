@@ -285,6 +285,7 @@ public sealed class InteractionInput
     private string _name = null!;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
+    private InteractionFileCollection _files = new([]);
 
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
@@ -297,7 +298,10 @@ public sealed class InteractionInput
 
     internal void SetRequired(bool required) => _required = required;
 
-    internal void SetFiles(IReadOnlyList<InteractionFile>? files) => Files = files;
+    internal void SetFiles(InteractionFileCollection files)
+    {
+        _files = files;
+    }
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -434,11 +438,78 @@ public sealed class InteractionInput
     /// Gets the files associated with this <see cref="InputType.File"/> input.
     /// Populated after the user selects file(s) and the interaction completes.
     /// </summary>
+    /// <remarks>
+    /// This property does not provide ownership of the uploaded files. Use <see cref="GetFiles"/> and dispose the
+    /// returned collection when the files are no longer needed.
+    /// </remarks>
+    [Obsolete("Use GetFiles() and dispose the returned collection when the files are no longer needed.")]
     // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
     // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
     // InteractionInputFile interface in base.mts, populated by ToResultInput.
     [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
-    public IReadOnlyList<InteractionFile>? Files { get; private set; }
+    public IReadOnlyList<InteractionFile>? Files => _files.Count > 0 ? _files : null;
+
+    /// <summary>
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// </summary>
+    /// <returns>
+    /// A disposable collection of uploaded files. Disposing the collection deletes the uploaded files from disk.
+    /// </returns>
+    /// <remarks>
+    /// The returned collection is owned by this input. Dispose it when the files are no longer needed. After disposal,
+    /// the file metadata remains available but file content can no longer be opened or read.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+    public InteractionFileCollection GetFiles() => _files;
+}
+
+/// <summary>
+/// Represents the uploaded files associated with an interaction input.
+/// </summary>
+/// <remarks>
+/// Dispose the collection when its files are no longer needed. Disposing the collection deletes the uploaded files
+/// from disk. Disposal is idempotent.
+/// </remarks>
+[AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
+public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, IDisposable
+{
+    private readonly IReadOnlyList<InteractionFile> _files;
+    private Action? _dispose;
+
+    internal InteractionFileCollection(IReadOnlyList<InteractionFile> files, Action? dispose = null)
+    {
+        _files = files;
+        _dispose = dispose;
+    }
+
+    /// <summary>
+    /// Gets the number of uploaded files in the collection.
+    /// </summary>
+    public int Count => _files.Count;
+
+    /// <summary>
+    /// Gets an uploaded file by its zero-based index.
+    /// </summary>
+    /// <param name="index">The zero-based index of the file.</param>
+    /// <returns>The uploaded file at the specified index.</returns>
+    public InteractionFile this[int index] => _files[index];
+
+    /// <summary>
+    /// Returns an enumerator that iterates through the uploaded files.
+    /// </summary>
+    /// <returns>An enumerator for the uploaded files.</returns>
+    public IEnumerator<InteractionFile> GetEnumerator() => _files.GetEnumerator();
+
+    /// <inheritdoc/>
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>
+    /// Deletes the uploaded files from disk.
+    /// </summary>
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _dispose, null)?.Invoke();
+    }
 }
 
 /// <summary>

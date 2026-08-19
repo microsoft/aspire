@@ -273,9 +273,10 @@ internal static class InteractionExports
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
 
-        if (input.Files is { Count: > 0 })
+        var files = input.GetFiles();
+        if (files.Count > 0)
         {
-            result.SetFiles(input.Files);
+            result.SetFiles(new InteractionFileCollection(files));
         }
 
         return result;

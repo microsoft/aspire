@@ -1098,8 +1098,52 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var result = await resultTask;
         var resultInputs = Assert.IsType<InteractionInputCollection>(result.Data);
 
-        Assert.Null(resultInputs[textInput.Name].Files);
+        Assert.Empty(resultInputs[textInput.Name].GetFiles());
         Assert.Equal(value, resultInputs[textInput.Name].Value);
+    }
+
+    [Fact]
+    public async Task SendInteractionRequestAsync_DisposeFiles_DeletesUploadedFiles()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
+        var input = new InteractionInput { Name = "File", InputType = InputType.File, Required = true };
+        var resultTask = interactionService.PromptInputAsync("Upload", "Select a file", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var (fileId, filePath) = fileUploadStore.CreateEntry("document.txt", interaction.InteractionId, input.Name);
+        await File.WriteAllTextAsync(filePath, "content");
+        fileUploadStore.CompleteUpload(interaction.InteractionId, fileId);
+        var request = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        request.InputsDialog.InputItems.Add(new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = input.Name,
+            InputType = Aspire.DashboardService.Proto.V1.InputType.File,
+            Value = $"[{{\"Id\":\"{fileId}\",\"Name\":\"document.txt\"}}]"
+        });
+
+        await dashboardServiceData.SendInteractionRequestAsync(request, CancellationToken.None);
+        var result = await resultTask;
+        var resultInput = Assert.IsType<InteractionInput>(result.Data);
+        var files = resultInput.GetFiles();
+        Assert.Equal(filePath, Assert.Single(files).FilePath);
+        Assert.True(File.Exists(filePath));
+
+        files.Dispose();
+        files.Dispose();
+
+        Assert.False(File.Exists(filePath));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, interaction.InteractionId, input.Name));
     }
 
     [Fact]

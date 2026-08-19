@@ -279,7 +279,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 continue;
             }
             var fileName = string.IsNullOrEmpty(fileRef.Name) ? store.GetFileName(interactionId, fileRef.Id) ?? "" : fileRef.Name;
-            files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
+            files.Add(new InputFileDto(fileRef.Id, fileName, filePath, () => store.RemoveEntry(interactionId, fileRef.Id)));
         }
 
         return files.Count > 0 ? files : null;

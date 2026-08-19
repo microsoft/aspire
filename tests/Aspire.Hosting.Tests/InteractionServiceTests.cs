@@ -1368,7 +1368,26 @@ public class InteractionServiceTests
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CompletedInteractions));
         var resultInput = Assert.IsType<InteractionInput>(result.Data);
-        Assert.Single(resultInput.Files!);
+        using var files = resultInput.GetFiles();
+        Assert.Single(files);
+    }
+
+    [Fact]
+    public void InteractionInput_SetFiles_DoesNotDisposeExistingCollection()
+    {
+        var input = new InteractionInput { Name = "File", InputType = InputType.File };
+        var disposeCount = 0;
+        var originalFiles = new InteractionFileCollection([], () => disposeCount++);
+        var replacementFiles = new InteractionFileCollection([]);
+        input.SetFiles(originalFiles);
+
+        input.SetFiles(replacementFiles);
+
+        Assert.Equal(0, disposeCount);
+        Assert.Same(replacementFiles, input.GetFiles());
+
+        originalFiles.Dispose();
+        Assert.Equal(1, disposeCount);
     }
 
     [Fact]
