@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documentation-only removal of a dangling section from the 13.5 what's new page; does not document a new feature and has no matching changelog entry",
+  "mergedAt": "2026-08-19T01:41:22Z",
+  "number": 1536,
+  "runDate": "2026-08-19T06:09:13Z",
+  "status": "excluded",
+  "title": "Remove AddDotnetProject section from Aspire 13.5 notes"
+}
