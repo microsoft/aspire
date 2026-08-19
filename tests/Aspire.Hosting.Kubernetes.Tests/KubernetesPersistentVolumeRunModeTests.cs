@@ -124,7 +124,7 @@ public class KubernetesPersistentVolumeRunModeTests
     }
 
     [Fact]
-    public async Task NameMatchBindingScopesExistingContainerVolume()
+    public async Task NameMatchBindingPreservesExistingContainerVolume()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var kubernetes = builder.AddKubernetesEnvironment("env");
@@ -137,8 +137,10 @@ public class KubernetesPersistentVolumeRunModeTests
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
+        // The name-match overload predates the env convention, so it must keep mounting the volume
+        // the container already declared. Scoping it would strand data written by earlier runs.
         var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
-        Assert.Equal(VolumeNameGenerator.Generate(volume, "kubernetes-env"), mount.Source);
+        Assert.Equal("data", mount.Source);
     }
 
     [Fact]
@@ -156,7 +158,7 @@ public class KubernetesPersistentVolumeRunModeTests
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
-        Assert.Equal(VolumeNameGenerator.Generate(volume, "kubernetes-env"), mount.Source);
+        Assert.Equal("data", mount.Source);
     }
 
     [Theory]
@@ -201,9 +203,9 @@ public class KubernetesPersistentVolumeRunModeTests
         var secondVolume = secondEnvironment.AddPersistentVolume("data");
 
         var firstContainer = builder.AddContainer("first", "image")
-            .WithPersistentVolume(firstVolume, "/srv/data");
+            .WithPersistentVolume(firstVolume, "/srv/data", env: "DATA_PATH");
         var secondContainer = builder.AddContainer("second", "image")
-            .WithPersistentVolume(secondVolume, "/srv/data");
+            .WithPersistentVolume(secondVolume, "/srv/data", env: "DATA_PATH");
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
@@ -212,6 +214,25 @@ public class KubernetesPersistentVolumeRunModeTests
         var secondMount = Assert.Single(secondContainer.Resource.Annotations.OfType<ContainerMountAnnotation>());
 
         Assert.NotEqual(firstMount.Source, secondMount.Source);
+    }
+
+    [Fact]
+    public async Task MountPathBindingWithoutEnvPreservesPersistentVolumeName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        var container = builder.AddContainer("container", "image")
+            .WithPersistentVolume(volume, "/srv/data");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        // Scoping is opt-in via env. Without it this overload has to mount the same local volume it
+        // mounted in 13.5.0, otherwise upgrading silently repoints the container at empty storage.
+        var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("data", mount.Source);
     }
 
     [Fact]
