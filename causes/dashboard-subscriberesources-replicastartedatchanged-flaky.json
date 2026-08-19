@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-subscriberesources-replicastartedatchanged-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange sees duplicate resource change events",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange",
+  "error_pattern": "Assert.Single() Failure: The collection contained 2 matching items\nExpected:      (predicate expression)\nCollection:    [ResourceViewModelChange { ChangeType = Upsert, ... }, ...]\nMatch indices: 0, 3\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange()",
+  "occurrences": [
+    {
+      "run_id": 32293779852,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32293779852",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "pr_number": 19205,
+      "observed_at": "2026-08-19T23:39:35Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19515"
+}

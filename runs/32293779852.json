@@ -1,0 +1,38 @@
+{
+  "run_id": 32293779852,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32293779852",
+  "analyzed_at": "2026-08-19T23:39:35Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19205,
+    "title": "Harden Azure Functions VS Code launch lifecycle",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-harden-functions-launch-lifecycle",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19205"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 96251740787,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32293779852/job/96251740787",
+      "classification": "flaky-test",
+      "reason": "Failure is a single test assertion failure in Aspire.Dashboard.Tests unrelated to the PR's changes, which only touched extension/ (VS Code extension) files. The test failure is a race-condition-style duplicate event assertion, not a build or PR-code-caused failure.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "Assert.Single() Failure: The collection contained 2 matching items\nExpected:      (predicate expression)\nCollection:    [ResourceViewModelChange { ChangeType = Upsert, Resource = Aspire.Dashboard.Model.ResourceViewModel }, ResourceViewModelChange { ChangeType = Upsert, Resource = Aspire.Dashboard.Model.ResourceViewModel }, ResourceViewModelChange { ChangeType = Upsert, Resource = Aspire.Dashboard.Model.ResourceViewModel }, ResourceViewModelChange { ChangeType = Upsert, Resource = Aspire.Dashboard.Model.ResourceViewModel }]\nMatch indices: 0, 3",
+      "stack_trace": "at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 567\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 569",
+      "classification": "flaky",
+      "reason": "The test asserts exactly one matching change event, but two matching upsert events were emitted (indices 0 and 3), indicating a timing/ordering race in the resource change subscription stream rather than an assertion tied to any PR-modified code. PR #19205 only modifies files under extension/ (VS Code extension), not Aspire.Dashboard or its tests."
+    }
+  ],
+  "causes": ["dashboard-subscriberesources-replicastartedatchanged-flaky"]
+}
