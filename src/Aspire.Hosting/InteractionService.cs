@@ -195,7 +195,11 @@ internal class InteractionService : IInteractionService
             var newState = new Interaction(title, message, options, new Interaction.InputsInteractionInfo(inputCollection), interactionCts.Token);
             if (hasFileInputs)
             {
-                _fileUploadStore.StartInteraction(newState.InteractionId);
+                var fileInputs = inputs
+                    .Where(input => input.InputType == InputType.File)
+                    .Select(input => (input.Name, InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles)))
+                    .ToArray();
+                _fileUploadStore.StartInteraction(newState.InteractionId, fileInputs);
             }
             AddInteractionUpdate(newState);
 
@@ -608,6 +612,14 @@ internal class InteractionService : IInteractionService
                                 if (input.Required && (input.Files is null || input.Files.Count == 0))
                                 {
                                     context.AddValidationError(input, "Value is required.");
+                                }
+                                else if (input.Files is { Count: var fileCount })
+                                {
+                                    var maxFileCount = InteractionHelpers.GetMaxFileCount(input.AllowMultipleFiles);
+                                    if (fileCount > maxFileCount)
+                                    {
+                                        context.AddValidationError(input, $"File count exceeds the maximum of {maxFileCount}.");
+                                    }
                                 }
                                 break;
                             default:

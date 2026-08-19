@@ -9,9 +9,9 @@ namespace Aspire.Hosting;
 internal interface IInteractionFileUploadStore
 {
     /// <summary>
-    /// Registers an interaction that can own uploaded files.
+    /// Registers an interaction and the file inputs that can own uploaded files.
     /// </summary>
-    void StartInteraction(int interactionId);
+    void StartInteraction(int interactionId, IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs);
 
     /// <summary>
     /// Creates a new entry for an uploaded file and returns the file ID and path.

@@ -7,7 +7,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Dashboard;
@@ -22,11 +21,6 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     private readonly ILogger<InteractionFileUploadStore> _logger;
     private int _disposed;
 
-    public InteractionFileUploadStore(IFileSystemService fileSystemService)
-        : this(fileSystemService, NullLogger<InteractionFileUploadStore>.Instance)
-    {
-    }
-
     public InteractionFileUploadStore(IFileSystemService fileSystemService, ILogger<InteractionFileUploadStore> logger)
     {
         _tempFileSystem = fileSystemService.TempDirectory;
@@ -34,11 +28,11 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     }
 
     /// <summary>
-    /// Registers an interaction that can own uploaded files.
+    /// Registers an interaction and the file inputs that can own uploaded files.
     /// </summary>
-    public void StartInteraction(int interactionId)
+    public void StartInteraction(int interactionId, IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs)
     {
-        if (_interactions.TryAdd(interactionId, new FileInteraction()))
+        if (_interactions.TryAdd(interactionId, new FileInteraction(fileInputs)))
         {
             _logger.LogDebug("Started tracking file uploads for interaction {InteractionId}.", interactionId);
         }
@@ -61,16 +55,28 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
                 throw new InvalidOperationException($"Interaction '{interactionId}' is not accepting file uploads.");
             }
 
-            // Sanitize the file name to prevent path traversal attacks.
-            // Strip directory components for both Unix (/) and Windows (\) separators
-            // regardless of the current platform, since the name comes from a remote client.
+            if (!interaction.FileInputLimits.TryGetValue(inputName, out var maxFileCount))
+            {
+                throw new InvalidOperationException($"Interaction '{interactionId}' is not accepting file uploads for input '{inputName}'.");
+            }
+
+            // Count uploads in progress as reserved slots so concurrent requests cannot exceed the input's limit.
+            var fileCount = interaction.Files.Values.Count(entry => string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName));
+            if (fileCount >= maxFileCount)
+            {
+                var fileLabel = maxFileCount == 1 ? "file" : "files";
+                throw new InvalidOperationException($"File input '{inputName}' accepts at most {maxFileCount} {fileLabel}.");
+            }
+
+            // Keep only the leaf name as metadata. The client-supplied name is never used for the
+            // on-disk path because filename rules vary by platform and some names have special semantics.
             var lastSep = originalFileName.AsSpan().LastIndexOfAny('/', '\\');
             var safeName = lastSep >= 0 ? originalFileName[(lastSep + 1)..] : originalFileName;
 
-            var tempFile = _tempFileSystem.CreateTempFile(string.IsNullOrEmpty(safeName) ? null : safeName);
+            var tempFile = _tempFileSystem.CreateTempFile();
             var fileId = Guid.NewGuid().ToString("N");
 
-            interaction.Files[fileId] = new FileEntry(tempFile, inputName);
+            interaction.Files[fileId] = new FileEntry(tempFile, inputName, safeName);
             _logger.LogDebug(
                 "Created uploaded file entry {FileId} for interaction {InteractionId}, input {InputName}, and file {FileName}.",
                 fileId,
@@ -134,7 +140,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// </summary>
     public string? GetFileName(int interactionId, string fileId)
     {
-        return TryGetEntry(interactionId, fileId, out var entry) ? Path.GetFileName(entry.TempFile.Path) : null;
+        return TryGetEntry(interactionId, fileId, out var entry) ? entry.OriginalFileName : null;
     }
 
     /// <summary>
@@ -331,17 +337,22 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         }
     }
 
-    private sealed class FileEntry(TempFile tempFile, string inputName)
+    private sealed class FileEntry(TempFile tempFile, string inputName, string originalFileName)
     {
         public TempFile TempFile { get; } = tempFile;
         public string InputName { get; } = inputName;
+        public string OriginalFileName { get; } = originalFileName;
         public bool UploadComplete { get; set; }
         public FileInteractionState InteractionState { get; set; }
     }
 
-    private sealed class FileInteraction
+    private sealed class FileInteraction(IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs)
     {
         public ConcurrentDictionary<string, FileEntry> Files { get; } = new(StringComparer.Ordinal);
+        public IReadOnlyDictionary<string, int> FileInputLimits { get; } = fileInputs.ToDictionary(
+            fileInput => fileInput.InputName,
+            fileInput => fileInput.MaxFileCount,
+            StringComparers.InteractionInputName);
         public FileInteractionState State { get; set; }
     }
 

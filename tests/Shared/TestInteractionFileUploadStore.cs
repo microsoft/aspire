@@ -14,14 +14,16 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
 
     public ConcurrentQueue<int> StartedInteractions { get; } = new();
+    public ConcurrentQueue<IReadOnlyList<(string InputName, int MaxFileCount)>> StartedFileInputs { get; } = new();
     public ConcurrentQueue<int> CompletedInteractions { get; } = new();
     public ConcurrentQueue<int> CanceledInteractions { get; } = new();
     public Action<int>? CompleteInteractionCallback { get; set; }
     public Action<int>? CancelInteractionCallback { get; set; }
 
-    public void StartInteraction(int interactionId)
+    public void StartInteraction(int interactionId, IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs)
     {
         StartedInteractions.Enqueue(interactionId);
+        StartedFileInputs.Enqueue(fileInputs.ToArray());
     }
 
     public (string FileId, string FilePath) CreateEntry(string originalFileName, int interactionId, string inputName)
