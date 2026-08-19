@@ -1507,6 +1507,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine("=== Override file ===");
         outputHelper.WriteLine(content);
 
+        // Snapshot tests cover YAML scalar style. These assertions only verify that resolution
+        // populated every path, so ignore the quotes required to preserve string values for Helm.
+        content = content.Replace("\"", string.Empty, StringComparison.Ordinal);
+
         // Phase 1: Both cache and server should have the resolved password
         Assert.Contains("cache_password: test-password-123", content);
 
@@ -1588,8 +1592,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
-        var host = builder.AddParameter("host", "localhost", publishValueAsDefault: true);
-        var token = builder.AddParameter("token", "test-token", secret: true);
+        // Numeric-looking strings must retain their lexical form when the deploy values file is
+        // parsed by Helm instead of being normalized as numeric YAML scalars.
+        var host = builder.AddParameter("host", "01", publishValueAsDefault: true);
+        var token = builder.AddParameter("token", "1.0", secret: true);
 
         builder.AddContainer("myapp", "nginx")
             .WithEnvironment("SOME_URL", $"http://{host}/test")
@@ -1630,7 +1636,7 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
-        builder.Configuration["Parameters:enable-tls"] = bool.TrueString;
+        builder.Configuration["Parameters:enable-tls"] = "1.0";
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
         var enableTls = builder.AddParameter("enable-tls");
@@ -1640,7 +1646,7 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
             {
                 context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
                     enableTls.Resource,
-                    bool.TrueString,
+                    "1.0",
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Create($",ssl=false"));
             });
