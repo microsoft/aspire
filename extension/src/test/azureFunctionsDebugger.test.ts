@@ -348,31 +348,33 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.assert.calledOnceWithExactly(fsRmSync, ownedMetadataDirectory, { recursive: true, force: true });
     });
 
-    test('quotes backslashes and apostrophes for a configured POSIX task shell', async () => {
-        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
-        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
-        const statusServer = await createFuncHostStatusServer(() => funcHostStatus);
-        const debugConfiguration = createDebugConfiguration(projectPath, ['--port', String(statusServer.port), '--password', "a\\b'c"]);
+    for (const shell of ['bash', 'dash', 'ash']) {
+        test(`quotes backslashes and apostrophes for a configured ${shell} task shell`, async () => {
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+            const statusServer = await createFuncHostStatusServer(() => funcHostStatus);
+            const debugConfiguration = createDebugConfiguration(projectPath, ['--port', String(statusServer.port), '--password', "a\\b'c"]);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        stubTaskShell('linux', { path: '/bin/bash' });
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            stubTaskShell('linux', { path: `/bin/${shell}` });
 
-        try {
-            await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
-                createLaunchConfiguration(projectPath),
-                debugConfiguration.args as string[],
-                [],
-                createLaunchOptions(false),
-                debugConfiguration);
+            try {
+                await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    createLaunchConfiguration(projectPath),
+                    debugConfiguration.args as string[],
+                    [],
+                    createLaunchOptions(false),
+                    debugConfiguration);
 
-            assert.strictEqual(
-                (taskHarness.getExecutedTask()?.execution as vscode.ShellExecution).commandLine,
-                `func host start --port ${statusServer.port} --password 'a\\b'"'"'c' --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
-        } finally {
-            await close(statusServer.server);
-        }
-    });
+                assert.strictEqual(
+                    (taskHarness.getExecutedTask()?.execution as vscode.ShellExecution).commandLine,
+                    `func host start --port ${statusServer.port} --password 'a\\b'"'"'c' --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
+            } finally {
+                await close(statusServer.server);
+            }
+        });
+    }
 
     test('quotes a backslash before an apostrophe for a configured fish task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');

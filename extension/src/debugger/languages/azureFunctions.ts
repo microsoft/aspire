@@ -633,7 +633,7 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('git bash') || identity.includes('wsl') || identity.includes('cygwin') || identity.includes('msys') ||
-        /(?:^|[\\/\s])(ba|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
+        /(?:^|[\\/\s])(ba|da|a|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
         return 'posix';
     }
 
