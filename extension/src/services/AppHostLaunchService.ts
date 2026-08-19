@@ -128,18 +128,26 @@ export class AppHostLaunchService implements vscode.Disposable {
     constructor(private readonly _capabilityProvider: AppHostLaunchCapabilityProvider) {
         const startSubscription = vscode.debug.onDidStartDebugSession(session => {
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
+            let transferredOperation = false;
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
                 // The launch token only rides on the root configuration this service creates,
                 // so its presence proves this is the root session that now owns any pending
                 // non-Run operation.
-                this.transferPendingOperationToActiveSession(launchToken, session.id);
+                transferredOperation = this.transferPendingOperationToActiveSession(launchToken, session.id);
             }
 
             const appHostPath = getDebugConfigurationAppHostPath(session.configuration);
             const reservationId = session.configuration?.[appHostLaunchReservationIdConfigKey];
             if (appHostPath && typeof reservationId === 'string') {
-                this._reservations.preserveStartedExternalLaunchReservation(appHostPath, reservationId);
+                if (transferredOperation) {
+                    // The active operation is now owned by this session. Its temporary launch
+                    // reservation must not block an independent Run or F5 for the same AppHost.
+                    this.clearMatchingLaunching(appHostPath, reservationId);
+                }
+                else {
+                    this._reservations.preserveStartedExternalLaunchReservation(appHostPath, reservationId);
+                }
             }
             if (appHostPath &&
                 session.configuration?.type === 'aspire' &&
@@ -604,7 +612,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // its AppHost. Rejecting here - before any pending state or the lifecycle lock -
         // stops a second deploy/publish/do from starting while one is pending or active,
         // while still allowing a Run to start alongside an active non-Run operation.
-        if (command !== 'run' && this.getActiveOperation(appHostPath)) {
+        if (command !== 'run' && this.hasPendingOrActiveOperationConflict(appHostPath)) {
             throw new vscode.CancellationError();
         }
 
@@ -915,18 +923,28 @@ export class AppHostLaunchService implements vscode.Disposable {
 
     /**
      * The durable non-Run operation (deploy/publish/do) currently pending or active for an
-     * AppHost, or `undefined` when none is. Matches on AppHost identity - not just the raw
-     * path - so a project file and its sibling source file resolve to the same operation,
-     * consistent with the other identity-aware lookups on this service.
+     * AppHost, or `undefined` when none can be identified unambiguously. Matches only a
+     * proven AppHost identity - not just the raw path - so a unique project file and its
+     * sibling source file resolve to the same operation without assigning ownership when
+     * multiple AppHosts could match.
      */
     getActiveOperation(appHostPath: string): AppHostOperationState | undefined {
-        for (const operation of [...this._pendingOperationByToken.values(), ...this._activeOperationBySessionId.values()]) {
-            if (compareAppHostIdentity(operation.appHostPath, appHostPath) !== 'different') {
-                return operation;
-            }
-        }
+        const matchingOperations = this.getPendingAndActiveOperations()
+            .filter(operation => compareAppHostIdentity(operation.appHostPath, appHostPath) === 'same');
 
-        return undefined;
+        return matchingOperations.length === 1 ? matchingOperations[0] : undefined;
+    }
+
+    private hasPendingOrActiveOperationConflict(appHostPath: string): boolean {
+        // Duplicate prevention is intentionally conservative: an ambiguous source/project
+        // association cannot identify an owner, but starting another operation could still
+        // overlap one that is already pending or active.
+        return this.getPendingAndActiveOperations()
+            .some(operation => compareAppHostIdentity(operation.appHostPath, appHostPath) !== 'different');
+    }
+
+    private getPendingAndActiveOperations(): AppHostOperationState[] {
+        return [...this._pendingOperationByToken.values(), ...this._activeOperationBySessionId.values()];
     }
 
     private beginPendingOperation(launchToken: number, appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep: string | undefined): void {
@@ -940,10 +958,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._onDidChangeOperationState.fire();
     }
 
-    private transferPendingOperationToActiveSession(launchToken: number, sessionId: string): void {
+    private transferPendingOperationToActiveSession(launchToken: number, sessionId: string): boolean {
         const pending = this._pendingOperationByToken.get(launchToken);
         if (!pending) {
-            return;
+            return false;
         }
 
         this._pendingOperationByToken.delete(launchToken);
@@ -951,6 +969,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // No state event fires: {@link getActiveOperation} still reports the same operation,
         // so nothing observable changed - only the owner moved from the launch token to the
         // now-running session.
+        return true;
     }
 
     private clearPendingOperation(launchToken: number): void {

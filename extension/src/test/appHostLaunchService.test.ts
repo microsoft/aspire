@@ -2385,11 +2385,11 @@ suite('AppHostLaunchService', () => {
         const publishConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
         const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
         onDidStartDebugSessionCallback(publishSession);
-        service.clearLaunching(appHostPath);
 
         assert.ok(onDidTerminateDebugSessionCallback);
         onDidTerminateDebugSessionCallback(runSession);
 
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
         assert.deepStrictEqual(terminationEvents, [{
             appHostPath,
             command: 'run',
@@ -2401,9 +2401,19 @@ suite('AppHostLaunchService', () => {
     test('a non-Run launch reports a pending then active operation and clears on termination', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         let changeCount = 0;
+        let signalCliResolutionStarted: (() => void) | undefined;
+        let releaseCliResolution: (() => void) | undefined;
+        const cliResolutionStarted = new Promise<void>(resolve => { signalCliResolutionStarted = resolve; });
+        const cliResolutionRelease = new Promise<void>(resolve => { releaseCliResolution = resolve; });
+        resolveCliPathStub.callsFake(async () => {
+            signalCliResolutionStarted?.();
+            await cliResolutionRelease;
+            return { cliPath: '/path/bin/aspire', available: true, source: 'path' };
+        });
         service.onDidChangeOperationState(() => { changeCount++; });
 
-        await service.launch(appHostPath, 'publish', true);
+        const launch = service.launch(appHostPath, 'publish', true);
+        await cliResolutionStarted;
 
         assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
             appHostPath,
@@ -2412,6 +2422,10 @@ suite('AppHostLaunchService', () => {
             doStep: undefined,
         });
         assert.strictEqual(changeCount, 1);
+        assert.strictEqual(startDebuggingStub.called, false);
+
+        releaseCliResolution?.();
+        await launch;
 
         const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
@@ -2448,6 +2462,30 @@ suite('AppHostLaunchService', () => {
         });
     });
 
+    test('an ambiguous AppHost path does not claim either active operation but still blocks duplicates', async () => {
+        const directory = createAppHostDirectory('First.csproj', 'Second.csproj', 'Program.cs');
+        const firstProjectPath = path.join(directory, 'First.csproj');
+        const secondProjectPath = path.join(directory, 'Second.csproj');
+        const ambiguousSourcePath = path.join(directory, 'Program.cs');
+
+        await service.launch(firstProjectPath, 'publish', true);
+        const firstConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'first', configuration: firstConfiguration } as unknown as vscode.DebugSession);
+
+        await service.launch(secondProjectPath, 'deploy', false, 'infra');
+        const secondConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        onDidStartDebugSessionCallback({ id: 'second', configuration: secondConfiguration } as unknown as vscode.DebugSession);
+
+        assert.strictEqual(service.getActiveOperation(firstProjectPath)?.command, 'publish');
+        assert.strictEqual(service.getActiveOperation(secondProjectPath)?.command, 'deploy');
+        assert.strictEqual(service.getActiveOperation(ambiguousSourcePath), undefined);
+        await assert.rejects(
+            service.launch(ambiguousSourcePath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        assert.strictEqual(startDebuggingStub.calledTwice, true);
+    });
+
     test('a duplicate non-Run operation is rejected while one is pending', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         await service.launch(appHostPath, 'publish', true);
@@ -2481,11 +2519,21 @@ suite('AppHostLaunchService', () => {
         const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.ok(onDidStartDebugSessionCallback);
         onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
-        service.clearLaunching(appHostPath);
 
         await service.launch(appHostPath, 'run', true);
 
         assert.strictEqual(startDebuggingStub.calledTwice, true);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+    });
+
+    test('an external F5 launch is not rejected while a non-Run operation is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+
+        assert.strictEqual(typeof service.tryReserveExternalLaunch(appHostPath), 'string');
         assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
     });
 
