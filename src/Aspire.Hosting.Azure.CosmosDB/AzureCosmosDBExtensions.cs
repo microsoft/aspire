@@ -50,7 +50,7 @@ public static class AzureCosmosExtensions
     /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator-linux"></a>.
     /// </summary>
-    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local emulator</ats-summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local Linux-based (vNext) emulator</ats-summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>

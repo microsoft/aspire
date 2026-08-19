@@ -285,6 +285,27 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AddAzureCosmosDBClassicEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator(e =>
+        {
+            e.WithEndpoint("emulator", e => e.AllocatedEndpoint = new(e, "localhost", 10001));
+        });
+
+        Assert.True(cosmos.Resource.IsContainer());
+
+        var csExpr = cosmos.Resource.ConnectionStringExpression;
+        var cs = await csExpr.GetValueAsync(CancellationToken.None);
+
+        var prefix = "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint=";
+        Assert.Equal(prefix + "https://{cosmos.bindings.emulator.host}:{cosmos.bindings.emulator.port};DisableServerCertificateValidation=True;", csExpr.ValueExpression);
+        Assert.Equal(prefix + "https://127.0.0.1:10001;DisableServerCertificateValidation=True;", cs);
+        Assert.Equal(cs, await ((IResourceWithConnectionString)cosmos.Resource).GetConnectionStringAsync());
+    }
+
+    [Fact]
     public async Task AddAzureCosmosDB_WithAccessKeyAuthentication_NoKeyVaultWithEmulator()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
