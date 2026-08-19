@@ -1307,6 +1307,56 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(129, exitCode);
     }
 
+    [Theory]
+    [InlineData("\"launchBrowser\": \"yes\"")]
+    [InlineData("\"launchUrl\": true")]
+    [InlineData("\"dotnetRunMessages\": \"yes\"")]
+    public async Task RunAsync_ProjectAppHostSelectedLaunchProfileWithInvalidSdkPropertyFallsBack(string invalidProperty)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), $$"""
+            {
+              "profiles": {
+                "E2E": {
+                  "commandName": "Project",
+                  {{invalidProperty}},
+                  "environmentVariables": { "PROFILE": "direct-launch" }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not accept a profile that the SDK cannot deserialize.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        {
+            Assert.Equal("E2E", options.LaunchProfile);
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey("PROFILE"));
+            return Task.FromResult(131);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(131, exitCode);
+    }
+
     [Fact]
     public async Task RunAsync_ProjectAppHostDuplicateSelectedLaunchProfileFallsBack()
     {
