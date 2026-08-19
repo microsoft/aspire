@@ -19,6 +19,22 @@ export interface AppHostDebugSessionTerminatedEvent {
     shouldMarkAppHostStopping: boolean;
 }
 
+/**
+ * A durable non-Run AppHost operation (`deploy`, `publish`, or `do`) that is currently
+ * pending or driving an active debug session.
+ *
+ * Run launches are deliberately excluded: a Run is represented by its long-lived running
+ * AppHost plus the launching and stop-refresh state. Deploy/publish/do have no running
+ * AppHost of their own, so the extension records them here to reflect that an operation is
+ * in flight for the AppHost even though nothing appears in the running list.
+ */
+export interface AppHostOperationState {
+    readonly appHostPath: string;
+    readonly command: AspireCommandType;
+    readonly noDebug: boolean;
+    readonly doStep?: string;
+}
+
 export interface AppHostLaunchSession {
     readonly appHostPath: string | undefined;
     /**

@@ -2366,4 +2366,224 @@ suite('AppHostLaunchService', () => {
 
         assert.strictEqual(terminationEventRaised, false);
     });
+
+    test('a Run termination still requests stop refresh while a later Publish stays active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const terminationEvents: Array<{ command?: string; shouldRequestStopRefresh: boolean; shouldMarkAppHostStopping: boolean }> = [];
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvents.push(event);
+        });
+
+        await service.launch(appHostPath, 'run', true);
+        const runConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const runSession = { id: 'run', configuration: runConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(runSession);
+        service.clearLaunching(appHostPath);
+
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(publishSession);
+        service.clearLaunching(appHostPath);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(runSession);
+
+        assert.deepStrictEqual(terminationEvents, [{
+            appHostPath,
+            command: 'run',
+            shouldRequestStopRefresh: true,
+            shouldMarkAppHostStopping: true,
+        }]);
+    });
+
+    test('a non-Run launch reports a pending then active operation and clears on termination', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        let changeCount = 0;
+        service.onDidChangeOperationState(() => { changeCount++; });
+
+        await service.launch(appHostPath, 'publish', true);
+
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'publish',
+            noDebug: true,
+            doStep: undefined,
+        });
+        assert.strictEqual(changeCount, 1);
+
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(publishSession);
+
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'publish',
+            noDebug: true,
+            doStep: undefined,
+        });
+        assert.strictEqual(changeCount, 1, 'transferring a pending operation to its session is not observable');
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(publishSession);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+        assert.strictEqual(changeCount, 2);
+    });
+
+    test('an active operation matches its AppHost by identity, not just its raw path', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+        const projectPath = path.join(directory, 'AppHost.csproj');
+        const sourcePath = path.join(directory, 'Program.cs');
+
+        await service.launch(projectPath, 'deploy', false, 'infra');
+
+        assert.deepStrictEqual(service.getActiveOperation(sourcePath), {
+            appHostPath: projectPath,
+            command: 'deploy',
+            noDebug: false,
+            doStep: 'infra',
+        });
+    });
+
+    test('a duplicate non-Run operation is rejected while one is pending', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+
+        await assert.rejects(
+            service.launch(appHostPath, 'deploy', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+    });
+
+    test('a duplicate non-Run operation is rejected while one is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+        service.clearLaunching(appHostPath);
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+    });
+
+    test('a Run is not rejected while a non-Run operation is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+        service.clearLaunching(appHostPath);
+
+        await service.launch(appHostPath, 'run', true);
+
+        assert.strictEqual(startDebuggingStub.calledTwice, true);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+    });
+
+    test('a declined non-Run launch clears its pending operation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        startDebuggingStub.resolves(false);
+
+        await assert.rejects(service.launch(appHostPath, 'publish', true));
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a cancelled non-Run launch clears its pending operation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        startDebuggingStub.rejects(new vscode.CancellationError());
+
+        await assert.rejects(service.launch(appHostPath, 'publish', true));
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a suppressed non-Run launch clears its pending operation', async () => {
+        const environmentVariables = [
+            'ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE',
+            'ASPIRE_EXTENSION_E2E_STATE_FILE',
+            'ASPIRE_EXTENSION_E2E_CONTROL_FILE',
+            'ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH',
+        ] as const;
+        const originalValues = new Map(environmentVariables.map(name => [name, process.env[name]]));
+        const appHostPath = '/repo/AppHost.csproj';
+
+        try {
+            process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE = 'true';
+            process.env.ASPIRE_EXTENSION_E2E_STATE_FILE = 'state.json';
+            process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE = 'control.json';
+            process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH = 'true';
+
+            await service.launch(appHostPath, 'publish', true);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+            assert.strictEqual(startDebuggingStub.called, false);
+        }
+        finally {
+            for (const [name, value] of originalValues) {
+                if (value === undefined) {
+                    delete process.env[name];
+                }
+                else {
+                    process.env[name] = value;
+                }
+            }
+        }
+    });
+
+    test('disposal clears active operation state', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        assert.ok(service.getActiveOperation(appHostPath));
+
+        service.dispose();
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a Publish launched while a Run is active does not advance the Run generation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const terminationEvents: Array<{ appHostPath: string; command?: string; shouldRequestStopRefresh: boolean; shouldMarkAppHostStopping: boolean }> = [];
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvents.push(event);
+        });
+
+        await service.launch(appHostPath, 'run', true);
+        const runConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const runSession = { id: 'run', configuration: runConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(runSession);
+        service.clearLaunching(appHostPath);
+
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(publishSession);
+        service.clearLaunching(appHostPath);
+
+        // The distinct reservation IDs prove the Publish took its own launching slot rather
+        // than reusing the Run's; the assertions below prove it did not steal the Run's
+        // generation while doing so.
+        assert.notStrictEqual(
+            publishConfiguration[appHostLaunchReservationIdConfigKey],
+            runConfiguration[appHostLaunchReservationIdConfigKey]);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(publishSession);
+        onDidTerminateDebugSessionCallback(runSession);
+
+        assert.deepStrictEqual(terminationEvents, [
+            { appHostPath, command: 'publish', shouldRequestStopRefresh: false, shouldMarkAppHostStopping: false },
+            { appHostPath, command: 'run', shouldRequestStopRefresh: true, shouldMarkAppHostStopping: true },
+        ]);
+    });
 });

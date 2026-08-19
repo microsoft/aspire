@@ -9,13 +9,13 @@ import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { CliPathResolutionTarget, getCliPathTargetForUri, getCliPathTargetKey } from '../utils/cliPathVariables';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { markAspireDebugConfigurationAsExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
-import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
+import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostOperationState, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
 import { AppHostLaunchReservations } from './appHostLaunchReservations';
 import { getLaunchTelemetryProperties, isE2eDebugLaunchSuppressed } from './appHostLaunchTelemetry';
 import { isolatedLaunchCapability, isolatedLaunchMinimumVersion, type CapabilityStatus } from '../types/configInfo';
 
 export { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs } from './appHostLaunchContracts';
-export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
+export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostOperationState, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
 
 export interface AppHostLaunchCapabilityProvider {
     getCapabilityStatus(capability: string, options?: {
@@ -97,9 +97,25 @@ export class AppHostLaunchService implements vscode.Disposable {
     private _disposed = false;
     private readonly _activeRunDebugSessionPaths = new Map<string, string>();
     private readonly _pendingRunPathByToken = new Map<number, string>();
+    /**
+     * Durable non-Run operations (deploy/publish/do) that have begun launch preparation but
+     * whose root debug session has not started yet, keyed by launch token. A pending entry
+     * is recorded before the first `await` so a concurrent duplicate is rejected, and is
+     * either transferred to {@link _activeOperationBySessionId} when the session starts or
+     * cleared when the launch is cancelled, declined, suppressed, errors, or disposes.
+     */
+    private readonly _pendingOperationByToken = new Map<number, AppHostOperationState>();
+    /**
+     * Durable non-Run operations whose root debug session is running, keyed by that
+     * session's ID. Cleared when the session terminates.
+     */
+    private readonly _activeOperationBySessionId = new Map<string, AppHostOperationState>();
     private _nextLaunchToken = 0;
 
     readonly onDidChangeLaunchingState = this._reservations.onDidChangeLaunchingState;
+
+    private readonly _onDidChangeOperationState = new vscode.EventEmitter<void>();
+    readonly onDidChangeOperationState = this._onDidChangeOperationState.event;
 
     private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<AppHostDebugSessionTerminatedEvent>();
     readonly onDidTerminateAppHostDebugSession = this._onDidTerminateAppHostDebugSession.event;
@@ -114,6 +130,10 @@ export class AppHostLaunchService implements vscode.Disposable {
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
+                // The launch token only rides on the root configuration this service creates,
+                // so its presence proves this is the root session that now owns any pending
+                // non-Run operation.
+                this.transferPendingOperationToActiveSession(launchToken, session.id);
             }
 
             const appHostPath = getDebugConfigurationAppHostPath(session.configuration);
@@ -132,9 +152,11 @@ export class AppHostLaunchService implements vscode.Disposable {
         // so the tree reverts from "Starting..." if the launch failed or was cancelled.
         const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
             this._activeRunDebugSessionPaths.delete(session.id);
+            this.clearActiveOperation(session.id);
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
+                this.clearPendingOperation(launchToken);
             }
 
             this._appHostDebugSessions.delete(session.id);
@@ -175,8 +197,11 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._reservations.dispose();
         this._activeRunDebugSessionPaths.clear();
         this._pendingRunPathByToken.clear();
+        this._pendingOperationByToken.clear();
+        this._activeOperationBySessionId.clear();
         this._onDidTerminateAppHostDebugSession.dispose();
         this._onDidRequestLaunch.dispose();
+        this._onDidChangeOperationState.dispose();
     }
 
     get launchingPaths(): readonly string[] {
@@ -495,16 +520,16 @@ export class AppHostLaunchService implements vscode.Disposable {
         return this._reservations.isLaunching(appHostPath);
     }
 
-    tryReserveLaunch(appHostPath: string): boolean {
-        return this._reservations.tryReserveLaunch(appHostPath);
+    tryReserveLaunch(appHostPath: string, trackRunGeneration = true): boolean {
+        return this._reservations.tryReserveLaunch(appHostPath, trackRunGeneration);
     }
 
     hasLifecycleLaunchClaim(appHostPath: string): boolean {
         return this._reservations.hasLifecycleLaunchClaim(appHostPath);
     }
 
-    reserveLaunch(appHostPath: string): string {
-        return this._reservations.reserveLaunch(appHostPath);
+    reserveLaunch(appHostPath: string, trackRunGeneration = true): string {
+        return this._reservations.reserveLaunch(appHostPath, trackRunGeneration);
     }
 
     tryReserveExternalLaunch(appHostPath: string, isDirectoryScope = false): string | false {
@@ -575,14 +600,23 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param doStep Optional step name for the 'do' command.
      */
     async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string, target?: CliPathResolutionTarget, cliPath?: string): Promise<void> {
+        // A durable non-Run operation (deploy/publish/do) must be the only one in flight for
+        // its AppHost. Rejecting here - before any pending state or the lifecycle lock -
+        // stops a second deploy/publish/do from starting while one is pending or active,
+        // while still allowing a Run to start alongside an active non-Run operation.
+        if (command !== 'run' && this.getActiveOperation(appHostPath)) {
+            throw new vscode.CancellationError();
+        }
+
         const launchToken = this.trackPendingRun(appHostPath, command);
+        this.beginPendingOperation(launchToken, appHostPath, command, noDebug, doStep);
         try {
             return await this.runWithAppHostLifecycleLock(appHostPath, this._lifecycleCancellationSource.token, async lockToken => {
                 if (this._disposed) {
                     throw new vscode.CancellationError();
                 }
 
-                if (!this.tryReserveLaunch(appHostPath)) {
+                if (!this.tryReserveLaunch(appHostPath, command === 'run')) {
                     throw new vscode.CancellationError();
                 }
 
@@ -591,6 +625,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
         catch (error) {
             this._pendingRunPathByToken.delete(launchToken);
+            this.clearPendingOperation(launchToken);
             throw error;
         }
     }
@@ -716,7 +751,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // The tree also shows "Starting..." from here, and every pre-start failure path
         // clears it because VS Code emits no terminate event for a launch that never
         // started. See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
-        const reservationId = this.reserveLaunch(appHostPath);
+        const reservationId = this.reserveLaunch(appHostPath, command === 'run');
         // Everything between the reservation and the main try/catch below has to release
         // the reservation itself, otherwise a cancelled or failed launch would leave this
         // AppHost permanently reported as launching.
@@ -742,6 +777,9 @@ export class AppHostLaunchService implements vscode.Disposable {
         const executionSuppressed = isE2eDebugLaunchSuppressed();
         if (executionSuppressed) {
             this._pendingRunPathByToken.delete(launchToken);
+            // A suppressed launch never starts a session, so there is nothing to transfer
+            // the pending operation to; clear it now rather than leaking it.
+            this.clearPendingOperation(launchToken);
         }
 
         let telemetryProperties: Awaited<ReturnType<typeof getLaunchTelemetryProperties>>;
@@ -873,6 +911,58 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
 
         return launchToken;
+    }
+
+    /**
+     * The durable non-Run operation (deploy/publish/do) currently pending or active for an
+     * AppHost, or `undefined` when none is. Matches on AppHost identity - not just the raw
+     * path - so a project file and its sibling source file resolve to the same operation,
+     * consistent with the other identity-aware lookups on this service.
+     */
+    getActiveOperation(appHostPath: string): AppHostOperationState | undefined {
+        for (const operation of [...this._pendingOperationByToken.values(), ...this._activeOperationBySessionId.values()]) {
+            if (compareAppHostIdentity(operation.appHostPath, appHostPath) !== 'different') {
+                return operation;
+            }
+        }
+
+        return undefined;
+    }
+
+    private beginPendingOperation(launchToken: number, appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep: string | undefined): void {
+        // Only deploy/publish/do are durable operations; a Run is represented by its running
+        // AppHost and needs no operation entry.
+        if (command === 'run') {
+            return;
+        }
+
+        this._pendingOperationByToken.set(launchToken, { appHostPath, command, noDebug, doStep });
+        this._onDidChangeOperationState.fire();
+    }
+
+    private transferPendingOperationToActiveSession(launchToken: number, sessionId: string): void {
+        const pending = this._pendingOperationByToken.get(launchToken);
+        if (!pending) {
+            return;
+        }
+
+        this._pendingOperationByToken.delete(launchToken);
+        this._activeOperationBySessionId.set(sessionId, pending);
+        // No state event fires: {@link getActiveOperation} still reports the same operation,
+        // so nothing observable changed - only the owner moved from the launch token to the
+        // now-running session.
+    }
+
+    private clearPendingOperation(launchToken: number): void {
+        if (this._pendingOperationByToken.delete(launchToken)) {
+            this._onDidChangeOperationState.fire();
+        }
+    }
+
+    private clearActiveOperation(sessionId: string): void {
+        if (this._activeOperationBySessionId.delete(sessionId)) {
+            this._onDidChangeOperationState.fire();
+        }
     }
 }
 
