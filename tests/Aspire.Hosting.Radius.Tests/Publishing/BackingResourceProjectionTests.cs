@@ -57,7 +57,7 @@ public class BackingResourceProjectionTests
             var cache = b.AddRedis("cache");
             var pgdb = b.AddPostgres("pg").AddDatabase("pgdb");
             var mongo = b.AddMongoDB("mongo");
-            var rabbit = b.AddRabbitMQ("rabbit");
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser"));
             var sql = b.AddSqlServer("sqlserver");
 
             b.AddContainer("api", "myapp/api", "latest")
@@ -127,13 +127,13 @@ public class BackingResourceProjectionTests
     /// with that in mind - the empty `password=` in `ConnectionStrings__cache` is the *projected*
     /// value, not a redaction, and this file therefore says nothing about the `listSecrets()` path.
     /// That path is pinned for the types that do have a recipe-generated credential by
-    /// <see cref="AllBackingResourceTypes_ProjectRecipeOutputs"/> (Mongo, RabbitMQ, SQL Server) and
+    /// <see cref="AllBackingResourceTypes_ProjectRecipeOutputs"/> (Mongo, SQL Server) and
     /// asserted directly - so an upstream change to a connection-string format cannot silently
     /// erase it - by <c>BackingResourceValueResolutionTests.UriFormattedValues_AreEscapedInTheEmittedBicep</c>
     /// and <c>BackingResourceValueResolutionTests.RedisPasswordIsNotProjected_BecauseTheRecipeDeploysAnUnauthenticatedServer</c>.
     /// </remarks>
     [Fact]
-    public Task LegacyBackingResource_DoesNotLeakAspireGeneratedPasswordParameter()
+    public Task UnauthenticatedBackingResource_DoesNotLeakAspireGeneratedPasswordParameter()
     {
         var bicep = GenerateBicep(b =>
         {

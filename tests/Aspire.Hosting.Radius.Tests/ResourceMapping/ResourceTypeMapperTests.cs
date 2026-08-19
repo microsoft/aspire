@@ -21,15 +21,15 @@ public class ResourceTypeMapperTests
     }
 
     [Fact]
-    public void RedisResource_MapsToLegacyFallback_LogsLegacyMapping()
+    public void RedisResource_MapsToUdt_WithoutLegacyMappingLog()
     {
         var resource = new RedisResource("cache");
 
         var (type, apiVersion) = _mapper.MapResource(resource);
 
-        Assert.Equal(RadiusResourceTypes.LegacyRedisCaches, type);
-        Assert.Equal(RadiusResourceTypes.LegacyApiVersion, apiVersion);
-        Assert.Contains("legacy", _logger.LastMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RadiusResourceTypes.RedisCaches, type);
+        Assert.Equal(RadiusResourceTypes.RadiusApiVersion, apiVersion);
+        Assert.Null(_logger.LastMessage);
     }
 
     [Fact]
@@ -58,16 +58,16 @@ public class ResourceTypeMapperTests
     }
 
     [Fact]
-    public void RabbitMQResource_MapsToLegacyFallback_LogsLegacyMapping()
+    public void RabbitMQResource_MapsToUdt_WithoutLegacyMappingLog()
     {
         var password = new ParameterResource("password", _ => "guest", secret: true);
         var resource = new RabbitMQServerResource("rabbit", null, password);
 
         var (type, apiVersion) = _mapper.MapResource(resource);
 
-        Assert.Equal(RadiusResourceTypes.LegacyRabbitMQQueues, type);
-        Assert.Equal(RadiusResourceTypes.LegacyApiVersion, apiVersion);
-        Assert.Contains("legacy", _logger.LastMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RadiusResourceTypes.RabbitMQ, type);
+        Assert.Equal(RadiusResourceTypes.RadiusApiVersion, apiVersion);
+        Assert.Null(_logger.LastMessage);
     }
 
     [Fact]
@@ -139,19 +139,23 @@ public class ResourceTypeMapperTests
     }
 
     [Fact]
-    public void DaprStateStoreResource_MapsToLegacyFallback_LogsLegacyMapping()
+    public void DaprStateStoreResource_MapsDirectlyToLegacyType()
     {
         var resource = new DaprStateStoreResource("statestore");
 
         var (type, apiVersion) = _mapper.MapResource(resource);
 
+        // Radius 0.60 has no Radius.Dapr/* namespace, so the legacy type is the primary mapping
+        // rather than a fallback — there is nothing "pending migration" to report. Asserting the
+        // type explicitly also guards the container fallback: an unmapped Dapr resource would
+        // silently publish as Radius.Compute/containers.
         Assert.Equal(RadiusResourceTypes.LegacyDaprStateStores, type);
         Assert.Equal(RadiusResourceTypes.LegacyApiVersion, apiVersion);
-        Assert.Contains("legacy", _logger.LastMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(_logger.LastMessage);
     }
 
     [Fact]
-    public void DaprPubSubResource_MapsToLegacyFallback_LogsLegacyMapping()
+    public void DaprPubSubResource_MapsDirectlyToLegacyType()
     {
         var resource = new DaprPubSubResource("pubsub");
 
@@ -159,7 +163,7 @@ public class ResourceTypeMapperTests
 
         Assert.Equal(RadiusResourceTypes.LegacyDaprPubSubBrokers, type);
         Assert.Equal(RadiusResourceTypes.LegacyApiVersion, apiVersion);
-        Assert.Contains("legacy", _logger.LastMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(_logger.LastMessage);
     }
 
     /// <summary>

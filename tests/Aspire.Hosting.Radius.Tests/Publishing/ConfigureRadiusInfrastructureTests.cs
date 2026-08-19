@@ -214,8 +214,9 @@ public class ConfigureRadiusInfrastructureTests
     [Fact]
     public void ConfigureCallback_CanEditRecipeEntryViaRecipeLocation()
     {
-        // L5: Callbacks can reach into recipe entries via typed access and edit
-        // the renamed RecipeLocation property (L1).
+        // L5: Callbacks can reach into recipe entries via typed access and edit the
+        // RecipeLocation property (L1). The C# member keeps its name; Radius 0.60 renamed only
+        // the emitted schema key, from `recipeLocation` to `source`.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("myenv")
             .ConfigureRadiusInfrastructure(opts =>
@@ -237,7 +238,7 @@ public class ConfigureRadiusInfrastructureTests
         var bicep = context.GenerateBicep(model);
 
         Assert.Contains("ghcr.io/myorg/recipes/override:v2", bicep);
-        Assert.Contains("recipeLocation:", bicep);
+        Assert.Contains("source:", bicep);
     }
 
     [Fact]

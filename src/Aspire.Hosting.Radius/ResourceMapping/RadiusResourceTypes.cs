@@ -43,19 +43,48 @@ internal static class RadiusResourceTypes
     /// fails type resolution at deploy time.
     /// See <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/sqlServerDatabases/sqlServerDatabases.yaml"/>.
     /// </summary>
+    /// <remarks>
+    /// Not emitted as of Radius 0.60: the type ships in the Bicep extension, but no Kubernetes
+    /// recipe is published for it (<c>kube-recipes/sqlserverdatabases</c> does not exist), so the
+    /// mapper still emits <see cref="LegacySqlDatabases"/>. The blocker is the missing recipe, not
+    /// a missing type.
+    /// </remarks>
     public const string SqlServerDatabases = "Radius.Data/sqlServerDatabases";
 
     public const string PostgreSqlDatabases = "Radius.Data/postgreSqlDatabases";
+
+    /// <summary>
+    /// The MongoDB UDT registered by <c>resource-types-contrib</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not emitted as of Radius 0.60: the type ships in the Bicep extension, but no Kubernetes
+    /// recipe is published for it (<c>kube-recipes/mongodatabases</c> does not exist), so the
+    /// mapper still emits <see cref="LegacyMongoDatabases"/>. The blocker is the missing recipe,
+    /// not a missing type.
+    /// </remarks>
     public const string MongoDatabases = "Radius.Data/mongoDatabases";
 
     // --- Radius.Messaging ---
 
-    public const string RabbitMQQueues = "Radius.Messaging/rabbitMQQueues";
+    /// <summary>
+    /// The RabbitMQ UDT. Note the name: Radius 0.60 spells this <c>rabbitMQ</c>, not
+    /// <c>rabbitMQQueues</c> — the latter is the legacy portable type
+    /// (<see cref="LegacyRabbitMQQueues"/>) and emitting it under the <c>Radius.*</c> namespace
+    /// fails type resolution at deploy time.
+    /// </summary>
+    public const string RabbitMQ = "Radius.Messaging/rabbitMQ";
 
-    // --- Radius.Dapr ---
+    // --- Radius.Security ---
 
-    public const string DaprStateStores = "Radius.Dapr/stateStores";
-    public const string DaprPubSubBrokers = "Radius.Dapr/pubSubBrokers";
+    /// <summary>
+    /// The <c>Radius.*</c> UDT replacement for <c>Applications.Core/secretStores</c>. Used to hold
+    /// credentials that a UDT backing resource consumes by resource ID.
+    /// </summary>
+    public const string SecuritySecrets = "Radius.Security/secrets";
+
+    // Deliberately absent: a Radius.Dapr/* namespace. No such namespace exists in Radius 0.60;
+    // Dapr building blocks are still modelled by the legacy Applications.Dapr/* portable types
+    // below, which is what ResourceTypeMapper emits for them.
 
     // --- Legacy Applications.* fallback types ---
     // These portable resource types are being replaced by user-defined types (UDTs)

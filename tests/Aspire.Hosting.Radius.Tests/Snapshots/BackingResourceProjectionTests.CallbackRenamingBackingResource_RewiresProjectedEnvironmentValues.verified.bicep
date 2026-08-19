@@ -4,9 +4,13 @@ resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
+      'Radius.Data/redisCaches': {
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/rediscaches:latest'
+      }
       'Radius.Compute/containers': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/containers:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/containers:latest'
       }
     }
   }
@@ -33,36 +37,11 @@ resource app 'Radius.Core/applications@2025-08-01-preview' = {
   }
 }
 
-resource myenv_legacy 'Applications.Core/environments@2023-10-01-preview' = {
-  name: 'myenv'
-  properties: {
-    compute: {
-      kind: 'kubernetes'
-      namespace: 'default'
-    }
-    recipes: {
-      'Applications.Datastores/redisCaches': {
-        default: {
-          templateKind: 'bicep'
-          templatePath: 'ghcr.io/radius-project/recipes/local-dev/rediscaches:latest'
-        }
-      }
-    }
-  }
-}
-
-resource app_legacy 'Applications.Core/applications@2023-10-01-preview' = {
-  name: 'app'
-  properties: {
-    environment: myenv_legacy.id
-  }
-}
-
-resource renamed_cache 'Applications.Datastores/redisCaches@2023-10-01-preview' = {
+resource renamed_cache 'Radius.Data/redisCaches@2025-08-01-preview' = {
   name: 'cache'
   properties: {
-    application: app_legacy.id
-    environment: myenv_legacy.id
+    application: app.id
+    environment: myenv.id
   }
 }
 
