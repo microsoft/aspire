@@ -203,11 +203,13 @@ public static class BlazorHostedExtensions
             return null;
         }
 
-        // Use MSBuild evaluation instead of parsing ProjectReference XML because imports and
-        // conditions determine the effective project graph. The target asks each evaluated
-        // reference whether it is a WASM client, then -getItem emits the collected items as JSON.
-        // An empty item collection is valid and keeps the browser debugging command hidden.
-        // See https://learn.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference#getitemitemname.
+        // ResolveWebAssemblyProjectReferences is temporarily defined by the BlazorHosted sample
+        // because Aspire currently builds with the .NET 10 SDK. The target has moved into the
+        // .NET 11 Static Web Assets SDK, so the sample copy can be removed once Aspire adopts it:
+        // https://github.com/dotnet/sdk/blob/c0fb107a5474a2993546bc574fd7a6daac9fd7aa/src/StaticWebAssetsSdk/Sdk/Sdk.targets
+        //
+        // The target returns each evaluated WASM ProjectReference. An empty collection is valid
+        // and keeps the browser debugging command hidden.
         var result = await BlazorDotNetCliRunner.RunAsync(
             serverProjectPath,
             "msbuild",
