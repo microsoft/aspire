@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19401/#19374 (K8s persistent volume default fsGroup); matched to Kubernetes persistent volume first-class support entry",
+  "mergedAt": "2026-08-18T14:27:17Z",
+  "number": 1502,
+  "runDate": "2026-08-19T00:07:13Z",
+  "status": "included",
+  "title": "[docs] Document default fsGroup for Kubernetes persistent volumes"
+}

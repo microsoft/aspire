@@ -8,7 +8,8 @@
   "description": "A new KubernetesPersistentVolumeResource lets AppHost authors configure durable Kubernetes volumes in the app model and bind them to container or project workloads via WithPersistentVolume(). Includes YAML serializer fixes for PV/PVC/StatefulSet manifests that previously emitted invalid empty object blocks. Workloads bound with WithPersistentVolume() now also get a default pod security context (fsGroup: 2000, OnRootMismatch) so non-root containers can write to the mounted volume without manual configuration; the default can be overridden or removed via the existing PublishAsKubernetesService customization callback.",
   "docsPrs": [
     1328,
-    1450
+    1450,
+    1502
   ],
   "docsRequired": true,
   "emoji": "💾",

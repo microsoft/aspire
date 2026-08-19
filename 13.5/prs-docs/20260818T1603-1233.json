@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bulk release-content/site infrastructure PR for 13.5 docs site (sidebar config, assets, scripts) - not tied to a specific changelog entry",
+  "mergedAt": "2026-08-18T16:03:34Z",
+  "number": 1233,
+  "runDate": "2026-08-19T00:07:13Z",
+  "status": "excluded",
+  "title": "🤓 Content for release: `13.5`"
+}
