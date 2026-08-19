@@ -701,7 +701,7 @@ public class AspireSkillsBundleTests
             }
 
             var exception = await Assert.ThrowsAsync<InvalidDataException>(() => s_bundleProvider.CreateAsync(
-                AgentAssetKind.Skills,
+                AspireSkillsBundleDescriptor.Skills,
                 new FileInfo(archivePath),
                 new DirectoryInfo(Path.Combine(rootDirectory, "staged")),
                 ComputeSha512(archivePath),
@@ -911,7 +911,7 @@ public class AspireSkillsBundleTests
         bool skipCompatibilityCheck = false)
     {
         return bundleProvider.LoadAsync(
-            AgentAssetKind.Skills,
+            AspireSkillsBundleDescriptor.Skills,
             new DirectoryInfo(bundleDirectory),
             CancellationToken.None,
             skipCompatibilityCheck);

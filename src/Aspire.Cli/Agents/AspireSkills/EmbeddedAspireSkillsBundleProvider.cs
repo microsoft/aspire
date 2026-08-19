@@ -16,13 +16,13 @@ internal interface IEmbeddedAspireSkillsBundleProvider
     /// <summary>
     /// Gets the metadata embedded alongside the specified bundle.
     /// </summary>
-    EmbeddedAspireSkillsBundleMetadata? GetMetadata(AgentAssetKind assetKind);
+    EmbeddedAspireSkillsBundleMetadata? GetMetadata(AspireSkillsBundleDescriptor descriptor);
 
     /// <summary>
     /// Creates the embedded bundle in the specified directory.
     /// </summary>
     Task<AspireSkillsBundle?> CreateBundleAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken);
 }
@@ -34,7 +34,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
 {
     private readonly IAspireSkillsBundleProvider _bundleProvider;
     private readonly ILogger<EmbeddedAspireSkillsBundleProvider> _logger;
-    private readonly ConcurrentDictionary<AgentAssetKind, Lazy<EmbeddedAspireSkillsBundleMetadata?>> _metadata = [];
+    private readonly ConcurrentDictionary<AspireSkillsBundleDescriptor, Lazy<EmbeddedAspireSkillsBundleMetadata?>> _metadata = [];
 
     public EmbeddedAspireSkillsBundleProvider(
         IAspireSkillsBundleProvider bundleProvider,
@@ -50,34 +50,25 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
     /// <summary>
     /// Gets the parsed metadata embedded alongside the specified Aspire-skills bundle archive.
     /// </summary>
-    public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AgentAssetKind assetKind)
+    public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AspireSkillsBundleDescriptor descriptor)
     {
-        var descriptor = AspireSkillsBundleDescriptor.Find(assetKind);
-        if (descriptor is null)
-        {
-            return null;
-        }
+        ArgumentNullException.ThrowIfNull(descriptor);
 
         return _metadata.GetOrAdd(
-            assetKind,
+            descriptor,
             _ => new Lazy<EmbeddedAspireSkillsBundleMetadata?>(
                 () => LoadMetadata(descriptor))).Value;
     }
 
     public async Task<AspireSkillsBundle?> CreateBundleAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var descriptor = AspireSkillsBundleDescriptor.Find(assetKind);
-        if (descriptor is null)
-        {
-            return null;
-        }
-
-        var metadata = GetMetadata(assetKind);
+        var metadata = GetMetadata(descriptor);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
         {
             return null;
@@ -107,7 +98,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         }
 
         return await _bundleProvider.CreateAsync(
-            assetKind,
+            descriptor,
             new FileInfo(archivePath),
             bundleDirectory,
             metadata.Sha512,

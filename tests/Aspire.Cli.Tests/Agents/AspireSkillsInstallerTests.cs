@@ -1492,8 +1492,8 @@ public class AspireSkillsInstallerTests
                 new AspireSkillsBundleProvider(),
                 NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
 
-            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(provider.GetMetadata(AgentAssetKind.Skills));
-            var bundle = await provider.CreateBundleAsync(AgentAssetKind.Skills, bundleDirectory, CancellationToken.None);
+            var metadata = Assert.IsType<EmbeddedAspireSkillsBundleMetadata>(provider.GetMetadata(AspireSkillsBundleDescriptor.Skills));
+            var bundle = await provider.CreateBundleAsync(AspireSkillsBundleDescriptor.Skills, bundleDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
@@ -1525,7 +1525,7 @@ public class AspireSkillsInstallerTests
                 lockingBundleProvider,
                 NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
 
-            var bundle = await provider.CreateBundleAsync(AgentAssetKind.Skills, stageDirectory, CancellationToken.None);
+            var bundle = await provider.CreateBundleAsync(AspireSkillsBundleDescriptor.Skills, stageDirectory, CancellationToken.None);
 
             Assert.NotNull(bundle);
             Assert.NotEmpty(Directory.GetDirectories(rootDirectory, ".embedded-*"));
@@ -1555,7 +1555,7 @@ public class AspireSkillsInstallerTests
             var provider = new AspireSkillsBundleProvider("13.4.0", "13.4.0");
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CreateAsync(
-                AgentAssetKind.Skills,
+                AspireSkillsBundleDescriptor.Skills,
                 new FileInfo(archivePath),
                 bundleDirectory,
                 ComputeSha512(archiveBytes),
@@ -1586,7 +1586,7 @@ public class AspireSkillsInstallerTests
             var provider = new AspireSkillsBundleProvider();
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CreateAsync(
-                AgentAssetKind.Skills,
+                AspireSkillsBundleDescriptor.Skills,
                 new FileInfo(archivePath),
                 new DirectoryInfo(bundleDirectory),
                 ComputeSha512(archiveBytes),
@@ -1615,7 +1615,7 @@ public class AspireSkillsInstallerTests
             cancellationTokenSource.Cancel();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.CreateBundleAsync(
-                AgentAssetKind.Skills,
+                AspireSkillsBundleDescriptor.Skills,
                 bundleDirectory,
                 cancellationTokenSource.Token));
 
@@ -2348,18 +2348,18 @@ public class AspireSkillsInstallerTests
 
         public bool CreateBundleCalled { get; private set; }
 
-        public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AgentAssetKind assetKind)
+        public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AspireSkillsBundleDescriptor descriptor)
         {
-            Assert.Equal(AgentAssetKind.Skills, assetKind);
+            Assert.Same(AspireSkillsBundleDescriptor.Skills, descriptor);
             return Metadata;
         }
 
         public async Task<AspireSkillsBundle?> CreateBundleAsync(
-            AgentAssetKind assetKind,
+            AspireSkillsBundleDescriptor descriptor,
             DirectoryInfo bundleDirectory,
             CancellationToken cancellationToken)
         {
-            Assert.Equal(AgentAssetKind.Skills, assetKind);
+            Assert.Same(AspireSkillsBundleDescriptor.Skills, descriptor);
             CreateBundleCalled = true;
             if (ArchiveBytes is null || string.IsNullOrWhiteSpace(Metadata?.Sha512))
             {
@@ -2372,7 +2372,7 @@ public class AspireSkillsInstallerTests
             {
                 await File.WriteAllBytesAsync(archivePath, ArchiveBytes, cancellationToken);
                 return await _bundleProvider.CreateAsync(
-                    assetKind,
+                    descriptor,
                     new FileInfo(archivePath),
                     bundleDirectory,
                     Metadata.Sha512,
@@ -2391,7 +2391,7 @@ public class AspireSkillsInstallerTests
         private FileStream? _archiveLock;
 
         public async Task<AspireSkillsBundle> CreateAsync(
-            AgentAssetKind assetKind,
+            AspireSkillsBundleDescriptor descriptor,
             FileInfo archive,
             DirectoryInfo bundleDirectory,
             string expectedArchiveSha512,
@@ -2405,7 +2405,7 @@ public class AspireSkillsInstallerTests
                 FileShare.Read);
 
             return await inner.CreateAsync(
-                assetKind,
+                descriptor,
                 archive,
                 bundleDirectory,
                 expectedArchiveSha512,
@@ -2414,12 +2414,12 @@ public class AspireSkillsInstallerTests
         }
 
         public Task<AspireSkillsBundle> LoadAsync(
-            AgentAssetKind assetKind,
+            AspireSkillsBundleDescriptor descriptor,
             DirectoryInfo bundleDirectory,
             CancellationToken cancellationToken,
             bool skipCompatibilityCheck = false)
         {
-            return inner.LoadAsync(assetKind, bundleDirectory, cancellationToken, skipCompatibilityCheck);
+            return inner.LoadAsync(descriptor, bundleDirectory, cancellationToken, skipCompatibilityCheck);
         }
 
         public void Dispose()

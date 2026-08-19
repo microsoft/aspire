@@ -79,23 +79,6 @@ internal sealed class AspireSkillsBundleDescriptor
     /// </summary>
     public static IReadOnlyList<AspireSkillsBundleDescriptor> All => s_all;
 
-    /// <summary>
-    /// Gets the Aspire-skills bundle descriptor for an agent asset kind, if one exists.
-    /// </summary>
-    public static AspireSkillsBundleDescriptor? Find(AgentAssetKind assetKind)
-    {
-        return s_all.SingleOrDefault(descriptor => descriptor.AssetKind == assetKind);
-    }
-
-    /// <summary>
-    /// Gets the Aspire-skills bundle descriptor for an agent asset kind.
-    /// </summary>
-    public static AspireSkillsBundleDescriptor Get(AgentAssetKind assetKind)
-    {
-        return Find(assetKind)
-            ?? throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, "The agent asset kind does not have an Aspire-skills bundle.");
-    }
-
     public AgentAssetKind AssetKind { get; }
 
     public string AssetKindName { get; }

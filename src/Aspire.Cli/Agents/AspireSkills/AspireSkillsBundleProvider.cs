@@ -24,7 +24,7 @@ internal interface IAspireSkillsBundleProvider
     /// in a dedicated staging directory.
     /// </summary>
     Task<AspireSkillsBundle> CreateAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         FileInfo archive,
         DirectoryInfo bundleDirectory,
         string expectedArchiveSha512,
@@ -35,7 +35,7 @@ internal interface IAspireSkillsBundleProvider
     /// Loads an Aspire-skills bundle from disk.
     /// </summary>
     Task<AspireSkillsBundle> LoadAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false);
@@ -79,15 +79,14 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     }
 
     public async Task<AspireSkillsBundle> CreateAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         FileInfo archive,
         DirectoryInfo bundleDirectory,
         string expectedArchiveSha512,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false)
     {
-        var descriptor = AspireSkillsBundleDescriptor.Get(assetKind);
-
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(archive);
         ArgumentNullException.ThrowIfNull(bundleDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedArchiveSha512);
@@ -111,20 +110,19 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         var bundleRoot = FindBundleRoot(extractionDirectory.FullName, descriptor.ManifestFileName);
-        var bundle = await LoadAsync(assetKind, bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
+        var bundle = await LoadAsync(descriptor, bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
         CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
         return bundle;
     }
 
     public async Task<AspireSkillsBundle> LoadAsync(
-        AgentAssetKind assetKind,
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false)
     {
-        var descriptor = AspireSkillsBundleDescriptor.Get(assetKind);
-
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
         var manifestPath = Path.Combine(bundleDirectory.FullName, descriptor.ManifestFileName);
@@ -153,7 +151,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return CreateBundle(assetKind, bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
+        return CreateBundle(descriptor.AssetKind, bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
     }
 
     internal static JsonTypeInfo<SkillBundleManifest> CreateManifestTypeInfo(AspireSkillsBundleDescriptor descriptor)

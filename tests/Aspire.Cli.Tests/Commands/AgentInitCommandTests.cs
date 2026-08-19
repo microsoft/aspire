@@ -991,7 +991,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
         await File.WriteAllTextAsync(manifestPath, manifestJson);
         return await new AspireSkillsBundleProvider().LoadAsync(
-            AgentAssetKind.Skills,
+            AspireSkillsBundleDescriptor.Skills,
             bundleDirectory,
             CancellationToken.None);
     }

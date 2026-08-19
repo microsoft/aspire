@@ -82,7 +82,7 @@ internal sealed class AspireSkillsBundleInstaller(
         Directory.CreateDirectory(cacheRoot);
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
-        var embeddedMetadata = embeddedBundleProvider.GetMetadata(bundleDescriptor.AssetKind);
+        var embeddedMetadata = embeddedBundleProvider.GetMetadata(bundleDescriptor);
 
         async Task<AspireSkillsInstallResult> CompleteInstallationAsync(AspireSkillsBundle bundle, string archiveSha512)
         {
@@ -343,7 +343,7 @@ internal sealed class AspireSkillsBundleInstaller(
             // which can lag the actual CLI version (especially for prerelease/dogfood builds)
             // and would otherwise reject a perfectly usable local copy.
             var bundle = await embeddedBundleProvider.CreateBundleAsync(
-                bundleDescriptor.AssetKind,
+                bundleDescriptor,
                 new DirectoryInfo(stageDirectory.FullName),
                 cancellationToken).ConfigureAwait(false);
             if (bundle is null)
@@ -719,7 +719,7 @@ internal sealed class AspireSkillsBundleInstaller(
             }
 
             var bundle = await bundleProvider.LoadAsync(
-                bundleDescriptor.AssetKind,
+                bundleDescriptor,
                 new DirectoryInfo(cacheDirectory),
                 cancellationToken,
                 skipCompatibilityCheck).ConfigureAwait(false);
@@ -748,7 +748,7 @@ internal sealed class AspireSkillsBundleInstaller(
         using var stageDirectory = CreateTemporaryCacheDirectory(cacheRoot, "stage");
 
         var stagedBundle = await bundleProvider.CreateAsync(
-            bundleDescriptor.AssetKind,
+            bundleDescriptor,
             new FileInfo(archivePath),
             new DirectoryInfo(stageDirectory.FullName),
             archiveSha512,
