@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Aspire skills release version to embed. Defaults to the currently pinned version."
+        description: "Aspire-skills release version to embed. Defaults to the currently pinned version."
         required: false
         type: string
   schedule:
@@ -28,7 +28,7 @@ jobs:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
-      - name: Update embedded Aspire skills bundle
+      - name: Update embedded Aspire-skills bundle
         shell: pwsh
         env:
           GH_TOKEN: ${{ steps.update-token.outputs.token }}
@@ -44,7 +44,7 @@ jobs:
       - name: Restore solution
         run: ./restore.sh
 
-      - name: Test Aspire skills installer
+      - name: Test Aspire-skills installer
         run: >
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
@@ -69,9 +69,9 @@ jobs:
           branch: update-aspire-skills-bundle
           base: main
           draft: true
-          commit-message: "[Automated] Update Aspire skills bundle"
+          commit-message: "[Automated] Update Aspire-skills bundle"
           labels: |
             area-cli
             area-engineering-systems
-          title: "[Automated] Update Aspire skills bundle"
-          body: "Auto-generated update to refresh the embedded Aspire skills bundle fallback used by the Aspire CLI."
+          title: "[Automated] Update Aspire-skills bundle"
+          body: "Auto-generated update to refresh the embedded Aspire-skills bundle fallback used by the Aspire CLI."

@@ -18,11 +18,11 @@ $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
 . (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "The GitHub CLI ('gh') is required to verify the embedded Aspire skills bundle."
+    throw "The GitHub CLI ('gh') is required to verify the embedded Aspire-skills bundle."
 }
 
 if (-not (Test-Path $metadataPath)) {
-    throw "Embedded Aspire skills metadata was not found at '$metadataPath'."
+    throw "Embedded Aspire-skills metadata was not found at '$metadataPath'."
 }
 
 $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
@@ -32,24 +32,24 @@ if ($metadata.repository -ne $Repository) {
 }
 
 if ([string]::IsNullOrWhiteSpace($metadata.tag)) {
-    throw "Embedded Aspire skills metadata must specify a GitHub release tag."
+    throw "Embedded Aspire-skills metadata must specify a GitHub release tag."
 }
 
 if ([string]::IsNullOrWhiteSpace($metadata.assetName)) {
-    throw "Embedded Aspire skills metadata must specify a release asset name."
+    throw "Embedded Aspire-skills metadata must specify a release asset name."
 }
 
 if ($metadata.assetName -ne [System.IO.Path]::GetFileName($metadata.assetName)) {
-    throw "Embedded Aspire skills asset name '$($metadata.assetName)' must not contain path separators."
+    throw "Embedded Aspire-skills asset name '$($metadata.assetName)' must not contain path separators."
 }
 
 if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
-    throw "Embedded Aspire skills metadata must specify the release asset SHA-512 hash."
+    throw "Embedded Aspire-skills metadata must specify the release asset SHA-512 hash."
 }
 
 $archivePath = Join-Path $embeddedDir $metadata.assetName
 if (-not (Test-Path $archivePath)) {
-    throw "Embedded Aspire skills archive was not found at '$archivePath'."
+    throw "Embedded Aspire-skills archive was not found at '$archivePath'."
 }
 
 $actualHash = (Get-FileHash -Algorithm SHA512 $archivePath).Hash.ToLowerInvariant()
@@ -69,7 +69,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "GitHub artifact attestation verification failed for '$archivePath' (exit code $LASTEXITCODE)."
 }
 
-Write-Host "Embedded Aspire skills bundle '$($metadata.assetName)' verified against GitHub artifact attestation."
+Write-Host "Embedded Aspire-skills bundle '$($metadata.assetName)' verified against GitHub artifact attestation."
 
 # Verify the embedded telemetry hook scripts when the bundle records them. The hooks block is only
 # present once update-aspire-skills-bundle.ps1 has synced hooks from a release that contains them, so
@@ -80,16 +80,16 @@ if ($metadata.PSObject.Properties.Name -contains 'hooks') {
     $hooks = $metadata.hooks
 
     if ([string]::IsNullOrWhiteSpace($hooks.commitSha)) {
-        throw "Embedded Aspire skills metadata 'hooks' block must specify the aspire-skills commit SHA the hooks were pinned to."
+        throw "Embedded Aspire-skills metadata 'hooks' block must specify the aspire-skills commit SHA the hooks were pinned to."
     }
 
     if (-not ($hooks.PSObject.Properties.Name -contains 'files')) {
-        throw "Embedded Aspire skills metadata 'hooks' block must record a 'files' map of hook hashes."
+        throw "Embedded Aspire-skills metadata 'hooks' block must record a 'files' map of hook hashes."
     }
 
     foreach ($hookFileName in Get-AspireSkillsHookFileNames) {
         if (-not ($hooks.files.PSObject.Properties.Name -contains $hookFileName)) {
-            throw "Embedded Aspire skills metadata 'hooks' block is missing a recorded hash for '$hookFileName'."
+            throw "Embedded Aspire-skills metadata 'hooks' block is missing a recorded hash for '$hookFileName'."
         }
 
         $recordedHash = $hooks.files.$hookFileName
