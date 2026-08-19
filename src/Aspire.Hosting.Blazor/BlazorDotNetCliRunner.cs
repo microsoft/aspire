@@ -2,7 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
-using System.Diagnostics;
+using System.Text;
+using Aspire.Hosting.Dcp.Process;
 
 namespace Aspire.Hosting;
 
@@ -18,85 +19,56 @@ internal static class BlazorDotNetCliRunner
         bool machineReadableOutput,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
+        var executablePath = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
+            ? dotnetHostPath
+            : "dotnet";
+        var argumentList = new List<string>(arguments.Count + 2)
         {
-            FileName = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
-                ? dotnetHostPath
-                : "dotnet",
-            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+            command,
+            projectPath
         };
-        startInfo.ArgumentList.Add(command);
-        startInfo.ArgumentList.Add(projectPath);
+        argumentList.AddRange(arguments);
 
-        foreach (var argument in arguments)
+        var standardOutput = new StringBuilder();
+        var standardError = new StringBuilder();
+        var processSpec = new ProcessSpec(executablePath)
         {
-            startInfo.ArgumentList.Add(argument);
-        }
-
+            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
+            ArgumentList = argumentList,
+            ThrowOnNonZeroReturnCode = false,
+            OnOutputData = line => standardOutput.AppendLine(line),
+            OnErrorData = line => standardError.AppendLine(line)
+        };
         if (machineReadableOutput)
         {
             // MSBuild queries emit JSON on stdout. Disable unrelated CLI messages that could
             // corrupt the machine-readable output before callers have a chance to parse it.
-            startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
-            startInfo.Environment["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"] = "1";
+            processSpec.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+            processSpec.EnvironmentVariables["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"] = "1";
         }
 
-        Process? process;
+        Task<ProcessResult> pendingResult;
+        IAsyncDisposable processDisposable;
         try
         {
-            process = Process.Start(startInfo);
+            (pendingResult, processDisposable) = ProcessUtil.Run(processSpec);
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
         {
-            return new(startInfo.FileName, false, -1, "", "", ex);
+            return new(executablePath, false, -1, "", "", ex);
         }
 
-        if (process is null)
+        await using (processDisposable.ConfigureAwait(false))
         {
-            return new(startInfo.FileName, false, -1, "", "", null);
-        }
+            var result = await pendingResult.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        using (process)
-        {
-            // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            try
-            {
-                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-                return new(
-                    startInfo.FileName,
-                    true,
-                    process.ExitCode,
-                    await stdoutTask.ConfigureAwait(false),
-                    await stderrTask.ConfigureAwait(false),
-                    null);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Canceling WaitForExitAsync only stops waiting. Terminate the complete process tree
-                // so dotnet/MSBuild child processes cannot outlive AppHost shutdown and retain files.
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(entireProcessTree: true);
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                    // The process can exit between HasExited and Kill.
-                }
-
-                await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
+            return new(
+                executablePath,
+                true,
+                result.ExitCode,
+                standardOutput.ToString(),
+                standardError.ToString(),
+                null);
         }
     }
 }
