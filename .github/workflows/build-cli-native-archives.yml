@@ -102,6 +102,9 @@ jobs:
           ${{ inputs.versionOverrideArg }}
 
       - name: Smoke test Native AOT Dashboard
+        # osx-x64 is cross-compiled on an Apple Silicon runner and cannot be executed there
+        # without introducing an undeclared Rosetta dependency.
+        if: ${{ matrix.targets.rids != 'osx-x64' }}
         shell: pwsh
         run: |
           $extension = if ('${{ runner.os }}' -eq 'Windows') { '.exe' } else { '' }

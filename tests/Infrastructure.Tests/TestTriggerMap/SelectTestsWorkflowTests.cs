@@ -75,6 +75,7 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains(expectedTarget, nativeArchivesYml);
         Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", testsYml);
         Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", nativeArchivesYml);
+        Assert.Contains("if: ${{ matrix.targets.rids != 'osx-x64' }}", nativeArchivesYml);
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
