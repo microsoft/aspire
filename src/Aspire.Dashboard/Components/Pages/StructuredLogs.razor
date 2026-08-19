@@ -186,8 +186,10 @@
                 else
                 {
                     <div>
-                        <FluentCounterBadge HorizontalPosition="70" Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
-                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                        <FluentCounterBadge Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                            <AnchorContent>
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                            </AnchorContent>
                         </FluentCounterBadge>
                     </div>
                 }

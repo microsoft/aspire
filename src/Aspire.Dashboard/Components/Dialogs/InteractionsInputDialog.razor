@@ -103,13 +103,13 @@
                                 {
                                     @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                     <FluentCombobox @key="input.ViewModel.InputKey"
-                                                    TOption="SelectViewModel<string>" TValue="string"
+                                                    TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                     @ref="@_elementRefs[input.ViewModel]"
-                                                    @bind-Value="input.ViewModel.Value"
+                                                    @bind-Value="input.ViewModel.SelectedOption"
+                                                    @bind-Value:after="@(() => OnChoiceSelected(input.ViewModel))"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
                                                     Required="input.ViewModel.Input.Required"
                                                     Items="@input.ViewModel.FilteredOptions()"
-                                                    OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
                                                     OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
                                                     OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                     Height="250px"

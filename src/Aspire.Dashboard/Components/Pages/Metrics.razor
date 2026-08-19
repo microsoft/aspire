@@ -96,8 +96,7 @@
                             }
                         </FluentMultiSplitterPane>
                         <FluentMultiSplitterPane Size="8fr">
-                            <div>
-                                <div class="metrics-content">
+                            <div class="metrics-content">
                                     @if (PageViewModel.SelectedResource.Id?.ReplicaSetName != null && PageViewModel is { SelectedMeter: not null, SelectedInstrument: not null })
                                     {
                                         <ChartContainer
@@ -145,7 +144,6 @@
                                         }
                                     }
                                 </div>
-                            </div>
                         </FluentMultiSplitterPane>
                     </FluentMultiSplitter>
                 }

@@ -67,7 +67,10 @@ public class FilterDialogTests : DashboardTestContext
         Assert.Same(countBadge, valueOption.LastElementChild);
         Assert.Single(countBadge.QuerySelectorAll("[data-filtercount='1']"));
 
-        Assert.Null(FilterDialog.GetOptionValue<object>(null));
+        Assert.Contains(JSInterop.Invocations, invocation =>
+            invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Select.Initialize" &&
+            invocation.Arguments.Count == 2 &&
+            Equals(invocation.Arguments[1], "request"));
 
         var parameterSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
         Assert.Null(parameterSelect.Instance.OptionText!(null));

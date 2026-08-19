@@ -34,6 +34,10 @@ body {
     overflow: auto;
 }
 
+.fluent-data-grid tr[row-state="empty-content"] > td {
+    height: 100% !important;
+}
+
 .body-content {
     flex: 1 1 auto;
     width: 100%;

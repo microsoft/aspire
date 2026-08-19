@@ -60,10 +60,18 @@ public sealed class InputViewModel
             {
                 input.Value = optionsVM[0].Id;
             }
+
+            SelectedOption = SelectOptions.FirstOrDefault(option => option.Id == input.Value);
+            if (SelectedOption is null && input.AllowCustomChoice && !string.IsNullOrEmpty(input.Value))
+            {
+                SelectedOption = new SelectViewModel<string> { Id = input.Value, Name = input.Value };
+            }
         }
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    public SelectViewModel<string>? SelectedOption { get; set; }
 
     /// <summary>
     /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor

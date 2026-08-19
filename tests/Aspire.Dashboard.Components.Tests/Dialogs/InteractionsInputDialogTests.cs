@@ -124,11 +124,32 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         Assert.Equal("Blue", option.GetAttribute("text"));
         Assert.Equal("Blu", Assert.Single(option.QuerySelectorAll("mark")).TextContent);
 
-        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, string>>());
-        Assert.Null(component.Instance.OptionValue!(null));
+        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>());
         Assert.Null(component.Instance.OptionText!(null));
         await component.InvokeAsync(() => component.Instance.ValueChanged.InvokeAsync(null));
         Assert.Equal(string.Empty, viewModel.Inputs[0].Value);
+    }
+
+    [Theory]
+    [InlineData("blue", "Blue")]
+    [InlineData("purple", "purple")]
+    public async Task Render_CustomChoiceExistingValueInitializesText(string value, string expectedText)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var viewModel = CreateChoiceViewModel(allowCustomChoice: true, value);
+
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters
+        {
+            Title = "Choose a color"
+        });
+        var cut = getCut();
+
+        var component = Assert.Single(cut.FindComponents<FluentCombobox<SelectViewModel<string>, SelectViewModel<string>>>());
+        Assert.Equal(value, component.Instance.Value?.Id);
+        Assert.Contains(JSInterop.Invocations, invocation =>
+            invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Select.Initialize" &&
+            invocation.Arguments.Count == 2 &&
+            Equals(invocation.Arguments[1], expectedText));
     }
 
     [Fact]
@@ -211,7 +232,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         };
     }
 
-    private static InteractionsInputsDialogViewModel CreateChoiceViewModel(bool allowCustomChoice)
+    private static InteractionsInputsDialogViewModel CreateChoiceViewModel(bool allowCustomChoice, string value = "")
     {
         var interaction = new WatchInteractionsResponseUpdate
         {
@@ -223,7 +244,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
             Name = "color",
             Label = "Color",
             InputType = InputType.Choice,
-            AllowCustomChoice = allowCustomChoice
+            AllowCustomChoice = allowCustomChoice,
+            Value = value
         };
         input.Options.Add("red", "Red");
         input.Options.Add("blue", "Blue");

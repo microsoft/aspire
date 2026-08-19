@@ -70,8 +70,10 @@
                 else
                 {
                     <div>
-                        <FluentCounterBadge HorizontalPosition="70" Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
-                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                        <FluentCounterBadge Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                            <AnchorContent>
+                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                            </AnchorContent>
                         </FluentCounterBadge>
                     </div>
                 }

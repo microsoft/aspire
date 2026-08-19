@@ -183,7 +183,14 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     private void OnChoiceInput(InputViewModel inputModel, ChangeEventArgs e)
     {
+        inputModel.SelectedOption = null;
         inputModel.Value = e.Value?.ToString();
+        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+    }
+
+    private void OnChoiceSelected(InputViewModel inputModel)
+    {
+        inputModel.Value = inputModel.SelectedOption?.Id;
         _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
     }
 
