@@ -87,7 +87,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             return;
         }
 
-        var files = new Dictionary<(string SkillName, string RelativePath), string>
+        var files = new Dictionary<(string AssetName, string RelativePath), string>
         {
             [(CommonAgentApplicators.AspireSkillName, "SKILL.md")] =
                 """
@@ -148,9 +148,9 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 """
         };
 
-        foreach (var ((skillName, relativePath), content) in files)
+        foreach (var ((assetName, relativePath), content) in files)
         {
-            var path = Path.Combine(_bundleDirectory.FullName, "skills", skillName, relativePath);
+            var path = Path.Combine(_bundleDirectory.FullName, "skills", assetName, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, content, cancellationToken);
         }
@@ -165,12 +165,12 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             },
             Assets =
             [
-                CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
-                CreateSkill(AspireInitSkillName, ["evals"], files),
-                CreateSkill(AspireMonitoringSkillName, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
+                CreateAgentAsset(CommonAgentApplicators.AspireSkillName, ["evals"], files),
+                CreateAgentAsset(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateAgentAsset(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
+                CreateAgentAsset(AspireInitSkillName, ["evals"], files),
+                CreateAgentAsset(AspireMonitoringSkillName, ["evals"], files),
+                CreateAgentAsset(AspireOrchestrationSkillName, ["evals"], files)
             ]
         };
 
@@ -180,19 +180,19 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleAsset CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private SkillBundleAsset CreateAgentAsset(string assetName, string[] installExcludedRelativePaths, Dictionary<(string AssetName, string RelativePath), string> files)
     {
         return new SkillBundleAsset
         {
-            Name = skillName,
-            Description = $"{skillName} skill",
+            Name = assetName,
+            Description = $"{assetName} skill",
             InstallExcludedRelativePaths = installExcludedRelativePaths,
             Files = files
-                .Where(entry => string.Equals(entry.Key.SkillName, skillName, StringComparison.Ordinal))
+                .Where(entry => string.Equals(entry.Key.AssetName, assetName, StringComparison.Ordinal))
                 .Select(entry => new SkillBundleFile
                 {
                     RelativePath = entry.Key.RelativePath,
-                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
+                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", assetName, entry.Key.RelativePath))
                 })
                 .ToArray()
         };

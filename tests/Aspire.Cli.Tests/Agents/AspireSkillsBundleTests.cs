@@ -378,8 +378,8 @@ public class AspireSkillsBundleTests
                 Supports = CreateSupports(),
                 Assets =
                 [
-                    CreateManifestSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription),
-                    CreateManifestSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription)
+                    CreateAgentAsset(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription),
+                    CreateAgentAsset(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription)
                 ]
             };
 
@@ -926,18 +926,18 @@ public class AspireSkillsBundleTests
         await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), content);
     }
 
-    private static SkillBundleAsset CreateManifestSkill(string bundleDirectory, string skillName, string description)
+    private static SkillBundleAsset CreateAgentAsset(string bundleDirectory, string assetName, string description)
     {
         return new SkillBundleAsset
         {
-            Name = skillName,
+            Name = assetName,
             Description = description,
             Files =
             [
                 new SkillBundleFile
                 {
                     RelativePath = "SKILL.md",
-                    Sha512 = ComputeSha512(Path.Combine(bundleDirectory, "skills", skillName, "SKILL.md"))
+                    Sha512 = ComputeSha512(Path.Combine(bundleDirectory, "skills", assetName, "SKILL.md"))
                 }
             ]
         };
