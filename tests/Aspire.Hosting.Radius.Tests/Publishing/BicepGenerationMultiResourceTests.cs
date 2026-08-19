@@ -54,7 +54,7 @@ public class BicepGenerationMultiResourceTests
         var bicep = context.GenerateBicep(model);
 
         // Recipe pack should have entries for each resource type
-        Assert.Contains("ghcr.io/radius-project/kube-recipes/rediscaches:latest", bicep);
+        Assert.Contains("ghcr.io/radius-project/kube-recipes/rediscaches:ebdeec9509036f2b2f271e41661e6fcfe45eda89", bicep);
         Assert.Contains("ghcr.io/radius-project/recipes/local-dev/sqldatabases:latest", bicep);
     }
 
