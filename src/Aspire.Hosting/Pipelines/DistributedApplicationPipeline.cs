@@ -266,9 +266,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         continue;
                     }
 
-                    // Skip if resource has a deployment target with a ContainerRegistry set
-                    var deploymentTargetAnnotation = resource.GetDeploymentTargetAnnotation();
-                    if (deploymentTargetAnnotation?.ContainerRegistry is not null)
+                    // Skip if any deployment target has a ContainerRegistry set. A stamped resource has one
+                    // deployment target per compute environment, and each of those supplies its own registry,
+                    // so the singular accessor would throw on the ambiguity.
+                    var deploymentTargetAnnotations = resource.GetDeploymentTargetAnnotations();
+                    if (deploymentTargetAnnotations.Any(a => a.ContainerRegistry is not null))
                     {
                         continue;
                     }
@@ -396,6 +398,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var unboundResources = model.Resources
             .OfType<IComputeResource>()
+            // Resources that are never deployed cannot target a compute environment, so requiring a binding
+            // for them would be a false positive. This matters now that multi-environment models are normal
+            // for regional stamps rather than an edge case.
+            .Where(resource => !resource.IsExcludedFromPublish() && !resource.IsBuildOnlyContainer())
             .Where(resource => resource.GetComputeEnvironment() is null)
             .ToList();
 
@@ -408,7 +414,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var environmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
         throw new InvalidOperationException(
             $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
-            $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
+            $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder, " +
+            $"or deploy a resource to several environments as regional stamps by calling 'WithComputeEnvironments'.");
     }
 
     private static void ValidateBuildOnlyContainerReferences(DistributedApplicationModel model)

@@ -4756,8 +4756,124 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(computeEnvironmentResource);
 
-        builder.WithAnnotation(new ComputeEnvironmentAnnotation(computeEnvironmentResource.Resource));
+        // Replace rather than append so repeated calls keep meaning "last one wins", which is what this
+        // method did before a resource could be bound to several environments. Appending would turn a second
+        // call into a second stamp, which both doubles the deployment and renames the first one.
+        builder.WithAnnotation(new ComputeEnvironmentAnnotation(computeEnvironmentResource.Resource), ResourceAnnotationMutationBehavior.Replace);
         return builder;
+    }
+
+    /// <summary>
+    /// Deploys the compute resource to every one of the specified compute environments, as a regional stamp per environment.
+    /// </summary>
+    /// <param name="builder">The compute resource builder.</param>
+    /// <param name="computeEnvironmentResources">The compute environments to deploy the resource to.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// <para>
+    /// Each compute environment produces an independent deployment of the resource, with its own
+    /// infrastructure names and its own host address. This is the deployment stamp topology: identical
+    /// copies of a workload deployed to several regions behind a single global entry point such as Azure
+    /// Front Door. See <see href="https://learn.microsoft.com/azure/architecture/patterns/deployment-stamp"/>.
+    /// </para>
+    /// <para>
+    /// Infrastructure names are suffixed with the stamp name, which defaults to the compute environment's
+    /// resource name. Use <see cref="WithStamp{T}(IResourceBuilder{T}, IResourceBuilder{IComputeEnvironmentResource}, string)"/>
+    /// to choose a shorter suffix when the generated names would exceed a platform's length limits.
+    /// </para>
+    /// <para>
+    /// References between stamped resources resolve within the same stamp, so a resource never crosses a
+    /// region boundary to reach a dependency that is present in its own stamp.
+    /// </para>
+    /// <example>
+    /// Deploy one API to two Azure regions behind a single Front Door hostname:
+    /// <code lang="C#">
+    /// var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+    /// var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+    ///
+    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    ///     .WithExternalHttpEndpoints()
+    ///     .WithComputeEnvironments(eastus, westeu);
+    ///
+    /// builder.AddAzureFrontDoor("frontdoor").WithOrigin(api);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<T> WithComputeEnvironments<T>(this IResourceBuilder<T> builder, params IResourceBuilder<IComputeEnvironmentResource>[] computeEnvironmentResources)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeEnvironmentResources);
+
+        if (computeEnvironmentResources.Length == 0)
+        {
+            throw new ArgumentException("At least one compute environment must be specified.", nameof(computeEnvironmentResources));
+        }
+
+        foreach (var computeEnvironmentResource in computeEnvironmentResources)
+        {
+            ArgumentNullException.ThrowIfNull(computeEnvironmentResource, nameof(computeEnvironmentResources));
+
+            AddComputeEnvironmentAnnotation(builder, computeEnvironmentResource.Resource, stampName: null);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Deploys the compute resource to the specified compute environment as a named regional stamp.
+    /// </summary>
+    /// <param name="builder">The compute resource builder.</param>
+    /// <param name="computeEnvironmentResource">The compute environment to deploy this stamp to.</param>
+    /// <param name="stampName">
+    /// The name of the stamp. It is appended to infrastructure names generated for this stamp, so prefer a
+    /// short value such as a region abbreviation.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// <para>
+    /// Call this method once per stamp. Unlike
+    /// <see cref="WithComputeEnvironments{T}(IResourceBuilder{T}, IResourceBuilder{IComputeEnvironmentResource}[])"/>,
+    /// supplying a stamp name always qualifies the generated infrastructure names, even for a single stamp.
+    /// </para>
+    /// <example>
+    /// Use short stamp names to stay within platform name-length limits:
+    /// <code lang="C#">
+    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    ///     .WithExternalHttpEndpoints()
+    ///     .WithStamp(eastus, "eus")
+    ///     .WithStamp(westeu, "weu");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<T> WithStamp<T>(this IResourceBuilder<T> builder, IResourceBuilder<IComputeEnvironmentResource> computeEnvironmentResource, string stampName)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeEnvironmentResource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stampName);
+
+        AddComputeEnvironmentAnnotation(builder, computeEnvironmentResource.Resource, stampName);
+
+        return builder;
+    }
+
+    private static void AddComputeEnvironmentAnnotation<T>(IResourceBuilder<T> builder, IComputeEnvironmentResource computeEnvironment, string? stampName)
+        where T : IComputeResource
+    {
+        // Binding the same environment twice would generate two identical stamps, which collide on every
+        // derived infrastructure name. Fail early with a message that names the resource.
+        if (builder.Resource.IsBoundToComputeEnvironment(computeEnvironment))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{builder.Resource.Name}' is already bound to compute environment '{computeEnvironment.Name}'. Each compute environment can only be specified once.");
+        }
+
+        builder.WithAnnotation(new ComputeEnvironmentAnnotation(computeEnvironment, stampName));
     }
 
     /// <summary>

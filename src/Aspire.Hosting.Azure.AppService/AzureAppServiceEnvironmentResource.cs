@@ -217,9 +217,10 @@ public class AzureAppServiceEnvironmentResource :
                 continue;
             }
 
-            // Skip resources that are explicitly targeted to a different compute environment
-            var resourceComputeEnvironment = resource.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            // Skip resources that are explicitly targeted to a different compute environment. A stamped
+            // resource is bound to several environments and must be processed by each of them, so the check
+            // is membership rather than equality.
+            if (resource.GetComputeEnvironments().Count > 0 && !resource.IsBoundToComputeEnvironment(this))
             {
                 continue;
             }
@@ -508,7 +509,10 @@ public class AzureAppServiceEnvironmentResource :
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        return ReferenceExpression.Create($"{resource.Name.ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");
+        // The web site name is stamp-qualified, so a resource deployed to several regions resolves to a
+        // distinct host in each of them. For a resource bound to a single environment this is just the
+        // resource name, keeping already deployed hostnames intact.
+        return ReferenceExpression.Create($"{resource.GetStampQualifiedName(this).ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");
     }
 
     /// <inheritdoc/>

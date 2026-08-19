@@ -30,40 +30,43 @@ public class AzureContainerAppResource : AzureProvisioningResource
         // Add pipeline step annotation for deploy
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
-            // Get the deployment target annotation
-            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation();
+            // Get the deployment target annotation for this stamp. A stamped target resource has one
+            // deployment target per compute environment, so the environment has to narrow the lookup.
+            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation(ComputeEnvironment);
             if (deploymentTargetAnnotation is null)
             {
                 return [];
             }
 
+            var stampName = targetResource.GetStampQualifiedName(ComputeEnvironment);
+
             var steps = new List<PipelineStep>();
 
             var printResourceSummary = new PipelineStep
             {
-                Name = $"print-{targetResource.Name}-summary",
-                Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
+                Name = $"print-{stampName}-summary",
+                Description = $"Prints the deployment summary and URL for {stampName}.",
                 Action = async ctx =>
                 {
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
-                    var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
+                    var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, stampName.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
 
                     if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
-                        var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
+                        var endpoint = $"https://{stampName.ToLowerInvariant()}.{domainValue}";
                         var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
-                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{stampName}** to {summaryValue}"));
+                        ctx.Summary.Add(stampName, new MarkdownString(summaryValue));
                     }
                     else
                     {
                         var summaryValue = $"No public endpoints ({portalLink})";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
-                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{stampName}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
+                        ctx.Summary.Add(stampName, new MarkdownString(summaryValue));
                     }
                 },
                 Tags = ["print-summary"],
@@ -72,8 +75,8 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
             var deployStep = new PipelineStep
             {
-                Name = $"deploy-{targetResource.Name}",
-                Description = $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps.",
+                Name = $"deploy-{stampName}",
+                Description = $"Aggregation step for deploying {stampName} to Azure Container Apps.",
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
@@ -104,4 +107,14 @@ public class AzureContainerAppResource : AzureProvisioningResource
     /// Gets the target resource that this Azure Container App is being created for.
     /// </summary>
     public IResource TargetResource { get; }
+
+    /// <summary>
+    /// Gets the compute environment this container app is deployed to.
+    /// </summary>
+    /// <remarks>
+    /// A target resource deployed as several regional stamps produces one <see cref="AzureContainerAppResource"/>
+    /// per compute environment. This identifies which of those stamps this instance represents, so that
+    /// deployment-target lookups and generated names stay unambiguous.
+    /// </remarks>
+    public IComputeEnvironmentResource? ComputeEnvironment { get; init; }
 }

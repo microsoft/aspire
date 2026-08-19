@@ -83,6 +83,21 @@ internal static class ComputeEnvironmentEndpointResolver
 
         var owningResource = endpointReferenceExpression.Endpoint.Resource;
 
+        // A stamped resource is deployed to several compute environments. When one of them is the
+        // environment currently being generated, the reference must stay inside that stamp so traffic
+        // never crosses a region boundary to reach a dependency that exists locally. The local endpoint
+        // map already resolves to the local stamp, so leave it alone.
+        foreach (var owned in owningResource.GetComputeEnvironments())
+        {
+            foreach (var current in currentComputeEnvironments)
+            {
+                if (ReferenceEquals(current, owned))
+                {
+                    return false;
+                }
+            }
+        }
+
         // Resolve the compute environment the owning resource deploys to. A plain resource that is
         // not deployed anywhere has none, so there is nothing to delegate to and the local lookup
         // handles it.
@@ -121,17 +136,40 @@ internal static class ComputeEnvironmentEndpointResolver
     /// <returns>
     /// <see langword="true"/> if a compute environment was resolved; otherwise <see langword="false"/>.
     /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the resource is deployed as several regional stamps, because there is no single
+    /// environment to resolve. Callers that can handle stamps should use
+    /// <see cref="ResourceExtensions.GetComputeStamps"/> instead.
+    /// </exception>
     public static bool TryGetEffectiveComputeEnvironment(
         IResource resource,
         [NotNullWhen(true)] out IComputeEnvironmentResource? computeEnvironment)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        var boundComputeEnvironments = resource.GetComputeEnvironments();
+        if (boundComputeEnvironments.Count > 1)
+        {
+            var names = string.Join("', '", boundComputeEnvironments.Select(e => e.Name));
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' is deployed as multiple stamps across compute environments '{names}', so a single endpoint cannot be resolved. " +
+                "Reference the resource from within one of those environments, or route to it through a global entry point such as Azure Front Door.");
+        }
+
         // Prefer an explicit compute environment binding, then fall back to the deployment target's
         // compute environment. This matches how endpoint references are resolved elsewhere
         // (Azure Front Door origins, Foundry hosted agents) so all call sites agree on "where is
         // this resource deployed".
-        computeEnvironment = resource.GetComputeEnvironment() ?? resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment;
+        if (boundComputeEnvironments.Count == 1)
+        {
+            computeEnvironment = boundComputeEnvironments[0];
+            return true;
+        }
+
+        // No explicit binding. The singular accessor still throws when the resource has several deployment
+        // targets, because an unbound resource with more than one target is genuinely ambiguous — silently
+        // picking one would resolve the endpoint to an arbitrary environment.
+        computeEnvironment = resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment;
         return computeEnvironment is not null;
     }
 }

@@ -205,9 +205,11 @@ public class AzureContainerAppEnvironmentResource :
 
         foreach (var r in appModel.GetComputeResources())
         {
-            // Skip resources that are explicitly targeted to a different compute environment
-            var resourceComputeEnvironment = r.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            // Skip resources that are explicitly targeted to a different compute environment. A stamped
+            // resource is bound to several environments and must be processed by each of them, so the check
+            // is membership rather than equality.
+            var boundComputeEnvironments = r.GetComputeEnvironments();
+            if (boundComputeEnvironments.Count > 0 && !r.IsBoundToComputeEnvironment(this))
             {
                 continue;
             }
@@ -349,7 +351,10 @@ public class AzureContainerAppEnvironmentResource :
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();
-        builder.AppendLiteral(resource.Name.ToLowerInvariant());
+        // The container app name is stamp-qualified, so a resource deployed to several regions resolves to
+        // a distinct host in each of them. For a resource bound to a single environment this is just the
+        // resource name, keeping already deployed hostnames intact.
+        builder.AppendLiteral(resource.GetStampQualifiedName(this).ToLowerInvariant());
         if (!endpointReference.EndpointAnnotation.IsExternal)
         {
             builder.AppendLiteral(".internal");
