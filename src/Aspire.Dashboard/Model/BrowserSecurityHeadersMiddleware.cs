@@ -32,9 +32,16 @@ internal sealed class BrowserSecurityHeadersMiddleware
         // Changes:
         // - style-src adds inline styles as they're used extensively by Blazor FluentUI.
         // - frame-src none added to prevent nesting in iframe.
+        // - script-src adds 'wasm-unsafe-eval' for the terminal's xterm.js image addon, which
+        //   decodes Kitty graphics payloads with a WebAssembly module. Instantiating any wasm
+        //   module is blocked under a bare script-src 'self'; the browser reports it as an
+        //   'unsafe-eval' violation. 'wasm-unsafe-eval' grants only WebAssembly compilation and
+        //   still forbids eval()/new Function(), so it is far narrower than 'unsafe-eval'.
+        //   Browsers that predate the keyword ignore it and simply keep wasm blocked.
+        //   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src#wasm-unsafe-eval
         var content = "base-uri 'self'; " +
             "object-src 'none'; " +
-            "script-src 'self'; " +
+            "script-src 'self' 'wasm-unsafe-eval'; " +
             "style-src 'self' 'unsafe-inline'; " +
             "frame-src 'none';";
 

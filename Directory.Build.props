@@ -41,6 +41,15 @@
     <!-- NU1510: The project does not reference any target framework and will not be restored. -->
     <!-- TODO: Re-enable and remove this. -->
     <NoWarn>$(NoWarn);xUnit1051;NU1510</NoWarn>
+
+    <!-- NuGet's vulnerability audit only reports what its audit sources publish, and the dnceng
+         feeds publish nothing — so the audit was inert here until NuGet.config gained the
+         nuget.org-backed Hex1b prerelease feed. On net10.0 the SDK defaults NuGetAuditMode to
+         "all", which would fail the build on transitive advisories in packages this repo does not
+         reference directly (MessagePack via StreamJsonRpc, SSH.NET/SharpCompress/Snappier via
+         Testcontainers). Pin the mode to "direct" so the audit covers the dependencies this repo
+         actually chooses, and revisit if those upstream packages get patched versions. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
 
   <!-- OS/Architecture properties for local development resources -->

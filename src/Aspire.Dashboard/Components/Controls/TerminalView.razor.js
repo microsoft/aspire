@@ -8,6 +8,13 @@
 //
 // xterm.js is loaded via script tags (not ES module import) because
 // the minified bundle uses UMD format, not ESM exports.
+//
+// Kitty Graphics Protocol (KGP) sequences pass straight through this
+// pipeline: the workload writes APC _G payloads to its PTY, Hex1b's HMP1
+// producer forwards the raw bytes, and @xterm/addon-image decodes and
+// renders them here. Nothing in the dashboard inspects or rewrites them.
+// See wwwroot/js/xterm/README.md for the vendored addon's provenance and
+// the known limits of the browser-side KGP support.
 
 import { Hmp1Client } from "/js/hmp1-client.js";
 
@@ -31,34 +38,51 @@ function dbg(state, event, extra) {
     }
 }
 
+// Memoized so that two TerminalViews initializing concurrently share one
+// load instead of each appending its own set of script tags. The old
+// `if (window.Terminal) return` guard was not enough: the core bundle
+// publishes window.Terminal as soon as it evaluates, so a second caller
+// could sail past the guard while the addons were still in flight and
+// then dereference window.ImageAddon before it existed.
+let xtermLoadPromise = null;
+
 function ensureXtermLoaded() {
+    if (window.Terminal && window.FitAddon && window.ImageAddon) {
+        return Promise.resolve();
+    }
+    if (!xtermLoadPromise) {
+        xtermLoadPromise = loadXterm().catch((err) => {
+            // Don't cache the failure — a later terminal open (e.g. after a
+            // transient asset 404) should be able to retry from scratch.
+            xtermLoadPromise = null;
+            throw err;
+        });
+    }
+    return xtermLoadPromise;
+}
+
+async function loadXterm() {
+    if (!document.querySelector('link[href*="xterm.min.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/js/xterm/xterm.min.css';
+        document.head.appendChild(link);
+    }
+
+    // The addons attach themselves to the globals the core bundle
+    // publishes, so they must load strictly after xterm.min.js.
+    await loadScript('/js/xterm/xterm.min.js');
+    await loadScript('/js/xterm/addon-fit.min.js');
+    await loadScript('/js/xterm/addon-image.min.js');
+}
+
+function loadScript(src) {
     return new Promise((resolve, reject) => {
-        if (window.Terminal) {
-            resolve();
-            return;
-        }
-
-        // Load CSS
-        if (!document.querySelector('link[href*="xterm.min.css"]')) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = '/js/xterm/xterm.min.css';
-            document.head.appendChild(link);
-        }
-
-        // Load xterm.js
-        const xtermScript = document.createElement('script');
-        xtermScript.src = '/js/xterm/xterm.min.js';
-        xtermScript.onload = () => {
-            // Load fit addon
-            const fitScript = document.createElement('script');
-            fitScript.src = '/js/xterm/addon-fit.min.js';
-            fitScript.onload = () => resolve();
-            fitScript.onerror = (e) => reject(new Error('Failed to load xterm fit addon'));
-            document.head.appendChild(fitScript);
-        };
-        xtermScript.onerror = (e) => reject(new Error('Failed to load xterm.js'));
-        document.head.appendChild(xtermScript);
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
     });
 }
 
@@ -962,6 +986,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         client: null,
         term: null,
         fitAddon: null,
+        imageAddon: null,
         element,
         wsUrl,
         // Blazor host (TerminalView) — the JS side pushes state snapshots
@@ -1029,6 +1054,29 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
 
     const FitAddon = window.FitAddon.FitAddon;
     const fitAddon = new FitAddon();
+    const ImageAddon = window.ImageAddon.ImageAddon;
+    // Sixel and iTerm inline images (IIP) are switched off because Hex1b only
+    // emits Kitty sequences; leaving them on would register extra DCS/OSC
+    // handlers and decoders for formats that can never arrive here.
+    //
+    // The Kitty path itself decodes payloads through a WebAssembly module, so
+    // the dashboard's CSP carries 'wasm-unsafe-eval' (see
+    // BrowserSecurityHeadersMiddleware). Without it the addon throws mid-APC
+    // and the terminal stops advancing until the next reconnect.
+    //
+    // The limits below bound how much browser memory a workload can pin by
+    // spraying images down the PTY. They mirror the Hex1b WebMuxerDemo
+    // sample so behaviour matches the reference implementation.
+    const imageAddon = new ImageAddon({
+        enableSizeReports: true,
+        pixelLimit: 4 * 1024 * 1024,
+        storageLimit: 64,
+        showPlaceholder: true,
+        sixelSupport: false,
+        iipSupport: false,
+        kittySupport: true,
+        kittySizeLimit: 8 * 1024 * 1024,
+    });
     const term = new window.Terminal({
         cursorBlink: true,
         fontSize: state.currentFontPx,
@@ -1049,10 +1097,15 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     });
 
     term.loadAddon(fitAddon);
+    // Must be loaded before open() so the addon's APC handler is registered
+    // ahead of the first write — an image transmitted in the StateSync
+    // replay would otherwise be parsed as garbage text.
+    term.loadAddon(imageAddon);
     term.open(state.terminalBody);
 
     state.term = term;
     state.fitAddon = fitAddon;
+    state.imageAddon = imageAddon;
 
     // Defense in depth: if Cascadia hadn't entered the FontFace cache
     // by the time we constructed Terminal (preload above failed/timed
@@ -1123,9 +1176,17 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     // the input goes out. Server drops non-primary input, so promoting
     // first ensures the keystroke lands. No-ops when we're already
     // primary or the client isn't connected yet.
+    //
+    // onData is not exclusively a user-input channel though: the image
+    // addon answers Kitty graphics queries through it as well. Promoting on
+    // those would let any workload that probes for KGP support silently
+    // steal primary from whoever currently holds it, so they are forwarded
+    // without promoting.
     term.onData((data) => {
         if (!state.client) return;
-        maybeAutoPromote(state);
+        if (!isTerminalGeneratedReply(data)) {
+            maybeAutoPromote(state);
+        }
         state.client.sendInput(textEncoder.encode(data));
     });
 
@@ -1386,8 +1447,12 @@ export function disposeTerminal(id) {
         try { state.host.parentNode.removeChild(state.host); } catch { /* ignore */ }
     }
     if (state.term) {
+        // Disposing the terminal also disposes every addon registered via
+        // loadAddon (fit, image), which is what releases the image addon's
+        // decoded-bitmap storage.
         try { state.term.dispose(); } catch { /* ignore */ }
     }
+    state.imageAddon = null;
     terminals.delete(id);
 }
 
@@ -1443,6 +1508,21 @@ function maybeAutoPromote(state) {
     if (!client || client.peerId === null) return;
     if (client.isPrimary) return;
     takePrimary(state);
+}
+
+// Distinguishes terminal-generated replies from real user input on the
+// onData channel. @xterm/addon-image answers Kitty graphics requests by
+// calling coreService.triggerDataEvent, which surfaces on onData just like
+// a keystroke. Those replies look like:
+//
+//   \x1b_Gi=31;OK\x1b\\            (transmission accepted)
+//   \x1b_Gi=31,p=7;ENOENT:...\x1b\\ (placement error, with placement id)
+//
+// i.e. APC ('\x1b_') + 'G' + key/value pairs + ';' + status + ST. A user
+// can never type a raw APC introducer, so the prefix test is unambiguous.
+// See https://sw.kovidgoyal.net/kitty/graphics-protocol/#the-response-format
+function isTerminalGeneratedReply(data) {
+    return data.startsWith('\x1b_G');
 }
 
 // Lets the .NET host query the current snapshot on demand (e.g. when
