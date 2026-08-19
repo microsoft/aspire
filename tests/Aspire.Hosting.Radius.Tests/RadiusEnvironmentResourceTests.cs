@@ -97,4 +97,79 @@ public class RadiusEnvironmentResourceTests
         // Url/Host/Port all target that Service and port rather than the bare name / port 80.
         Assert.Equal(expected, expression.ValueExpression);
     }
+
+    /// <summary>
+    /// The transport-security guard the Radius publisher applies has to hold on this path too. A
+    /// Kubernetes, Azure Container Apps, or App Service consumer of a Radius-owned backing resource
+    /// is routed here by <c>ComputeEnvironmentEndpointResolver</c>, and no mapped Radius type
+    /// publishes a transport-security output — so answering from the local endpoint declaration
+    /// would describe how the resource runs locally rather than how its recipe deploys it.
+    /// </summary>
+    [Theory]
+    [InlineData(EndpointProperty.Scheme)]
+    [InlineData(EndpointProperty.TlsEnabled)]
+    [InlineData(EndpointProperty.Url)]
+    public void GetEndpointPropertyExpression_TlsEnabledBackingResource_Throws(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("radius");
+        var cache = builder.AddRedis("cache").WithEndpoint("tcp", e => e.TlsEnabled = true);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        var endpoint = cache.GetEndpoint("tcp");
+
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => ((IComputeEnvironmentResource)radiusEnv)
+            .GetEndpointPropertyExpression(endpoint.Property(property)));
+
+        Assert.Contains("ASPIRERADIUS081", ex.Message, StringComparison.Ordinal);
+        Assert.Equal("cache", ex.Resource.Name);
+    }
+
+    /// <summary>
+    /// The guard is scoped to transport security on a backing resource, so it must not fire for a
+    /// plain container endpoint — those answer their scheme correctly on this path and did so
+    /// before backing-resource projection existed.
+    /// </summary>
+    [Fact]
+    public void GetEndpointPropertyExpression_TlsEnabledContainerEndpoint_IsAnswered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("radius");
+        var api = builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpsEndpoint(targetPort: 8443, name: "https");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        var endpoint = api.GetEndpoint("https");
+
+        var expression = ((IComputeEnvironmentResource)radiusEnv)
+            .GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.Scheme));
+
+        Assert.Equal("https", expression.ValueExpression);
+    }
+
+    /// <summary>
+    /// A backing resource without TLS is unaffected: the recipe's transport is what the endpoint
+    /// already describes, so there is nothing to disagree about.
+    /// </summary>
+    [Fact]
+    public void GetEndpointPropertyExpression_BackingResourceWithoutTls_AnswersScheme()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("radius");
+        var cache = builder.AddRedis("cache");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        var endpoint = cache.GetEndpoint("tcp");
+
+        var expression = ((IComputeEnvironmentResource)radiusEnv)
+            .GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.Scheme));
+
+        Assert.Equal("redis", expression.ValueExpression);
+    }
 }

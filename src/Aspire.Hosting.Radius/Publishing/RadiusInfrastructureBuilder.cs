@@ -9,7 +9,6 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
@@ -28,7 +27,7 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// (environments, applications, recipe packs, resource type instances, containers) that are
 /// compiled to Bicep via <c>Infrastructure.Build().Compile()</c>.
 /// </summary>
-internal sealed partial class RadiusInfrastructureBuilder
+internal sealed class RadiusInfrastructureBuilder
 {
     private readonly RadiusEnvironmentResource _environment;
     private readonly DistributedApplicationModel _model;
@@ -1425,8 +1424,16 @@ internal sealed partial class RadiusInfrastructureBuilder
     /// password as the deployed one, which is <see href="https://github.com/microsoft/aspire/issues/18935"/>
     /// itself. Emitting <c>listSecrets().password</c> is no better: the recipe records no secrets,
     /// so ARM fails the deployment on a property the returned object does not have. An empty value
-    /// matches what the recipe provisions, and the warning names the mismatch so an AppHost author
-    /// who deliberately set a password is not left to discover it at run time.
+    /// matches what the recipe provisions.
+    /// <para>
+    /// A password Aspire generated for run mode and one the AppHost author supplied are not the
+    /// same case, so they are not treated the same way. A generated password carries no intent —
+    /// there is nothing for the author to have expected of it in a deployment — so discarding it
+    /// with a warning is proportionate. An explicitly supplied password *is* the author asking for
+    /// an authenticated deployment, and this recipe cannot deliver one; downgrading that request to
+    /// an unauthenticated workload behind a warning is a security decision the publisher must not
+    /// make silently, so it fails the publish instead.
+    /// </para>
     /// </remarks>
     private void ApplyNoCredential(
         IResource resource,
@@ -1438,21 +1445,36 @@ internal sealed partial class RadiusInfrastructureBuilder
             return;
         }
 
+        // `Default is GenerateParameterDefault` distinguishes the two only in publish mode:
+        // ParameterResourceBuilderExtensions.CreateGeneratedParameter rewrites Default to an
+        // internal user-secrets wrapper in run mode. This code only ever runs while publishing —
+        // the same caveat WarnIfUserSuppliedCredentialIsReplaced documents.
+        if (passwordParameter.Default is not GenerateParameterDefault)
+        {
+            throw new InvalidOperationException(
+                $"A password was supplied for '{resource.Name}', but the Radius recipe that provisions it deploys the " +
+                $"workload without authentication: {reason}. The parameter '{passwordParameter.Name}' cannot be " +
+                $"applied, so '{resource.Name}' would be deployed unauthenticated while its consumers are handed an " +
+                $"empty password. Remove the password to accept an unauthenticated deployment, or provision " +
+                $"'{resource.Name}' yourself if the deployed workload must require one. Diagnostic: ASPIRERADIUS085.");
+        }
+
         // Registered as a substitution even though the replacement is a literal: the parameter's own
         // value is discarded everywhere it appears, so sharing it with a resource that keeps its
         // value is the same silent-mismatch hazard RegisterRecipeCredential exists to reject.
         //
         // WarnIfUserSuppliedCredentialIsReplaced is deliberately not reused here: its message says
         // the recipe generates its own credential, which is the opposite of what happens for this
-        // mode. The warning below covers both a generated and a user-supplied password, because
-        // unlike a substituted credential neither has a deployed counterpart.
+        // mode. The warning below covers the generated password that reaches this point — a
+        // user-supplied one has already failed the publish above — because unlike a substituted
+        // credential it has no deployed counterpart.
         RegisterRecipeCredential(passwordParameter, resource, isProjectionSubstitution: true);
         _emptyCredentialSubstitutions.Add(passwordParameter);
 
         _logger.LogWarning(
             "Radius resource '{ResourceName}' is deployed by a recipe that provisions no credential: {Reason}. " +
-            "Consumers receive an empty password, and any password configured on '{ResourceName}' is not applied to " +
-            "the deployed workload. Diagnostic: ASPIRERADIUS075.",
+            "Consumers receive an empty password, and the password Aspire generated for '{ResourceName}' is not " +
+            "applied to the deployed workload. Diagnostic: ASPIRERADIUS075.",
             resource.Name,
             reason,
             resource.Name);
@@ -1647,8 +1669,8 @@ internal sealed partial class RadiusInfrastructureBuilder
                     resource,
                     $"Resource '{resource.Name}' is emitted as a Radius type that requires '{requiredProperty}' as a " +
                     $"schema property, but '{resource.Name}' exposes no '{requiredProperty}' connection property for " +
-                    $"Aspire to supply it, so the deployment would be rejected by schema validation. Set the value " +
-                    $"explicitly with ConfigureRadiusInfrastructure, or map the resource to a type that does not " +
+                    $"Aspire to supply it, so the deployment would be rejected by schema validation. Expose the " +
+                    $"property on the resource's connection string, or map the resource to a type that does not " +
                     $"require it. Diagnostic: ASPIRERADIUS076.");
             }
         }
@@ -1812,8 +1834,8 @@ internal sealed partial class RadiusInfrastructureBuilder
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type that requires '{propertyName}', but " +
                 $"'{resource.Name}' exposes no '{propertyName}' connection property for Aspire to supply it, so the " +
-                $"deployment would be rejected by schema validation. Set the value explicitly with " +
-                $"ConfigureRadiusInfrastructure, or map the resource to a type that does not require it. " +
+                $"deployment would be rejected by schema validation. Expose the property on the resource's " +
+                $"connection string, or map the resource to a type that does not require it. " +
                 $"Diagnostic: ASPIRERADIUS076.");
         }
 
@@ -1881,8 +1903,8 @@ internal sealed partial class RadiusInfrastructureBuilder
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type that requires 'username' as a schema property, " +
                 $"but '{resource.Name}' exposes no 'username' connection property for Aspire to supply it, so the " +
-                $"deployment would be rejected by schema validation. Set the value explicitly with " +
-                $"ConfigureRadiusInfrastructure, or map the resource to a type that does not require it. " +
+                $"deployment would be rejected by schema validation. Expose the property on the resource's " +
+                $"connection string, or map the resource to a type that does not require it. " +
                 $"Diagnostic: ASPIRERADIUS076.");
         }
 
@@ -2251,6 +2273,15 @@ internal sealed partial class RadiusInfrastructureBuilder
     /// model order — a parameter shared with an earlier resource would resolve differently than one
     /// shared with a later resource.
     /// </para>
+    /// <para>
+    /// A fragment the publisher cannot produce is a *failure* here, not a skip. The env-var loop
+    /// can drop one unresolvable variable and carry on, but a connection property feeds a schema
+    /// property of the emitted Radius type, so dropping it silently would publish an artifact that
+    /// is either rejected by schema validation or deployed with a value that describes nothing.
+    /// <see cref="RadiusUnresolvableValueException"/> is internal and carries no diagnostic code, so
+    /// it is translated here into the public exception rather than escaping <c>aspire publish</c>
+    /// as an unattributed internal error.
+    /// </para>
     /// </remarks>
     private async Task<(BicepValue<object> Value, List<EnvPart> Parts)?> TryResolveConnectionPropertyAsync(
         IResourceWithConnectionString resource,
@@ -2262,7 +2293,21 @@ internal sealed partial class RadiusInfrastructureBuilder
         }
 
         var parts = new List<EnvPart>();
-        await ResolveEnvPartsAsync(expression, resource, parts, resource, allowRecipeSubstitutions: false).ConfigureAwait(false);
+
+        try
+        {
+            await ResolveEnvPartsAsync(expression, resource, parts, resource, allowRecipeSubstitutions: false).ConfigureAwait(false);
+        }
+        catch (RadiusUnresolvableValueException ex)
+        {
+            throw new RadiusBackingResourceEndpointException(
+                resource,
+                $"The '{key}' connection property of Radius resource '{resource.Name}' could not be resolved at publish " +
+                $"time: {ex.Message} That value is written onto the emitted Radius type, so it cannot be skipped. " +
+                $"Supply the value with a parameter or a literal, or set it explicitly with " +
+                $"ConfigureRadiusInfrastructure. Diagnostic: ASPIRERADIUS086.",
+                ex);
+        }
 
         return parts.Count == 0 ? null : (new BicepValue<object>(BuildEnvBicepValue(parts).Compile()), parts);
     }
@@ -2776,13 +2821,6 @@ internal sealed partial class RadiusInfrastructureBuilder
     /// and it is retained in the rollout history after a rotation. Only
     /// <c>valueFrom.secretKeyRef</c> keeps it out of both.
     /// </remarks>
-    /// <summary>
-    /// The character set Kubernetes allows in a <c>Secret</c> <c>data</c> key.
-    /// See https://kubernetes.io/docs/concepts/configuration/secret/#restriction-names-data.
-    /// </summary>
-    [GeneratedRegex(@"^[-._a-zA-Z0-9]+$")]
-    private static partial Regex SecretKeyPattern();
-
     private static bool IsSensitive(EnvPart part)
         => part.Parameter?.IsSecure == true || part.Projection?.IsSecret == true;
 
@@ -2790,21 +2828,24 @@ internal sealed partial class RadiusInfrastructureBuilder
     /// Maps an environment-variable name to a key of the container's secret.
     /// </summary>
     /// <remarks>
-    /// Kubernetes restricts <c>Secret</c> data keys to <c>[-._a-zA-Z0-9]+</c>, which is narrower
-    /// than what an environment-variable name may contain. Aspire's own names (<c>services__*</c>,
-    /// <c>ConnectionStrings__*</c>, <c>OTEL_*</c>) all satisfy it, but a name supplied through
-    /// <c>WithEnvironment</c> need not, and an invalid key is rejected by the API server at deploy
-    /// time rather than at publish time. Reject it here instead, where the name can be attributed.
+    /// Kubernetes restricts <c>Secret</c> data keys to <c>[-._a-zA-Z0-9]+</c>, caps them at 253
+    /// characters, and rejects <c>.</c>, <c>..</c> and any name starting with <c>..</c> — all
+    /// narrower than what an environment-variable name may contain. Aspire's own names
+    /// (<c>services__*</c>, <c>ConnectionStrings__*</c>, <c>OTEL_*</c>) all satisfy it, but a name
+    /// supplied through <c>WithEnvironment</c> need not, and an invalid key is rejected by the API
+    /// server at deploy time rather than at publish time. Reject it here instead, where the name can
+    /// be attributed. <see cref="KubernetesName.IsValidSecretDataKey"/> carries the full contract,
+    /// so it is reused rather than restated as a looser character-class check here.
     /// </remarks>
     private static string ToSecretKey(IResource resource, string envVarName)
     {
-        if (!SecretKeyPattern().IsMatch(envVarName))
+        if (!KubernetesName.IsValidSecretDataKey(envVarName))
         {
             throw new InvalidOperationException(
                 $"Environment variable '{envVarName}' on resource '{resource.Name}' holds a credential, so it is " +
-                $"published as a Kubernetes secret key, but its name contains characters that a secret key may not " +
-                $"contain (allowed: letters, digits, '-', '_' and '.'). Rename the variable. " +
-                $"Diagnostic: ASPIRERADIUS083.");
+                $"published as a Kubernetes secret key, but its name is not a valid one (a key must be 1-253 " +
+                $"characters of letters, digits, '-', '_' and '.', and may not be '.' or '..' or start with '..'). " +
+                $"Rename the variable. Diagnostic: ASPIRERADIUS083.");
         }
 
         return envVarName;

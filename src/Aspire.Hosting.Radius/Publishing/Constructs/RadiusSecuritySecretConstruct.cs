@@ -115,6 +115,7 @@ public sealed class RadiusSecuritySecretConstruct : ProvisionableResource
     }
 
     /// <summary>Initializes a new <see cref="RadiusSecuritySecretConstruct"/> with the given Bicep identifier.</summary>
+    /// <param name="bicepIdentifier">The Bicep identifier for the resource.</param>
     public RadiusSecuritySecretConstruct(string bicepIdentifier)
         : base(bicepIdentifier, new Azure.Core.ResourceType(RadiusResourceTypes.SecuritySecrets), RadiusResourceTypes.RadiusApiVersion)
     {

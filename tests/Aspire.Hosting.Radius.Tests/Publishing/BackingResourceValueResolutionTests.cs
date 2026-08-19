@@ -382,7 +382,12 @@ public class BackingResourceValueResolutionTests
 
         Assert.DoesNotContain("MODE_URL", bicep, StringComparison.Ordinal);
         Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
-        Assert.Single(logger.Matching(LogLevel.Warning, "MODE_URL"));
+
+        // The README documents the dropped variable under ASPIRERADIUS078, so the warning has to
+        // name the code — otherwise the reader cannot map it back to the diagnostics table.
+        var warnings = logger.Matching(LogLevel.Warning, "MODE_URL");
+        Assert.Single(warnings);
+        Assert.Contains("ASPIRERADIUS078", warnings[0], StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -419,11 +424,11 @@ public class BackingResourceValueResolutionTests
         {
             var shared = b.AddParameter("shared", "value", secret: true);
             var pg = b.AddPostgres("pg", userName: shared);
-            var cache = b.AddRedis("cache", password: shared);
+            var sql = b.AddSqlServer("sql", password: shared);
 
             b.AddContainer("api", "myapp/api", "latest")
                 .WithReference(pg)
-                .WithReference(cache);
+                .WithReference(sql);
         }));
 
         Assert.Contains("ASPIRERADIUS070", ex.Message, StringComparison.Ordinal);
@@ -538,16 +543,39 @@ public class BackingResourceValueResolutionTests
     {
         var (bicep, logger) = GenerateBicep(b =>
         {
-            var password = b.AddParameter("cachepassword", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: password);
+            // The generated password, not an explicit one: an explicitly supplied password is a
+            // request for an authenticated deployment this recipe cannot satisfy, so it fails the
+            // publish instead (ASPIRERADIUS085, pinned below).
+            var cache = b.AddRedis("cache");
             b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
         });
 
         Assert.Single(logger.Matching(LogLevel.Warning, "cache", "ASPIRERADIUS075"));
 
         // Neither the parameter nor a listSecrets() call for a secret the recipe never records.
-        Assert.DoesNotContain("cachepassword", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("cache-password", bicep, StringComparison.Ordinal);
         Assert.DoesNotContain("cache.listSecrets()", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A password the AppHost author supplied for a resource whose recipe provisions no credential
+    /// is a request for an authenticated deployment that cannot be honoured. Discarding it behind a
+    /// warning would deploy an unauthenticated server while the author believed otherwise, so it
+    /// fails the publish and names the choice.
+    /// </summary>
+    [Fact]
+    public void ExplicitPasswordOnAnUnauthenticatedRecipe_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var password = b.AddParameter("cachepassword", "hunter2", secret: true);
+            var cache = b.AddRedis("cache", password: password);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
+        }));
+
+        Assert.Contains("ASPIRERADIUS085", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("cachepassword", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("cache", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -577,14 +605,14 @@ public class BackingResourceValueResolutionTests
         var (_, logger) = GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: shared);
+            var sql = b.AddSqlServer("sql", password: shared);
 
             b.AddContainer("api", "myapp/api", "latest")
-                .WithReference(cache)
+                .WithReference(sql)
                 .WithEnvironment("ADMIN_PASSWORD", shared);
         });
 
-        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'"));
+        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'sql'"));
     }
 
     /// <summary>
@@ -598,17 +626,17 @@ public class BackingResourceValueResolutionTests
         var (_, logger) = GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: shared);
+            var sql = b.AddSqlServer("sql", password: shared);
 
             b.AddContainer("api", "myapp/api", "latest")
-                .WithReference(cache)
+                .WithReference(sql)
                 .WithEnvironment(context =>
                 {
                     context.EnvironmentVariables["ADMIN_PASSWORD"] = shared;
                 });
         });
 
-        var warnings = logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'");
+        var warnings = logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'sql'");
         Assert.Single(warnings);
 
         // The README documents this warning under ASPIRERADIUS070, so the message has to name the
@@ -673,14 +701,14 @@ public class BackingResourceValueResolutionTests
         var (_, logger) = GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: shared);
+            var sql = b.AddSqlServer("sql", password: shared);
 
             b.AddContainer("api", "myapp/api", "latest")
-                .WithReference(cache)
+                .WithReference(sql)
                 .WithEnvironment("ADMIN_PASSWORD", ReferenceExpression.Create($"{shared}"));
         });
 
-        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'cache'"));
+        Assert.Single(logger.Matching(LogLevel.Warning, "references parameter 'shared'", "credential of 'sql'"));
     }
 
     /// <summary>
@@ -696,9 +724,9 @@ public class BackingResourceValueResolutionTests
         var (_, logger) = GenerateBicep(b =>
         {
             var shared = b.AddParameter("shared", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: shared);
+            var sql = b.AddSqlServer("sql", password: shared);
 
-            b.AddContainer("api", "myapp/api", "latest").WithReference(cache, "admin");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(sql, "admin");
         });
 
         Assert.Empty(logger.Matching(LogLevel.Warning, "references parameter"));
@@ -715,10 +743,10 @@ public class BackingResourceValueResolutionTests
     {
         var (_, logger) = GenerateBicep(b =>
         {
-            var password = b.AddParameter("cachepassword", "hunter2", secret: true);
-            var cache = b.AddRedis("cache", password: password);
+            var password = b.AddParameter("sqlpassword", "hunter2", secret: true);
+            var sql = b.AddSqlServer("sql", password: password);
 
-            b.AddContainer("api", "myapp/api", "latest").WithReference(cache);
+            b.AddContainer("api", "myapp/api", "latest").WithReference(sql);
         });
 
         Assert.Empty(logger.Matching(LogLevel.Warning, "references parameter"));
@@ -898,10 +926,51 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// Aspire's <c>ReferenceExpression</c> validates a format string only when it resolves the
+    /// value, and the publisher never calls <c>GetValueAsync</c> — it compiles the expression into
+    /// Bicep instead. An unsupported format therefore reaches the publisher intact, and there is no
+    /// Bicep equivalent to emit for it, so it fails the publish rather than silently dropping the
+    /// formatting and emitting a value that is not escaped the way the author asked.
+    /// </summary>
+    [Fact]
+    public void UnsupportedStringFormat_FailsThePublish()
+    {
+        var ex = Assert.Throws<NotSupportedException>(() => GenerateBicep(b =>
+        {
+            var token = b.AddParameter("token", "abc", secret: true);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("TOKEN", ReferenceExpression.Create($"{token:json}"));
+        }));
+
+        Assert.Contains("ASPIRERADIUS073", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("json", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The <c>Radius.*</c> manifests mark <c>username</c> and <c>password</c> <c>required</c>, so a
+    /// resource that exposes neither as a connection property would publish an artifact Radius
+    /// rejects during schema validation — with nothing at publish time to explain it. Asserted
+    /// against a resource that maps to the Postgres type but publishes no connection properties,
+    /// because every shipped resource that maps there exposes both.
+    /// </summary>
+    [Fact]
+    public void BackingResourceMissingARequiredSchemaProperty_FailsThePublish()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var pg = b.AddResource(new PostgresServerResource("pg")).WithImage("postgres", "17");
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
+        }));
+
+        Assert.Contains("ASPIRERADIUS076", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("pg", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A value provider whose resolution fails and which claims no deployment-substituted semantics.
     /// </summary>
-    private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
-    {
+    private sealed class ThrowingValueProvider(Exception exception) : IValueProvider    {
         public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
             => throw exception;
 
@@ -923,5 +992,54 @@ public class BackingResourceValueResolutionTests
 
         public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
             => throw exception;
+    }
+
+    /// <summary>
+    /// A backing resource whose schema publishes no address — the Dapr types, which are consumed
+    /// through the sidecar's component configuration rather than through a host and port Aspire
+    /// composes — cannot answer an endpoint reference, so emitting a container-shaped address for
+    /// it fails instead.
+    /// </summary>
+    [Fact]
+    public void BackingResourceWithNoAddressOutput_FailsThePublish()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var store = b.AddResource(new DaprStateStoreResource("statestore"))
+                .WithImage("daprio/dapr", "1.14")
+                .WithEndpoint(scheme: "tcp", name: "tcp", port: 3500, targetPort: 3500);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("STORE_HOST", store.GetEndpoint("tcp").Property(EndpointProperty.Host));
+        }));
+
+        Assert.Contains("ASPIRERADIUS079", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("statestore", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Stands in for a Dapr state store, whose Radius type is a backing resource that publishes no
+    /// address. The Dapr hosting package is not referenced here; the class derives from
+    /// <see cref="ContainerResource"/> and carries an image for the same reason as
+    /// <see cref="PostgresServerResource"/>, and its name matches the real type exactly because
+    /// <c>ResourceTypeMapper</c> keys its mappings on the simple type name.
+    /// </summary>
+    private sealed class DaprStateStoreResource(string name) : ContainerResource(name), IResourceWithEndpoints
+    {
+    }
+
+    /// <summary>
+    /// Stands in for a resource that maps to the Postgres Radius type but exposes no connection
+    /// properties, so neither of the type's required schema properties can be supplied. Every
+    /// shipped resource that maps there exposes both, so the guard cannot be reached with one.
+    /// <para>
+    /// It derives from <see cref="ContainerResource"/> and carries an image because only a resource
+    /// the publisher classifies into the environment is emitted at all, and it is named to match the
+    /// real type exactly: <c>ResourceTypeMapper</c> keys its mappings on the simple type name.
+    /// </para>
+    /// </summary>
+    private sealed class PostgresServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=pg");
     }
 }

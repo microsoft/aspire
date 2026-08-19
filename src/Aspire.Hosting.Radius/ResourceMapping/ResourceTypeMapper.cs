@@ -192,6 +192,27 @@ internal sealed class ResourceTypeMapper
     }
 
     /// <summary>
+    /// The Radius type a backing resource is emitted as — the legacy fallback when one is
+    /// configured, otherwise the <c>Radius.*</c> type — or <see langword="null"/> when
+    /// <paramref name="resource"/> is not a backing resource.
+    /// </summary>
+    /// <remarks>
+    /// Side-effect-free like <see cref="IsBackingResource"/>, so a diagnostic can name the type
+    /// without emitting the per-resource mapping log entries that belong to the publish path.
+    /// </remarks>
+    internal static string? TryGetEmittedBackingType(IResource resource)
+    {
+        var key = GetMappingKey(resource);
+        if (!s_typeMappings.TryGetValue(key, out var mapping) ||
+            string.Equals(mapping.RadiusType, RadiusResourceTypes.Containers, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return mapping.LegacyFallbackType ?? mapping.RadiusType;
+    }
+
+    /// <summary>
     /// The Radius type each backing-resource mapping actually emits — the legacy fallback when one
     /// is configured, otherwise the <c>Radius.*</c> type — paired with the mapping key it came from.
     /// </summary>

@@ -412,8 +412,26 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
                 $"PGPORT=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PORT\")].value}}') && " +
                 $"PGUSER=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_USERNAME\")].value}}') && " +
                 $"PGDATABASE=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_DATABASENAME\")].value}}') && " +
-                $"PGPASSWORD=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PASSWORD\")].value}}') && " +
-                "echo \"projected host=$PGHOST port=$PGPORT user=$PGUSER database=$PGDATABASE password_length=${#PGPASSWORD}\"");
+                "echo \"projected host=$PGHOST port=$PGPORT user=$PGUSER database=$PGDATABASE\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The password is *not* among them: a credential-bearing variable is published as
+            // `valueFrom.secretKeyRef`, so `.value` is empty for it and the password has to be read
+            // out of the referenced Secret. Reading `.value` here would silently hand psql an empty
+            // password and fail below as a confusing authentication error.
+            await auto.TypeAsync(
+                $"PG_SECRET=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PASSWORD\")].valueFrom.secretKeyRef.name}}') && " +
+                $"PG_SECRET_KEY=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"APPDB_PASSWORD\")].valueFrom.secretKeyRef.key}}') && " +
+                "test -n \"$PG_SECRET\" && test \"$PG_SECRET_KEY\" = APPDB_PASSWORD && " +
+                "echo \"secret ref: $PG_SECRET/$PG_SECRET_KEY\" && echo SECRETREF''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("SECRETREF_OK", timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync(
+                $"PGPASSWORD=$(kubectl get secret -n {radiusNamespace} \"$PG_SECRET\" -o jsonpath=\"{{.data.$PG_SECRET_KEY}}\" | base64 -d) && " +
+                "echo \"password_length=${#PGPASSWORD}\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
