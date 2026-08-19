@@ -335,7 +335,7 @@ internal sealed class TelemetryApiService(
         await foreach (var log in telemetryRepository.WatchLogsAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
-            yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
+            yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
         }
     }
 

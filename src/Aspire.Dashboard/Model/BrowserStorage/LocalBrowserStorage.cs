@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+using Aspire.Dashboard.Serialization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.JSInterop;
 
@@ -13,6 +15,7 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
+        TypeInfoResolver = DashboardJsonSerializerContext.Default,
     };
 
     private readonly IJSRuntime _jsRuntime;
@@ -33,7 +36,8 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
         try
         {
-            return new StorageResult<TValue>(true, JsonSerializer.Deserialize<TValue>(json, s_options));
+            var typeInfo = (JsonTypeInfo<TValue>)s_options.GetTypeInfo(typeof(TValue));
+            return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
         }
         catch (Exception ex)
         {
@@ -45,7 +49,8 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
     {
-        var json = JsonSerializer.Serialize(value, s_options);
+        var typeInfo = (JsonTypeInfo<TValue>)s_options.GetTypeInfo(typeof(TValue));
+        var json = JsonSerializer.Serialize(value, typeInfo);
 
         await SetJsonAsync(key, json).ConfigureAwait(false);
     }

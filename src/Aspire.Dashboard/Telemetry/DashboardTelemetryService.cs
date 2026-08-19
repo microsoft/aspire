@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization.Metadata;
 using Aspire.Shared;
 
 namespace Aspire.Dashboard.Telemetry;
@@ -113,7 +114,12 @@ public sealed class DashboardTelemetryService
                 correlations?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray(),
                 postStartEvent);
 
-            var response = await PostRequestAsync<StartOperationRequest, StartOperationResponse>(client, TelemetryEndpoints.TelemetryStartOperation, new StartOperationRequest(eventName, scopeSettings)).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryStartOperation,
+                new StartOperationRequest(eventName, scopeSettings),
+                DashboardTelemetryJsonSerializerContext.Default.StartOperationRequest,
+                DashboardTelemetryJsonSerializerContext.Default.StartOperationResponse).ConfigureAwait(false);
             context.Properties[0].SetValue(response.OperationId);
             context.Properties[1].SetValue(response.Correlation);
         });
@@ -134,7 +140,10 @@ public sealed class DashboardTelemetryService
         var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryEndOperation);
         _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
         {
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryEndOperation, new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage)).ConfigureAwait(false);
+            await client.PostAsJsonAsync(
+                TelemetryEndpoints.TelemetryEndOperation,
+                new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage),
+                DashboardTelemetryJsonSerializerContext.Default.EndOperationRequest).ConfigureAwait(false);
         });
     }
 
@@ -159,7 +168,12 @@ public sealed class DashboardTelemetryService
                 correlations?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray(),
                 postStartEvent);
 
-            var response = await PostRequestAsync<StartOperationRequest, StartOperationResponse>(client, TelemetryEndpoints.TelemetryStartUserTask, new StartOperationRequest(eventName, scopeSettings)).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryStartUserTask,
+                new StartOperationRequest(eventName, scopeSettings),
+                DashboardTelemetryJsonSerializerContext.Default.StartOperationRequest,
+                DashboardTelemetryJsonSerializerContext.Default.StartOperationResponse).ConfigureAwait(false);
             context.Properties[0].SetValue(response.OperationId);
             context.Properties[1].SetValue(response.Correlation);
         });
@@ -180,7 +194,10 @@ public sealed class DashboardTelemetryService
         var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryEndUserTask);
         _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
         {
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryEndUserTask, new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage)).ConfigureAwait(false);
+            await client.PostAsJsonAsync(
+                TelemetryEndpoints.TelemetryEndUserTask,
+                new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage),
+                DashboardTelemetryJsonSerializerContext.Default.EndOperationRequest).ConfigureAwait(false);
         });
     }
 
@@ -206,7 +223,12 @@ public sealed class DashboardTelemetryService
                 IncludeDefaultProperties(properties),
                 correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
 
-            var response = await PostRequestAsync<PostOperationRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostOperation, request).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryPostOperation,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostOperationRequest,
+                DashboardTelemetryJsonSerializerContext.Default.TelemetryEventCorrelation).ConfigureAwait(false);
             context.Properties[0].SetValue(response);
         });
 
@@ -234,7 +256,12 @@ public sealed class DashboardTelemetryService
                 IncludeDefaultProperties(properties),
                 correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
 
-            var response = await PostRequestAsync<PostOperationRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostUserTask, request).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryPostUserTask,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostOperationRequest,
+                DashboardTelemetryJsonSerializerContext.Default.TelemetryEventCorrelation).ConfigureAwait(false);
             context.Properties[0].SetValue(response);
         });
 
@@ -262,7 +289,12 @@ public sealed class DashboardTelemetryService
                 IncludeDefaultProperties(properties),
                 correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
 
-            var response = await PostRequestAsync<PostFaultRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostFault, request).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryPostFault,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostFaultRequest,
+                DashboardTelemetryJsonSerializerContext.Default.TelemetryEventCorrelation).ConfigureAwait(false);
             context.Properties[0].SetValue(response);
         });
 
@@ -291,7 +323,12 @@ public sealed class DashboardTelemetryService
                 IncludeDefaultProperties(additionalProperties),
                 correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
 
-            var response = await PostRequestAsync<PostAssetRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostAsset, request).ConfigureAwait(false);
+            var response = await PostRequestAsync(
+                client,
+                TelemetryEndpoints.TelemetryPostAsset,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostAssetRequest,
+                DashboardTelemetryJsonSerializerContext.Default.TelemetryEventCorrelation).ConfigureAwait(false);
             context.Properties[0].SetValue(response);
         });
 
@@ -312,7 +349,10 @@ public sealed class DashboardTelemetryService
         _telemetrySender.QueueRequest(context, async (client, _) =>
         {
             var request = new PostPropertyRequest(propertyName, propertyValue);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostProperty, request).ConfigureAwait(false);
+            await client.PostAsJsonAsync(
+                TelemetryEndpoints.TelemetryPostProperty,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostPropertyRequest).ConfigureAwait(false);
         });
     }
 
@@ -330,7 +370,10 @@ public sealed class DashboardTelemetryService
         _telemetrySender.QueueRequest(context, async (client, _) =>
         {
             var request = new PostPropertyRequest(propertyName, propertyValue);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostRecurringProperty, request).ConfigureAwait(false);
+            await client.PostAsJsonAsync(
+                TelemetryEndpoints.TelemetryPostRecurringProperty,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostPropertyRequest).ConfigureAwait(false);
         });
     }
 
@@ -348,15 +391,23 @@ public sealed class DashboardTelemetryService
         _telemetrySender.QueueRequest(context, async (client, _) =>
         {
             var request = new PostCommandLineFlagsRequest(flagPrefixes, additionalProperties);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostCommandLineFlags, request).ConfigureAwait(false);
+            await client.PostAsJsonAsync(
+                TelemetryEndpoints.TelemetryPostCommandLineFlags,
+                request,
+                DashboardTelemetryJsonSerializerContext.Default.PostCommandLineFlagsRequest).ConfigureAwait(false);
         });
     }
 
-    private static async Task<TResponse> PostRequestAsync<TRequest, TResponse>(HttpClient client, string endpoint, TRequest request)
+    private static async Task<TResponse> PostRequestAsync<TRequest, TResponse>(
+        HttpClient client,
+        string endpoint,
+        TRequest request,
+        JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TResponse> responseTypeInfo)
     {
-        var httpResponseMessage = await client.PostAsJsonAsync(endpoint, request).ConfigureAwait(false);
+        var httpResponseMessage = await client.PostAsJsonAsync(endpoint, request, requestTypeInfo).ConfigureAwait(false);
         httpResponseMessage.EnsureSuccessStatusCode();
-        var response = await httpResponseMessage.Content.ReadFromJsonAsync<TResponse>().ConfigureAwait(false);
+        var response = await httpResponseMessage.Content.ReadFromJsonAsync(responseTypeInfo).ConfigureAwait(false);
         if (response is null)
         {
             throw new InvalidOperationException("Response was null.");
