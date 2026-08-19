@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -108,11 +109,25 @@ public static class BlazorHostedExtensions
                 // The debug bridge (monovsdbg_wasm) needs the CLIENT project path to resolve
                 // WASM BCL assemblies on disk. Passing the server's path fails because the
                 // server's output doesn't contain browser-wasm BCL DLLs (e.g. mscorlib.dll).
-                var clientProjectPath = ResolveBlazorWasmClientProjectPath(projectMetadata.ProjectPath);
-                if (clientProjectPath is not null)
+                // Register the hidden debugger resource now so the app model is complete, but
+                // keep its command hidden until cancellable discovery runs before startup.
+                AddBrowserDebuggerResource(
+                    host,
+                    projectMetadata.ProjectPath,
+                    () => annotation.DebuggerClientProjectPath,
+                    relativePath: null,
+                    browser: annotation.DebuggerBrowser);
+
+                host.ApplicationBuilder.OnBeforeStart(async (beforeStartEvent, cancellationToken) =>
                 {
-                    AddBrowserDebuggerResource(host, clientProjectPath, relativePath: null, browser: annotation.DebuggerBrowser);
-                }
+                    var logger = beforeStartEvent.Services
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger(typeof(BlazorHostedExtensions));
+                    annotation.DebuggerClientProjectPath = await ResolveBlazorWasmClientProjectPathAsync(
+                        projectMetadata.ProjectPath,
+                        logger,
+                        cancellationToken).ConfigureAwait(false);
+                });
             }
         }
 
@@ -177,7 +192,10 @@ public static class BlazorHostedExtensions
     /// The server project target asks each evaluated project reference whether it is a
     /// Blazor WebAssembly project and returns the matching project path.
     /// </summary>
-    private static string? ResolveBlazorWasmClientProjectPath(string serverProjectPath)
+    private static async Task<string?> ResolveBlazorWasmClientProjectPathAsync(
+        string serverProjectPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
         var serverDirectory = Path.GetDirectoryName(serverProjectPath);
         if (serverDirectory is null)
@@ -185,7 +203,7 @@ public static class BlazorHostedExtensions
             return null;
         }
 
-        var result = BlazorDotNetCliRunner.RunAsync(
+        var result = await BlazorDotNetCliRunner.RunAsync(
             serverProjectPath,
             "msbuild",
             [
@@ -194,11 +212,33 @@ public static class BlazorHostedExtensions
                 "-nologo"
             ],
             machineReadableOutput: true,
-            CancellationToken.None).GetAwaiter().GetResult();
+            cancellationToken).ConfigureAwait(false);
 
-        if (!result.Started || result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.StandardOutput))
+        if (!result.Started)
         {
-            return null;
+            var message =
+                $"Failed to start '{result.Command}' while discovering the Blazor WebAssembly client project for '{serverProjectPath}'.";
+            throw result.StartException is not null
+                ? new DistributedApplicationException(message, result.StartException)
+                : new DistributedApplicationException(message);
+        }
+
+        if (result.ExitCode != 0)
+        {
+            BlazorGatewayLog.WasmClientDiscoveryFailed(
+                logger,
+                serverProjectPath,
+                result.StandardOutput,
+                result.StandardError);
+            throw new DistributedApplicationException(
+                $"Failed to discover the Blazor WebAssembly client project for '{serverProjectPath}'. " +
+                $"The ResolveWebAssemblyProjectReferences MSBuild target exited with code {result.ExitCode}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            throw new DistributedApplicationException(
+                $"The ResolveWebAssemblyProjectReferences MSBuild target returned no output for '{serverProjectPath}'.");
         }
 
         try
@@ -220,9 +260,11 @@ public static class BlazorHostedExtensions
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            return null;
+            throw new DistributedApplicationException(
+                $"Failed to parse the ResolveWebAssemblyProjectReferences output for '{serverProjectPath}'.",
+                ex);
         }
 
         return null;
@@ -230,15 +272,19 @@ public static class BlazorHostedExtensions
 
     private static void AddBrowserDebuggerResource(
         IResourceBuilder<ProjectResource> host,
-        string clientProjectPath,
+        string serverProjectPath,
+        Func<string?> clientProjectPathProvider,
         string? relativePath,
         string browser)
     {
+        var workingDirectory = Path.GetDirectoryName(serverProjectPath) ?? serverProjectPath;
+
         BrowserDebuggerHelper.AddBrowserDebuggerResource(
             host.ApplicationBuilder,
             host.Resource,
             host,
-            clientProjectPath,
+            workingDirectory,
+            clientProjectPathProvider,
             relativePath,
             browser: browser);
     }
@@ -254,6 +300,7 @@ internal sealed class HostedClientAnnotation : IResourceAnnotation
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
     public string DebuggerBrowser { get; set; } = "msedge";
+    public string? DebuggerClientProjectPath { get; set; }
 }
 
 /// <summary>

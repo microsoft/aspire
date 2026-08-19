@@ -20,6 +20,8 @@ internal static class BrowserDebuggerHelper
     private const string BrowserCapability = "browser";
     private const string BrowserDebuggingUnavailableMessage =
         "Browser debugging requires an active IDE debug session that supports the 'browser' launch configuration.";
+    private const string BrowserDebuggerClientUnavailableMessage =
+        "Browser debugging is unavailable because no Blazor WebAssembly client project was discovered.";
 
     /// <summary>
     /// Creates a hidden child ExecutableResource with WithExplicitStart that launches a debug browser
@@ -40,13 +42,35 @@ internal static class BrowserDebuggerHelper
         string? relativePath,
         string browser = "msedge")
     {
+        var clientProjectDirectory = Path.GetDirectoryName(clientProjectPath) ?? clientProjectPath;
+
+        AddBrowserDebuggerResource(
+            builder,
+            parentResource,
+            commandTarget,
+            clientProjectDirectory,
+            () => clientProjectPath,
+            relativePath,
+            browser);
+    }
+
+    /// <summary>
+    /// Creates a browser debugger whose client project path is resolved before application startup.
+    /// </summary>
+    internal static void AddBrowserDebuggerResource(
+        IDistributedApplicationBuilder builder,
+        IResourceWithEndpoints parentResource,
+        IResourceBuilder<IResource> commandTarget,
+        string workingDirectory,
+        Func<string?> clientProjectPathProvider,
+        string? relativePath,
+        string browser = "msedge")
+    {
         var debuggerResourceName = relativePath is not null
             ? $"{parentResource.Name}-{commandTarget.Resource.Name}-debugger"
             : $"{parentResource.Name}-wasm-debugger";
 
-        var clientProjectDir = Path.GetDirectoryName(clientProjectPath) ?? clientProjectPath;
-
-        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, browser, clientProjectDir);
+        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, browser, workingDirectory);
         debuggerResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         // Tracks whether a debug browser session is currently active.
@@ -92,6 +116,9 @@ internal static class BrowserDebuggerHelper
                     var appUrl = relativePath is not null
                         ? $"{endpointReference.Url}/{relativePath}/"
                         : endpointReference.Url;
+                    // DCP materializes launch configurations during startup. When discovery found
+                    // no client, the command stays hidden and this placeholder is never launched.
+                    var clientProjectPath = clientProjectPathProvider() ?? workingDirectory;
 
                     return new BrowserLaunchConfiguration
                     {
@@ -112,6 +139,11 @@ internal static class BrowserDebuggerHelper
                 await debugSessionLock.WaitAsync(context.CancellationToken).ConfigureAwait(false);
                 try
                 {
+                    if (clientProjectPathProvider() is null)
+                    {
+                        return CommandResults.Failure(BrowserDebuggerClientUnavailableMessage);
+                    }
+
                     if (!debuggerResource.SupportsDebugging(builder.Configuration, out _))
                     {
                         return CommandResults.Failure(BrowserDebuggingUnavailableMessage);
@@ -175,6 +207,11 @@ internal static class BrowserDebuggerHelper
             {
                 UpdateState = ctx =>
                 {
+                    if (clientProjectPathProvider() is null)
+                    {
+                        return ResourceCommandState.Hidden;
+                    }
+
                     if (debugSessionActive)
                     {
                         return ResourceCommandState.Hidden;
