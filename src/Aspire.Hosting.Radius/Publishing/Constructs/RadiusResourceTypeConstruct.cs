@@ -27,6 +27,15 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     private BicepValue<object>? _password;
     private BicepValue<object>? _database;
 
+    // Which schema properties have actually been assigned a value.
+    //
+    // The backing fields cannot answer this: Azure.Provisioning's DefineProperty returns a non-null
+    // BicepValue in an *unset* state, and DefineProvisionableProperties runs on the first
+    // Initialize() — which the publisher triggers when it assigns ResourceName, long before any
+    // credential is resolved. A `_userName is null` test would therefore always be false and the
+    // publish-time guards that depend on it would never fire.
+    private readonly HashSet<string> _assignedSchemaProperties = new(StringComparer.Ordinal);
+
     /// <summary>The resource name.</summary>
     public BicepValue<string> ResourceName
     {
@@ -83,7 +92,7 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     internal BicepValue<object> UserName
     {
         get { Initialize(); return _userName!; }
-        set { Initialize(); _userName!.Assign(value); }
+        set { Initialize(); _userName!.Assign(value); _assignedSchemaProperties.Add("username"); }
     }
 
     /// <summary>
@@ -100,7 +109,7 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     internal BicepValue<object> Password
     {
         get { Initialize(); return _password!; }
-        set { Initialize(); _password!.Assign(value); }
+        set { Initialize(); _password!.Assign(value); _assignedSchemaProperties.Add("password"); }
     }
 
     /// <summary>
@@ -110,7 +119,7 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     internal BicepValue<object> Database
     {
         get { Initialize(); return _database!; }
-        set { Initialize(); _database!.Assign(value); }
+        set { Initialize(); _database!.Assign(value); _assignedSchemaProperties.Add("database"); }
     }
 
     /// <summary>
@@ -144,11 +153,17 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     /// Reads back a schema property assigned through <see cref="SetSchemaProperty"/>, or
     /// <see langword="null"/> when it was never assigned.
     /// </summary>
+    /// <remarks>
+    /// Assignment is tracked explicitly rather than inferred from the backing field. The field is
+    /// non-<see langword="null"/> from the first <c>Initialize()</c> onwards whether or not a value
+    /// was ever assigned, so a field null-check would report every property as present and silently
+    /// disable the callers that rely on this returning <see langword="null"/>.
+    /// </remarks>
     internal BicepValue<object>? GetSchemaProperty(string propertyName) => propertyName switch
     {
-        "username" => _userName is null ? null : UserName,
-        "password" => _password is null ? null : Password,
-        "database" => _database is null ? null : Database,
+        "username" => _assignedSchemaProperties.Contains("username") ? UserName : null,
+        "password" => _assignedSchemaProperties.Contains("password") ? Password : null,
+        "database" => _assignedSchemaProperties.Contains("database") ? Database : null,
         _ => throw new ArgumentOutOfRangeException(
             nameof(propertyName),
             propertyName,

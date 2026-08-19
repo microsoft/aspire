@@ -56,6 +56,7 @@ public sealed class RadiusBackingResourceEndpointException : InvalidOperationExc
     /// </summary>
     /// <param name="resource">The backing resource that could not be projected.</param>
     /// <param name="message">The message that describes the error.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="resource"/> is <see langword="null"/>.</exception>
     public RadiusBackingResourceEndpointException(IResource resource, string message)
         : this(resource, message, innerException: null)
     {
@@ -75,6 +76,7 @@ public sealed class RadiusBackingResourceEndpointException : InvalidOperationExc
     /// a caller catching it does so to report which resource failed — and an instance without one
     /// could not answer that.
     /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="resource"/> is <see langword="null"/>.</exception>
     public RadiusBackingResourceEndpointException(IResource resource, string message, Exception? innerException)
         : base(message, innerException)
     {

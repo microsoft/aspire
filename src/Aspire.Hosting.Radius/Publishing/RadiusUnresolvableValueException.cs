@@ -35,8 +35,15 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// Both are detected at their exact call site and re-thrown as this type, so the loop's catch names
 /// the condition rather than a type that any other failure could also share.
 /// </para>
+/// <para>
+/// It derives from <see cref="InvalidOperationException"/> to match the package's publish-time
+/// failure convention (the same convention <c>RadiusBackingResourceEndpointException</c>
+/// documents), so that a path which does not intend to skip the value — and therefore lets this
+/// escape — still fails the publish as the publisher's own exception family rather than as a bare
+/// <see cref="Exception"/>.
+/// </para>
 /// </remarks>
-internal sealed class RadiusUnresolvableValueException : Exception
+internal sealed class RadiusUnresolvableValueException : InvalidOperationException
 {
     public RadiusUnresolvableValueException(IResource owner, string reason, Exception? innerException = null)
         : base(reason, innerException)
