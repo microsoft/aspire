@@ -501,6 +501,7 @@ suite('E2E launch profile', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostLifecycleTools = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostLifecycleTools.e2e.test.ts'), 'utf8');
         const dotnetRuntimeInstallIndex = runner.indexOf("displayName: '.NET Install Tool'");
         const csharpInstallIndex = runner.indexOf("displayName: 'C#'");
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
@@ -513,7 +514,8 @@ suite('E2E launch profile', () => {
         // Generated project files embed their target framework as:
         //   <TargetFramework>net10.0</TargetFramework>
         const runnerTargetFrameworks = [...runner.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]);
-        const fixtureTargetFrameworks = [...fixtures.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]);
+        const fixtureTargetFrameworks = [fixtures, appHostLifecycleTools]
+            .flatMap(source => [...source.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]));
 
         assert.ok(workflow.includes('shardName: azure-functions'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
@@ -521,7 +523,7 @@ suite('E2E launch profile', () => {
         assert.ok(dotNetSetupIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
         assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0']);
-        assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0']);
+        assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
         assert.ok(workflow.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
