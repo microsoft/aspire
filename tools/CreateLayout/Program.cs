@@ -179,7 +179,9 @@ internal sealed class LayoutBuilder : IDisposable
     {
         Log("Copying Native AOT Dashboard...");
 
-        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0");
+        // A non-RID publish contains a framework-dependent apphost whose DLL and runtime config are
+        // intentionally not copied into the bundle. Only RID-specific output can be used here.
+        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
         if (dashboardPublishPath is null)
         {
             throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
@@ -297,11 +299,11 @@ internal sealed class LayoutBuilder : IDisposable
         return archivePath;
     }
 
-    private string? FindPublishPath(string projectName, string targetFramework)
+    private string? FindPublishPath(string projectName, string targetFramework, bool requireRidSpecific = false)
     {
         // Look for publish output in standard locations
         // Order: RID-specific publish paths first (Release then Debug)
-        var searchPaths = new[]
+        var ridSpecificSearchPaths = new[]
         {
             // PlatformName-scoped output used by RID packaging and signing.
             Path.Combine(_artifactsPath, "bin", projectName, _rid, "Release", targetFramework, _rid, "publish"),
@@ -312,10 +314,17 @@ internal sealed class LayoutBuilder : IDisposable
             // Native AOT output
             Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, _rid, "native"),
             Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, _rid, "native"),
-            // Non-RID publish output
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, "publish"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, "publish"),
         };
+
+        var searchPaths = requireRidSpecific
+            ? ridSpecificSearchPaths
+            :
+            [
+                .. ridSpecificSearchPaths,
+                // Non-RID publish output
+                Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, "publish"),
+                Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, "publish"),
+            ];
 
         foreach (var path in searchPaths)
         {

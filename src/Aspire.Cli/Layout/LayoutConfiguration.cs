@@ -11,13 +11,13 @@ namespace Aspire.Cli.Layout;
 public enum LayoutComponent
 {
     /// <summary>CLI executable.</summary>
-    Cli,
+    Cli = 0,
     /// <summary>Developer Control Plane.</summary>
-    Dcp,
-    /// <summary>Dashboard executable and static assets.</summary>
-    Dashboard,
+    Dcp = 1,
     /// <summary>Unified managed binary (server, NuGet, terminal host).</summary>
-    Managed
+    Managed = 2,
+    /// <summary>Dashboard executable and static assets.</summary>
+    Dashboard = 3
 }
 
 /// <summary>
