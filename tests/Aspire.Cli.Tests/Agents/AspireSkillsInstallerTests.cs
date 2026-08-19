@@ -2101,9 +2101,9 @@ public class AspireSkillsInstallerTests
             ]
         };
 
-        manifest.AdditionalProperties[AspireSkillsBundleDescriptor.Skills.ManifestAssetsPropertyName] =
-            JsonSerializer.SerializeToElement(manifest.Assets, AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray);
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(
+            manifest,
+            AspireSkillsBundleProvider.CreateManifestTypeInfo(AspireSkillsBundleDescriptor.Skills));
         await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
         if (archiveSha512 is not null)

@@ -48,15 +48,21 @@ public class AspireSkillsBundleTests
             }
             """;
         var descriptor = CreateDescriptor(manifestAssetsPropertyName);
+        var manifestTypeInfo = AspireSkillsBundleProvider.CreateManifestTypeInfo(descriptor);
 
         var manifest = JsonSerializer.Deserialize(
             json,
-            AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+            manifestTypeInfo);
 
         Assert.NotNull(manifest);
-        var asset = Assert.Single(manifest.GetAssets(descriptor.ManifestAssetsPropertyName));
+        var asset = Assert.Single(manifest.Assets);
         Assert.NotNull(asset);
         Assert.Equal("aspire", asset.Name);
+
+        var serializedManifest = JsonSerializer.Serialize(manifest, manifestTypeInfo);
+        using var document = JsonDocument.Parse(serializedManifest);
+        Assert.True(document.RootElement.TryGetProperty(manifestAssetsPropertyName, out var serializedAssets));
+        Assert.Equal(JsonValueKind.Array, serializedAssets.ValueKind);
     }
 
     [Fact]
@@ -939,9 +945,9 @@ public class AspireSkillsBundleTests
 
     private static Task WriteManifestAsync(string bundleDirectory, SkillBundleManifest manifest)
     {
-        manifest.AdditionalProperties[AspireSkillsBundleDescriptor.Skills.ManifestAssetsPropertyName] =
-            JsonSerializer.SerializeToElement(manifest.Assets, AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray);
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(
+            manifest,
+            AspireSkillsBundleProvider.CreateManifestTypeInfo(AspireSkillsBundleDescriptor.Skills));
         return File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
     }
 

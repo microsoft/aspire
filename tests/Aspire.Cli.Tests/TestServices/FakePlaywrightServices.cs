@@ -174,9 +174,9 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             ]
         };
 
-        manifest.AdditionalProperties[AspireSkillsBundleDescriptor.Skills.ManifestAssetsPropertyName] =
-            JsonSerializer.SerializeToElement(manifest.Assets, AspireSkillsJsonSerializerContext.Default.SkillBundleAssetArray);
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(
+            manifest,
+            AspireSkillsBundleProvider.CreateManifestTypeInfo(AspireSkillsBundleDescriptor.Skills));
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 

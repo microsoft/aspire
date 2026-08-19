@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Semver;
@@ -133,15 +134,13 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         SkillBundleManifest? manifest;
-        SkillBundleAsset?[] assets;
         try
         {
             await using var manifestStream = File.OpenRead(manifestPath);
             manifest = await JsonSerializer.DeserializeAsync(
                 manifestStream,
-                AspireSkillsJsonSerializerContext.Default.SkillBundleManifest,
+                CreateManifestTypeInfo(descriptor),
                 cancellationToken).ConfigureAwait(false);
-            assets = manifest?.GetAssets(descriptor.ManifestAssetsPropertyName) ?? [];
         }
         catch (JsonException ex)
         {
@@ -154,14 +153,41 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return CreateBundle(assetKind, bundleDirectory, manifest, assets, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
+        return CreateBundle(assetKind, bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
+    }
+
+    internal static JsonTypeInfo<SkillBundleManifest> CreateManifestTypeInfo(AspireSkillsBundleDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        var resolver = AspireSkillsJsonSerializerContext.Default.WithAddedModifier(typeInfo =>
+        {
+            if (typeInfo.Type != typeof(SkillBundleManifest))
+            {
+                return;
+            }
+
+            var assetsPropertyName = JsonNamingPolicy.CamelCase.ConvertName(nameof(SkillBundleManifest.Assets));
+            var assetsProperty = typeInfo.Properties.Single(property =>
+                string.Equals(property.Name, assetsPropertyName, StringComparison.Ordinal));
+            // Published manifests use a descriptor-specific top-level collection, such as:
+            // { "skills": [...] }
+            assetsProperty.Name = descriptor.ManifestAssetsPropertyName;
+        });
+        // Use the source-generated contract as the resolver base rather than
+        // DefaultJsonTypeInfoResolver so the Native AOT CLI does not require reflection.
+        var options = new JsonSerializerOptions(AspireSkillsJsonSerializerContext.Default.Options)
+        {
+            TypeInfoResolver = resolver,
+        };
+
+        return (JsonTypeInfo<SkillBundleManifest>)options.GetTypeInfo(typeof(SkillBundleManifest));
     }
 
     private static AspireSkillsBundle CreateBundle(
         AgentAssetKind assetKind,
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
-        SkillBundleAsset?[] assets,
         string currentCliVersion,
         string currentSdkVersion,
         bool skipCompatibilityCheck)
@@ -182,6 +208,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
         }
 
+        var assets = manifest.Assets;
         if (assets is not { Length: > 0 })
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
