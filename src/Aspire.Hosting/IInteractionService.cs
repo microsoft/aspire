@@ -528,7 +528,7 @@ public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, 
 /// </summary>
 public sealed class InteractionFile
 {
-    private int _disposed;
+    private bool _disposed;
 
     internal InteractionFile(string id, string name, string filePath)
     {
@@ -559,7 +559,7 @@ public sealed class InteractionFile
     /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
     public Stream OpenRead()
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
     }
 
@@ -571,11 +571,11 @@ public sealed class InteractionFile
     /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
     public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         return File.ReadAllBytesAsync(FilePath, cancellationToken);
     }
 
-    internal void MarkDisposed() => Interlocked.Exchange(ref _disposed, 1);
+    internal void MarkDisposed() => _disposed = true;
 }
 
 /// <summary>
