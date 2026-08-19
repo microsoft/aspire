@@ -203,6 +203,11 @@ public static class BlazorHostedExtensions
             return null;
         }
 
+        // Use MSBuild evaluation instead of parsing ProjectReference XML because imports and
+        // conditions determine the effective project graph. The target asks each evaluated
+        // reference whether it is a WASM client, then -getItem emits the collected items as JSON.
+        // An empty item collection is valid and keeps the browser debugging command hidden.
+        // See https://learn.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference#getitemitemname.
         var result = await BlazorDotNetCliRunner.RunAsync(
             serverProjectPath,
             "msbuild",
