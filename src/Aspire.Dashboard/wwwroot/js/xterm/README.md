@@ -157,12 +157,32 @@ Normal image display is unaffected by the patch.
 `TerminalView.razor.js` loads the addon with Sixel and iTerm inline images
 disabled and Kitty enabled, because Hex1b only emits Kitty sequences.
 
-The addon decodes payloads through a WebAssembly module, so the dashboard's
-Content Security Policy includes `'wasm-unsafe-eval'` in `script-src` (see
-`Model/BrowserSecurityHeadersMiddleware.cs`). Under a bare `script-src 'self'`
-the browser blocks wasm instantiation, the addon throws while handling the APC
-sequence, and the terminal stops advancing until the next reconnect — the image
-never appears and live output appears frozen.
+### Why the CSP needs `'wasm-unsafe-eval'`
+
+Kitty payloads are base64, and the addon decodes them with a streaming base64
+decoder from the `sixel` package that is compiled to WebAssembly via `inwasm`.
+It is instantiated lazily on the first payload chunk:
+
+```
+KittyGraphicsHandler.put -> _streamPayload -> decoder.init()
+  -> new WebAssembly.Module / new WebAssembly.Instance
+```
+
+This is on the mandatory path for every Kitty transmission, so turning Sixel off
+does not avoid it, and the addon has no JavaScript fallback for this decoder.
+(The `atob` fallbacks elsewhere in the bundle decode the embedded wasm binary
+itself, which is stored as base64.)
+
+Under a bare `script-src 'self'` the browser refuses to compile the module, the
+addon throws part-way through the APC sequence, and xterm's parser is left
+mid-sequence — the image never appears *and* the terminal stops advancing until
+the next reconnect. Hence `'wasm-unsafe-eval'` in
+`Model/BrowserSecurityHeadersMiddleware.cs`. It permits only WebAssembly
+compilation and still forbids `eval()` and `new Function()`.
+
+A wasm-free fallback for this decode (`Uint8Array.fromBase64()`, or `atob`)
+would let strict-CSP hosts drop the relaxation entirely; worth raising upstream
+alongside PR #6098.
 
 Other known limits of this path:
 

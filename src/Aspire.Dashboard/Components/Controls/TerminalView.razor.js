@@ -1061,8 +1061,12 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     //
     // The Kitty path itself decodes payloads through a WebAssembly module, so
     // the dashboard's CSP carries 'wasm-unsafe-eval' (see
-    // BrowserSecurityHeadersMiddleware). Without it the addon throws mid-APC
-    // and the terminal stops advancing until the next reconnect.
+    // BrowserSecurityHeadersMiddleware). Note that turning Sixel off does not
+    // avoid this: Kitty payloads are base64, and the addon decodes them with a
+    // wasm-compiled streaming base64 decoder that has no JS fallback
+    // (KittyGraphicsHandler.put -> _streamPayload -> decoder.init()). Without
+    // the CSP entry the addon throws mid-APC and the terminal stops advancing
+    // until the next reconnect.
     //
     // The limits below bound how much browser memory a workload can pin by
     // spraying images down the PTY. They mirror the Hex1b WebMuxerDemo
