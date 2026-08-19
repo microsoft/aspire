@@ -52,22 +52,36 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
+    private readonly bool _hasBundle;
+    private readonly List<AgentAssetKind> _requestedAssetKinds = [];
 
     public FakeAspireSkillsInstaller(CliExecutionContext executionContext)
         : this(executionContext, result: null)
     {
     }
 
-    public FakeAspireSkillsInstaller(CliExecutionContext executionContext, AspireSkillsInstallResult? result)
+    public FakeAspireSkillsInstaller(
+        CliExecutionContext executionContext,
+        AspireSkillsInstallResult? result,
+        bool hasBundle = true)
     {
         _bundleDirectory = new DirectoryInfo(Path.Combine(executionContext.WorkingDirectory.FullName, ".fake-aspire-skills-bundle"));
         _result = result;
+        _hasBundle = hasBundle;
+    }
+
+    public IReadOnlyList<AgentAssetKind> RequestedAssetKinds => _requestedAssetKinds;
+
+    public bool HasBundle(AgentAssetKind assetKind)
+    {
+        return _hasBundle && assetKind is AgentAssetKind.Skills;
     }
 
     public async Task<AspireSkillsInstallResult> InstallAsync(
         AgentAssetKind assetKind,
         CancellationToken cancellationToken)
     {
+        _requestedAssetKinds.Add(assetKind);
         Assert.Equal(AgentAssetKind.Skills, assetKind);
 
         if (_result is not null)

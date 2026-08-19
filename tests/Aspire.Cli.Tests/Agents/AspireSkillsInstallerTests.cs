@@ -25,8 +25,27 @@ namespace Aspire.Cli.Tests.Agents;
 public class AspireSkillsInstallerTests
 {
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
-    private const string CacheLockRetryLogMessage = "Acquiring the Aspire skills cache lock";
+    private const string CacheLockRetryLogMessage = "Acquiring the Aspire-skills bundle cache lock";
     private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+
+    [Fact]
+    public void HasBundle_ReflectsKnownBundleDescriptors()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var installer = CreateInstaller(executionContext);
+
+            Assert.True(installer.HasBundle(AgentAssetKind.Skills));
+            Assert.False(installer.HasBundle((AgentAssetKind)int.MaxValue));
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task InstallAsync_TracksAgentAssetKind()
@@ -462,7 +481,8 @@ public class AspireSkillsInstallerTests
                 await File.ReadAllTextAsync(Path.Combine(
                     cachedBundleDirectory,
                     AspireSkillsInstaller.ArchiveSha512FileName)));
-            Assert.NotEmpty(await oldResult.Bundle.GetAssetFilesAsync(oldResult.Bundle.GetAssetDefinitions()[0], CancellationToken.None));
+            var oldSkill = oldResult.Bundle.GetAssetDefinitions()[0];
+            Assert.NotEmpty(await oldResult.Bundle.GetAssetFilesAsync(oldSkill, CancellationToken.None));
 
             var restoredEmbeddedBundleProvider = new TestEmbeddedAspireSkillsBundleProvider
             {
@@ -2352,7 +2372,7 @@ public class AspireSkillsInstallerTests
             {
                 await File.WriteAllBytesAsync(archivePath, ArchiveBytes, cancellationToken);
                 return await _bundleProvider.CreateAsync(
-                    AgentAssetKind.Skills,
+                    assetKind,
                     new FileInfo(archivePath),
                     bundleDirectory,
                     Metadata.Sha512,

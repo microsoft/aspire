@@ -499,7 +499,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
 
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
+                .Where(static asset => asset.AssetKind is AgentAssetKind.Skills)
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
                 .Cast<object>()
                 .ToList();
@@ -547,7 +548,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
 
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
+                .Where(static asset => asset.AssetKind is AgentAssetKind.Skills)
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
                 .Cast<object>()
                 .ToList();

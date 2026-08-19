@@ -26,6 +26,7 @@ internal sealed class AspireSkillsBundleDescriptor
 {
     internal AspireSkillsBundleDescriptor(
         AgentAssetKind assetKind,
+        string assetKindName,
         string assetPrefix,
         string cacheDirectoryName,
         string displayName,
@@ -36,6 +37,7 @@ internal sealed class AspireSkillsBundleDescriptor
         AspireSkillsBundleInstallerMessages messages)
     {
         AssetKind = assetKind;
+        AssetKindName = assetKindName;
         AssetPrefix = assetPrefix;
         CacheDirectoryName = cacheDirectoryName;
         DisplayName = displayName;
@@ -51,9 +53,10 @@ internal sealed class AspireSkillsBundleDescriptor
     /// </summary>
     public static AspireSkillsBundleDescriptor Skills { get; } = new(
         assetKind: AgentAssetKind.Skills,
+        assetKindName: "skills",
         assetPrefix: "aspire-skills",
         cacheDirectoryName: "aspire-skills",
-        displayName: "Aspire skills",
+        displayName: "Aspire-skills",
         manifestFileName: "skill-manifest.json",
         manifestAssetsPropertyName: "skills",
         embeddedArchiveResourceName: "aspire-skills.bundle.tgz",
@@ -69,7 +72,33 @@ internal sealed class AspireSkillsBundleDescriptor
             MissingMetadataAssetName: AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName,
             MissingMetadataSha512: AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha512));
 
+    private static readonly IReadOnlyList<AspireSkillsBundleDescriptor> s_all = [Skills];
+
+    /// <summary>
+    /// Gets all Aspire-skills bundles known to this CLI.
+    /// </summary>
+    public static IReadOnlyList<AspireSkillsBundleDescriptor> All => s_all;
+
+    /// <summary>
+    /// Gets the Aspire-skills bundle descriptor for an agent asset kind, if one exists.
+    /// </summary>
+    public static AspireSkillsBundleDescriptor? Find(AgentAssetKind assetKind)
+    {
+        return s_all.SingleOrDefault(descriptor => descriptor.AssetKind == assetKind);
+    }
+
+    /// <summary>
+    /// Gets the Aspire-skills bundle descriptor for an agent asset kind.
+    /// </summary>
+    public static AspireSkillsBundleDescriptor Get(AgentAssetKind assetKind)
+    {
+        return Find(assetKind)
+            ?? throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, "The agent asset kind does not have an Aspire-skills bundle.");
+    }
+
     public AgentAssetKind AssetKind { get; }
+
+    public string AssetKindName { get; }
 
     public string AssetPrefix { get; }
 
@@ -86,16 +115,4 @@ internal sealed class AspireSkillsBundleDescriptor
     public string EmbeddedMetadataResourceName { get; }
 
     public AspireSkillsBundleInstallerMessages Messages { get; }
-
-    /// <summary>
-    /// Gets the descriptor for the specified agent asset kind.
-    /// </summary>
-    public static AspireSkillsBundleDescriptor Get(AgentAssetKind assetKind)
-    {
-        return assetKind switch
-        {
-            AgentAssetKind.Skills => Skills,
-            _ => throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, "Unsupported agent asset kind."),
-        };
-    }
 }

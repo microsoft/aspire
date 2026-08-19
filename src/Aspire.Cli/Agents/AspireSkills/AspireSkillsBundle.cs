@@ -16,9 +16,16 @@ internal sealed class AspireSkillsBundle
 
     internal AspireSkillsBundle(string version, AgentAssetKind assetKind, IReadOnlyList<ValidatedAspireSkillsBundleAsset> assets)
     {
+        if (assets.Any(asset => asset.Definition.AssetKind != assetKind))
+        {
+            throw new ArgumentException("All Aspire-skills bundle assets must match the bundle's asset kind.", nameof(assets));
+        }
+
         _version = version;
         _assetKind = assetKind;
-        _assets = assets;
+        _assets = assets
+            .Select(static asset => new ValidatedAspireSkillsBundleAsset(asset.Definition, [.. asset.Files]))
+            .ToList();
     }
 
     /// <summary>
@@ -27,7 +34,12 @@ internal sealed class AspireSkillsBundle
     public string Version => _version;
 
     /// <summary>
-    /// Gets installable files for the specified asset.
+    /// Gets the asset kind represented by this bundle.
+    /// </summary>
+    public AgentAssetKind AssetKind => _assetKind;
+
+    /// <summary>
+    /// Gets installable files for a definition supplied by this bundle.
     /// </summary>
     public Task<IReadOnlyList<AgentAssetFile>> GetAssetFilesAsync(
         AgentAssetDefinition asset,
@@ -36,24 +48,32 @@ internal sealed class AspireSkillsBundle
         ArgumentNullException.ThrowIfNull(asset);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundledAsset = _assets.FirstOrDefault(a => string.Equals(a.Definition.Name, asset.Name, StringComparison.Ordinal));
+        if (asset.AssetKind != _assetKind)
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire-skills bundle contains '{0}' assets, but asset '{1}' has kind '{2}'.",
+                _assetKind,
+                asset.Name,
+                asset.AssetKind));
+        }
+
+        // Definitions are the handles for bundle-owned payloads. Requiring the exact definition
+        // returned by this bundle prevents a same-name asset from another bundle or source from
+        // resolving to these files.
+        var bundledAsset = _assets.FirstOrDefault(candidate => ReferenceEquals(candidate.Definition, asset));
         if (bundledAsset is null)
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle does not contain asset '{0}'.", asset.Name));
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire-skills bundle does not own asset definition '{0}'.",
+                asset.Name));
         }
 
-        List<AgentAssetFile> files = [];
-        foreach (var bundledFile in bundledAsset.Files.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
-        {
-            var relativePath = bundledFile.RelativePath;
-            if (!asset.ShouldInstallFile(relativePath) ||
-                !bundledAsset.Definition.ShouldInstallFile(relativePath))
-            {
-                continue;
-            }
-
-            files.Add(bundledFile);
-        }
+        var files = bundledAsset.Files
+            .Where(file => asset.ShouldInstallFile(file.RelativePath))
+            .OrderBy(file => file.RelativePath, StringComparer.Ordinal)
+            .ToList();
 
         return Task.FromResult<IReadOnlyList<AgentAssetFile>>(files);
     }

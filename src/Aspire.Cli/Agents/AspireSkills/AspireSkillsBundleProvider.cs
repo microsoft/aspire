@@ -15,12 +15,12 @@ using Semver;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Creates and loads validated Aspire skills bundles.
+/// Creates and loads validated Aspire-skills bundles.
 /// </summary>
 internal interface IAspireSkillsBundleProvider
 {
     /// <summary>
-    /// Creates an Aspire skills bundle from an archive and materializes its validated files
+    /// Creates an Aspire-skills bundle from an archive and materializes its validated files
     /// in a dedicated staging directory.
     /// </summary>
     Task<AspireSkillsBundle> CreateAsync(
@@ -32,7 +32,7 @@ internal interface IAspireSkillsBundleProvider
         bool skipCompatibilityCheck = false);
 
     /// <summary>
-    /// Loads an Aspire skills bundle from disk.
+    /// Loads an Aspire-skills bundle from disk.
     /// </summary>
     Task<AspireSkillsBundle> LoadAsync(
         AgentAssetKind assetKind,
@@ -97,7 +97,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         Directory.CreateDirectory(bundleDirectory.FullName);
         var temporaryDirectoryRoot = bundleDirectory.Parent
-            ?? throw new InvalidOperationException("The Aspire skills bundle staging directory must have a parent directory.");
+            ?? throw new InvalidOperationException("The Aspire-skills bundle staging directory must have a parent directory.");
         // Keep extraction beside the staging directory rather than inside it. If Windows AV or
         // indexing holds an extracted file open, best-effort cleanup must not block the later
         // atomic move that publishes the validated staging directory.
@@ -130,7 +130,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var manifestPath = Path.Combine(bundleDirectory.FullName, descriptor.ManifestFileName);
         if (!File.Exists(manifestPath))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest was not found at '{0}'.", manifestPath));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle manifest was not found at '{0}'.", manifestPath));
         }
 
         SkillBundleManifest? manifest;
@@ -144,12 +144,12 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest is invalid.", ex);
+            throw new InvalidOperationException("Aspire-skills bundle manifest is invalid.", ex);
         }
 
         if (manifest is null)
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest is empty or invalid.");
+            throw new InvalidOperationException("Aspire-skills bundle manifest is empty or invalid.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -195,7 +195,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var version = manifest.Version;
         if (string.IsNullOrWhiteSpace(version))
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
+            throw new InvalidOperationException("Aspire-skills bundle manifest must specify a version.");
         }
 
         // The bundle's `supports` range gates remotely acquired bundles, including cache
@@ -211,7 +211,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var assets = manifest.Assets;
         if (assets is not { Length: > 0 })
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
+            throw new InvalidOperationException("Aspire-skills bundle manifest must contain at least one skill.");
         }
 
         var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -220,30 +220,30 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         {
             if (skill is null)
             {
-                throw new InvalidOperationException("Aspire skills bundle manifest contains an empty skill entry.");
+                throw new InvalidOperationException("Aspire-skills bundle manifest contains an empty skill entry.");
             }
 
             var skillName = skill.Name;
             if (string.IsNullOrWhiteSpace(skillName))
             {
-                throw new InvalidOperationException("Aspire skills bundle manifest contains a skill without a name.");
+                throw new InvalidOperationException("Aspire-skills bundle manifest contains a skill without a name.");
             }
 
             ValidateSkillName(skillName);
             if (!skillNames.Add(skillName))
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest contains duplicate skill '{0}'.", skillName));
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle manifest contains duplicate skill '{0}'.", skillName));
             }
 
             if (string.IsNullOrWhiteSpace(skill.Description))
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must specify a description.", skillName));
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' must specify a description.", skillName));
             }
 
             var skillFiles = skill.Files;
             if (skillFiles is not { Length: > 0 })
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' does not contain any files.", skillName));
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' does not contain any files.", skillName));
             }
 
             var installExcludedRelativePaths = (skill.InstallExcludedRelativePaths ?? [])
@@ -251,10 +251,11 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 .ToArray();
             if (installExcludedRelativePaths.Contains(SkillFileName, StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' cannot exclude SKILL.md from installation.", skillName));
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' cannot exclude SKILL.md from installation.", skillName));
             }
 
-            var definition = SkillDefinition.CreateAspireSkillsBundle(
+            var definition = AgentAssetDefinition.CreateAspireSkillsBundleAsset(
+                assetKind,
                 skillName,
                 skill.Description,
                 installExcludedRelativePaths,
@@ -267,7 +268,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             {
                 if (file is null)
                 {
-                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' contains an empty file entry.", skillName));
+                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' contains an empty file entry.", skillName));
                 }
 
                 var validatedFile = ValidateFile(bundleDirectory, skillName, file);
@@ -275,7 +276,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 {
                     throw new InvalidOperationException(string.Format(
                         CultureInfo.InvariantCulture,
-                        "Aspire skills bundle skill '{0}' contains duplicate file '{1}'.",
+                        "Aspire-skills bundle skill '{0}' contains duplicate file '{1}'.",
                         skillName,
                         validatedFile.RelativePath));
                 }
@@ -286,7 +287,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
             if (!hasSkillFile)
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must contain SKILL.md.", skillName));
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' must contain SKILL.md.", skillName));
             }
 
             validatedAssets.Add(new ValidatedAspireSkillsBundleAsset(definition, files));
@@ -307,7 +308,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle skill name '{0}' must be 1-{1} characters, use only lowercase ASCII letters, digits, and hyphens, and must not start or end with a hyphen or contain consecutive hyphens.",
+                "Aspire-skills bundle skill name '{0}' must be 1-{1} characters, use only lowercase ASCII letters, digits, and hyphens, and must not start or end with a hyphen or contain consecutive hyphens.",
                 skillName,
                 MaxSkillNameLength));
         }
@@ -319,7 +320,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
         if (!File.Exists(fullPath))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' was not found.", relativePath, skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle file '{0}' in skill '{1}' was not found.", relativePath, skillName));
         }
 
         // Hash and decode the same bytes so a concurrent filesystem change cannot
@@ -345,12 +346,12 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
         else
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' does not specify a SHA-512 or SHA-256 hash.", relativePath, skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle file '{0}' in skill '{1}' does not specify a SHA-512 or SHA-256 hash.", relativePath, skillName));
         }
 
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed {2} verification.", relativePath, skillName, algorithmName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle file '{0}' in skill '{1}' failed {2} verification.", relativePath, skillName, algorithmName));
         }
 
         using var stream = new MemoryStream(bytes, writable: false);
@@ -369,14 +370,14 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var frontmatterName = GetFrontmatterValue(content, "name");
         if (string.IsNullOrWhiteSpace(frontmatterName))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must define a frontmatter name in SKILL.md.", skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' must define a frontmatter name in SKILL.md.", skillName));
         }
 
         if (!string.Equals(frontmatterName, skillName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle skill '{0}' SKILL.md frontmatter name '{1}' must match its manifest and directory name.",
+                "Aspire-skills bundle skill '{0}' SKILL.md frontmatter name '{1}' must match its manifest and directory name.",
                 skillName,
                 frontmatterName));
         }
@@ -384,14 +385,14 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var description = GetFrontmatterValue(content, "description");
         if (string.IsNullOrWhiteSpace(description))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must define a frontmatter description in SKILL.md.", skillName));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle skill '{0}' must define a frontmatter description in SKILL.md.", skillName));
         }
 
         if (description.Length > MaxSkillDescriptionLength)
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle skill '{0}' SKILL.md description is {1} characters; agent hosts accept at most {2}.",
+                "Aspire-skills bundle skill '{0}' SKILL.md description is {1} characters; agent hosts accept at most {2}.",
                 skillName,
                 description.Length,
                 MaxSkillDescriptionLength));
@@ -442,7 +443,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         if (string.IsNullOrWhiteSpace(relativePath))
         {
-            throw new InvalidOperationException("Aspire skills bundle contains an empty relative path.");
+            throw new InvalidOperationException("Aspire-skills bundle contains an empty relative path.");
         }
 
         var normalizedPath = relativePath
@@ -451,13 +452,13 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         if (Path.IsPathRooted(normalizedPath))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle path '{0}' must be relative.", relativePath));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle path '{0}' must be relative.", relativePath));
         }
 
         var segments = normalizedPath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 0 || segments.Any(static segment => !IsPortablePathSegment(segment)))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle path '{0}' is not safe.", relativePath));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle path '{0}' is not safe.", relativePath));
         }
 
         return Path.Combine(segments);
@@ -556,7 +557,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                     break;
 
                 default:
-                    throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' has unsupported type '{1}'.", entry.Name, entry.EntryType));
+                    throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle archive entry '{0}' has unsupported type '{1}'.", entry.Name, entry.EntryType));
             }
         }
     }
@@ -599,14 +600,14 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             segments.Length == 0 ||
             segments.Any(static segment => !IsPortablePathSegment(segment)))
         {
-            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' is not safe.", entryName));
+            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle archive entry '{0}' is not safe.", entryName));
         }
 
         var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, normalizedEntryName.Replace('/', Path.DirectorySeparatorChar)));
         if (!destinationPath.StartsWith(destinationRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
             !string.Equals(destinationPath, destinationRoot, StringComparison.Ordinal))
         {
-            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' escapes the extraction directory.", entryName));
+            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle archive entry '{0}' escapes the extraction directory.", entryName));
         }
 
         return destinationPath;
@@ -639,10 +640,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         if (topLevelBundleDirectories.Length > 1)
         {
-            throw new InvalidOperationException("Downloaded Aspire skills package contains multiple skill-manifest.json files.");
+            throw new InvalidOperationException("Downloaded Aspire-skills bundle contains multiple skill-manifest.json files.");
         }
 
-        throw new InvalidOperationException("Downloaded Aspire skills package does not contain skill-manifest.json.");
+        throw new InvalidOperationException("Downloaded Aspire-skills bundle does not contain skill-manifest.json.");
     }
 
     private static void CopyDirectory(string sourceDirectory, string targetDirectory)
@@ -667,19 +668,19 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         if (supports is null)
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest must specify supported Aspire versions.");
+            throw new InvalidOperationException("Aspire-skills bundle manifest must specify supported Aspire versions.");
         }
 
         if (string.IsNullOrWhiteSpace(supports.AspireCli))
         {
-            throw new InvalidOperationException("Aspire skills bundle manifest must specify supports.aspireCli.");
+            throw new InvalidOperationException("Aspire-skills bundle manifest must specify supports.aspireCli.");
         }
 
         if (!IsVersionInRange(currentCliVersion, supports.AspireCli))
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle supports Aspire CLI versions '{0}', but the current CLI version is '{1}'.",
+                "Aspire-skills bundle supports Aspire CLI versions '{0}', but the current CLI version is '{1}'.",
                 supports.AspireCli,
                 currentCliVersion));
         }
@@ -689,7 +690,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture,
-                "Aspire skills bundle supports Aspire SDK versions '{0}', but the current SDK version is '{1}'.",
+                "Aspire-skills bundle supports Aspire SDK versions '{0}', but the current SDK version is '{1}'.",
                 supports.AspireSdk,
                 currentSdkVersion));
         }
@@ -701,7 +702,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         var comparators = range.Replace(',', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (comparators.Length == 0)
         {
-            throw new InvalidOperationException("Aspire skills bundle contains an empty version range.");
+            throw new InvalidOperationException("Aspire-skills bundle contains an empty version range.");
         }
 
         foreach (var comparator in comparators)
@@ -733,7 +734,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             "<" => comparison < 0,
             "<=" => comparison <= 0,
             "=" or "==" => comparison == 0,
-            _ => throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Unsupported Aspire skills bundle version comparator '{0}'.", op))
+            _ => throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Unsupported Aspire-skills bundle version comparator '{0}'.", op))
         };
     }
 
@@ -746,7 +747,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 var operand = comparator[op.Length..];
                 if (string.IsNullOrWhiteSpace(operand))
                 {
-                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle contains an invalid version comparator '{0}'.", comparator));
+                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle contains an invalid version comparator '{0}'.", comparator));
                 }
 
                 return (op, operand);
@@ -760,7 +761,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         if (!SemVersion.TryParse(version, SemVersionStyles.Any, out var parsedVersion))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle contains an invalid version value '{0}'.", version));
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire-skills bundle contains an invalid version value '{0}'.", version));
         }
 
         return SemVersion.Parse(

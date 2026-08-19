@@ -29,7 +29,7 @@ internal sealed class SkillBundleSupports
 }
 
 /// <summary>
-/// Describes a single skill in an Aspire skills bundle.
+/// Describes a single skill in an Aspire-skills bundle.
 /// </summary>
 internal sealed class SkillBundleAsset
 {
@@ -45,7 +45,7 @@ internal sealed class SkillBundleAsset
 }
 
 /// <summary>
-/// Describes a single file in an Aspire skills bundle.
+/// Describes a single file in an Aspire-skills bundle.
 /// </summary>
 internal sealed class SkillBundleFile
 {
@@ -64,7 +64,7 @@ internal sealed class SkillBundleFile
 }
 
 /// <summary>
-/// Describes the Aspire skills bundle archive embedded in the CLI.
+/// Describes the Aspire-skills bundle archive embedded in the CLI.
 /// </summary>
 internal sealed class EmbeddedAspireSkillsBundleMetadata
 {
@@ -81,7 +81,7 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
 }
 
 /// <summary>
-/// Source-generation context for Aspire skills bundle JSON.
+/// Source-generation context for Aspire-skills bundle JSON.
 /// </summary>
 [JsonSourceGenerationOptions(
     AllowTrailingCommas = true,

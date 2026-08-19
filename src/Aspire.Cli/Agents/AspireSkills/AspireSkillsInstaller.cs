@@ -68,7 +68,7 @@ internal sealed class AspireSkillsBundleInstaller(
         using var activity = telemetry.StartReportedActivity(TelemetryActivityName);
         activity?.SetTag(
             TelemetryConstants.Tags.AgentAssetKind,
-            bundleDescriptor.ManifestAssetsPropertyName);
+            bundleDescriptor.AssetKindName);
 
         var effectiveVersion = configuration[VersionOverrideKey];
         if (string.IsNullOrWhiteSpace(effectiveVersion))
@@ -447,7 +447,11 @@ internal sealed class AspireSkillsBundleInstaller(
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogDebug("Failed to fetch Aspire skills GitHub release {Tag}: HTTP {StatusCode}.", tag, response.StatusCode);
+                logger.LogDebug(
+                    "Failed to fetch GitHub release {Tag} for the {BundleDisplayName} bundle: HTTP {StatusCode}.",
+                    tag,
+                    bundleDescriptor.DisplayName,
+                    response.StatusCode);
                 return null;
             }
 
@@ -896,7 +900,8 @@ internal sealed class AspireSkillsBundleInstaller(
                 if (maxAttempts is { } boundedAttempts)
                 {
                     logger.LogDebug(
-                        "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
+                        "Acquiring the {BundleDisplayName} bundle cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms (retry {RetryCount} of {MaxRetries}).",
+                        bundleDescriptor.DisplayName,
                         version,
                         ex.HResult,
                         retryDelay.TotalMilliseconds,
@@ -906,7 +911,8 @@ internal sealed class AspireSkillsBundleInstaller(
                 else
                 {
                     logger.LogDebug(
-                        "Acquiring the Aspire skills cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms.",
+                        "Acquiring the {BundleDisplayName} bundle cache lock for version {Version} failed with HRESULT {HResult}; retrying in {DelayMilliseconds} ms.",
+                        bundleDescriptor.DisplayName,
                         version,
                         ex.HResult,
                         retryDelay.TotalMilliseconds);
@@ -1279,9 +1285,9 @@ internal sealed class AspireSkillsInstaller : IAspireSkillsInstaller
         AspireCliTelemetry telemetry,
         ILogger<AspireSkillsInstaller> logger)
     {
-        _installers = new Dictionary<AgentAssetKind, AspireSkillsBundleInstaller>
-        {
-            [AgentAssetKind.Skills] = new(
+        _installers = AspireSkillsBundleDescriptor.All.ToDictionary(
+            static descriptor => descriptor.AssetKind,
+            descriptor => new AspireSkillsBundleInstaller(
                 githubArtifactAttestationVerifier,
                 httpClientFactory,
                 bundleProvider,
@@ -1291,9 +1297,13 @@ internal sealed class AspireSkillsInstaller : IAspireSkillsInstaller
                 configuration,
                 features,
                 telemetry,
-                AspireSkillsBundleDescriptor.Skills,
-                logger),
-        };
+                descriptor,
+                logger));
+    }
+
+    public bool HasBundle(AgentAssetKind assetKind)
+    {
+        return _installers.ContainsKey(assetKind);
     }
 
     public Task<AspireSkillsInstallResult> InstallAsync(
@@ -1312,4 +1322,5 @@ internal sealed class AspireSkillsInstaller : IAspireSkillsInstaller
     {
         return AspireSkillsBundleInstaller.IsCacheLockContention(exception, isWindows);
     }
+
 }

@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Describes the outcome of resolving the Aspire skills bundle.
+/// Describes the outcome of resolving an Aspire-skills bundle.
 /// </summary>
 internal enum AspireSkillsInstallStatus
 {
@@ -20,7 +20,7 @@ internal enum AspireSkillsInstallStatus
 }
 
 /// <summary>
-/// Represents the result of resolving the Aspire skills bundle.
+/// Represents the result of resolving an Aspire-skills bundle.
 /// </summary>
 internal sealed record AspireSkillsInstallResult(AspireSkillsInstallStatus Status, AspireSkillsBundle? Bundle, string? Message)
 {

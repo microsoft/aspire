@@ -52,7 +52,12 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
     /// </summary>
     public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AgentAssetKind assetKind)
     {
-        var descriptor = AspireSkillsBundleDescriptor.Get(assetKind);
+        var descriptor = AspireSkillsBundleDescriptor.Find(assetKind);
+        if (descriptor is null)
+        {
+            return null;
+        }
+
         return _metadata.GetOrAdd(
             assetKind,
             _ => new Lazy<EmbeddedAspireSkillsBundleMetadata?>(
@@ -66,7 +71,12 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var descriptor = AspireSkillsBundleDescriptor.Get(assetKind);
+        var descriptor = AspireSkillsBundleDescriptor.Find(assetKind);
+        if (descriptor is null)
+        {
+            return null;
+        }
+
         var metadata = GetMetadata(assetKind);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
         {
