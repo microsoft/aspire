@@ -101,6 +101,7 @@
                                 }
                                 else
                                 {
+                                    @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                     <FluentCombobox @key="input.ViewModel.InputKey"
                                                     TOption="SelectViewModel<string>" TValue="string"
                                                     @ref="@_elementRefs[input.ViewModel]"
@@ -114,7 +115,6 @@
                                                     Height="250px"
                                                     Position="SelectPosition.Below"
                                                     Disabled="input.ViewModel.InputDisabled"
-                                                    @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                                     @oninput="@(e => OnChoiceInput(input.ViewModel, e))"
                                                     aria-describedby="@input.DescriptionId">
                                         <OptionTemplate Context="optionContext">

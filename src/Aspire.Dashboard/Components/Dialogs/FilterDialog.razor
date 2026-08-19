@@ -78,6 +78,7 @@
         else
         {
             <div class="filter-input-container input-container">
+                @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                 <FluentCombobox TOption="SelectViewModel<FieldValue>" TValue="string"
                                 @bind-Value="_formModel.Value"
                                 @bind-Value:after="ValueChanged"
@@ -87,7 +88,6 @@
                                 OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)"
                                 OptionValue="@((SelectViewModel<FieldValue>? c) => GetOptionValue(c))"
                                 OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                @* TODO: Restore Immediate/ImmediateDelay when https://github.com/microsoft/fluentui-blazor/issues/5173 is fixed. *@
                                 @oninput="OnValueInput"
                                 Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
                     <OptionTemplate Context="optionContext">

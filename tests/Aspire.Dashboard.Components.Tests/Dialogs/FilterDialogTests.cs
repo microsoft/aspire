@@ -60,6 +60,7 @@ public class FilterDialogTests : DashboardTestContext
 
         Assert.Empty(cut.FindComponents<FluentNumberInput<double?>>());
         Assert.Contains("fluent-dropdown", cut.Markup);
+        Assert.DoesNotContain("TODO: Restore Immediate/ImmediateDelay", cut.Markup);
 
         var valueOption = cut.Find("fluent-option[text='request']");
         var countBadge = Assert.Single(valueOption.QuerySelectorAll("fluent-badge:not([slot])"));

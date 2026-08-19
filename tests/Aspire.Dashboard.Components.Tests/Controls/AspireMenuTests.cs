@@ -33,6 +33,39 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
+    public void NestedAspireMenu_RendersItemsDirectlyInSubmenu()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuHost = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Items, new[]
+            {
+                new MenuButtonItem
+                {
+                    Text = "Commands",
+                    NestedMenuItems =
+                    [
+                        new MenuButtonItem { Text = "Start" },
+                        new MenuButtonItem { Text = "Stop" }
+                    ]
+                }
+            });
+        });
+
+        Assert.Empty(menuHost.FindAll("fluent-menu-item > fluent-menu-list[slot='submenu'] > fluent-menu-list"));
+        var nestedItems = menuHost.FindAll("fluent-menu-item > fluent-menu-list[slot='submenu'] > fluent-menu-item");
+        Assert.Collection(
+            nestedItems,
+            item => Assert.Equal("Start", item.TextContent.Trim()),
+            item => Assert.Equal("Stop", item.TextContent.Trim()));
+    }
+
+    [Fact]
     public async Task RemoveAspireMenu_RemovesFluentMenuFromHost()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

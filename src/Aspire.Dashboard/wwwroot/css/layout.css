@@ -9,6 +9,12 @@ body {
     overflow: hidden;
 }
 
+.aspire-menu-container fluent-menu-list[slot="submenu"] {
+    /* At least one side of the anchor has half the viewport available. Keeping the submenu below
+       that height lets Fluent's position fallback move command-heavy menus left and above/below. */
+    max-height: calc(50dvh - 8px);
+}
+
 *,
 *::before,
 *::after {

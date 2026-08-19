@@ -115,6 +115,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         });
         var cut = getCut();
         var combobox = cut.Find("fluent-dropdown[type='combobox']");
+        Assert.DoesNotContain("TODO: Restore Immediate/ImmediateDelay", cut.Markup);
 
         await combobox.InputAsync(new ChangeEventArgs { Value = "blu" });
 

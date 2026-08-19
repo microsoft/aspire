@@ -49,11 +49,11 @@
             return null;
         }
 
-        return @<FluentMenuList>
+        return @<text>
             @foreach (var nestedItem in item.NestedMenuItems)
             {
                 @RenderMenuItem(nestedItem)
             }
-        </FluentMenuList>;
+        </text>;
     }
 }
