@@ -858,7 +858,7 @@ safe-outputs:
           type: string
       steps:
         - name: Rerun failed jobs
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             ENABLE_RERUN: ${{ env.ENABLE_RERUN }}
           with:

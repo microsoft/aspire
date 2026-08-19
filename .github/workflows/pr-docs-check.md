@@ -369,7 +369,7 @@ safe-outputs:
             owner: microsoft
             repositories: aspire
         - name: Post status comment on source PR
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
@@ -504,7 +504,7 @@ safe-outputs:
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
