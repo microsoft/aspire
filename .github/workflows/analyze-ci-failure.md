@@ -1,11 +1,9 @@
 ---
 description: |
-  Analyzes failed PR CI builds using Copilot to determine whether the failure
-  is transient (flaky test, infrastructure issue) or caused by the PR changes
-  (compilation error, test regression). For transient infrastructure failures,
-  reruns the CI build. For transient test failures, posts a comment with
-  details and suggested next steps. For non-transient failures, posts a
-  comment explaining the root cause.
+  Analyzes failed CI builds using Copilot to determine whether the failure is
+  transient (flaky test, infrastructure issue), caused by pull request changes,
+  or a repository break on main. Pull request failures are reported on the PR;
+  main repository breaks create a dedicated issue.
 
 on:
   workflow_run:
@@ -44,6 +42,7 @@ jobs:
       run_id: ${{ steps.collect.outputs.run_id }}
       run_attempt: ${{ steps.collect.outputs.run_attempt }}
       run_url: ${{ steps.collect.outputs.run_url }}
+      run_scope: ${{ steps.collect.outputs.run_scope }}
       pr_numbers: ${{ steps.collect.outputs.pr_numbers }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -79,13 +78,27 @@ jobs:
           gh api "repos/${REPO}/actions/runs/${RUN_ID}" > ci-failure-data/run.json
 
           RUN_ATTEMPT=$(jq -r '.run_attempt // 1' ci-failure-data/run.json)
+          RUN_EVENT=$(jq -r '.event // ""' ci-failure-data/run.json)
           HEAD_SHA=$(jq -r '.head_sha // ""' ci-failure-data/run.json)
           HEAD_BRANCH=$(jq -r '.head_branch // ""' ci-failure-data/run.json)
           RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
           CONCLUSION=$(jq -r '.conclusion // ""' ci-failure-data/run.json)
+          case "${RUN_EVENT}:${HEAD_BRANCH}" in
+            push:main)
+              RUN_SCOPE="main"
+              ;;
+            pull_request:*|pull_request_target:*)
+              RUN_SCOPE="pull-request"
+              ;;
+            *)
+              echo "::error::Unsupported run scope: event=${RUN_EVENT}, branch=${HEAD_BRANCH}"
+              exit 1
+              ;;
+          esac
           echo "run_attempt=${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "run_scope=${RUN_SCOPE}" >> "$GITHUB_OUTPUT"
 
           # Skip analysis if the run succeeded (e.g. manual dispatch on a passing run)
           if [ "${CONCLUSION}" = "success" ]; then
@@ -94,30 +107,92 @@ jobs:
             exit 0
           fi
 
-          # Find the associated PR number
-          PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' ci-failure-data/run.json)
-          if [ -z "${PR_NUMBERS}" ]; then
-            # Fallback 1: search for PRs by head branch (requires owner:branch format)
-            HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
-            if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
-              PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
-                --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+          PR_NUMBERS=""
+          if [ "${RUN_SCOPE}" = "pull-request" ]; then
+            # Workflow metadata can include pull requests from forks that happen
+            # to reference this commit, so only accept PRs targeting this repository.
+            PR_NUMBERS=$(jq -r --arg repo_url "https://api.github.com/repos/${REPO}" \
+              '[.pull_requests[]? | select(.base.repo.url == $repo_url) | .number] | join(",")' \
+              ci-failure-data/run.json)
+            if [ -z "${PR_NUMBERS}" ]; then
+              HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
+              if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
+                PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
+                  --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+              fi
             fi
-          fi
-          if [ -z "${PR_NUMBERS}" ]; then
-            # Fallback 2: find PRs associated with the head commit SHA.
-            # This works even when the PR is merged/closed or the run metadata
-            # doesn't include the pull_requests array.
-            if [ -n "${HEAD_SHA}" ]; then
+            if [ -z "${PR_NUMBERS}" ] && [ -n "${HEAD_SHA}" ]; then
               PR_NUMBERS=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
-                --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+                --jq "[.[] | select(.base.repo.full_name == \"${REPO}\") | .number] | join(\",\")" \
+                2>/dev/null || echo "")
+            fi
+
+            if [ -z "${PR_NUMBERS}" ]; then
+              echo "No associated PR found. Analysis will proceed without PR context."
+            fi
+          else
+            # The PR associated with the failed head commit identifies the merge
+            # that triggered this run. It is context only and is not presumed causal.
+            gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+              --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\")] | first // {}" \
+              > ci-failure-data/triggering-merge-pr.json 2>/dev/null \
+              || echo "{}" > ci-failure-data/triggering-merge-pr.json
+
+            WORKFLOW_ID=$(jq -r '.workflow_id' ci-failure-data/run.json)
+            RUN_CREATED_AT=$(jq -r '.created_at' ci-failure-data/run.json)
+            gh api --paginate --method GET "repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs" \
+              -f branch=main -f event=push -f status=success -f "created=<${RUN_CREATED_AT}" \
+              --jq '.workflow_runs[]' 2>/dev/null \
+              | jq -s 'sort_by(.created_at) | last // {}' \
+              > ci-failure-data/last-successful-main-run.json
+
+            LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // ""' ci-failure-data/last-successful-main-run.json)
+            echo "[]" > ci-failure-data/candidate-merges.json
+            if [ -n "${LAST_SUCCESSFUL_SHA}" ] && [ -n "${HEAD_SHA}" ]; then
+              gh api "repos/${REPO}/compare/${LAST_SUCCESSFUL_SHA}...${HEAD_SHA}" \
+                > ci-failure-data/main-comparison.json 2>/dev/null \
+                || echo '{"commits":[]}' > ci-failure-data/main-comparison.json
+
+              jq -c '.commits[]? | {sha, message: .commit.message, html_url}' \
+                ci-failure-data/main-comparison.json | while IFS= read -r COMMIT; do
+                COMMIT_SHA=$(jq -r '.sha' <<< "${COMMIT}")
+                MERGE_PR=$(gh api "repos/${REPO}/commits/${COMMIT_SHA}/pulls" \
+                  --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\" and .merged_at != null)] | first // null" \
+                  2>/dev/null || echo "null")
+                if [ "${MERGE_PR}" != "null" ]; then
+                  jq --argjson commit "${COMMIT}" --argjson pr "${MERGE_PR}" \
+                    '. + [$commit + {pull_request: {
+                      number: $pr.number,
+                      title: $pr.title,
+                      url: $pr.html_url,
+                      merged_at: $pr.merged_at
+                    }}]' ci-failure-data/candidate-merges.json \
+                    > ci-failure-data/candidate-merges.tmp
+                  mv ci-failure-data/candidate-merges.tmp ci-failure-data/candidate-merges.json
+                fi
+              done
+              rm -f ci-failure-data/main-comparison.json
             fi
           fi
           echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
 
-          if [ -z "${PR_NUMBERS}" ]; then
-            echo "No associated PR found. Analysis will proceed without PR context."
-          fi
+          jq -n \
+            --argjson run_id "${RUN_ID}" \
+            --argjson run_attempt "${RUN_ATTEMPT}" \
+            --arg event "${RUN_EVENT}" \
+            --arg head_branch "${HEAD_BRANCH}" \
+            --arg head_sha "${HEAD_SHA}" \
+            --arg run_scope "${RUN_SCOPE}" \
+            --arg pr_numbers "${PR_NUMBERS}" \
+            '{
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              event: $event,
+              head_branch: $head_branch,
+              head_sha: $head_sha,
+              run_scope: $run_scope,
+              pr_numbers: $pr_numbers
+            }' > ci-failure-data/run-context.json
 
           # Fetch all jobs for this run attempt.
           # Use --jq '.jobs[]' to emit individual job objects (handles pagination
@@ -294,6 +369,7 @@ jobs:
           RUN_ID: ${{ steps.collect.outputs.run_id }}
           RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
           RUN_URL: ${{ steps.collect.outputs.run_url }}
+          RUN_SCOPE: ${{ steps.collect.outputs.run_scope }}
           PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
         run: |
           set -euo pipefail
@@ -306,7 +382,12 @@ jobs:
             echo "- **Run ID**: ${RUN_ID}"
             echo "- **Run Attempt**: ${RUN_ATTEMPT}"
             echo "- **Run URL**: ${RUN_URL}"
-            echo "- **Associated PRs**: ${PR_NUMBERS}"
+            echo "- **Run Scope**: ${RUN_SCOPE}"
+            jq -r '"- **Event**: \(.event)\n- **Branch**: \(.head_branch)\n- **Failed SHA**: \(.head_sha)"' \
+              ci-failure-data/run-context.json
+            if [ "${RUN_SCOPE}" = "pull-request" ]; then
+              echo "- **Associated PRs**: ${PR_NUMBERS}"
+            fi
             echo ""
 
             echo "## Failed Jobs"
@@ -357,21 +438,39 @@ jobs:
             fi
             echo ""
 
-            echo "## Pull Request"
-            echo ""
-            if [ -f "ci-failure-data/pr-metadata.json" ]; then
-              jq -r '"- **PR**: #\(.number) \(.title)\n- **Author**: @\(.user)\n- **State**: \(.state)\n- **Branch**: \(.head_branch) → \(.base_branch)\n- **URL**: \(.html_url)"' ci-failure-data/pr-metadata.json 2>/dev/null || echo "No PR metadata available."
-            else
-              echo "No PR metadata available."
-            fi
-            echo ""
+            if [ "${RUN_SCOPE}" = "pull-request" ]; then
+              echo "## Pull Request"
+              echo ""
+              if [ -f "ci-failure-data/pr-metadata.json" ]; then
+                jq -r '"- **PR**: #\(.number) \(.title)\n- **Author**: @\(.user)\n- **State**: \(.state)\n- **Branch**: \(.head_branch) → \(.base_branch)\n- **URL**: \(.html_url)"' ci-failure-data/pr-metadata.json 2>/dev/null || echo "No PR metadata available."
+              else
+                echo "No PR metadata available."
+              fi
+              echo ""
 
-            echo "## PR Changed Files"
-            echo ""
-            if [ -f "ci-failure-data/pr-files.json" ]; then
-              jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
+              echo "## PR Changed Files"
+              echo ""
+              if [ -f "ci-failure-data/pr-files.json" ]; then
+                jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
+              else
+                echo "No PR file data available."
+              fi
             else
-              echo "No PR file data available."
+              echo "## Main Branch Context"
+              echo ""
+              jq -r '"- **Last successful main run**: " + (if .id then "[\(.id)](\(.html_url)) at `\(.head_sha)`" else "Not found" end)' \
+                ci-failure-data/last-successful-main-run.json
+              jq -r '"- **Triggering merge PR (context only, not necessarily causal)**: " + (if .number then "#\(.number) \(.title) (\(.html_url))" else "Not found" end)' \
+                ci-failure-data/triggering-merge-pr.json
+              echo ""
+              echo "### Candidate merges since the last successful main run"
+              echo ""
+              if [ "$(jq 'length' ci-failure-data/candidate-merges.json)" -gt 0 ]; then
+                jq -r '.[] | "- #\(.pull_request.number) \(.pull_request.title) (\(.pull_request.url)) — `\(.sha)`"' \
+                  ci-failure-data/candidate-merges.json
+              else
+                echo "No candidate merges found."
+              fi
             fi
             echo ""
 
@@ -448,14 +547,16 @@ safe-outputs:
     publish-data:
       name: "Publish analysis data and comment on PR"
       description: |
-        Publishes the CI failure analysis to the memory branch and posts a PR
-        comment. The agent must write:
+        Publishes the CI failure analysis to the memory branch, then posts a PR
+        comment or updates a main-breakage issue according to the trusted scope.
+        The agent must write:
           - /tmp/gh-aw/agent/analysis-result.json (run summary)
           - /tmp/gh-aw/agent/causes/*.json (one file per failure cause)
         Emit exactly one `publish_data` item with run_id and pr_numbers.
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       permissions:
+        actions: read
         contents: write
         issues: write
         pull-requests: write
@@ -471,6 +572,39 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - uses: actions/download-artifact@v4
+          with:
+            name: ci-failure-data
+            path: ci-failure-data/
+        - name: Validate analysis scope
+          run: |
+            set -euo pipefail
+
+            ANALYSIS_FILE="$(dirname "$GH_AW_AGENT_OUTPUT")/agent/analysis-result.json"
+            RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
+            if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ]; then
+              echo "::error::Analysis result or trusted run context not found"
+              exit 1
+            fi
+
+            TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
+            TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+            ANALYSIS_RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
+            ANALYSIS_RUN_SCOPE=$(jq -r '.run_scope' "$ANALYSIS_FILE")
+            VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+
+            if [ "$ANALYSIS_RUN_ID" != "$TRUSTED_RUN_ID" ] || [ "$ANALYSIS_RUN_SCOPE" != "$TRUSTED_RUN_SCOPE" ]; then
+              echo "::error::Analysis result does not match trusted run context"
+              exit 1
+            fi
+            if [ "$TRUSTED_RUN_SCOPE" = "main" ] && { [ "$(jq -r '.pr // null' "$ANALYSIS_FILE")" != "null" ] || [ "$VERDICT" = "code-issue" ]; }; then
+              echo "::error::Main run analysis must not identify a subject PR or use the PR code-issue verdict"
+              exit 1
+            fi
+            if [ "$TRUSTED_RUN_SCOPE" = "pull-request" ] && [ "$VERDICT" = "main-repository-breakage" ]; then
+              echo "::error::Pull request run analysis cannot use the main repository breakage verdict"
+              exit 1
+            fi
         - name: Publish analysis data and comment on PR
           run: |
             set -euo pipefail
@@ -496,6 +630,12 @@ safe-outputs:
               exit 1
             fi
 
+            RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
+            TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
+            TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+            TRUSTED_PR_NUMBERS=$(jq -r '.pr_numbers' "$RUN_CONTEXT_FILE")
+            VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+
             # Validate cause files
             if [ -d "$CAUSES_DIR" ]; then
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
@@ -510,17 +650,14 @@ safe-outputs:
             MEMORY_BRANCH="memory/ci-failure-analysis"
 
             # Read fields from the analysis JSON
-            RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
-            VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+            RUN_ID="$TRUSTED_RUN_ID"
+            RUN_SCOPE="$TRUSTED_RUN_SCOPE"
             RUN_URL=$(jq -r '.run_url // ""' "$ANALYSIS_FILE")
-            # Build a comma-separated list of PR numbers. The JSON schema has
-            # a single pr.number; if the collect-data job passed multiple PRs
-            # in the future, extend the agent schema accordingly.
-            PR_NUMBERS=$(jq -r '.pr.number // "" | tostring' "$ANALYSIS_FILE")
+            PR_NUMBERS="$TRUSTED_PR_NUMBERS"
 
             # ── 1. Set up memory branch and merge cause data ──
-            # Skip persisting data for code-issue verdicts — these are not
-            # actionable by CI automation and would just add noise.
+            # Pull request code issues are handled on the PR and do not need
+            # stable cause records. Main repository breakages are persisted.
             if [ "$VERDICT" = "code-issue" ]; then
               echo "Verdict is code-issue. Skipping memory branch persistence."
             else
@@ -549,7 +686,7 @@ safe-outputs:
 
                 # Build the occurrence entry from the run summary JSON
                 ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-                PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
+                PR_NUMBER=$(jq -r '.pr.number // .triggering_merge_pr.number // 0' "$ANALYSIS_FILE")
                 # Find the first failed job name for context in the occurrence
                 FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
 
@@ -596,12 +733,17 @@ safe-outputs:
             if [ -d "$CAUSES_DIR" ]; then
               # Build occurrence info from the run summary for issue updates
               ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
+              PR_NUMBER=$(jq -r '.pr.number // .triggering_merge_pr.number // 0' "$ANALYSIS_FILE")
               FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
 
               # Build the occurrence table row for this run
               OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
+              if [ "$RUN_SCOPE" = "main" ]; then
+                OCCURRENCE_CONTEXT="main"
+              else
+                OCCURRENCE_CONTEXT="#${PR_NUMBER}"
+              fi
+              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | ${OCCURRENCE_CONTEXT} |"
 
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
@@ -707,18 +849,30 @@ safe-outputs:
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
                   TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
+                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                    LAST_SUCCESSFUL_SHA=$(jq -r '.main_context.last_successful_main_sha // "unknown"' "$ANALYSIS_FILE")
+                    FAILED_SHA=$(jq -r '.main_context.failed_sha // "unknown"' "$ANALYSIS_FILE")
+                    TRIGGERING_MERGE=$(jq -r 'if .triggering_merge_pr then "#\(.triggering_merge_pr.number) \(.triggering_merge_pr.title)" else "Not found" end' "$ANALYSIS_FILE")
+                  fi
                   {
                     echo "${MARKER}"
                     echo ""
                     echo "## Build Information"
                     echo ""
                     echo "Build: ${RUN_URL}"
-                    if [ -n "$TEST_NAME" ]; then
+                    if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                      echo "Affected branch: \`main\`"
+                      echo "Last successful main SHA: \`${LAST_SUCCESSFUL_SHA}\`"
+                      echo "Failed main SHA: \`${FAILED_SHA}\`"
+                      echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
+                    elif [ -n "$TEST_NAME" ]; then
                       echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
                     else
                       echo "Build error leg: ${FIRST_JOB}"
                     fi
-                    echo "Pull request: #${PR_NUMBER}"
+                    if [ "$RUN_SCOPE" = "pull-request" ]; then
+                      echo "Pull request: #${PR_NUMBER}"
+                    fi
                     echo ""
                     echo "## Error Message"
                     echo ""
@@ -734,7 +888,7 @@ safe-outputs:
                     echo ""
                     echo "## Occurrences"
                     echo ""
-                    echo "| Date | Build | Job | PR |"
+                    echo "| Date | Build | Job | Context |"
                     echo "|------|-------|-----|----|"
                     echo "$NEW_OCCURRENCE_ROW"
                   } > "$BODY_FILE"
@@ -742,11 +896,21 @@ safe-outputs:
                   LABELS="ci-failure-cause"
                   if [ "$CAUSE_TYPE" = "flaky-test" ]; then
                     LABELS="ci-failure-cause,test-failure"
+                  elif [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                    gh label create "main-ci-break" --repo "$REPO" \
+                      --color "b60205" \
+                      --description "Deterministic repository breakage on the main branch" \
+                      --force
+                    LABELS="ci-failure-cause,main-ci-break"
                   fi
 
                   # Build the title via jq to avoid shell metacharacter issues
                   # with agent-generated cause titles.
-                  ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
+                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
+                    ISSUE_TITLE=$(jq -r '"[Main CI Failure] " + .title' "$CAUSE_FILE")
+                  else
+                    ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
+                  fi
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
@@ -776,6 +940,11 @@ safe-outputs:
             fi
 
             # ── 4. Post PR comment using the analysis JSON ──
+            if [ "$RUN_SCOPE" = "main" ]; then
+              echo "Main run analysis is reported through cause issues, not PR comments."
+              exit 0
+            fi
+
             FIRST_PR=$(echo "$PR_NUMBERS" | cut -d',' -f1)
             if [ -z "$FIRST_PR" ] || [ "$FIRST_PR" = "null" ]; then
               echo "No PR number found in analysis. Skipping comment."
@@ -934,7 +1103,7 @@ steps:
 
 # Analyze CI Failure
 
-You are analyzing a failed CI build for a pull request in the **microsoft/aspire** repository. Your job is to determine the root cause of the failure and take the appropriate action.
+You are analyzing a failed CI build in the **microsoft/aspire** repository. Your job is to determine the root cause of the failure and take the appropriate action. The run scope in the summary was derived deterministically from the failed run's immutable `event` and `head_branch`; never infer or change it based on associated pull requests.
 
 ## Workflow
 
@@ -946,15 +1115,16 @@ Read `ci-failure-data/analysis-summary.md`. It contains the run information, PR 
 
 Analyze all of the data to classify each failed job (see **Classification Rules** below).
 
-#### Matching against prior causes (transient failures only)
+#### Matching against prior causes
 
-When a failure is classified as `flaky-test` or `infra-failure` (NOT `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
+When a failure is classified as `flaky-test`, `infra-failure`, or `main-repository-breakage` (NOT pull-request `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
 
 If any of this run's transient failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
 
 A failure matches an existing cause when:
 - For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
 - For infra failures: the error message substantially matches the `error_pattern` of a prior infra-failure cause
+- For main repository breakages: the deterministic failure substantially matches the `error_pattern` of a prior main-repository-breakage cause
 
 When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Also add the cause ID to the `causes` array in the run summary.
 
@@ -971,8 +1141,9 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
   "run_id": 12345,
   "run_attempt": 1,
   "run_url": "https://github.com/microsoft/aspire/actions/runs/12345",
+  "run_scope": "main | pull-request",
   "analyzed_at": "2026-06-30T12:00:00Z",
-  "verdict": "transient-infra | flaky-test | code-issue | mixed",
+  "verdict": "transient-infra | flaky-test | code-issue | main-repository-breakage | mixed",
   "pr": {
     "number": 1234,
     "title": "PR title",
@@ -982,6 +1153,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
     "base_branch": "main",
     "url": "https://github.com/microsoft/aspire/pull/1234"
   },
+  "triggering_merge_pr": null,
+  "main_context": null,
   "failed_jobs": [
     {
       "name": "Build and Test (ubuntu-latest)",
@@ -1008,24 +1181,28 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
 ```
 
 Field details:
-- `verdict`: The overall classification. Use `"transient-infra"` if ALL failures are infrastructure issues, `"flaky-test"` if ANY failures are flaky tests (and none are code issues), `"code-issue"` if ANY failures are caused by PR changes, or `"mixed"` if there are both transient and non-transient failures.
-- `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, or `"code-issue"`.
+- `run_scope`: Copy the immutable run scope from the summary exactly.
+- `verdict`: The overall classification. Use `"transient-infra"` if ALL failures are infrastructure issues, `"flaky-test"` if ANY failures are flaky tests (and none are deterministic repository issues), `"code-issue"` for failures caused by pull request changes, `"main-repository-breakage"` for deterministic repository failures on main, or `"mixed"` if there are both transient and non-transient failures.
+- `pr`: For pull-request scope, include the subject PR object. For main scope, this MUST be `null`.
+- `triggering_merge_pr`: For main scope, include the triggering merge PR from the summary when available. It is non-causal context and MUST NOT be copied to `pr`. For pull-request scope, this is `null`.
+- `main_context`: For main scope, include `last_successful_main_sha`, `failed_sha`, and `candidate_merges` from the summary. For pull-request scope, this is `null`.
+- `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, `"code-issue"`, or `"main-repository-breakage"`.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
 - `failed_tests[].error`: The full error message from the TRX test failure data.
 - `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
-#### 3b. Per-cause files (flaky-test and infra-failure only)
+#### 3b. Per-cause files
 
-For each distinct underlying cause that is NOT a code-issue, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the cause (e.g., sanitized test name for flaky tests, or a short descriptive slug for infrastructure issues). Do NOT create cause files for code-issue classifications — those are the PR author's responsibility and are not tracked as recurring CI problems.
+For each distinct underlying cause that is NOT a pull-request code issue, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the cause (e.g., sanitized test name for flaky tests, or a short descriptive slug for infrastructure issues and main repository breakages). Do NOT create cause files for `code-issue` classifications — those are the PR author's responsibility and are not tracked as recurring CI problems.
 
 Each cause file must follow this schema:
 
 ```json
 {
   "id": "cause-id",
-  "type": "flaky-test | infra-failure",
+  "type": "flaky-test | infra-failure | main-repository-breakage",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
   "error_pattern": "The key error message or pattern that identifies this cause"
@@ -1034,7 +1211,7 @@ Each cause file must follow this schema:
 
 Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
-- `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
+- `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
@@ -1061,6 +1238,11 @@ The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - **Prior causes** from the memory branch (previously identified recurring failures with their IDs and occurrence history)
 
 ## Classification Rules
+
+Apply rules based on the immutable run scope:
+
+- For `pull-request`, determine whether the PR changes caused the failure and report deterministic failures as `code-issue`.
+- For `main`, consider the complete candidate merge range since the last successful main run. The triggering merge PR is context only and is not necessarily causal. Deterministic compilation, test, API compatibility, lint, or formatting failures are `main-repository-breakage`; they MUST NOT be classified as infrastructure merely because they are unrelated to the triggering merge PR.
 
 Classify each failed job into one of these categories:
 
@@ -1095,6 +1277,17 @@ The failure was directly caused by changes in the PR. Indicators:
 - **API compatibility failures**: public API surface changes that break compatibility
 - **Lint/format errors**: code style violations in PR-changed files
 
+This classification is valid only for pull-request scope.
+
+### 4. Main Repository Breakage
+
+The failure is a deterministic code or repository failure on main. Indicators:
+- Compilation or build errors caused by the combined repository state
+- Deterministic test, API compatibility, lint, or formatting failures on main
+- Semantic merge conflicts where independently valid changes are incompatible together
+
+Use all candidate merges since the last successful main run when investigating. Name a specific PR as causal only when the logs and changed code provide direct evidence; never presume that the triggering merge caused the break.
+
 ## Analysis Process
 
 1. Read `ci-failure-data/analysis-summary.md`
@@ -1104,7 +1297,8 @@ The failure was directly caused by changes in the PR. Indicators:
    - The job annotations
 3. Cross-reference failures against:
    - The known transient failure patterns
-   - The PR changed files list
+   - For pull requests, the PR changed files list
+   - For main, all candidate merges since the last successful main run
 4. Classify each failed job
 5. Determine the overall verdict and proceed to **Actions**
 
@@ -1132,6 +1326,12 @@ Set `verdict` to `"code-issue"` in the JSON. Ensure `failed_jobs` entries have `
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
+### If ANY failures are Main Repository Breakages:
+
+Set `verdict` to `"main-repository-breakage"` in the JSON. Set `pr` to `null`, populate `triggering_merge_pr` only as non-causal context, and include the main candidate range in `main_context`. Write a `main-repository-breakage` cause file so the publish job creates or updates the dedicated main-CI-break issue.
+
+Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
+
 ### Mixed Failures
 
 If there are both transient and non-transient failures, set `verdict` to `"mixed"`. Report all findings with per-job and per-test classifications.
@@ -1140,11 +1340,11 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
 ## Important Rules
 
-1. **Always write the run summary** — every analysis must produce `/tmp/gh-aw/agent/analysis-result.json`. Write cause files in `/tmp/gh-aw/agent/causes/` only for `flaky-test` and `infra-failure` causes (NOT for `code-issue`).
+1. **Always write the run summary** — every analysis must produce `/tmp/gh-aw/agent/analysis-result.json`. Write cause files in `/tmp/gh-aw/agent/causes/` for `flaky-test`, `infra-failure`, and `main-repository-breakage` causes (NOT for pull-request `code-issue`).
 2. **Always emit the `publish-data` safe output** — with `run_id` and `pr_numbers` so the publish-data job can push the data and post a comment.
 3. **Never rerun when there are code issues** — only emit `rerun-failed-jobs` for pure infrastructure failures with `ENABLE_RERUN` set to `'true'`.
 4. **Be specific** — include actual error messages and job/test names in the JSON fields.
-5. **Cross-reference PR files** — always check whether the failing test is in an area modified by the PR.
-6. **PR must not be locked** — check the PR state from the "Pull Request" section in the summary file. If the PR is locked, skip the analysis and call `noop`. Still analyze and comment on closed PRs.
+5. **Use scope-appropriate history** — cross-reference PR files only for pull-request scope; for main scope, consider every candidate merge since the last successful main run.
+6. **PR must not be locked** — for pull-request scope, check the PR state from the "Pull Request" section in the summary file. If the PR is locked, skip the analysis and call `noop`. Still analyze and comment on closed PRs. This rule does not apply to main scope.
 7. **Do NOT use MCP to query GitHub** — all needed data (PR metadata, changed files, job logs, annotations) is already in the summary file. No GitHub API tools are available.
 8. **Do NOT post PR comments directly** — the `publish-data` job handles commenting using the JSON file. Do not use `add-comment`.
