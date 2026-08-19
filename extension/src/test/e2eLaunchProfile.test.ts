@@ -899,6 +899,48 @@ suite('E2E launch profile', () => {
         assert.ok(cleanup.includes('() => cancelAppHostsSectionTextTransition()'), 'The transition tracker must be disposed even when the E2E fails before observing the rendered row.');
     });
 
+    test('keeps AppHost tree cold-start budgets above the CLI startup budget', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+        const cliStartupTimeout = /ASPIRE_CLI_START_TIMEOUT:\s*process\.env\.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT\s*\|\|\s*'([\d_]+)'/.exec(runner);
+        const defaultRunningWait = /waitForRunningAppHost\(timeoutMs = ([\d_]+)\)/.exec(assertions);
+        const explicitRunningWait = /waitForRunningAppHost\(([\d_]+)\)/.exec(runningBeforeDiscoveryTest);
+        const suiteTimeout = /this\.timeout\(([\d_]+)\);/.exec(appHostTree);
+
+        assert.ok(cliStartupTimeout, 'Expected the E2E runner to configure the CLI startup timeout.');
+        assert.ok(defaultRunningWait, 'Expected waitForRunningAppHost to declare its default timeout.');
+        assert.ok(suiteTimeout, 'Expected the AppHost tree suite to declare its timeout.');
+
+        const parseNumericLiteral = (value: string) => Number(value.replaceAll('_', ''));
+        const cliStartupTimeoutMs = parseNumericLiteral(cliStartupTimeout[1]) * 1000;
+        const runningWaitMs = parseNumericLiteral((explicitRunningWait ?? defaultRunningWait)[1]);
+        const suiteTimeoutMs = parseNumericLiteral(suiteTimeout[1]);
+
+        assert.ok(
+            runningWaitMs >= cliStartupTimeoutMs,
+            `The running AppHost wait (${runningWaitMs}ms) must not expire before the CLI startup budget (${cliStartupTimeoutMs}ms).`);
+        assert.ok(
+            suiteTimeoutMs >= runningWaitMs + cliStartupTimeoutMs,
+            `The AppHost tree suite timeout (${suiteTimeoutMs}ms) must leave one CLI startup budget after the running wait for the scenario assertions and cleanup.`);
+    });
+
+    test('starts the running-before-discovery scenario through the deterministic control bridge', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(runningBeforeDiscoveryTest.includes('const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();'));
+        assert.ok(runningBeforeDiscoveryTest.includes("const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);"));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForTreeItem('));
+        assert.ok(!runningBeforeDiscoveryTest.includes('.expand()'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('clickTreeItem('));
+    });
+
     test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');

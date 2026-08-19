@@ -5,7 +5,9 @@ import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
-    this.timeout(240000);
+    // The first real AppHost launch pays for an isolated CLI bundle extraction and cold build.
+    // Leave the CLI's full startup budget plus another budget for the scenario and its cleanup.
+    this.timeout(600000);
 
     teardown(async () => {
         await runE2eTeardown([
@@ -185,14 +187,16 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
-        const section = await openAspireView();
+        await openAspireView();
 
-        const idleItem = await waitForTreeItem(section, appHostLabel);
-        await idleItem.expand();
-        await clickTreeItem(section, 'Run AppHost');
-        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success');
-        const running = await waitForRunningAppHost();
+        const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
+        // Match the E2E runner's CLI startup budget so CI contention cannot make the test abandon a
+        // launch that the CLI still legitimately considers in progress.
+        const running = await waitForRunningAppHost(300000);
         const runningAppHost = findRunningAppHost(running.state);
         assert.ok(runningAppHost);
         const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;
