@@ -4,10 +4,12 @@ import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPat
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
+const cliStartupTimeoutMs = getCliStartupTimeoutMs();
+
 suite('Aspire AppHost tree E2E', function () {
     // The first real AppHost launch pays for an isolated CLI bundle extraction and cold build.
     // Leave the CLI's full startup budget plus another budget for the scenario and its cleanup.
-    this.timeout(600000);
+    this.timeout(cliStartupTimeoutMs * 2);
 
     teardown(async () => {
         await runE2eTeardown([
@@ -196,7 +198,7 @@ suite('Aspire AppHost tree E2E', function () {
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
         // Match the E2E runner's CLI startup budget so CI contention cannot make the test abandon a
         // launch that the CLI still legitimately considers in progress.
-        const running = await waitForRunningAppHost(300000);
+        const running = await waitForRunningAppHost(cliStartupTimeoutMs);
         const runningAppHost = findRunningAppHost(running.state);
         assert.ok(runningAppHost);
         const authoritativeSnapshotAppHostPid = runningAppHost.appHostPid + 1_000_000;
@@ -381,5 +383,15 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForNoRunningAppHost(120000, appHostPath);
     });
-
 });
+
+function getCliStartupTimeoutMs(): number {
+    // run-e2e.js forwards the effective CLI timeout as a positive integer number of seconds,
+    // for example ASPIRE_CLI_START_TIMEOUT=300.
+    const configuredSeconds = Number(process.env.ASPIRE_CLI_START_TIMEOUT);
+    if (!Number.isInteger(configuredSeconds) || configuredSeconds <= 0) {
+        throw new Error(`ASPIRE_CLI_START_TIMEOUT must be a positive integer for AppHost tree E2E tests. Got '${process.env.ASPIRE_CLI_START_TIMEOUT ?? '<unset>'}'.`);
+    }
+
+    return configuredSeconds * 1000;
+}
