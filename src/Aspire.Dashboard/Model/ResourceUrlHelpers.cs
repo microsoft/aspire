@@ -52,7 +52,7 @@ internal static class ResourceUrlHelpers
         // - endpoint name
         var orderedUrls = urls
             .OrderByDescending(e => e.SortOrder)
-            .ThenByDescending(e => e.Url?.StartsWith("https") == true)
+            .ThenByDescending(e => e.Url?.StartsWith("https", StringComparison.Ordinal) == true)
             .ThenByDescending(e => e.Url is not null)
             .ThenBy(e => e.Name, StringComparers.EndpointAnnotationName)
             .ToList();

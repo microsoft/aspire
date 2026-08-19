@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Globalization;
@@ -1731,7 +1730,6 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
     private sealed class TestHttpResource(string name) : Resource(name), IResourceWithEndpoints;
 
-#pragma warning disable ASPIREINTERACTION001
     private static InteractionInputCollection CreateConfigureArguments(string scope, string browser, string userDataMode, string profile, string? saveToUserSecrets = null)
     {
         return new InteractionInputCollection(
@@ -1743,7 +1741,6 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             new InteractionInput { Name = "saveToUserSecrets", InputType = InputType.Boolean, Value = saveToUserSecrets },
         ]);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private static bool HasProperty(CustomResourceSnapshot snapshot, string name, object expectedValue) =>
         snapshot.Properties.Any(property => property.Name == name && Equals(property.Value, expectedValue));
@@ -1998,5 +1995,4 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 }
 
 #pragma warning restore ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning restore ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

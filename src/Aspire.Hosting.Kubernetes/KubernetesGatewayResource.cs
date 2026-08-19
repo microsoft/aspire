@@ -81,6 +81,14 @@ public class KubernetesGatewayResource(
     /// Gets the generated K8S HTTPRoute objects, populated during infrastructure processing.
     /// </summary>
     internal List<Resources.HttpRouteV1> GeneratedHttpRoutes { get; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether this gateway is emitted into the deployment artifacts.
+    /// A gateway with no routes is skipped, so nothing downstream (TLS bootstrap, FQDN discovery,
+    /// field-manager cleanup, cert-manager solver parentRefs) may select it — those steps would
+    /// otherwise act on a Gateway that never exists in the cluster.
+    /// </summary>
+    internal bool ShouldMaterialize => Routes.Count > 0;
 }
 
 /// <summary>

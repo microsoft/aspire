@@ -1,12 +1,13 @@
-﻿// ===== AddContainerOptions.java =====
+﻿// ===== aspire/AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** AddContainerOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AddContainerOptions implements JsonSerializable {
     private String image;
     private String tag;
@@ -34,15 +35,13 @@ public class AddContainerOptions implements JsonSerializable {
     }
 }
 
-// ===== AddDockerfileOptions.java =====
+// ===== aspire/AddDockerfileOptions.java =====
 // AddDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddDockerfile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddDockerfileOptions {
     private String dockerfilePath;
     private String stage;
@@ -61,15 +60,13 @@ public final class AddDockerfileOptions {
 
 }
 
-// ===== AddParameterOptions.java =====
+// ===== aspire/AddParameterOptions.java =====
 // AddParameterOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddParameter. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddParameterOptions {
     private String value;
     private Boolean publishValueAsDefault;
@@ -95,15 +92,13 @@ public final class AddParameterOptions {
 
 }
 
-// ===== AddParameterWithGeneratedValueOptions.java =====
+// ===== aspire/AddParameterWithGeneratedValueOptions.java =====
 // AddParameterWithGeneratedValueOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddParameterWithGeneratedValue. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddParameterWithGeneratedValueOptions {
     private Boolean secret;
     private Boolean persist;
@@ -122,15 +117,13 @@ public final class AddParameterWithGeneratedValueOptions {
 
 }
 
-// ===== AddStepOptions.java =====
+// ===== aspire/AddStepOptions.java =====
 // AddStepOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for AddStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AddStepOptions {
     private String[] dependsOn;
     private String[] requiredBy;
@@ -149,15 +142,16 @@ public final class AddStepOptions {
 
 }
 
-// ===== AfterPublishEvent.java =====
+// ===== aspire/AfterPublishEvent.java =====
 // AfterPublishEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AfterPublishEvent extends HandleWrapperBase {
     AfterPublishEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -181,15 +175,16 @@ public class AfterPublishEvent extends HandleWrapperBase {
 
 }
 
-// ===== AfterResourcesCreatedEvent.java =====
+// ===== aspire/AfterResourcesCreatedEvent.java =====
 // AfterResourcesCreatedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AfterResourcesCreatedEvent extends HandleWrapperBase {
     AfterResourcesCreatedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -213,15 +208,16 @@ public class AfterResourcesCreatedEvent extends HandleWrapperBase {
 
 }
 
-// ===== Aspire.java =====
+// ===== aspire/Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Main entry point for Aspire SDK. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class Aspire {
     /** Connect to the AppHost server. */
     public static AspireClient connect() throws Exception {
@@ -250,8 +246,10 @@ public class Aspire {
             resolvedOptions.putAll(options.toMap());
         }
         if (resolvedOptions.get("Args") == null) {
-            // Note: Java doesn't have easy access to command line args from here
-            resolvedOptions.put("Args", new String[0]);
+            String forwardedArgs = System.getenv("ASPIRE_APPHOST_ARGS");
+            resolvedOptions.put("Args", forwardedArgs == null || forwardedArgs.isEmpty()
+                ? new String[0]
+                : forwardedArgs.split("\n", -1));
         }
         if (resolvedOptions.get("ProjectDirectory") == null) {
             String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
@@ -272,93 +270,106 @@ public class Aspire {
     }
 }
 
-// ===== AspireAction0.java =====
+// ===== aspire/AspireAction0.java =====
 // AspireAction0.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction0 {
     void invoke();
 }
 
-// ===== AspireAction1.java =====
+// ===== aspire/AspireAction1.java =====
 // AspireAction1.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction1<T1> {
     void invoke(T1 arg1);
 }
 
-// ===== AspireAction2.java =====
+// ===== aspire/AspireAction2.java =====
 // AspireAction2.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction2<T1, T2> {
     void invoke(T1 arg1, T2 arg2);
 }
 
-// ===== AspireAction3.java =====
+// ===== aspire/AspireAction3.java =====
 // AspireAction3.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction3<T1, T2, T3> {
     void invoke(T1 arg1, T2 arg2, T3 arg3);
 }
 
-// ===== AspireAction4.java =====
+// ===== aspire/AspireAction4.java =====
 // AspireAction4.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireAction4<T1, T2, T3, T4> {
     void invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4);
 }
 
-// ===== AspireClient.java =====
+// ===== aspire/AspireClient.java =====
 // AspireClient.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * AspireClient handles JSON-RPC communication with the AppHost server.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireClient {
     private static final boolean DEBUG = System.getenv("ASPIRE_DEBUG") != null;
     
     private final String socketPath;
     private OutputStream outputStream;
     private InputStream inputStream;
+    // Windows only. inputStream/outputStream are built from this file's descriptor, so the
+    // RandomAccessFile has to outlive connect() -- closing it would close the descriptor they share
+    // and break the connection. Holding it in a field also makes that lifetime explicit to a
+    // compiler's resource-leak analysis, which cannot see the escape through FileDescriptor.
+    private RandomAccessFile namedPipe;
     private final AtomicInteger requestId = new AtomicInteger(0);
     private final Map<String, Function<Object[], Object>> callbacks = new ConcurrentHashMap<>();
     private final Map<String, Consumer<Void>> cancellations = new ConcurrentHashMap<>();
     private Runnable disconnectHandler;
-    private volatile boolean connected = false;
 
     // Handle wrapper factory registry
     private static final Map<String, BiFunction<Handle, AspireClient, Object>> handleWrappers = new ConcurrentHashMap<>();
@@ -380,7 +391,6 @@ public class AspireClient {
             connectUnixSocket();
         }
         
-        connected = true;
         debug("Connected successfully");
     }
 
@@ -395,10 +405,10 @@ public class AspireClient {
         debug("Opening Windows named pipe: " + pipePath);
         
         // Use RandomAccessFile to open the named pipe
-        RandomAccessFile pipe = new RandomAccessFile(pipePath, "rw");
-        
+        namedPipe = new RandomAccessFile(pipePath, "rw");
+
         // Create streams from the RandomAccessFile
-        FileDescriptor fd = pipe.getFD();
+        FileDescriptor fd = namedPipe.getFD();
         inputStream = new FileInputStream(fd);
         outputStream = new FileOutputStream(fd);
         
@@ -560,7 +570,6 @@ public class AspireClient {
     @SuppressWarnings("unchecked")
     private Map<String, Object> readMessage() throws IOException {
         // Read headers
-        StringBuilder headerBuilder = new StringBuilder();
         int contentLength = -1;
         
         while (true) {
@@ -790,7 +799,6 @@ public class AspireClient {
     }
 
     private void handleDisconnect() {
-        connected = false;
         if (disconnectHandler != null) {
             disconnectHandler.run();
         }
@@ -1114,16 +1122,19 @@ public class AspireClient {
     }
 }
 
-// ===== AspireDict.java =====
+// ===== aspire/AspireDict.java =====
 // AspireDict.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AspireDict is a handle-backed dictionary with lazy handle resolution.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireDict<K, V> extends HandleWrapperBase {
     private final String getterCapabilityId;
     private Handle resolvedHandle;
@@ -1195,83 +1206,116 @@ public class AspireDict<K, V> extends HandleWrapperBase {
         return Boolean.TRUE.equals(result);
     }
 
+    /**
+     * Gets the keys in the dictionary.
+     *
+     * @return a snapshot of the keys
+     */
     @SuppressWarnings("unchecked")
     public List<K> keys() {
         Object result = getClient().invokeCapability("Aspire.Hosting/Dict.keys", Map.of("dict", ensureHandle().toJson()));
         return (List<K>) result;
     }
+
+    /**
+     * Gets the values in the dictionary.
+     *
+     * @return a snapshot of the values
+     */
+    @SuppressWarnings("unchecked")
+    public List<V> values() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.values", Map.of("dict", ensureHandle().toJson()));
+        return (List<V>) result;
+    }
+
+    /**
+     * Removes all entries from the dictionary.
+     */
+    public void clear() {
+        getClient().invokeCapability("Aspire.Hosting/Dict.clear", Map.of("dict", ensureHandle().toJson()));
+    }
+
+    /**
+     * Copies the dictionary into a plain {@link Map}. Later mutations of the
+     * underlying app model are not reflected in the returned copy.
+     *
+     * @return a snapshot of the dictionary contents
+     */
+    @SuppressWarnings("unchecked")
+    public Map<K, V> toMap() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.toObject", Map.of("dict", ensureHandle().toJson()));
+        return (Map<K, V>) result;
+    }
 }
 
-// ===== AspireFunc0.java =====
+// ===== aspire/AspireFunc0.java =====
 // AspireFunc0.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc0<R> {
     R invoke();
 }
 
-// ===== AspireFunc1.java =====
+// ===== aspire/AspireFunc1.java =====
 // AspireFunc1.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc1<T1, R> {
     R invoke(T1 arg1);
 }
 
-// ===== AspireFunc2.java =====
+// ===== aspire/AspireFunc2.java =====
 // AspireFunc2.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc2<T1, T2, R> {
     R invoke(T1 arg1, T2 arg2);
 }
 
-// ===== AspireFunc3.java =====
+// ===== aspire/AspireFunc3.java =====
 // AspireFunc3.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc3<T1, T2, T3, R> {
     R invoke(T1 arg1, T2 arg2, T3 arg3);
 }
 
-// ===== AspireFunc4.java =====
+// ===== aspire/AspireFunc4.java =====
 // AspireFunc4.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 @FunctionalInterface
 public interface AspireFunc4<T1, T2, T3, T4, R> {
     R invoke(T1 arg1, T2 arg2, T3 arg3, T4 arg4);
 }
 
-// ===== AspireList.java =====
+// ===== aspire/AspireList.java =====
 // AspireList.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AspireList is a handle-backed list with lazy handle resolution.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireList<T> extends HandleWrapperBase {
     private final String getterCapabilityId;
     private Handle resolvedHandle;
@@ -1305,17 +1349,86 @@ public class AspireList<T> extends HandleWrapperBase {
         }
         return resolvedHandle;
     }
+
+    /**
+     * Gets the number of elements in the list.
+     *
+     * @return the element count
+     */
+    public int size() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.length", Map.of("list", ensureHandle().toJson()));
+        return ((Number) result).intValue();
+    }
+
+    /**
+     * Gets the element at the specified index.
+     *
+     * @param index the zero-based index
+     * @return the element at {@code index}
+     */
+    @SuppressWarnings("unchecked")
+    public T get(int index) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("index", index);
+        return (T) getClient().invokeCapability("Aspire.Hosting/List.get", args);
+    }
+
+    /**
+     * Appends an element to the end of the list.
+     *
+     * @param item the element to append
+     */
+    public void add(T item) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("item", AspireClient.serializeValue(item));
+        getClient().invokeCapability("Aspire.Hosting/List.add", args);
+    }
+
+    /**
+     * Removes the element at the specified index.
+     *
+     * @param index the zero-based index
+     * @return {@code true} if an element was removed
+     */
+    public boolean remove(int index) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("list", ensureHandle().toJson());
+        args.put("index", index);
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.removeAt", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    /**
+     * Removes all elements from the list.
+     */
+    public void clear() {
+        getClient().invokeCapability("Aspire.Hosting/List.clear", Map.of("list", ensureHandle().toJson()));
+    }
+
+    /**
+     * Copies the list into a plain {@link List}. Later mutations of the underlying
+     * app model are not reflected in the returned copy.
+     *
+     * @return a snapshot of the list contents
+     */
+    @SuppressWarnings("unchecked")
+    public List<T> toList() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/List.toArray", Map.of("list", ensureHandle().toJson()));
+        return (List<T>) result;
+    }
 }
 
-// ===== AspireRegistrations.java =====
+// ===== aspire/AspireRegistrations.java =====
 // AspireRegistrations.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.List;
 
 /** Static initializer to register handle wrappers. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class AspireRegistrations {
     static {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", (h, c) -> new IDistributedApplicationBuilder(h, c));
@@ -1343,6 +1456,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", (h, c) -> new IInteractionService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", (h, c) -> new ProgressContext(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", (h, c) -> new IConfigurationSection(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", (h, c) -> new IHostEnvironment(h, c));
@@ -1371,12 +1486,19 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent", (h, c) -> new IDistributedApplicationResourceEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", (h, c) -> new IDistributedApplicationEventing(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", (h, c) -> new EventingSubscriberRegistrationContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder", (h, c) -> new InteractionInputBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext", (h, c) -> new InteractionInputLoadContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput", (h, c) -> new InteractionLoadingInput(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult", (h, c) -> new InputsInteractionResult(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", (h, c) -> new AfterResourcesCreatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", (h, c) -> new BeforeResourceStartedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", (h, c) -> new BeforeStartEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", (h, c) -> new CommandLineArgsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", (h, c) -> new CommandLineArgsEditor(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", (h, c) -> new ConnectionStringAvailableEvent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext", (h, c) -> new ContainerBuildOptionsCallbackContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem", (h, c) -> new ContainerFileSystemItem(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", (h, c) -> new ContainerFileSystemCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", (h, c) -> new ContainerImagePushOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", (h, c) -> new ContainerImagePushOptionsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", (h, c) -> new DistributedApplicationModel(h, c));
@@ -1387,10 +1509,14 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", (h, c) -> new EnvironmentEditor(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext", (h, c) -> new HttpCommandPrepareRequestContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext", (h, c) -> new HttpsCertificateConfigurationCallbackAnnotationContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext", (h, c) -> new HttpsEndpointUpdateCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", (h, c) -> new IExpressionValue(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", (h, c) -> new InitializeResourceEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", (h, c) -> new LogFacade(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", (h, c) -> new ReferenceExpressionBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext", (h, c) -> new RequiredCommandValidationContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult", (h, c) -> new RequiredCommandValidationResult(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", (h, c) -> new UpdateCommandStateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", (h, c) -> new ExecuteCommandContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", (h, c) -> new ResourceEndpointsAllocatedEvent(h, c));
@@ -1417,11 +1543,11 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", (h, c) -> new ITestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource", (h, c) -> new IContainerFilesDestinationResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", (h, c) -> new IComputeResource(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,any>", (h, c) -> new AspireDict(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/List<any>", (h, c) -> new AspireList(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,any>", (h, c) -> new AspireDict<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/List<any>", (h, c) -> new AspireList<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict<>(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict<>(h, c));
     }
 
     static void ensureRegistered() {
@@ -1429,16 +1555,15 @@ public class AspireRegistrations {
     }
 }
 
-// ===== AspireUnion.java =====
+// ===== aspire/AspireUnion.java =====
 // AspireUnion.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Represents a runtime union value for generated Java APIs.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class AspireUnion {
     private final Object value;
 
@@ -1478,16 +1603,15 @@ public final class AspireUnion {
     }
 }
 
-// ===== BaseRegistrations.java =====
+// ===== aspire/BaseRegistrations.java =====
 // BaseRegistrations.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Registers runtime-owned wrappers defined in Base.java.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class BaseRegistrations {
     private BaseRegistrations() {
     }
@@ -1500,15 +1624,16 @@ public final class BaseRegistrations {
     }
 }
 
-// ===== BeforePublishEvent.java =====
+// ===== aspire/BeforePublishEvent.java =====
 // BeforePublishEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforePublishEvent extends HandleWrapperBase {
     BeforePublishEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1532,15 +1657,16 @@ public class BeforePublishEvent extends HandleWrapperBase {
 
 }
 
-// ===== BeforeResourceStartedEvent.java =====
+// ===== aspire/BeforeResourceStartedEvent.java =====
 // BeforeResourceStartedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforeResourceStartedEvent extends HandleWrapperBase {
     BeforeResourceStartedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1564,15 +1690,16 @@ public class BeforeResourceStartedEvent extends HandleWrapperBase {
 
 }
 
-// ===== BeforeStartEvent.java =====
+// ===== aspire/BeforeStartEvent.java =====
 // BeforeStartEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class BeforeStartEvent extends HandleWrapperBase {
     BeforeStartEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1596,15 +1723,50 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
-// ===== BuildOptions.java =====
+// ===== aspire/BoolInteractionResult.java =====
+// BoolInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** BoolInteractionResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class BoolInteractionResult implements JsonSerializable {
+    private boolean canceled;
+    private Boolean value;
+
+    public boolean getCanceled() { return canceled; }
+    public void setCanceled(boolean value) { this.canceled = value; }
+    public Boolean getValue() { return value; }
+    public void setValue(Boolean value) { this.value = value; }
+
+    @SuppressWarnings("unchecked")
+    public static BoolInteractionResult fromMap(Map<String, Object> map) {
+        var value = new BoolInteractionResult();
+        var canceledValue = map.get("Canceled");
+        value.setCanceled((Boolean) canceledValue);
+        var valueValue = map.get("Value");
+        value.setValue(valueValue == null ? null : (Boolean) valueValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Canceled", AspireClient.serializeValue(canceled));
+        map.put("Value", AspireClient.serializeValue(value));
+        return map;
+    }
+}
+
+// ===== aspire/BuildOptions.java =====
 // BuildOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for Build. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class BuildOptions {
     private ILogger resourceLogger;
     private CancellationToken cancellationToken;
@@ -1623,15 +1785,17 @@ public final class BuildOptions {
 
 }
 
-// ===== CSharpAppResource.java =====
+// ===== aspire/CSharpAppResource.java =====
 // CSharpAppResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CSharpAppResource extends ProjectResource {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -1651,9 +1815,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public CSharpAppResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public CSharpAppResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -1676,9 +1840,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public CSharpAppResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -1765,6 +1929,29 @@ public class CSharpAppResource extends ProjectResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public CSharpAppResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -1914,6 +2101,10 @@ public class CSharpAppResource extends ProjectResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public CSharpAppResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public CSharpAppResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -1931,10 +2122,10 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a reference to another resource */
-    public CSharpAppResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public CSharpAppResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -1985,9 +2176,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -2018,9 +2209,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -2051,15 +2242,15 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a network endpoint */
-    public CSharpAppResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public CSharpAppResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -2068,7 +2259,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a network endpoint */
-    private CSharpAppResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private CSharpAppResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2109,12 +2300,12 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP endpoint */
-    public CSharpAppResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public CSharpAppResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -2123,7 +2314,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP endpoint */
-    private CSharpAppResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private CSharpAppResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2146,12 +2337,12 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public CSharpAppResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public CSharpAppResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -2160,7 +2351,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private CSharpAppResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private CSharpAppResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -2351,7 +2542,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public CSharpAppResource waitForCompletion(IResource dependency, Double exitCode) {
+    public CSharpAppResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -2362,7 +2553,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    public CSharpAppResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public CSharpAppResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -2376,10 +2567,10 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -2388,7 +2579,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private CSharpAppResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private CSharpAppResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -2521,6 +2712,38 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public CSharpAppResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public CSharpAppResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public CSharpAppResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -2591,14 +2814,14 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -2607,7 +2830,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private CSharpAppResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private CSharpAppResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -2653,9 +2876,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public CSharpAppResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public CSharpAppResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -2664,7 +2887,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private CSharpAppResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private CSharpAppResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -2711,12 +2934,20 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public CSharpAppResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -2874,10 +3105,26 @@ public class CSharpAppResource extends ProjectResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public CSharpAppResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public CSharpAppResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public CSharpAppResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -3126,9 +3373,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging */
-    public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -3137,7 +3384,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging */
-    private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -3152,9 +3399,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging with file path */
-    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -3163,7 +3410,7 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging with file path */
-    private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -3205,25 +3452,52 @@ public class CSharpAppResource extends ProjectResource {
 
 }
 
-// ===== CancellationToken.java =====
+// ===== aspire/CancellationToken.java =====
 // CancellationToken.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * CancellationToken for cancelling operations.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CancellationToken {
     private volatile boolean cancelled = false;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+
+    // Remote token id supplied by the AppHost when this token is materialized for a
+    // callback argument. Null for locally-created tokens. Retained so cancellation can
+    // be correlated back to the AppHost if needed.
+    private final String remoteTokenId;
+
+    CancellationToken() {
+        this.remoteTokenId = null;
+    }
+
+    private CancellationToken(String remoteTokenId) {
+        this.remoteTokenId = remoteTokenId;
+    }
+
+    /**
+     * Materializes a cancellation token from a transport value sent by the AppHost.
+     * When the AppHost invokes a callback that accepts a CancellationToken it passes a
+     * remote token id (a string); generated code calls this to turn that wire value into
+     * a CancellationToken instance. Mirrors the TypeScript/Go SDK behavior.
+     */
+    static CancellationToken fromValue(Object value) {
+        if (value instanceof CancellationToken token) {
+            return token;
+        }
+        if (value instanceof String tokenId) {
+            return new CancellationToken(tokenId);
+        }
+        return new CancellationToken();
+    }
+
+    String getRemoteTokenId() { return remoteTokenId; }
 
     void cancel() {
         cancelled = true;
@@ -3242,22 +3516,15 @@ public class CancellationToken {
     }
 }
 
-// ===== CapabilityError.java =====
+// ===== aspire/CapabilityError.java =====
 // CapabilityError.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
-
 /**
  * CapabilityError represents an error from a capability invocation.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CapabilityError extends RuntimeException {
     private final String code;
     private final Object data;
@@ -3272,15 +3539,16 @@ public class CapabilityError extends RuntimeException {
     Object getData() { return data; }
 }
 
-// ===== CertificateTrustExecutionConfigurationContext.java =====
+// ===== aspire/CertificateTrustExecutionConfigurationContext.java =====
 // CertificateTrustExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CertificateTrustExecutionConfigurationContext DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CertificateTrustExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificateBundlePath;
     private ReferenceExpression certificateDirectoriesPath;
@@ -3320,15 +3588,16 @@ public class CertificateTrustExecutionConfigurationContext implements JsonSerial
     }
 }
 
-// ===== CertificateTrustExecutionConfigurationExportData.java =====
+// ===== aspire/CertificateTrustExecutionConfigurationExportData.java =====
 // CertificateTrustExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CertificateTrustExecutionConfigurationExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CertificateTrustExecutionConfigurationExportData implements JsonSerializable {
     private CertificateTrustScope scope;
     private String[] certificateSubjects;
@@ -3362,15 +3631,13 @@ public class CertificateTrustExecutionConfigurationExportData implements JsonSer
     }
 }
 
-// ===== CertificateTrustScope.java =====
+// ===== aspire/CertificateTrustScope.java =====
 // CertificateTrustScope.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** CertificateTrustScope enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum CertificateTrustScope implements WireValueEnum {
     NONE("None"),
     APPEND("Append"),
@@ -3393,15 +3660,16 @@ public enum CertificateTrustScope implements WireValueEnum {
     }
 }
 
-// ===== CommandLineArgsCallbackContext.java =====
+// ===== aspire/CommandLineArgsCallbackContext.java =====
 // CommandLineArgsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandLineArgsCallbackContext extends HandleWrapperBase {
     CommandLineArgsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3441,15 +3709,16 @@ public class CommandLineArgsCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== CommandLineArgsEditor.java =====
+// ===== aspire/CommandLineArgsEditor.java =====
 // CommandLineArgsEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandLineArgsEditor extends HandleWrapperBase {
     CommandLineArgsEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3497,26 +3766,29 @@ public class CommandLineArgsEditor extends HandleWrapperBase {
 
 }
 
-// ===== CommandOptions.java =====
+// ===== aspire/CommandOptions.java =====
 // CommandOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** CommandOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandOptions implements JsonSerializable {
     private String description;
     private Object parameter;
     private InteractionInput[] arguments;
-    private Object validateArguments;
+    private AspireAction1<InputsDialogValidationContext> validateArguments;
     private ResourceCommandVisibility visibility;
     private String confirmationMessage;
     private String iconName;
     private IconVariant iconVariant;
     private boolean isHighlighted;
-    private Object updateState;
+    private AspireFunc1<UpdateCommandStateContext, ResourceCommandState> updateState;
+    private CommandProgressOptions progress;
 
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
@@ -3524,8 +3796,8 @@ public class CommandOptions implements JsonSerializable {
     public void setParameter(Object value) { this.parameter = value; }
     public InteractionInput[] getArguments() { return arguments; }
     public void setArguments(InteractionInput[] value) { this.arguments = value; }
-    public Object getValidateArguments() { return validateArguments; }
-    public void setValidateArguments(Object value) { this.validateArguments = value; }
+    public AspireAction1<InputsDialogValidationContext> getValidateArguments() { return validateArguments; }
+    public void setValidateArguments(AspireAction1<InputsDialogValidationContext> value) { this.validateArguments = value; }
     public ResourceCommandVisibility getVisibility() { return visibility; }
     public void setVisibility(ResourceCommandVisibility value) { this.visibility = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
@@ -3536,8 +3808,10 @@ public class CommandOptions implements JsonSerializable {
     public void setIconVariant(IconVariant value) { this.iconVariant = value; }
     public boolean getIsHighlighted() { return isHighlighted; }
     public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
-    public Object getUpdateState() { return updateState; }
-    public void setUpdateState(Object value) { this.updateState = value; }
+    public AspireFunc1<UpdateCommandStateContext, ResourceCommandState> getUpdateState() { return updateState; }
+    public void setUpdateState(AspireFunc1<UpdateCommandStateContext, ResourceCommandState> value) { this.updateState = value; }
+    public CommandProgressOptions getProgress() { return progress; }
+    public void setProgress(CommandProgressOptions value) { this.progress = value; }
 
     @SuppressWarnings("unchecked")
     public static CommandOptions fromMap(Map<String, Object> map) {
@@ -3548,8 +3822,6 @@ public class CommandOptions implements JsonSerializable {
         value.setParameter(parameterValue);
         var argumentsValue = map.get("Arguments");
         value.setArguments((InteractionInput[]) argumentsValue);
-        var validateArgumentsValue = map.get("ValidateArguments");
-        value.setValidateArguments(validateArgumentsValue);
         var visibilityValue = map.get("Visibility");
         value.setVisibility(ResourceCommandVisibility.fromValue((String) visibilityValue));
         var confirmationMessageValue = map.get("ConfirmationMessage");
@@ -3560,8 +3832,8 @@ public class CommandOptions implements JsonSerializable {
         value.setIconVariant(iconVariantValue == null ? null : IconVariant.fromValue((String) iconVariantValue));
         var isHighlightedValue = map.get("IsHighlighted");
         value.setIsHighlighted((Boolean) isHighlightedValue);
-        var updateStateValue = map.get("UpdateState");
-        value.setUpdateState(updateStateValue);
+        var progressValue = map.get("Progress");
+        value.setProgress(progressValue == null ? null : CommandProgressOptions.fromMap((Map<String, Object>) progressValue));
         return value;
     }
 
@@ -3570,26 +3842,78 @@ public class CommandOptions implements JsonSerializable {
         map.put("Description", AspireClient.serializeValue(description));
         map.put("Parameter", AspireClient.serializeValue(parameter));
         map.put("Arguments", AspireClient.serializeValue(arguments));
-        map.put("ValidateArguments", AspireClient.serializeValue(validateArguments));
+        map.put("ValidateArguments", validateArguments == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (InputsDialogValidationContext) transportArg;
+            validateArguments.invoke(arg);
+            return null;
+        }));
         map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));
         map.put("IconVariant", AspireClient.serializeValue(iconVariant));
         map.put("IsHighlighted", AspireClient.serializeValue(isHighlighted));
-        map.put("UpdateState", AspireClient.serializeValue(updateState));
+        map.put("UpdateState", updateState == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (UpdateCommandStateContext) transportArg;
+            return AspireClient.awaitValue(updateState.invoke(arg));
+        }));
+        map.put("Progress", AspireClient.serializeValue(progress));
         return map;
     }
 }
 
-// ===== CommandResultData.java =====
+// ===== aspire/CommandProgressOptions.java =====
+// CommandProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** CommandProgressOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class CommandProgressOptions implements JsonSerializable {
+    private String message;
+    private String title;
+    private boolean hideCancelButton;
+
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public boolean getHideCancelButton() { return hideCancelButton; }
+    public void setHideCancelButton(boolean value) { this.hideCancelButton = value; }
+
+    @SuppressWarnings("unchecked")
+    public static CommandProgressOptions fromMap(Map<String, Object> map) {
+        var value = new CommandProgressOptions();
+        var messageValue = map.get("Message");
+        value.setMessage(messageValue == null ? null : (String) messageValue);
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
+        var hideCancelButtonValue = map.get("HideCancelButton");
+        value.setHideCancelButton((Boolean) hideCancelButtonValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Message", AspireClient.serializeValue(message));
+        map.put("Title", AspireClient.serializeValue(title));
+        map.put("HideCancelButton", AspireClient.serializeValue(hideCancelButton));
+        return map;
+    }
+}
+
+// ===== aspire/CommandResultData.java =====
 // CommandResultData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CommandResultData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CommandResultData implements JsonSerializable {
     private String value;
     private CommandResultFormat format;
@@ -3623,15 +3947,13 @@ public class CommandResultData implements JsonSerializable {
     }
 }
 
-// ===== CommandResultFormat.java =====
+// ===== aspire/CommandResultFormat.java =====
 // CommandResultFormat.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** CommandResultFormat enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum CommandResultFormat implements WireValueEnum {
     TEXT("Text"),
     JSON("Json"),
@@ -3653,15 +3975,13 @@ public enum CommandResultFormat implements WireValueEnum {
     }
 }
 
-// ===== CompleteStepMarkdownOptions.java =====
+// ===== aspire/CompleteStepMarkdownOptions.java =====
 // CompleteStepMarkdownOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteStepMarkdown. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteStepMarkdownOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3680,15 +4000,13 @@ public final class CompleteStepMarkdownOptions {
 
 }
 
-// ===== CompleteStepOptions.java =====
+// ===== aspire/CompleteStepOptions.java =====
 // CompleteStepOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteStepOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3707,15 +4025,13 @@ public final class CompleteStepOptions {
 
 }
 
-// ===== CompleteTaskMarkdownOptions.java =====
+// ===== aspire/CompleteTaskMarkdownOptions.java =====
 // CompleteTaskMarkdownOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteTaskMarkdown. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteTaskMarkdownOptions {
     private String completionState;
     private CancellationToken cancellationToken;
@@ -3734,15 +4050,13 @@ public final class CompleteTaskMarkdownOptions {
 
 }
 
-// ===== CompleteTaskOptions.java =====
+// ===== aspire/CompleteTaskOptions.java =====
 // CompleteTaskOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for CompleteTask. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class CompleteTaskOptions {
     private String completionMessage;
     private String completionState;
@@ -3768,15 +4082,16 @@ public final class CompleteTaskOptions {
 
 }
 
-// ===== ConnectionStringAvailableEvent.java =====
+// ===== aspire/ConnectionStringAvailableEvent.java =====
 // ConnectionStringAvailableEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ConnectionStringAvailableEvent extends HandleWrapperBase {
     ConnectionStringAvailableEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3800,26 +4115,348 @@ public class ConnectionStringAvailableEvent extends HandleWrapperBase {
 
 }
 
-// ===== ContainerFilesOptions.java =====
+// ===== aspire/ContainerBuildOptionsCallbackContext.java =====
+// ContainerBuildOptionsCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ContainerBuildOptionsCallbackContext extends HandleWrapperBase {
+    ContainerBuildOptionsCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the resource being built. */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets the service provider. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
+    /** Gets the logger instance. */
+    public ILogger logger() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger", reqArgs);
+        return (ILogger) result;
+    }
+
+    /** Gets the cancellation token. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Gets the distributed application execution context. */
+    public DistributedApplicationExecutionContext executionContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext", reqArgs);
+        return (DistributedApplicationExecutionContext) result;
+    }
+
+    /** Gets or sets the destination for the container image. */
+    public ContainerImageDestination destination() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination", reqArgs);
+        return result == null ? null : ContainerImageDestination.fromValue((String) result);
+    }
+
+    /** Sets the Destination property */
+    public ContainerBuildOptionsCallbackContext setDestination(ContainerImageDestination value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+    /** Gets or sets the output path for the container archive. */
+    public String outputPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Sets the OutputPath property */
+    public ContainerBuildOptionsCallbackContext setOutputPath(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+    /** Gets or sets the container image format. */
+    public ContainerImageFormat imageFormat() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat", reqArgs);
+        return result == null ? null : ContainerImageFormat.fromValue((String) result);
+    }
+
+    /** Sets the ImageFormat property */
+    public ContainerBuildOptionsCallbackContext setImageFormat(ContainerImageFormat value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+    /** Gets or sets the target platform for the container. */
+    public ContainerTargetPlatform targetPlatform() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform", reqArgs);
+        return result == null ? null : ContainerTargetPlatform.fromValue((String) result);
+    }
+
+    /** Sets the TargetPlatform property */
+    public ContainerBuildOptionsCallbackContext setTargetPlatform(ContainerTargetPlatform value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+    /** Gets or sets the local image name for the built container. */
+    public String localImageName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Sets the LocalImageName property */
+    public ContainerBuildOptionsCallbackContext setLocalImageName(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+    /** Gets or sets the local image tag for the built container. */
+    public String localImageTag() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Sets the LocalImageTag property */
+    public ContainerBuildOptionsCallbackContext setLocalImageTag(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag", reqArgs);
+        return (ContainerBuildOptionsCallbackContext) result;
+    }
+
+}
+
+// ===== aspire/ContainerFileSystemCallbackContext.java =====
+// ContainerFileSystemCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ContainerFileSystemCallbackContext extends HandleWrapperBase {
+    ContainerFileSystemCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** A `IServiceProvider` that can be used to resolve services in the callback. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
+    /** The app model resource the callback is associated with. */
+    public IResource model() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Creates a container file entry with inline contents or a host source path. */
+    public ContainerFileSystemItem createFile(String name, CreateFileOptions optionsBag) {
+        var contents = optionsBag == null ? null : optionsBag.getContents();
+        var sourcePath = optionsBag == null ? null : optionsBag.getSourcePath();
+        var owner = optionsBag == null ? null : optionsBag.getOwner();
+        var group = optionsBag == null ? null : optionsBag.getGroup();
+        var mode = optionsBag == null ? null : optionsBag.getMode();
+        var continueOnError = optionsBag == null ? null : optionsBag.getContinueOnError();
+        return createFileImpl(name, contents, sourcePath, owner, group, mode, continueOnError);
+    }
+
+    public ContainerFileSystemItem createFile(String name) {
+        return createFile(name, null);
+    }
+
+    /** Creates a container file entry with inline contents or a host source path. */
+    private ContainerFileSystemItem createFileImpl(String name, String contents, String sourcePath, Number owner, Number group, Number mode, Boolean continueOnError) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (contents != null) {
+            reqArgs.put("contents", AspireClient.serializeValue(contents));
+        }
+        if (sourcePath != null) {
+            reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        }
+        if (owner != null) {
+            reqArgs.put("owner", AspireClient.serializeValue(owner));
+        }
+        if (group != null) {
+            reqArgs.put("group", AspireClient.serializeValue(group));
+        }
+        if (mode != null) {
+            reqArgs.put("mode", AspireClient.serializeValue(mode));
+        }
+        if (continueOnError != null) {
+            reqArgs.put("continueOnError", AspireClient.serializeValue(continueOnError));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createFile", reqArgs);
+        return (ContainerFileSystemItem) result;
+    }
+
+    /** Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink. */
+    public ContainerFileSystemItem createCertificateFile(String name, CreateCertificateFileOptions optionsBag) {
+        var contents = optionsBag == null ? null : optionsBag.getContents();
+        var sourcePath = optionsBag == null ? null : optionsBag.getSourcePath();
+        var owner = optionsBag == null ? null : optionsBag.getOwner();
+        var group = optionsBag == null ? null : optionsBag.getGroup();
+        var mode = optionsBag == null ? null : optionsBag.getMode();
+        var continueOnError = optionsBag == null ? null : optionsBag.getContinueOnError();
+        return createCertificateFileImpl(name, contents, sourcePath, owner, group, mode, continueOnError);
+    }
+
+    public ContainerFileSystemItem createCertificateFile(String name) {
+        return createCertificateFile(name, null);
+    }
+
+    /** Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink. */
+    private ContainerFileSystemItem createCertificateFileImpl(String name, String contents, String sourcePath, Number owner, Number group, Number mode, Boolean continueOnError) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (contents != null) {
+            reqArgs.put("contents", AspireClient.serializeValue(contents));
+        }
+        if (sourcePath != null) {
+            reqArgs.put("sourcePath", AspireClient.serializeValue(sourcePath));
+        }
+        if (owner != null) {
+            reqArgs.put("owner", AspireClient.serializeValue(owner));
+        }
+        if (group != null) {
+            reqArgs.put("group", AspireClient.serializeValue(group));
+        }
+        if (mode != null) {
+            reqArgs.put("mode", AspireClient.serializeValue(mode));
+        }
+        if (continueOnError != null) {
+            reqArgs.put("continueOnError", AspireClient.serializeValue(continueOnError));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createCertificateFile", reqArgs);
+        return (ContainerFileSystemItem) result;
+    }
+
+    /** Creates a container directory entry containing the specified child entries. */
+    public ContainerFileSystemItem createDirectory(String name, ContainerFileSystemItem[] entries, CreateDirectoryOptions optionsBag) {
+        var owner = optionsBag == null ? null : optionsBag.getOwner();
+        var group = optionsBag == null ? null : optionsBag.getGroup();
+        var mode = optionsBag == null ? null : optionsBag.getMode();
+        return createDirectoryImpl(name, entries, owner, group, mode);
+    }
+
+    public ContainerFileSystemItem createDirectory(String name, ContainerFileSystemItem[] entries) {
+        return createDirectory(name, entries, null);
+    }
+
+    /** Creates a container directory entry containing the specified child entries. */
+    private ContainerFileSystemItem createDirectoryImpl(String name, ContainerFileSystemItem[] entries, Number owner, Number group, Number mode) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("entries", AspireClient.serializeValue(entries));
+        if (owner != null) {
+            reqArgs.put("owner", AspireClient.serializeValue(owner));
+        }
+        if (group != null) {
+            reqArgs.put("group", AspireClient.serializeValue(group));
+        }
+        if (mode != null) {
+            reqArgs.put("mode", AspireClient.serializeValue(mode));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createDirectory", reqArgs);
+        return (ContainerFileSystemItem) result;
+    }
+
+}
+
+// ===== aspire/ContainerFileSystemItem.java =====
+// ContainerFileSystemItem.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ContainerFileSystemItem extends HandleWrapperBase {
+    ContainerFileSystemItem(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ContainerFilesOptions.java =====
 // ContainerFilesOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ContainerFilesOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerFilesOptions implements JsonSerializable {
-    private Double defaultOwner;
-    private Double defaultGroup;
-    private Double umask;
+    private Number defaultOwner;
+    private Number defaultGroup;
+    private Number umask;
 
-    public Double getDefaultOwner() { return defaultOwner; }
-    public void setDefaultOwner(Double value) { this.defaultOwner = value; }
-    public Double getDefaultGroup() { return defaultGroup; }
-    public void setDefaultGroup(Double value) { this.defaultGroup = value; }
-    public Double getUmask() { return umask; }
-    public void setUmask(Double value) { this.umask = value; }
+    public Number getDefaultOwner() { return defaultOwner; }
+    public void setDefaultOwner(Number value) { this.defaultOwner = value; }
+    public Number getDefaultGroup() { return defaultGroup; }
+    public void setDefaultGroup(Number value) { this.defaultGroup = value; }
+    public Number getUmask() { return umask; }
+    public void setUmask(Number value) { this.umask = value; }
 
     @SuppressWarnings("unchecked")
     public static ContainerFilesOptions fromMap(Map<String, Object> map) {
@@ -3842,15 +4479,70 @@ public class ContainerFilesOptions implements JsonSerializable {
     }
 }
 
-// ===== ContainerImagePushOptions.java =====
+// ===== aspire/ContainerImageDestination.java =====
+// ContainerImageDestination.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** ContainerImageDestination enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum ContainerImageDestination implements WireValueEnum {
+    REGISTRY("Registry"),
+    ARCHIVE("Archive");
+
+    private final String value;
+
+    ContainerImageDestination(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ContainerImageDestination fromValue(String value) {
+        for (ContainerImageDestination e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/ContainerImageFormat.java =====
+// ContainerImageFormat.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** ContainerImageFormat enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum ContainerImageFormat implements WireValueEnum {
+    DOCKER("Docker"),
+    OCI("Oci");
+
+    private final String value;
+
+    ContainerImageFormat(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ContainerImageFormat fromValue(String value) {
+        for (ContainerImageFormat e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/ContainerImagePushOptions.java =====
 // ContainerImagePushOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImagePushOptions extends HandleWrapperBase {
     ContainerImagePushOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3892,15 +4584,16 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
 
 }
 
-// ===== ContainerImagePushOptionsCallbackContext.java =====
+// ===== aspire/ContainerImagePushOptionsCallbackContext.java =====
 // ContainerImagePushOptionsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase {
     ContainerImagePushOptionsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3932,15 +4625,16 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
 
 }
 
-// ===== ContainerImageReference.java =====
+// ===== aspire/ContainerImageReference.java =====
 // ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerImageReference extends HandleWrapperBase {
     ContainerImageReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -3964,15 +4658,13 @@ public class ContainerImageReference extends HandleWrapperBase {
 
 }
 
-// ===== ContainerLifetime.java =====
+// ===== aspire/ContainerLifetime.java =====
 // ContainerLifetime.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerLifetime enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerLifetime implements WireValueEnum {
     SESSION("Session"),
     PERSISTENT("Persistent");
@@ -3993,15 +4685,16 @@ public enum ContainerLifetime implements WireValueEnum {
     }
 }
 
-// ===== ContainerMountAnnotation.java =====
+// ===== aspire/ContainerMountAnnotation.java =====
 // ContainerMountAnnotation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerMountAnnotation extends HandleWrapperBase {
     ContainerMountAnnotation(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4041,15 +4734,13 @@ public class ContainerMountAnnotation extends HandleWrapperBase {
 
 }
 
-// ===== ContainerMountType.java =====
+// ===== aspire/ContainerMountType.java =====
 // ContainerMountType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ContainerMountType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ContainerMountType implements WireValueEnum {
     BIND_MOUNT("BindMount"),
     VOLUME("Volume");
@@ -4070,15 +4761,16 @@ public enum ContainerMountType implements WireValueEnum {
     }
 }
 
-// ===== ContainerPortReference.java =====
+// ===== aspire/ContainerPortReference.java =====
 // ContainerPortReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerPortReference extends HandleWrapperBase {
     ContainerPortReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4102,15 +4794,16 @@ public class ContainerPortReference extends HandleWrapperBase {
 
 }
 
-// ===== ContainerRegistryResource.java =====
+// ===== aspire/ContainerRegistryResource.java =====
 // ContainerRegistryResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerRegistryResource extends ResourceBuilderBase {
     ContainerRegistryResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -4130,9 +4823,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ContainerRegistryResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ContainerRegistryResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -4167,6 +4860,29 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ContainerRegistryResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -4349,6 +5065,22 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ContainerRegistryResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ContainerRegistryResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4422,9 +5154,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ContainerRegistryResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ContainerRegistryResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -4433,7 +5165,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ContainerRegistryResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ContainerRegistryResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -4446,12 +5178,20 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ContainerRegistryResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -4584,10 +5324,26 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ContainerRegistryResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ContainerRegistryResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ContainerRegistryResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -4811,9 +5567,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -4822,7 +5578,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -4837,9 +5593,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -4848,7 +5604,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -4890,15 +5646,17 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
 
 }
 
-// ===== ContainerResource.java =====
+// ===== aspire/ContainerResource.java =====
 // ContainerResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ContainerResource extends ResourceBuilderBase {
     ContainerResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -5022,9 +5780,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public ContainerResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public ContainerResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -5108,10 +5866,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public ContainerResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public ContainerResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -5153,6 +5911,30 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ContainerResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback) {
+        return withContainerFilesCallback(destinationPath, callback, null);
+    }
+
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
+    public ContainerResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg1 = (ContainerFileSystemCallbackContext) args[0];
+            var arg2 = CancellationToken.fromValue(args[1]);
+            return AspireClient.awaitValue(callback.invoke(arg1, arg2));
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFilesCallback", reqArgs);
+        return this;
+    }
+
     public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -5178,9 +5960,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -5212,9 +5994,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ContainerResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -5272,6 +6054,29 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ContainerResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -5421,6 +6226,10 @@ public class ContainerResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ContainerResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ContainerResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -5438,10 +6247,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ContainerResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ContainerResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -5492,9 +6301,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -5525,9 +6334,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -5558,15 +6367,15 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ContainerResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ContainerResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -5575,7 +6384,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ContainerResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ContainerResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -5616,12 +6425,12 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ContainerResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ContainerResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -5630,7 +6439,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ContainerResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ContainerResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -5653,12 +6462,12 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ContainerResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ContainerResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -5667,7 +6476,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ContainerResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ContainerResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -5844,7 +6653,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ContainerResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ContainerResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -5855,7 +6664,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ContainerResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ContainerResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -5869,10 +6678,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -5881,7 +6690,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ContainerResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ContainerResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -6014,6 +6823,38 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public ContainerResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ContainerResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ContainerResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6084,14 +6925,14 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -6100,7 +6941,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ContainerResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ContainerResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -6146,9 +6987,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ContainerResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ContainerResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -6157,7 +6998,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ContainerResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ContainerResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -6204,12 +7045,20 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ContainerResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ContainerResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ContainerResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -6263,9 +7112,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a volume to a container resource. */
-    public ContainerResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public ContainerResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -6384,10 +7233,26 @@ public class ContainerResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ContainerResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ContainerResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ContainerResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -6636,9 +7501,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -6647,7 +7512,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -6662,9 +7527,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -6673,7 +7538,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -6715,15 +7580,48 @@ public class ContainerResource extends ResourceBuilderBase {
 
 }
 
-// ===== CreateBuilderOptions.java =====
+// ===== aspire/ContainerTargetPlatform.java =====
+// ContainerTargetPlatform.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** ContainerTargetPlatform enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum ContainerTargetPlatform implements WireValueEnum {
+    LINUX_AMD64("LinuxAmd64"),
+    LINUX_ARM64("LinuxArm64"),
+    ALL_LINUX("AllLinux"),
+    LINUX_ARM("LinuxArm"),
+    LINUX386("Linux386"),
+    WINDOWS_AMD64("WindowsAmd64"),
+    WINDOWS_ARM64("WindowsArm64");
+
+    private final String value;
+
+    ContainerTargetPlatform(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ContainerTargetPlatform fromValue(String value) {
+        for (ContainerTargetPlatform e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/CreateBuilderOptions.java =====
 // CreateBuilderOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** CreateBuilderOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class CreateBuilderOptions implements JsonSerializable {
     private String[] args;
     private String projectDirectory;
@@ -6787,15 +7685,276 @@ public class CreateBuilderOptions implements JsonSerializable {
     }
 }
 
-// ===== DistributedApplication.java =====
+// ===== aspire/CreateCertificateFileOptions.java =====
+// CreateCertificateFileOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for CreateCertificateFile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class CreateCertificateFileOptions {
+    private String contents;
+    private String sourcePath;
+    private Number owner;
+    private Number group;
+    private Number mode;
+    private Boolean continueOnError;
+
+    public String getContents() { return contents; }
+    public CreateCertificateFileOptions contents(String value) {
+        this.contents = value;
+        return this;
+    }
+
+    public String getSourcePath() { return sourcePath; }
+    public CreateCertificateFileOptions sourcePath(String value) {
+        this.sourcePath = value;
+        return this;
+    }
+
+    public Number getOwner() { return owner; }
+    public CreateCertificateFileOptions owner(Number value) {
+        this.owner = value;
+        return this;
+    }
+
+    public Number getGroup() { return group; }
+    public CreateCertificateFileOptions group(Number value) {
+        this.group = value;
+        return this;
+    }
+
+    public Number getMode() { return mode; }
+    public CreateCertificateFileOptions mode(Number value) {
+        this.mode = value;
+        return this;
+    }
+
+    public Boolean getContinueOnError() { return continueOnError; }
+    public CreateCertificateFileOptions continueOnError(Boolean value) {
+        this.continueOnError = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/CreateChoiceInputOptions.java =====
+// CreateChoiceInputOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for CreateChoiceInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class CreateChoiceInputOptions {
+    private InteractionChoiceOption[] choices;
+    private CreateInteractionInputOptions options;
+
+    public InteractionChoiceOption[] getChoices() { return choices; }
+    public CreateChoiceInputOptions choices(InteractionChoiceOption[] value) {
+        this.choices = value;
+        return this;
+    }
+
+    public CreateInteractionInputOptions getOptions() { return options; }
+    public CreateChoiceInputOptions options(CreateInteractionInputOptions value) {
+        this.options = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/CreateDirectoryOptions.java =====
+// CreateDirectoryOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for CreateDirectory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class CreateDirectoryOptions {
+    private Number owner;
+    private Number group;
+    private Number mode;
+
+    public Number getOwner() { return owner; }
+    public CreateDirectoryOptions owner(Number value) {
+        this.owner = value;
+        return this;
+    }
+
+    public Number getGroup() { return group; }
+    public CreateDirectoryOptions group(Number value) {
+        this.group = value;
+        return this;
+    }
+
+    public Number getMode() { return mode; }
+    public CreateDirectoryOptions mode(Number value) {
+        this.mode = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/CreateFileOptions.java =====
+// CreateFileOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for CreateFile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class CreateFileOptions {
+    private String contents;
+    private String sourcePath;
+    private Number owner;
+    private Number group;
+    private Number mode;
+    private Boolean continueOnError;
+
+    public String getContents() { return contents; }
+    public CreateFileOptions contents(String value) {
+        this.contents = value;
+        return this;
+    }
+
+    public String getSourcePath() { return sourcePath; }
+    public CreateFileOptions sourcePath(String value) {
+        this.sourcePath = value;
+        return this;
+    }
+
+    public Number getOwner() { return owner; }
+    public CreateFileOptions owner(Number value) {
+        this.owner = value;
+        return this;
+    }
+
+    public Number getGroup() { return group; }
+    public CreateFileOptions group(Number value) {
+        this.group = value;
+        return this;
+    }
+
+    public Number getMode() { return mode; }
+    public CreateFileOptions mode(Number value) {
+        this.mode = value;
+        return this;
+    }
+
+    public Boolean getContinueOnError() { return continueOnError; }
+    public CreateFileOptions continueOnError(Boolean value) {
+        this.continueOnError = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/CreateInteractionInputOptions.java =====
+// CreateInteractionInputOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** CreateInteractionInputOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class CreateInteractionInputOptions implements JsonSerializable {
+    private String label;
+    private String description;
+    private Boolean enableDescriptionMarkdown;
+    private Boolean required;
+    private String placeholder;
+    private String value;
+    private Boolean allowCustomChoice;
+    private Boolean disabled;
+    private Number maxLength;
+    private Number maxFileSize;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
+
+    public String getLabel() { return label; }
+    public void setLabel(String value) { this.label = value; }
+    public String getDescription() { return description; }
+    public void setDescription(String value) { this.description = value; }
+    public Boolean getEnableDescriptionMarkdown() { return enableDescriptionMarkdown; }
+    public void setEnableDescriptionMarkdown(Boolean value) { this.enableDescriptionMarkdown = value; }
+    public Boolean getRequired() { return required; }
+    public void setRequired(Boolean value) { this.required = value; }
+    public String getPlaceholder() { return placeholder; }
+    public void setPlaceholder(String value) { this.placeholder = value; }
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public Boolean getAllowCustomChoice() { return allowCustomChoice; }
+    public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
+    public Boolean getDisabled() { return disabled; }
+    public void setDisabled(Boolean value) { this.disabled = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
+    public Number getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Number value) { this.maxFileSize = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
+
+    @SuppressWarnings("unchecked")
+    public static CreateInteractionInputOptions fromMap(Map<String, Object> map) {
+        var value = new CreateInteractionInputOptions();
+        var labelValue = map.get("Label");
+        value.setLabel(labelValue == null ? null : (String) labelValue);
+        var descriptionValue = map.get("Description");
+        value.setDescription(descriptionValue == null ? null : (String) descriptionValue);
+        var enableDescriptionMarkdownValue = map.get("EnableDescriptionMarkdown");
+        value.setEnableDescriptionMarkdown(enableDescriptionMarkdownValue == null ? null : (Boolean) enableDescriptionMarkdownValue);
+        var requiredValue = map.get("Required");
+        value.setRequired(requiredValue == null ? null : (Boolean) requiredValue);
+        var placeholderValue = map.get("Placeholder");
+        value.setPlaceholder(placeholderValue == null ? null : (String) placeholderValue);
+        var valueValue = map.get("Value");
+        value.setValue(valueValue == null ? null : (String) valueValue);
+        var allowCustomChoiceValue = map.get("AllowCustomChoice");
+        value.setAllowCustomChoice(allowCustomChoiceValue == null ? null : (Boolean) allowCustomChoiceValue);
+        var disabledValue = map.get("Disabled");
+        value.setDisabled(disabledValue == null ? null : (Boolean) disabledValue);
+        var maxLengthValue = map.get("MaxLength");
+        value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Label", AspireClient.serializeValue(label));
+        map.put("Description", AspireClient.serializeValue(description));
+        map.put("EnableDescriptionMarkdown", AspireClient.serializeValue(enableDescriptionMarkdown));
+        map.put("Required", AspireClient.serializeValue(required));
+        map.put("Placeholder", AspireClient.serializeValue(placeholder));
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
+        map.put("Disabled", AspireClient.serializeValue(disabled));
+        map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
+        return map;
+    }
+}
+
+// ===== aspire/DistributedApplication.java =====
 // DistributedApplication.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplication. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplication extends HandleWrapperBase {
     DistributedApplication(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6836,15 +7995,13 @@ public class DistributedApplication extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationEventSubscription.java =====
+// ===== aspire/DistributedApplicationEventSubscription.java =====
 // DistributedApplicationEventSubscription.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationEventSubscription extends HandleWrapperBase {
     DistributedApplicationEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6852,15 +8009,16 @@ public class DistributedApplicationEventSubscription extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationExecutionContext.java =====
+// ===== aspire/DistributedApplicationExecutionContext.java =====
 // DistributedApplicationExecutionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationExecutionContext extends HandleWrapperBase {
     DistributedApplicationExecutionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6889,6 +8047,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation", reqArgs);
         return DistributedApplicationOperation.fromValue((String) result);
+    }
+
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    public RunConfiguration runConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration", reqArgs);
+        return RunConfiguration.fromMap((Map<String, Object>) result);
     }
 
     /** The `IServiceProvider` for the AppHost. */
@@ -6925,15 +8091,13 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationExecutionContextOptions.java =====
+// ===== aspire/DistributedApplicationExecutionContextOptions.java =====
 // DistributedApplicationExecutionContextOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationExecutionContextOptions extends HandleWrapperBase {
     DistributedApplicationExecutionContextOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6941,15 +8105,16 @@ public class DistributedApplicationExecutionContextOptions extends HandleWrapper
 
 }
 
-// ===== DistributedApplicationModel.java =====
+// ===== aspire/DistributedApplicationModel.java =====
 // DistributedApplicationModel.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationModel extends HandleWrapperBase {
     DistributedApplicationModel(Handle handle, AspireClient client) {
         super(handle, client);
@@ -6974,15 +8139,13 @@ public class DistributedApplicationModel extends HandleWrapperBase {
 
 }
 
-// ===== DistributedApplicationOperation.java =====
+// ===== aspire/DistributedApplicationOperation.java =====
 // DistributedApplicationOperation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** DistributedApplicationOperation enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum DistributedApplicationOperation implements WireValueEnum {
     RUN("Run"),
     PUBLISH("Publish");
@@ -7003,15 +8166,13 @@ public enum DistributedApplicationOperation implements WireValueEnum {
     }
 }
 
-// ===== DistributedApplicationResourceEventSubscription.java =====
+// ===== aspire/DistributedApplicationResourceEventSubscription.java =====
 // DistributedApplicationResourceEventSubscription.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DistributedApplicationResourceEventSubscription extends DistributedApplicationEventSubscription {
     DistributedApplicationResourceEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7019,15 +8180,16 @@ public class DistributedApplicationResourceEventSubscription extends Distributed
 
 }
 
-// ===== DockerfileBuilder.java =====
+// ===== aspire/DockerfileBuilder.java =====
 // DockerfileBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileBuilder extends HandleWrapperBase {
     DockerfileBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7099,15 +8261,16 @@ public class DockerfileBuilder extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileBuilderCallbackContext.java =====
+// ===== aspire/DockerfileBuilderCallbackContext.java =====
 // DockerfileBuilderCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
     DockerfileBuilderCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7147,15 +8310,16 @@ public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileFactoryContext.java =====
+// ===== aspire/DockerfileFactoryContext.java =====
 // DockerfileFactoryContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileFactoryContext extends HandleWrapperBase {
     DockerfileFactoryContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7171,15 +8335,16 @@ public class DockerfileFactoryContext extends HandleWrapperBase {
 
 }
 
-// ===== DockerfileStage.java =====
+// ===== aspire/DockerfileStage.java =====
 // DockerfileStage.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DockerfileStage extends HandleWrapperBase {
     DockerfileStage(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7362,15 +8527,17 @@ public class DockerfileStage extends HandleWrapperBase {
 
 }
 
-// ===== DotnetToolResource.java =====
+// ===== aspire/DotnetToolResource.java =====
 // DotnetToolResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class DotnetToolResource extends ExecutableResource {
     DotnetToolResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -7390,9 +8557,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public DotnetToolResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public DotnetToolResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -7500,9 +8667,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public DotnetToolResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -7552,6 +8719,29 @@ public class DotnetToolResource extends ExecutableResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public DotnetToolResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -7701,6 +8891,10 @@ public class DotnetToolResource extends ExecutableResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public DotnetToolResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public DotnetToolResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -7718,10 +8912,10 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a reference to another resource */
-    public DotnetToolResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public DotnetToolResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -7772,9 +8966,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -7805,9 +8999,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -7838,15 +9032,15 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a network endpoint */
-    public DotnetToolResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public DotnetToolResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -7855,7 +9049,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a network endpoint */
-    private DotnetToolResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private DotnetToolResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -7896,12 +9090,12 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP endpoint */
-    public DotnetToolResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public DotnetToolResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -7910,7 +9104,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP endpoint */
-    private DotnetToolResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private DotnetToolResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -7933,12 +9127,12 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public DotnetToolResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public DotnetToolResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -7947,7 +9141,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private DotnetToolResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private DotnetToolResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -8124,7 +9318,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public DotnetToolResource waitForCompletion(IResource dependency, Double exitCode) {
+    public DotnetToolResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -8135,7 +9329,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    public DotnetToolResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public DotnetToolResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -8149,10 +9343,10 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -8161,7 +9355,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private DotnetToolResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private DotnetToolResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -8294,6 +9488,38 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public DotnetToolResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public DotnetToolResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public DotnetToolResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8364,14 +9590,14 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -8380,7 +9606,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private DotnetToolResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private DotnetToolResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -8426,9 +9652,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public DotnetToolResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public DotnetToolResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -8437,7 +9663,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private DotnetToolResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private DotnetToolResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -8484,12 +9710,20 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public DotnetToolResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -8638,10 +9872,26 @@ public class DotnetToolResource extends ExecutableResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public DotnetToolResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public DotnetToolResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public DotnetToolResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -8890,9 +10140,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging */
-    public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -8901,7 +10151,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging */
-    private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -8916,9 +10166,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging with file path */
-    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -8927,7 +10177,7 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging with file path */
-    private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -8969,15 +10219,50 @@ public class DotnetToolResource extends ExecutableResource {
 
 }
 
-// ===== EndpointProperty.java =====
+// ===== aspire/DynamicLoadingOptions.java =====
+// DynamicLoadingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** DynamicLoadingOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class DynamicLoadingOptions implements JsonSerializable {
+    private Boolean alwaysLoadOnStart;
+    private String[] dependsOnInputs;
+
+    public Boolean getAlwaysLoadOnStart() { return alwaysLoadOnStart; }
+    public void setAlwaysLoadOnStart(Boolean value) { this.alwaysLoadOnStart = value; }
+    public String[] getDependsOnInputs() { return dependsOnInputs; }
+    public void setDependsOnInputs(String[] value) { this.dependsOnInputs = value; }
+
+    @SuppressWarnings("unchecked")
+    public static DynamicLoadingOptions fromMap(Map<String, Object> map) {
+        var value = new DynamicLoadingOptions();
+        var alwaysLoadOnStartValue = map.get("AlwaysLoadOnStart");
+        value.setAlwaysLoadOnStart(alwaysLoadOnStartValue == null ? null : (Boolean) alwaysLoadOnStartValue);
+        var dependsOnInputsValue = map.get("DependsOnInputs");
+        value.setDependsOnInputs((String[]) dependsOnInputsValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("AlwaysLoadOnStart", AspireClient.serializeValue(alwaysLoadOnStart));
+        map.put("DependsOnInputs", AspireClient.serializeValue(dependsOnInputs));
+        return map;
+    }
+}
+
+// ===== aspire/EndpointProperty.java =====
 // EndpointProperty.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** EndpointProperty enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum EndpointProperty implements WireValueEnum {
     URL("Url"),
     HOST("Host"),
@@ -9004,15 +10289,16 @@ public enum EndpointProperty implements WireValueEnum {
     }
 }
 
-// ===== EndpointReference.java =====
+// ===== aspire/EndpointReference.java =====
 // EndpointReference.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointReference extends HandleWrapperBase {
     EndpointReference(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9174,15 +10460,16 @@ public class EndpointReference extends HandleWrapperBase {
 
 }
 
-// ===== EndpointReferenceExpression.java =====
+// ===== aspire/EndpointReferenceExpression.java =====
 // EndpointReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointReferenceExpression extends HandleWrapperBase {
     EndpointReferenceExpression(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9214,15 +10501,16 @@ public class EndpointReferenceExpression extends HandleWrapperBase {
 
 }
 
-// ===== EndpointUpdateContext.java =====
+// ===== aspire/EndpointUpdateContext.java =====
 // EndpointUpdateContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EndpointUpdateContext extends HandleWrapperBase {
     EndpointUpdateContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9408,15 +10696,16 @@ public class EndpointUpdateContext extends HandleWrapperBase {
 
 }
 
-// ===== EnvironmentCallbackContext.java =====
+// ===== aspire/EnvironmentCallbackContext.java =====
 // EnvironmentCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EnvironmentCallbackContext extends HandleWrapperBase {
     EnvironmentCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9456,15 +10745,16 @@ public class EnvironmentCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== EnvironmentEditor.java =====
+// ===== aspire/EnvironmentEditor.java =====
 // EnvironmentEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EnvironmentEditor extends HandleWrapperBase {
     EnvironmentEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9513,15 +10803,16 @@ public class EnvironmentEditor extends HandleWrapperBase {
 
 }
 
-// ===== EventingSubscriberRegistrationContext.java =====
+// ===== aspire/EventingSubscriberRegistrationContext.java =====
 // EventingSubscriberRegistrationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
     EventingSubscriberRegistrationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9609,15 +10900,17 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
 
 }
 
-// ===== ExecutableResource.java =====
+// ===== aspire/ExecutableResource.java =====
 // ExecutableResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecutableResource extends ResourceBuilderBase {
     ExecutableResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -9637,9 +10930,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ExecutableResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ExecutableResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -9696,9 +10989,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ExecutableResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -9748,6 +11041,29 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ExecutableResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -9897,6 +11213,10 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ExecutableResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ExecutableResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -9914,10 +11234,10 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ExecutableResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ExecutableResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -9968,9 +11288,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -10001,9 +11321,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -10034,15 +11354,15 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ExecutableResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ExecutableResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -10051,7 +11371,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ExecutableResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ExecutableResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -10092,12 +11412,12 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ExecutableResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ExecutableResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -10106,7 +11426,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ExecutableResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ExecutableResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -10129,12 +11449,12 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ExecutableResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ExecutableResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -10143,7 +11463,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ExecutableResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ExecutableResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -10320,7 +11640,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ExecutableResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ExecutableResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -10331,7 +11651,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ExecutableResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ExecutableResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -10345,10 +11665,10 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -10357,7 +11677,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ExecutableResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ExecutableResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -10490,6 +11810,38 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public ExecutableResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ExecutableResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ExecutableResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10560,14 +11912,14 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ExecutableResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -10576,7 +11928,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ExecutableResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ExecutableResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -10622,9 +11974,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ExecutableResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ExecutableResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -10633,7 +11985,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ExecutableResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ExecutableResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -10680,12 +12032,20 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ExecutableResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -10834,10 +12194,26 @@ public class ExecutableResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ExecutableResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ExecutableResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ExecutableResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -11086,9 +12462,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -11097,7 +12473,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -11112,9 +12488,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -11123,7 +12499,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -11165,15 +12541,15 @@ public class ExecutableResource extends ResourceBuilderBase {
 
 }
 
-// ===== ExecuteCommandAsyncOptions.java =====
+// ===== aspire/ExecuteCommandAsyncOptions.java =====
 // ExecuteCommandAsyncOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.Map;
 
 /** Options for ExecuteCommandAsync. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class ExecuteCommandAsyncOptions {
     private Map<String, String> arguments;
     private CancellationToken cancellationToken;
@@ -11192,18 +12568,27 @@ public final class ExecuteCommandAsyncOptions {
 
 }
 
-// ===== ExecuteCommandContext.java =====
+// ===== aspire/ExecuteCommandContext.java =====
 // ExecuteCommandContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecuteCommandContext extends HandleWrapperBase {
     ExecuteCommandContext(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** The service provider. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services", reqArgs);
+        return (IServiceProvider) result;
     }
 
     /** The resource name. */
@@ -11240,15 +12625,16 @@ public class ExecuteCommandContext extends HandleWrapperBase {
 
 }
 
-// ===== ExecuteCommandResult.java =====
+// ===== aspire/ExecuteCommandResult.java =====
 // ExecuteCommandResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ExecuteCommandResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExecuteCommandResult implements JsonSerializable {
     private boolean success;
     private Boolean canceled;
@@ -11294,15 +12680,16 @@ public class ExecuteCommandResult implements JsonSerializable {
     }
 }
 
-// ===== ExternalServiceResource.java =====
+// ===== aspire/ExternalServiceResource.java =====
 // ExternalServiceResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ExternalServiceResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ExternalServiceResource extends ResourceBuilderBase {
     ExternalServiceResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -11322,9 +12709,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ExternalServiceResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ExternalServiceResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -11347,10 +12734,10 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
-    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -11359,7 +12746,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
-    private ExternalServiceResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ExternalServiceResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -11388,6 +12775,29 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ExternalServiceResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -11570,6 +12980,22 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ExternalServiceResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ExternalServiceResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -11643,9 +13069,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ExternalServiceResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ExternalServiceResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -11654,7 +13080,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ExternalServiceResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ExternalServiceResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -11667,12 +13093,20 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ExternalServiceResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ExternalServiceResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ExternalServiceResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -11805,10 +13239,26 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ExternalServiceResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ExternalServiceResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ExternalServiceResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -12032,9 +13482,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -12043,7 +13493,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -12058,9 +13508,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -12069,7 +13519,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -12111,15 +13561,16 @@ public class ExternalServiceResource extends ResourceBuilderBase {
 
 }
 
-// ===== GenerateParameterDefault.java =====
+// ===== aspire/GenerateParameterDefault.java =====
 // GenerateParameterDefault.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** GenerateParameterDefault DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class GenerateParameterDefault implements JsonSerializable {
     private double minLength;
     private boolean lower;
@@ -12189,22 +13640,18 @@ public class GenerateParameterDefault implements JsonSerializable {
     }
 }
 
-// ===== Handle.java =====
+// ===== aspire/Handle.java =====
 // Handle.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Handle represents a remote object reference.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class Handle {
     private final String id;
     private final String typeId;
@@ -12230,16 +13677,15 @@ public class Handle {
     }
 }
 
-// ===== HandleWrapperBase.java =====
+// ===== aspire/HandleWrapperBase.java =====
 // HandleWrapperBase.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * HandleWrapperBase is the base class for all handle wrappers.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HandleWrapperBase {
     private final Handle handle;
     private final AspireClient client;
@@ -12258,15 +13704,16 @@ public class HandleWrapperBase {
     }
 }
 
-// ===== HealthCheckResult.java =====
+// ===== aspire/HealthCheckResult.java =====
 // HealthCheckResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HealthCheckResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HealthCheckResult implements JsonSerializable {
     private HealthStatus status;
     private String description;
@@ -12300,15 +13747,13 @@ public class HealthCheckResult implements JsonSerializable {
     }
 }
 
-// ===== HealthStatus.java =====
+// ===== aspire/HealthStatus.java =====
 // HealthStatus.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** HealthStatus enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum HealthStatus implements WireValueEnum {
     UNHEALTHY("Unhealthy"),
     DEGRADED("Degraded"),
@@ -12330,15 +13775,17 @@ public enum HealthStatus implements WireValueEnum {
     }
 }
 
-// ===== HttpCommandExportOptions.java =====
+// ===== aspire/HttpCommandExportOptions.java =====
 // HttpCommandExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** HttpCommandExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandExportOptions implements JsonSerializable {
     private CommandOptions commandOptions;
     private String description;
@@ -12349,7 +13796,7 @@ public class HttpCommandExportOptions implements JsonSerializable {
     private String commandName;
     private String endpointName;
     private String methodName;
-    private Object prepareRequest;
+    private AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> prepareRequest;
     private HttpCommandResultMode resultMode;
 
     public CommandOptions getCommandOptions() { return commandOptions; }
@@ -12370,8 +13817,8 @@ public class HttpCommandExportOptions implements JsonSerializable {
     public void setEndpointName(String value) { this.endpointName = value; }
     public String getMethodName() { return methodName; }
     public void setMethodName(String value) { this.methodName = value; }
-    public Object getPrepareRequest() { return prepareRequest; }
-    public void setPrepareRequest(Object value) { this.prepareRequest = value; }
+    public AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> getPrepareRequest() { return prepareRequest; }
+    public void setPrepareRequest(AspireFunc1<HttpCommandPrepareRequestContext, HttpCommandRequestExportData> value) { this.prepareRequest = value; }
     public HttpCommandResultMode getResultMode() { return resultMode; }
     public void setResultMode(HttpCommandResultMode value) { this.resultMode = value; }
 
@@ -12396,8 +13843,6 @@ public class HttpCommandExportOptions implements JsonSerializable {
         value.setEndpointName(endpointNameValue == null ? null : (String) endpointNameValue);
         var methodNameValue = map.get("MethodName");
         value.setMethodName(methodNameValue == null ? null : (String) methodNameValue);
-        var prepareRequestValue = map.get("PrepareRequest");
-        value.setPrepareRequest(prepareRequestValue);
         var resultModeValue = map.get("ResultMode");
         value.setResultMode(HttpCommandResultMode.fromValue((String) resultModeValue));
         return value;
@@ -12414,21 +13859,25 @@ public class HttpCommandExportOptions implements JsonSerializable {
         map.put("CommandName", AspireClient.serializeValue(commandName));
         map.put("EndpointName", AspireClient.serializeValue(endpointName));
         map.put("MethodName", AspireClient.serializeValue(methodName));
-        map.put("PrepareRequest", AspireClient.serializeValue(prepareRequest));
+        map.put("PrepareRequest", prepareRequest == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (HttpCommandPrepareRequestContext) transportArg;
+            return AspireClient.awaitValue(prepareRequest.invoke(arg));
+        }));
         map.put("ResultMode", AspireClient.serializeValue(resultMode));
         return map;
     }
 }
 
-// ===== HttpCommandPrepareRequestContext.java =====
+// ===== aspire/HttpCommandPrepareRequestContext.java =====
 // HttpCommandPrepareRequestContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandPrepareRequestContext extends HandleWrapperBase {
     HttpCommandPrepareRequestContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12468,15 +13917,16 @@ public class HttpCommandPrepareRequestContext extends HandleWrapperBase {
 
 }
 
-// ===== HttpCommandRequestExportData.java =====
+// ===== aspire/HttpCommandRequestExportData.java =====
 // HttpCommandRequestExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpCommandRequestExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpCommandRequestExportData implements JsonSerializable {
     private String methodName;
     private Map<String, String> headers;
@@ -12516,15 +13966,13 @@ public class HttpCommandRequestExportData implements JsonSerializable {
     }
 }
 
-// ===== HttpCommandResultMode.java =====
+// ===== aspire/HttpCommandResultMode.java =====
 // HttpCommandResultMode.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** HttpCommandResultMode enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum HttpCommandResultMode implements WireValueEnum {
     NONE("None"),
     AUTO("Auto"),
@@ -12547,24 +13995,117 @@ public enum HttpCommandResultMode implements WireValueEnum {
     }
 }
 
-// ===== HttpsCertificateExecutionConfigurationContext.java =====
+// ===== aspire/HttpsCertificateConfigurationCallbackAnnotationContext.java =====
+// HttpsCertificateConfigurationCallbackAnnotationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class HttpsCertificateConfigurationCallbackAnnotationContext extends HandleWrapperBase {
+    HttpsCertificateConfigurationCallbackAnnotationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the `DistributedApplicationExecutionContext` for this session. */
+    public DistributedApplicationExecutionContext executionContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext", reqArgs);
+        return (DistributedApplicationExecutionContext) result;
+    }
+
+    /** Gets the resource to which the annotation is applied. */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource", reqArgs);
+        return (IResource) result;
+    }
+
+    /** A value provider that will resolve to a path to the certificate file. */
+    public ReferenceExpression certificatePath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath", reqArgs);
+        return (ReferenceExpression) result;
+    }
+
+    /** A value provider that will resolve to a path to the private key for the certificate. */
+    public ReferenceExpression keyPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath", reqArgs);
+        return (ReferenceExpression) result;
+    }
+
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    public ReferenceExpression certificateWithKeyPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath", reqArgs);
+        return (ReferenceExpression) result;
+    }
+
+    /** A value provider that will resolve to a path to a PFX file for the key pair. */
+    public ReferenceExpression pfxPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath", reqArgs);
+        return (ReferenceExpression) result;
+    }
+
+    /** Gets the `CancellationToken` that can be used to cancel the operation. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Gets the editor used to manipulate the command-line arguments in polyglot callbacks. */
+    public CommandLineArgsEditor arguments() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments", reqArgs);
+        return (CommandLineArgsEditor) result;
+    }
+
+    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    public EnvironmentEditor environment() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment", reqArgs);
+        return (EnvironmentEditor) result;
+    }
+
+}
+
+// ===== aspire/HttpsCertificateExecutionConfigurationContext.java =====
 // HttpsCertificateExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateExecutionConfigurationContext DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificatePath;
     private ReferenceExpression keyPath;
+    private ReferenceExpression certificateWithKeyPath;
     private ReferenceExpression pfxPath;
 
     public ReferenceExpression getCertificatePath() { return certificatePath; }
     public void setCertificatePath(ReferenceExpression value) { this.certificatePath = value; }
     public ReferenceExpression getKeyPath() { return keyPath; }
     public void setKeyPath(ReferenceExpression value) { this.keyPath = value; }
+    public ReferenceExpression getCertificateWithKeyPath() { return certificateWithKeyPath; }
+    public void setCertificateWithKeyPath(ReferenceExpression value) { this.certificateWithKeyPath = value; }
     public ReferenceExpression getPfxPath() { return pfxPath; }
     public void setPfxPath(ReferenceExpression value) { this.pfxPath = value; }
 
@@ -12575,6 +14116,8 @@ public class HttpsCertificateExecutionConfigurationContext implements JsonSerial
         value.setCertificatePath((ReferenceExpression) certificatePathValue);
         var keyPathValue = map.get("KeyPath");
         value.setKeyPath((ReferenceExpression) keyPathValue);
+        var certificateWithKeyPathValue = map.get("CertificateWithKeyPath");
+        value.setCertificateWithKeyPath((ReferenceExpression) certificateWithKeyPathValue);
         var pfxPathValue = map.get("PfxPath");
         value.setPfxPath((ReferenceExpression) pfxPathValue);
         return value;
@@ -12584,26 +14127,29 @@ public class HttpsCertificateExecutionConfigurationContext implements JsonSerial
         Map<String, Object> map = new HashMap<>();
         map.put("CertificatePath", AspireClient.serializeValue(certificatePath));
         map.put("KeyPath", AspireClient.serializeValue(keyPath));
+        map.put("CertificateWithKeyPath", AspireClient.serializeValue(certificateWithKeyPath));
         map.put("PfxPath", AspireClient.serializeValue(pfxPath));
         return map;
     }
 }
 
-// ===== HttpsCertificateExecutionConfigurationExportData.java =====
+// ===== aspire/HttpsCertificateExecutionConfigurationExportData.java =====
 // HttpsCertificateExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateExecutionConfigurationExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateExecutionConfigurationExportData implements JsonSerializable {
     private String subject;
     private String thumbprint;
     private String keyPathExpression;
     private String pfxPathExpression;
     private boolean isKeyPathReferenced;
+    private boolean isCertificateWithKeyPathReferenced;
     private boolean isPfxPathReferenced;
     private String password;
 
@@ -12617,6 +14163,8 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
     public void setPfxPathExpression(String value) { this.pfxPathExpression = value; }
     public boolean getIsKeyPathReferenced() { return isKeyPathReferenced; }
     public void setIsKeyPathReferenced(boolean value) { this.isKeyPathReferenced = value; }
+    public boolean getIsCertificateWithKeyPathReferenced() { return isCertificateWithKeyPathReferenced; }
+    public void setIsCertificateWithKeyPathReferenced(boolean value) { this.isCertificateWithKeyPathReferenced = value; }
     public boolean getIsPfxPathReferenced() { return isPfxPathReferenced; }
     public void setIsPfxPathReferenced(boolean value) { this.isPfxPathReferenced = value; }
     public String getPassword() { return password; }
@@ -12635,6 +14183,8 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
         value.setPfxPathExpression((String) pfxPathExpressionValue);
         var isKeyPathReferencedValue = map.get("IsKeyPathReferenced");
         value.setIsKeyPathReferenced((Boolean) isKeyPathReferencedValue);
+        var isCertificateWithKeyPathReferencedValue = map.get("IsCertificateWithKeyPathReferenced");
+        value.setIsCertificateWithKeyPathReferenced((Boolean) isCertificateWithKeyPathReferencedValue);
         var isPfxPathReferencedValue = map.get("IsPfxPathReferenced");
         value.setIsPfxPathReferenced((Boolean) isPfxPathReferencedValue);
         var passwordValue = map.get("Password");
@@ -12649,21 +14199,23 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
         map.put("KeyPathExpression", AspireClient.serializeValue(keyPathExpression));
         map.put("PfxPathExpression", AspireClient.serializeValue(pfxPathExpression));
         map.put("IsKeyPathReferenced", AspireClient.serializeValue(isKeyPathReferenced));
+        map.put("IsCertificateWithKeyPathReferenced", AspireClient.serializeValue(isCertificateWithKeyPathReferenced));
         map.put("IsPfxPathReferenced", AspireClient.serializeValue(isPfxPathReferenced));
         map.put("Password", AspireClient.serializeValue(password));
         return map;
     }
 }
 
-// ===== HttpsCertificateInfo.java =====
+// ===== aspire/HttpsCertificateInfo.java =====
 // HttpsCertificateInfo.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** HttpsCertificateInfo DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class HttpsCertificateInfo implements JsonSerializable {
     private String subject;
     private String issuer;
@@ -12697,15 +14249,65 @@ public class HttpsCertificateInfo implements JsonSerializable {
     }
 }
 
-// ===== IAspireStore.java =====
+// ===== aspire/HttpsEndpointUpdateCallbackContext.java =====
+// HttpsEndpointUpdateCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class HttpsEndpointUpdateCallbackContext extends HandleWrapperBase {
+    HttpsEndpointUpdateCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the `IServiceProvider` instance from the application. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
+    /** Gets the `IResource` that is being configured for HTTPS. */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets the `DistributedApplicationModel` instance. */
+    public DistributedApplicationModel model() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model", reqArgs);
+        return (DistributedApplicationModel) result;
+    }
+
+    /** Gets the `CancellationToken` for the operation. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+}
+
+// ===== aspire/IAspireStore.java =====
 // IAspireStore.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IAspireStore extends HandleWrapperBase {
     IAspireStore(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12731,15 +14333,13 @@ public class IAspireStore extends HandleWrapperBase {
 
 }
 
-// ===== IComputeEnvironmentResource.java =====
+// ===== aspire/IComputeEnvironmentResource.java =====
 // IComputeEnvironmentResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IComputeEnvironmentResource extends ResourceBuilderBase {
     IComputeEnvironmentResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12747,15 +14347,13 @@ public class IComputeEnvironmentResource extends ResourceBuilderBase {
 
 }
 
-// ===== IComputeResource.java =====
+// ===== aspire/IComputeResource.java =====
 // IComputeResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IComputeResource extends HandleWrapperBase {
     IComputeResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12763,15 +14361,16 @@ public class IComputeResource extends HandleWrapperBase {
 
 }
 
-// ===== IConfiguration.java =====
+// ===== aspire/IConfiguration.java =====
 // IConfiguration.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IConfiguration extends HandleWrapperBase {
     IConfiguration(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12823,15 +14422,16 @@ public class IConfiguration extends HandleWrapperBase {
 
 }
 
-// ===== IConfigurationSection.java =====
+// ===== aspire/IConfigurationSection.java =====
 // IConfigurationSection.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IConfigurationSection extends HandleWrapperBase {
     IConfigurationSection(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12872,15 +14472,13 @@ public class IConfigurationSection extends HandleWrapperBase {
 
 }
 
-// ===== IContainerFilesDestinationResource.java =====
+// ===== aspire/IContainerFilesDestinationResource.java =====
 // IContainerFilesDestinationResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IContainerFilesDestinationResource extends HandleWrapperBase {
     IContainerFilesDestinationResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12888,15 +14486,16 @@ public class IContainerFilesDestinationResource extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationBuilder.java =====
+// ===== aspire/IDistributedApplicationBuilder.java =====
 // IDistributedApplicationBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationBuilder extends HandleWrapperBase {
     IDistributedApplicationBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -12954,9 +14553,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a Dockerfile to the application model that can be treated like a container resource. */
-    public ContainerResource addDockerfile(String name, String contextPath, AddDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public ContainerResource addDockerfile(String name, String contextPath, AddDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return addDockerfileImpl(name, contextPath, dockerfilePath, stage);
     }
 
@@ -13126,10 +14725,10 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a parameter resource */
-    public ParameterResource addParameter(String name, AddParameterOptions options) {
-        var value = options == null ? null : options.getValue();
-        var publishValueAsDefault = options == null ? null : options.getPublishValueAsDefault();
-        var secret = options == null ? null : options.getSecret();
+    public ParameterResource addParameter(String name, AddParameterOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var publishValueAsDefault = optionsBag == null ? null : optionsBag.getPublishValueAsDefault();
+        var secret = optionsBag == null ? null : optionsBag.getSecret();
         return addParameterImpl(name, value, publishValueAsDefault, secret);
     }
 
@@ -13173,9 +14772,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a parameter with a generated default value */
-    public ParameterResource addParameterWithGeneratedValue(String name, GenerateParameterDefault value, AddParameterWithGeneratedValueOptions options) {
-        var secret = options == null ? null : options.getSecret();
-        var persist = options == null ? null : options.getPersist();
+    public ParameterResource addParameterWithGeneratedValue(String name, GenerateParameterDefault value, AddParameterWithGeneratedValueOptions optionsBag) {
+        var secret = optionsBag == null ? null : optionsBag.getSecret();
+        var persist = optionsBag == null ? null : optionsBag.getPersist();
         return addParameterWithGeneratedValueImpl(name, value, secret, persist);
     }
 
@@ -13386,7 +14985,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a test Redis resource from ATS documentation. */
-    public TestRedisResource addTestRedis(String name, Double port) {
+    public TestRedisResource addTestRedis(String name, Number port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
@@ -13408,15 +15007,13 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationEvent.java =====
+// ===== aspire/IDistributedApplicationEvent.java =====
 // IDistributedApplicationEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationEvent extends HandleWrapperBase {
     IDistributedApplicationEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13424,15 +15021,16 @@ public class IDistributedApplicationEvent extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationEventing.java =====
+// ===== aspire/IDistributedApplicationEventing.java =====
 // IDistributedApplicationEventing.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationEventing extends HandleWrapperBase {
     IDistributedApplicationEventing(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13448,15 +15046,16 @@ public class IDistributedApplicationEventing extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationPipeline.java =====
+// ===== aspire/IDistributedApplicationPipeline.java =====
 // IDistributedApplicationPipeline.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationPipeline extends HandleWrapperBase {
     IDistributedApplicationPipeline(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13471,9 +15070,9 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
     }
 
     /** Adds an application-level pipeline step in a TypeScript-friendly shape. */
-    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
         addStepImpl(stepName, callback, dependsOn, requiredBy);
     }
 
@@ -13520,15 +15119,13 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
 
 }
 
-// ===== IDistributedApplicationResourceEvent.java =====
+// ===== aspire/IDistributedApplicationResourceEvent.java =====
 // IDistributedApplicationResourceEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
     IDistributedApplicationResourceEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13536,24 +15133,25 @@ public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
 
 }
 
-// ===== IExecutionConfigurationBuilder.java =====
+// ===== aspire/IExecutionConfigurationBuilder.java =====
 // IExecutionConfigurationBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExecutionConfigurationBuilder extends HandleWrapperBase {
     IExecutionConfigurationBuilder(Handle handle, AspireClient client) {
         super(handle, client);
     }
 
     /** Builds the execution configuration for the specified builder. */
-    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions options) {
-        var resourceLogger = options == null ? null : options.getResourceLogger();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions optionsBag) {
+        var resourceLogger = optionsBag == null ? null : optionsBag.getResourceLogger();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         return buildImpl(executionContext, resourceLogger, cancellationToken);
     }
 
@@ -13624,15 +15222,16 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
 
 }
 
-// ===== IExecutionConfigurationResult.java =====
+// ===== aspire/IExecutionConfigurationResult.java =====
 // IExecutionConfigurationResult.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExecutionConfigurationResult extends HandleWrapperBase {
     IExecutionConfigurationResult(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13656,15 +15255,13 @@ public class IExecutionConfigurationResult extends HandleWrapperBase {
 
 }
 
-// ===== IExpressionValue.java =====
+// ===== aspire/IExpressionValue.java =====
 // IExpressionValue.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IExpressionValue extends HandleWrapperBase {
     IExpressionValue(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13672,15 +15269,16 @@ public class IExpressionValue extends HandleWrapperBase {
 
 }
 
-// ===== IHostEnvironment.java =====
+// ===== aspire/IHostEnvironment.java =====
 // IHostEnvironment.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IHostEnvironment extends HandleWrapperBase {
     IHostEnvironment(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13772,15 +15370,318 @@ public class IHostEnvironment extends HandleWrapperBase {
 
 }
 
-// ===== ILogger.java =====
+// ===== aspire/IInteractionService.java =====
+// IInteractionService.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.IInteractionService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class IInteractionService extends HandleWrapperBase {
+    IInteractionService(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets a value indicating whether the interaction service is available to prompt the user. */
+    public boolean isAvailable() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/isAvailable", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Prompts the user for confirmation with an OK/Cancel dialog. */
+    public BoolInteractionResult promptConfirmation(String title, String message, PromptConfirmationOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptConfirmationImpl(title, message, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptConfirmation(String title, String message) {
+        return promptConfirmation(title, message, null);
+    }
+
+    /** Prompts the user for confirmation with an OK/Cancel dialog. */
+    private BoolInteractionResult promptConfirmationImpl(String title, String message, InteractionMessageBoxOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptConfirmation", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user with a message box dialog. */
+    public BoolInteractionResult promptMessageBox(String title, String message, PromptMessageBoxOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptMessageBoxImpl(title, message, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptMessageBox(String title, String message) {
+        return promptMessageBox(title, message, null);
+    }
+
+    /** Prompts the user with a message box dialog. */
+    private BoolInteractionResult promptMessageBoxImpl(String title, String message, InteractionMessageBoxOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptMessageBox", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user with a notification. */
+    public BoolInteractionResult promptNotification(String title, String message, PromptNotificationOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptNotificationImpl(title, message, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptNotification(String title, String message) {
+        return promptNotification(title, message, null);
+    }
+
+    /** Prompts the user with a notification. */
+    private BoolInteractionResult promptNotificationImpl(String title, String message, InteractionNotificationOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptNotification", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Displays a progress dialog with an indeterminate progress indicator. */
+    public BoolInteractionResult promptProgress(String message, PromptProgressOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptProgressImpl(message, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptProgress(String message) {
+        return promptProgress(message, null);
+    }
+
+    /** Displays a progress dialog with an indeterminate progress indicator. */
+    private BoolInteractionResult promptProgressImpl(String message, InteractionProgressOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptProgress", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user for a single input. */
+    public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input, PromptInputOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptInputImpl(title, message, input, options, cancellationToken);
+    }
+
+    public InputInteractionResult promptInput(String title, String message, HandleWrapperBase input, PromptInputOptions options) {
+        return promptInput(title, message, new InteractionInputBuilder(input.getHandle(), input.getClient()), options);
+    }
+
+    public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input) {
+        return promptInput(title, message, input, null);
+    }
+
+    public InputInteractionResult promptInput(String title, String message, HandleWrapperBase input) {
+        return promptInput(title, message, new InteractionInputBuilder(input.getHandle(), input.getClient()));
+    }
+
+    /** Prompts the user for a single input. */
+    private InputInteractionResult promptInputImpl(String title, String message, InteractionInputBuilder input, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("input", AspireClient.serializeValue(input));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptInput", reqArgs);
+        return InputInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user for multiple inputs. */
+    public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs, PromptInputsOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptInputsImpl(title, message, inputs, options, cancellationToken);
+    }
+
+    public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs) {
+        return promptInputs(title, message, inputs, null);
+    }
+
+    /** Prompts the user for multiple inputs. */
+    private InputsInteractionResult promptInputsImpl(String title, String message, InteractionInputBuilder[] inputs, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("inputs", AspireClient.serializeValue(inputs));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptInputs", reqArgs);
+        return (InputsInteractionResult) result;
+    }
+
+    public InteractionInputBuilder createTextInput(String name) {
+        return createTextInput(name, null);
+    }
+
+    /** Creates a single-line text input. */
+    public InteractionInputBuilder createTextInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createTextInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createSecretInput(String name) {
+        return createSecretInput(name, null);
+    }
+
+    /** Creates a secret (masked) text input. */
+    public InteractionInputBuilder createSecretInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createSecretInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createBooleanInput(String name) {
+        return createBooleanInput(name, null);
+    }
+
+    /** Creates a boolean (checkbox) input. */
+    public InteractionInputBuilder createBooleanInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createBooleanInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createNumberInput(String name) {
+        return createNumberInput(name, null);
+    }
+
+    /** Creates a numeric input. */
+    public InteractionInputBuilder createNumberInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createNumberInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createFileInput(String name) {
+        return createFileInput(name, null);
+    }
+
+    /** Creates a file input. */
+    public InteractionInputBuilder createFileInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createFileInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    /** Creates a choice input that selects from a list of options. */
+    public InteractionInputBuilder createChoiceInput(String name, CreateChoiceInputOptions optionsBag) {
+        var choices = optionsBag == null ? null : optionsBag.getChoices();
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        return createChoiceInputImpl(name, choices, options);
+    }
+
+    public InteractionInputBuilder createChoiceInput(String name) {
+        return createChoiceInput(name, null);
+    }
+
+    /** Creates a choice input that selects from a list of options. */
+    private InteractionInputBuilder createChoiceInputImpl(String name, InteractionChoiceOption[] choices, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (choices != null) {
+            reqArgs.put("choices", AspireClient.serializeValue(choices));
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createChoiceInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+}
+
+// ===== aspire/ILogger.java =====
 // ILogger.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ILogger extends HandleWrapperBase {
     ILogger(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13829,15 +15730,16 @@ public class ILogger extends HandleWrapperBase {
 
 }
 
-// ===== ILoggerFactory.java =====
+// ===== aspire/ILoggerFactory.java =====
 // ILoggerFactory.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ILoggerFactory extends HandleWrapperBase {
     ILoggerFactory(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13854,15 +15756,16 @@ public class ILoggerFactory extends HandleWrapperBase {
 
 }
 
-// ===== IReportingStep.java =====
+// ===== aspire/IReportingStep.java =====
 // IReportingStep.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IReportingStep extends HandleWrapperBase {
     IReportingStep(Handle handle, AspireClient client) {
         super(handle, client);
@@ -13919,9 +15822,9 @@ public class IReportingStep extends HandleWrapperBase {
     }
 
     /** Completes the reporting step with plain-text completion text. */
-    public void completeStep(String completionText, CompleteStepOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeStep(String completionText, CompleteStepOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeStepImpl(completionText, completionState, cancellationToken);
     }
 
@@ -13944,9 +15847,9 @@ public class IReportingStep extends HandleWrapperBase {
     }
 
     /** Completes the reporting step with Markdown-formatted completion text. */
-    public void completeStepMarkdown(String markdownString, CompleteStepMarkdownOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeStepMarkdown(String markdownString, CompleteStepMarkdownOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeStepMarkdownImpl(markdownString, completionState, cancellationToken);
     }
 
@@ -13970,15 +15873,16 @@ public class IReportingStep extends HandleWrapperBase {
 
 }
 
-// ===== IReportingTask.java =====
+// ===== aspire/IReportingTask.java =====
 // IReportingTask.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IReportingTask extends HandleWrapperBase {
     IReportingTask(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14015,10 +15919,10 @@ public class IReportingTask extends HandleWrapperBase {
     }
 
     /** Completes the reporting task with plain-text completion text. */
-    public void completeTask(CompleteTaskOptions options) {
-        var completionMessage = options == null ? null : options.getCompletionMessage();
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeTask(CompleteTaskOptions optionsBag) {
+        var completionMessage = optionsBag == null ? null : optionsBag.getCompletionMessage();
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeTaskImpl(completionMessage, completionState, cancellationToken);
     }
 
@@ -14043,9 +15947,9 @@ public class IReportingTask extends HandleWrapperBase {
     }
 
     /** Completes the reporting task with Markdown-formatted completion text. */
-    public void completeTaskMarkdown(String markdownString, CompleteTaskMarkdownOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeTaskMarkdown(String markdownString, CompleteTaskMarkdownOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeTaskMarkdownImpl(markdownString, completionState, cancellationToken);
     }
 
@@ -14069,15 +15973,13 @@ public class IReportingTask extends HandleWrapperBase {
 
 }
 
-// ===== IResource.java =====
+// ===== aspire/IResource.java =====
 // IResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResource extends ResourceBuilderBase {
     IResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14085,15 +15987,13 @@ public class IResource extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithArgs.java =====
+// ===== aspire/IResourceWithArgs.java =====
 // IResourceWithArgs.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithArgs extends ResourceBuilderBase {
     IResourceWithArgs(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14101,15 +16001,13 @@ public class IResourceWithArgs extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithConnectionString.java =====
+// ===== aspire/IResourceWithConnectionString.java =====
 // IResourceWithConnectionString.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithConnectionString extends ResourceBuilderBase {
     IResourceWithConnectionString(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14117,15 +16015,16 @@ public class IResourceWithConnectionString extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithContainerFiles.java =====
+// ===== aspire/IResourceWithContainerFiles.java =====
 // IResourceWithContainerFiles.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithContainerFiles extends ResourceBuilderBase {
     IResourceWithContainerFiles(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14150,15 +16049,13 @@ public class IResourceWithContainerFiles extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithEndpoints.java =====
+// ===== aspire/IResourceWithEndpoints.java =====
 // IResourceWithEndpoints.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEndpoints extends ResourceBuilderBase {
     IResourceWithEndpoints(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14166,15 +16063,13 @@ public class IResourceWithEndpoints extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithEnvironment.java =====
+// ===== aspire/IResourceWithEnvironment.java =====
 // IResourceWithEnvironment.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEnvironment extends ResourceBuilderBase {
     IResourceWithEnvironment(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14182,15 +16077,13 @@ public class IResourceWithEnvironment extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithParent.java =====
+// ===== aspire/IResourceWithParent.java =====
 // IResourceWithParent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithParent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithParent extends ResourceBuilderBase {
     IResourceWithParent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14198,15 +16091,13 @@ public class IResourceWithParent extends ResourceBuilderBase {
 
 }
 
-// ===== IResourceWithWaitSupport.java =====
+// ===== aspire/IResourceWithWaitSupport.java =====
 // IResourceWithWaitSupport.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithWaitSupport extends ResourceBuilderBase {
     IResourceWithWaitSupport(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14214,15 +16105,16 @@ public class IResourceWithWaitSupport extends ResourceBuilderBase {
 
 }
 
-// ===== IServiceProvider.java =====
+// ===== aspire/IServiceProvider.java =====
 // IServiceProvider.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for System.ComponentModel/System.IServiceProvider. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IServiceProvider extends HandleWrapperBase {
     IServiceProvider(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14242,6 +16134,14 @@ public class IServiceProvider extends HandleWrapperBase {
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getEventing", reqArgs);
         return (IDistributedApplicationEventing) result;
+    }
+
+    /** Gets the interaction service from the service provider. */
+    public IInteractionService getInteractionService() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getInteractionService", reqArgs);
+        return (IInteractionService) result;
     }
 
     /** Gets the logger factory from the service provider. */
@@ -14294,15 +16194,13 @@ public class IServiceProvider extends HandleWrapperBase {
 
 }
 
-// ===== ITestVaultResource.java =====
+// ===== aspire/ITestVaultResource.java =====
 // ITestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ITestVaultResource extends ResourceBuilderBase {
     ITestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14310,15 +16208,16 @@ public class ITestVaultResource extends ResourceBuilderBase {
 
 }
 
-// ===== IUserSecretsManager.java =====
+// ===== aspire/IUserSecretsManager.java =====
 // IUserSecretsManager.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.IUserSecretsManager. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class IUserSecretsManager extends HandleWrapperBase {
     IUserSecretsManager(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14390,15 +16289,13 @@ public class IUserSecretsManager extends HandleWrapperBase {
 
 }
 
-// ===== IconVariant.java =====
+// ===== aspire/IconVariant.java =====
 // IconVariant.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** IconVariant enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum IconVariant implements WireValueEnum {
     REGULAR("Regular"),
     FILLED("Filled");
@@ -14419,15 +16316,13 @@ public enum IconVariant implements WireValueEnum {
     }
 }
 
-// ===== ImagePullPolicy.java =====
+// ===== aspire/ImagePullPolicy.java =====
 // ImagePullPolicy.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ImagePullPolicy enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ImagePullPolicy implements WireValueEnum {
     DEFAULT("Default"),
     ALWAYS("Always"),
@@ -14450,15 +16345,16 @@ public enum ImagePullPolicy implements WireValueEnum {
     }
 }
 
-// ===== InitializeResourceEvent.java =====
+// ===== aspire/InitializeResourceEvent.java =====
 // InitializeResourceEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InitializeResourceEvent extends HandleWrapperBase {
     InitializeResourceEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14506,21 +16402,57 @@ public class InitializeResourceEvent extends HandleWrapperBase {
 
 }
 
-// ===== InputType.java =====
+// ===== aspire/InputInteractionResult.java =====
+// InputInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** InputInteractionResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InputInteractionResult implements JsonSerializable {
+    private boolean canceled;
+    private InteractionInput input;
+
+    public boolean getCanceled() { return canceled; }
+    public void setCanceled(boolean value) { this.canceled = value; }
+    public InteractionInput getInput() { return input; }
+    public void setInput(InteractionInput value) { this.input = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InputInteractionResult fromMap(Map<String, Object> map) {
+        var value = new InputInteractionResult();
+        var canceledValue = map.get("Canceled");
+        value.setCanceled((Boolean) canceledValue);
+        var inputValue = map.get("Input");
+        value.setInput(inputValue == null ? null : InteractionInput.fromMap((Map<String, Object>) inputValue));
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Canceled", AspireClient.serializeValue(canceled));
+        map.put("Input", AspireClient.serializeValue(input));
+        return map;
+    }
+}
+
+// ===== aspire/InputType.java =====
 // InputType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** InputType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum InputType implements WireValueEnum {
     TEXT("Text"),
     SECRET_TEXT("SecretText"),
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
-    NUMBER("Number");
+    NUMBER("Number"),
+    FILE("File");
 
     private final String value;
 
@@ -14538,15 +16470,16 @@ public enum InputType implements WireValueEnum {
     }
 }
 
-// ===== InputsDialogValidationContext.java =====
+// ===== aspire/InputsDialogValidationContext.java =====
 // InputsDialogValidationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InputsDialogValidationContext extends HandleWrapperBase {
     InputsDialogValidationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14568,6 +16501,14 @@ public class InputsDialogValidationContext extends HandleWrapperBase {
         return (CancellationToken) result;
     }
 
+    /** Gets the service provider for resolving services during validation. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
     /** Adds a validation error for the input with the specified name. */
     public void addValidationError(String inputName, String errorMessage) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14579,15 +16520,86 @@ public class InputsDialogValidationContext extends HandleWrapperBase {
 
 }
 
-// ===== InteractionInput.java =====
+// ===== aspire/InputsInteractionResult.java =====
+// InputsInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InputsInteractionResult extends HandleWrapperBase {
+    InputsInteractionResult(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets a value indicating whether the interaction was canceled by the user. */
+    public boolean canceled() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/InputsInteractionResult.canceled", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Gets the inputs returned from the interaction. Empty when `Canceled` is `true`. */
+    public InteractionInputCollection inputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/InputsInteractionResult.inputs", reqArgs);
+        return (InteractionInputCollection) result;
+    }
+
+}
+
+// ===== aspire/InteractionChoiceOption.java =====
+// InteractionChoiceOption.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** InteractionChoiceOption DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionChoiceOption implements JsonSerializable {
+    private String value;
+    private String label;
+
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public String getLabel() { return label; }
+    public void setLabel(String value) { this.label = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionChoiceOption fromMap(Map<String, Object> map) {
+        var value = new InteractionChoiceOption();
+        var valueValue = map.get("Value");
+        value.setValue((String) valueValue);
+        var labelValue = map.get("Label");
+        value.setLabel((String) labelValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("Label", AspireClient.serializeValue(label));
+        return map;
+    }
+}
+
+// ===== aspire/InteractionInput.java =====
 // InteractionInput.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** InteractionInput DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInput implements JsonSerializable {
     private String name;
     private String label;
@@ -14596,12 +16608,14 @@ public class InteractionInput implements JsonSerializable {
     private InputType inputType;
     private Boolean required;
     private Object[] options;
-    private Object dynamicLoading;
     private String value;
     private String placeholder;
     private Boolean allowCustomChoice;
     private boolean disabled;
-    private Double maxLength;
+    private Number maxLength;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
+    private Number maxFileSize;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -14617,8 +16631,6 @@ public class InteractionInput implements JsonSerializable {
     public void setRequired(Boolean value) { this.required = value; }
     public Object[] getOptions() { return options; }
     public void setOptions(Object[] value) { this.options = value; }
-    public Object getDynamicLoading() { return dynamicLoading; }
-    public void setDynamicLoading(Object value) { this.dynamicLoading = value; }
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
     public String getPlaceholder() { return placeholder; }
@@ -14627,8 +16639,14 @@ public class InteractionInput implements JsonSerializable {
     public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public boolean getDisabled() { return disabled; }
     public void setDisabled(boolean value) { this.disabled = value; }
-    public Double getMaxLength() { return maxLength; }
-    public void setMaxLength(Double value) { this.maxLength = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
+    public Number getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Number value) { this.maxFileSize = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInput fromMap(Map<String, Object> map) {
@@ -14647,8 +16665,6 @@ public class InteractionInput implements JsonSerializable {
         value.setRequired(requiredValue == null ? null : (Boolean) requiredValue);
         var optionsValue = map.get("Options");
         value.setOptions((Object[]) optionsValue);
-        var dynamicLoadingValue = map.get("DynamicLoading");
-        value.setDynamicLoading(dynamicLoadingValue);
         var valueValue = map.get("Value");
         value.setValue(valueValue == null ? null : (String) valueValue);
         var placeholderValue = map.get("Placeholder");
@@ -14659,6 +16675,12 @@ public class InteractionInput implements JsonSerializable {
         value.setDisabled((Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
         return value;
     }
 
@@ -14671,25 +16693,86 @@ public class InteractionInput implements JsonSerializable {
         map.put("InputType", AspireClient.serializeValue(inputType));
         map.put("Required", AspireClient.serializeValue(required));
         map.put("Options", AspireClient.serializeValue(options));
-        map.put("DynamicLoading", AspireClient.serializeValue(dynamicLoading));
         map.put("Value", AspireClient.serializeValue(value));
         map.put("Placeholder", AspireClient.serializeValue(placeholder));
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
         return map;
     }
 }
 
-// ===== InteractionInputCollection.java =====
+// ===== aspire/InteractionInputBuilder.java =====
+// InteractionInputBuilder.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionInputBuilder extends HandleWrapperBase {
+    InteractionInputBuilder(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Sets the choice options for the input. */
+    public InteractionInputBuilder withChoiceOptions(InteractionChoiceOption[] choices) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("choices", AspireClient.serializeValue(choices));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/withChoiceOptions", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    /** Sets the value of the input. */
+    public InteractionInputBuilder withValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/withValue", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder withDynamicLoading(AspireAction1<InteractionInputLoadContext> callback) {
+        return withDynamicLoading(callback, null);
+    }
+
+    /** Attaches a callback that dynamically loads or updates the input after the prompt starts. */
+    public InteractionInputBuilder withDynamicLoading(AspireAction1<InteractionInputLoadContext> callback, DynamicLoadingOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (InteractionInputLoadContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/withDynamicLoading", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+}
+
+// ===== aspire/InteractionInputCollection.java =====
 // InteractionInputCollection.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.InteractionInputCollection. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class InteractionInputCollection extends HandleWrapperBase {
     InteractionInputCollection(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14703,34 +16786,384 @@ public class InteractionInputCollection extends HandleWrapperBase {
         return (InteractionInput[]) result;
     }
 
+    /** Gets the input with the specified name, or null if no input matches. */
+    public InteractionInput get(String name) {
+        for (var input : toArray()) {
+            if (input.getName() != null && input.getName().equalsIgnoreCase(name)) {
+                return input;
+            }
+        }
+        return null;
+    }
+
+    /** Gets the input with the specified name, or throws if no input matches. */
+    public InteractionInput required(String name) {
+        var input = get(name);
+        if (input == null) {
+            throw new IllegalArgumentException("no input with name '" + name + "' was found");
+        }
+        return input;
+    }
+
+    /** Gets the value of the input with the specified name, or an empty string if no input matches or it has no value. */
+    public String value(String name) {
+        var input = get(name);
+        return input == null || input.getValue() == null ? "" : input.getValue();
+    }
+
+    /** Gets the value of the input with the specified name, or throws if no input matches. */
+    public String requiredValue(String name) {
+        return required(name).getValue();
+    }
+
 }
 
-// ===== JsonSerializable.java =====
+// ===== aspire/InteractionInputLoadContext.java =====
+// InteractionInputLoadContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionInputLoadContext extends HandleWrapperBase {
+    InteractionInputLoadContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets all inputs in the prompt, including the one currently loading. */
+    public InteractionInputCollection inputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/InteractionInputLoadContext.inputs", reqArgs);
+        return (InteractionInputCollection) result;
+    }
+
+    /** Gets a handle to the input that is loading. Mutate the input through this handle. */
+    public InteractionLoadingInput input() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/input", reqArgs);
+        return (InteractionLoadingInput) result;
+    }
+
+}
+
+// ===== aspire/InteractionInputsDialogOptions.java =====
+// InteractionInputsDialogOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+/** InteractionInputsDialogOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionInputsDialogOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+    private AspireAction1<InputsDialogValidationContext> validationCallback;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
+    public void setValidationCallback(AspireAction1<InputsDialogValidationContext> value) { this.validationCallback = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionInputsDialogOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionInputsDialogOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("ValidationCallback", validationCallback == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (InputsDialogValidationContext) transportArg;
+            validationCallback.invoke(arg);
+            return null;
+        }));
+        return map;
+    }
+}
+
+// ===== aspire/InteractionLoadingInput.java =====
+// InteractionLoadingInput.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionLoadingInput extends HandleWrapperBase {
+    InteractionLoadingInput(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the name of the input. */
+    public String getName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.Ats/getName", reqArgs);
+        return (String) result;
+    }
+
+    /** Sets the choice options for the input. */
+    public void setChoiceOptions(InteractionChoiceOption[] choices) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("choices", AspireClient.serializeValue(choices));
+        getClient().invokeCapability("Aspire.Hosting.Ats/setChoiceOptions", reqArgs);
+    }
+
+    /** Sets the value of the input. */
+    public void setValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting.Ats/setValue", reqArgs);
+    }
+
+}
+
+// ===== aspire/InteractionMessageBoxOptions.java =====
+// InteractionMessageBoxOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** InteractionMessageBoxOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionMessageBoxOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+    private MessageIntent intent;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public MessageIntent getIntent() { return intent; }
+    public void setIntent(MessageIntent value) { this.intent = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionMessageBoxOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionMessageBoxOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        var intentValue = map.get("Intent");
+        value.setIntent(intentValue == null ? null : MessageIntent.fromValue((String) intentValue));
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("Intent", AspireClient.serializeValue(intent));
+        return map;
+    }
+}
+
+// ===== aspire/InteractionNotificationOptions.java =====
+// InteractionNotificationOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** InteractionNotificationOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionNotificationOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+    private MessageIntent intent;
+    private String linkText;
+    private String linkUrl;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public MessageIntent getIntent() { return intent; }
+    public void setIntent(MessageIntent value) { this.intent = value; }
+    public String getLinkText() { return linkText; }
+    public void setLinkText(String value) { this.linkText = value; }
+    public String getLinkUrl() { return linkUrl; }
+    public void setLinkUrl(String value) { this.linkUrl = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionNotificationOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionNotificationOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        var intentValue = map.get("Intent");
+        value.setIntent(intentValue == null ? null : MessageIntent.fromValue((String) intentValue));
+        var linkTextValue = map.get("LinkText");
+        value.setLinkText(linkTextValue == null ? null : (String) linkTextValue);
+        var linkUrlValue = map.get("LinkUrl");
+        value.setLinkUrl(linkUrlValue == null ? null : (String) linkUrlValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("Intent", AspireClient.serializeValue(intent));
+        map.put("LinkText", AspireClient.serializeValue(linkText));
+        map.put("LinkUrl", AspireClient.serializeValue(linkUrl));
+        return map;
+    }
+}
+
+// ===== aspire/InteractionProgressOptions.java =====
+// InteractionProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+/** InteractionProgressOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class InteractionProgressOptions implements JsonSerializable {
+    private String title;
+    private String primaryButtonText;
+    private Boolean enableMessageMarkdown;
+    private AspireAction1<ProgressContext> work;
+
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public AspireAction1<ProgressContext> getWork() { return work; }
+    public void setWork(AspireAction1<ProgressContext> value) { this.work = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionProgressOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionProgressOptions();
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Title", AspireClient.serializeValue(title));
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("Work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (ProgressContext) transportArg;
+            work.invoke(arg);
+            return null;
+        }));
+        return map;
+    }
+}
+
+// ===== aspire/JsonSerializable.java =====
 // JsonSerializable.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import java.util.Map;
 
+@SuppressWarnings({"all", "unchecked", "serial"})
 public interface JsonSerializable {
     Map<String, Object> toMap();
 }
 
-// ===== LogFacade.java =====
+// ===== aspire/LogFacade.java =====
 // LogFacade.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class LogFacade extends HandleWrapperBase {
     LogFacade(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14770,15 +17203,44 @@ public class LogFacade extends HandleWrapperBase {
 
 }
 
-// ===== OtlpProtocol.java =====
+// ===== aspire/MessageIntent.java =====
+// MessageIntent.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** MessageIntent enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum MessageIntent implements WireValueEnum {
+    NONE("None"),
+    SUCCESS("Success"),
+    WARNING("Warning"),
+    ERROR("Error"),
+    INFORMATION("Information"),
+    CONFIRMATION("Confirmation");
+
+    private final String value;
+
+    MessageIntent(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static MessageIntent fromValue(String value) {
+        for (MessageIntent e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/OtlpProtocol.java =====
 // OtlpProtocol.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** OtlpProtocol enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum OtlpProtocol implements WireValueEnum {
     GRPC("Grpc"),
     HTTP_PROTOBUF("HttpProtobuf"),
@@ -14800,15 +17262,16 @@ public enum OtlpProtocol implements WireValueEnum {
     }
 }
 
-// ===== ParameterCustomInputOptions.java =====
+// ===== aspire/ParameterCustomInputOptions.java =====
 // ParameterCustomInputOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ParameterCustomInputOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ParameterCustomInputOptions implements JsonSerializable {
     private InputType inputType;
     private String label;
@@ -14819,7 +17282,7 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     private String placeholder;
     private Boolean allowCustomChoice;
     private Boolean disabled;
-    private Double maxLength;
+    private Number maxLength;
 
     public InputType getInputType() { return inputType; }
     public void setInputType(InputType value) { this.inputType = value; }
@@ -14839,8 +17302,8 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public Boolean getDisabled() { return disabled; }
     public void setDisabled(Boolean value) { this.disabled = value; }
-    public Double getMaxLength() { return maxLength; }
-    public void setMaxLength(Double value) { this.maxLength = value; }
+    public Number getMaxLength() { return maxLength; }
+    public void setMaxLength(Number value) { this.maxLength = value; }
 
     @SuppressWarnings("unchecked")
     public static ParameterCustomInputOptions fromMap(Map<String, Object> map) {
@@ -14884,15 +17347,16 @@ public class ParameterCustomInputOptions implements JsonSerializable {
     }
 }
 
-// ===== ParameterResource.java =====
+// ===== aspire/ParameterResource.java =====
 // ParameterResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ParameterResource extends ResourceBuilderBase {
     ParameterResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -14912,9 +17376,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ParameterResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ParameterResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -14974,6 +17438,29 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ParameterResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ParameterResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -15156,6 +17643,22 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ParameterResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ParameterResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -15229,9 +17732,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ParameterResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ParameterResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -15240,7 +17743,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ParameterResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ParameterResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -15253,12 +17756,20 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ParameterResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -15391,10 +17902,26 @@ public class ParameterResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ParameterResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ParameterResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ParameterResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -15618,9 +18145,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -15629,7 +18156,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -15644,9 +18171,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -15655,7 +18182,7 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -15697,15 +18224,16 @@ public class ParameterResource extends ResourceBuilderBase {
 
 }
 
-// ===== PipelineConfigurationContext.java =====
+// ===== aspire/PipelineConfigurationContext.java =====
 // PipelineConfigurationContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineConfigurationContext extends HandleWrapperBase {
     PipelineConfigurationContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15738,15 +18266,16 @@ public class PipelineConfigurationContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineContext.java =====
+// ===== aspire/PipelineContext.java =====
 // PipelineContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineContext extends HandleWrapperBase {
     PipelineContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15813,15 +18342,16 @@ public class PipelineContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineEditor.java =====
+// ===== aspire/PipelineEditor.java =====
 // PipelineEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineEditor extends HandleWrapperBase {
     PipelineEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15846,15 +18376,16 @@ public class PipelineEditor extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStep.java =====
+// ===== aspire/PipelineStep.java =====
 // PipelineStep.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStep extends HandleWrapperBase {
     PipelineStep(Handle handle, AspireClient client) {
         super(handle, client);
@@ -15929,15 +18460,16 @@ public class PipelineStep extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStepContext.java =====
+// ===== aspire/PipelineStepContext.java =====
 // PipelineStepContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStepContext extends HandleWrapperBase {
     PipelineStepContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16009,15 +18541,16 @@ public class PipelineStepContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineStepFactoryContext.java =====
+// ===== aspire/PipelineStepFactoryContext.java =====
 // PipelineStepFactoryContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineStepFactoryContext extends HandleWrapperBase {
     PipelineStepFactoryContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16041,15 +18574,16 @@ public class PipelineStepFactoryContext extends HandleWrapperBase {
 
 }
 
-// ===== PipelineSummary.java =====
+// ===== aspire/PipelineSummary.java =====
 // PipelineSummary.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class PipelineSummary extends HandleWrapperBase {
     PipelineSummary(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16075,15 +18609,13 @@ public class PipelineSummary extends HandleWrapperBase {
 
 }
 
-// ===== ProbeType.java =====
+// ===== aspire/ProbeType.java =====
 // ProbeType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ProbeType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ProbeType implements WireValueEnum {
     STARTUP("Startup"),
     READINESS("Readiness"),
@@ -16105,15 +18637,17 @@ public enum ProbeType implements WireValueEnum {
     }
 }
 
-// ===== ProcessCommandExportOptions.java =====
+// ===== aspire/ProcessCommandExportOptions.java =====
 // ProcessCommandExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
 
 /** ProcessCommandExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandExportOptions implements JsonSerializable {
     private String executablePath;
     private String[] arguments;
@@ -16122,9 +18656,9 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private Boolean inheritEnvironmentVariables;
     private String standardInputContent;
     private Boolean killEntireProcessTree;
-    private Object createProcessSpec;
+    private AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec;
     private CommandOptions commandOptions;
-    private Double maxOutputLineCount;
+    private Number maxOutputLineCount;
     private Boolean displayImmediately;
     private double[] successExitCodes;
 
@@ -16142,12 +18676,12 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setStandardInputContent(String value) { this.standardInputContent = value; }
     public Boolean getKillEntireProcessTree() { return killEntireProcessTree; }
     public void setKillEntireProcessTree(Boolean value) { this.killEntireProcessTree = value; }
-    public Object getCreateProcessSpec() { return createProcessSpec; }
-    public void setCreateProcessSpec(Object value) { this.createProcessSpec = value; }
+    public AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> getCreateProcessSpec() { return createProcessSpec; }
+    public void setCreateProcessSpec(AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> value) { this.createProcessSpec = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
-    public Double getMaxOutputLineCount() { return maxOutputLineCount; }
-    public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
+    public Number getMaxOutputLineCount() { return maxOutputLineCount; }
+    public void setMaxOutputLineCount(Number value) { this.maxOutputLineCount = value; }
     public Boolean getDisplayImmediately() { return displayImmediately; }
     public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
     public double[] getSuccessExitCodes() { return successExitCodes; }
@@ -16170,8 +18704,6 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         value.setStandardInputContent(standardInputContentValue == null ? null : (String) standardInputContentValue);
         var killEntireProcessTreeValue = map.get("KillEntireProcessTree");
         value.setKillEntireProcessTree(killEntireProcessTreeValue == null ? null : (Boolean) killEntireProcessTreeValue);
-        var createProcessSpecValue = map.get("CreateProcessSpec");
-        value.setCreateProcessSpec(createProcessSpecValue);
         var commandOptionsValue = map.get("CommandOptions");
         value.setCommandOptions(commandOptionsValue == null ? null : CommandOptions.fromMap((Map<String, Object>) commandOptionsValue));
         var maxOutputLineCountValue = map.get("MaxOutputLineCount");
@@ -16192,7 +18724,10 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         map.put("InheritEnvironmentVariables", AspireClient.serializeValue(inheritEnvironmentVariables));
         map.put("StandardInputContent", AspireClient.serializeValue(standardInputContent));
         map.put("KillEntireProcessTree", AspireClient.serializeValue(killEntireProcessTree));
-        map.put("CreateProcessSpec", AspireClient.serializeValue(createProcessSpec));
+        map.put("CreateProcessSpec", createProcessSpec == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (ExecuteCommandContext) transportArg;
+            return AspireClient.awaitValue(createProcessSpec.invoke(arg));
+        }));
         map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("MaxOutputLineCount", AspireClient.serializeValue(maxOutputLineCount));
         map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));
@@ -16201,25 +18736,26 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     }
 }
 
-// ===== ProcessCommandResultExportOptions.java =====
+// ===== aspire/ProcessCommandResultExportOptions.java =====
 // ProcessCommandResultExportOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ProcessCommandResultExportOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandResultExportOptions implements JsonSerializable {
     private CommandOptions commandOptions;
-    private Double maxOutputLineCount;
+    private Number maxOutputLineCount;
     private Boolean displayImmediately;
     private double[] successExitCodes;
 
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
-    public Double getMaxOutputLineCount() { return maxOutputLineCount; }
-    public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
+    public Number getMaxOutputLineCount() { return maxOutputLineCount; }
+    public void setMaxOutputLineCount(Number value) { this.maxOutputLineCount = value; }
     public Boolean getDisplayImmediately() { return displayImmediately; }
     public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
     public double[] getSuccessExitCodes() { return successExitCodes; }
@@ -16249,15 +18785,16 @@ public class ProcessCommandResultExportOptions implements JsonSerializable {
     }
 }
 
-// ===== ProcessCommandSpecExportData.java =====
+// ===== aspire/ProcessCommandSpecExportData.java =====
 // ProcessCommandSpecExportData.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ProcessCommandSpecExportData DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProcessCommandSpecExportData implements JsonSerializable {
     private String executablePath;
     private String[] arguments;
@@ -16315,15 +18852,42 @@ public class ProcessCommandSpecExportData implements JsonSerializable {
     }
 }
 
-// ===== ProjectResource.java =====
+// ===== aspire/ProgressContext.java =====
+// ProgressContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ProgressContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ProgressContext extends HandleWrapperBase {
+    ProgressContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/ProgressContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+}
+
+// ===== aspire/ProjectResource.java =====
 // ProjectResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProjectResource extends ResourceBuilderBase {
     ProjectResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -16343,9 +18907,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ProjectResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ProjectResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -16368,9 +18932,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ProjectResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -16457,6 +19021,29 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public ProjectResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -16606,6 +19193,10 @@ public class ProjectResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    public ProjectResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public ProjectResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -16623,10 +19214,10 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ProjectResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ProjectResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -16677,9 +19268,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -16710,9 +19301,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -16743,15 +19334,15 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ProjectResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ProjectResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -16760,7 +19351,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    private ProjectResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private ProjectResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -16801,12 +19392,12 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ProjectResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ProjectResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -16815,7 +19406,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    private ProjectResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ProjectResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -16838,12 +19429,12 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ProjectResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ProjectResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -16852,7 +19443,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    private ProjectResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private ProjectResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -17043,7 +19634,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public ProjectResource waitForCompletion(IResource dependency, Double exitCode) {
+    public ProjectResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -17054,7 +19645,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    public ProjectResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public ProjectResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -17068,10 +19659,10 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -17080,7 +19671,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private ProjectResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private ProjectResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -17213,6 +19804,38 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public ProjectResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public ProjectResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public ProjectResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17283,14 +19906,14 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -17299,7 +19922,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private ProjectResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private ProjectResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -17345,9 +19968,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ProjectResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ProjectResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -17356,7 +19979,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private ProjectResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private ProjectResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -17403,12 +20026,20 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ProjectResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -17566,10 +20197,26 @@ public class ProjectResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public ProjectResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public ProjectResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ProjectResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -17818,9 +20465,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -17829,7 +20476,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -17844,9 +20491,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -17855,7 +20502,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -17897,15 +20544,16 @@ public class ProjectResource extends ResourceBuilderBase {
 
 }
 
-// ===== ProjectResourceOptions.java =====
+// ===== aspire/ProjectResourceOptions.java =====
 // ProjectResourceOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ProjectResourceOptions extends HandleWrapperBase {
     ProjectResourceOptions(Handle handle, AspireClient client) {
         super(handle, client);
@@ -17964,15 +20612,163 @@ public class ProjectResourceOptions extends HandleWrapperBase {
 
 }
 
-// ===== ProtocolType.java =====
+// ===== aspire/PromptConfirmationOptions.java =====
+// PromptConfirmationOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptConfirmation. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptConfirmationOptions {
+    private InteractionMessageBoxOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionMessageBoxOptions getOptions() { return options; }
+    public PromptConfirmationOptions options(InteractionMessageBoxOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptConfirmationOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/PromptInputOptions.java =====
+// PromptInputOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptInput. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptInputOptions {
+    private InteractionInputsDialogOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionInputsDialogOptions getOptions() { return options; }
+    public PromptInputOptions options(InteractionInputsDialogOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptInputOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/PromptInputsOptions.java =====
+// PromptInputsOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptInputs. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptInputsOptions {
+    private InteractionInputsDialogOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionInputsDialogOptions getOptions() { return options; }
+    public PromptInputsOptions options(InteractionInputsDialogOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptInputsOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/PromptMessageBoxOptions.java =====
+// PromptMessageBoxOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptMessageBox. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptMessageBoxOptions {
+    private InteractionMessageBoxOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionMessageBoxOptions getOptions() { return options; }
+    public PromptMessageBoxOptions options(InteractionMessageBoxOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptMessageBoxOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/PromptNotificationOptions.java =====
+// PromptNotificationOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptNotification. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptNotificationOptions {
+    private InteractionNotificationOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionNotificationOptions getOptions() { return options; }
+    public PromptNotificationOptions options(InteractionNotificationOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptNotificationOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/PromptProgressOptions.java =====
+// PromptProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for PromptProgress. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class PromptProgressOptions {
+    private InteractionProgressOptions options;
+    private CancellationToken cancellationToken;
+
+    public InteractionProgressOptions getOptions() { return options; }
+    public PromptProgressOptions options(InteractionProgressOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptProgressOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== aspire/ProtocolType.java =====
 // ProtocolType.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ProtocolType enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ProtocolType implements WireValueEnum {
     IP("IP"),
     IPV6_HOP_BY_HOP_OPTIONS("IPv6HopByHopOptions"),
@@ -18016,15 +20812,13 @@ public enum ProtocolType implements WireValueEnum {
     }
 }
 
-// ===== PublishResourceUpdateOptions.java =====
+// ===== aspire/PublishResourceUpdateOptions.java =====
 // PublishResourceUpdateOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for PublishResourceUpdate. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class PublishResourceUpdateOptions {
     private String state;
     private String stateStyle;
@@ -18043,15 +20837,16 @@ public final class PublishResourceUpdateOptions {
 
 }
 
-// ===== ReferenceEnvironmentInjectionOptions.java =====
+// ===== aspire/ReferenceEnvironmentInjectionOptions.java =====
 // ReferenceEnvironmentInjectionOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ReferenceEnvironmentInjectionOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceEnvironmentInjectionOptions implements JsonSerializable {
     private boolean connectionString;
     private boolean connectionProperties;
@@ -18091,17 +20886,21 @@ public class ReferenceEnvironmentInjectionOptions implements JsonSerializable {
     }
 }
 
-// ===== ReferenceExpression.java =====
+// ===== aspire/ReferenceExpression.java =====
 // ReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * ReferenceExpression represents a reference expression.
  * Supports value mode (format + value providers), conditional mode, and handle mode.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceExpression {
     private final String format;
     private final Object[] valueProviders;
@@ -18219,15 +21018,16 @@ public class ReferenceExpression {
     }
 }
 
-// ===== ReferenceExpressionBuilder.java =====
+// ===== aspire/ReferenceExpressionBuilder.java =====
 // ReferenceExpressionBuilder.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ReferenceExpressionBuilder extends HandleWrapperBase {
     ReferenceExpressionBuilder(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18289,31 +21089,122 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
 
 }
 
-// ===== ResourceBuilderBase.java =====
+// ===== aspire/RequiredCommandValidationContext.java =====
+// RequiredCommandValidationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class RequiredCommandValidationContext extends HandleWrapperBase {
+    RequiredCommandValidationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the resolved full path to the command executable. */
+    public String resolvedPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the service provider for accessing application services. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
+    /** Gets a cancellation token that can be used to cancel the validation. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    /** Creates a successful validation result. */
+    public RequiredCommandValidationResult success() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success", reqArgs);
+        return (RequiredCommandValidationResult) result;
+    }
+
+    /** Creates a failed validation result with the specified message. */
+    public RequiredCommandValidationResult failure(String validationMessage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("validationMessage", AspireClient.serializeValue(validationMessage));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure", reqArgs);
+        return (RequiredCommandValidationResult) result;
+    }
+
+}
+
+// ===== aspire/RequiredCommandValidationResult.java =====
+// RequiredCommandValidationResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class RequiredCommandValidationResult extends HandleWrapperBase {
+    RequiredCommandValidationResult(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets a value indicating whether the command validation succeeded. */
+    public boolean isValid() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Gets an optional validation message describing why validation failed. */
+    public String validationMessage() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+}
+
+// ===== aspire/ResourceBuilderBase.java =====
 // ResourceBuilderBase.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * ResourceBuilderBase extends HandleWrapperBase for resource builders.
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceBuilderBase extends HandleWrapperBase {
     ResourceBuilderBase(Handle handle, AspireClient client) {
         super(handle, client);
     }
 }
 
-// ===== ResourceCommandService.java =====
+// ===== aspire/ResourceCommandService.java =====
 // ResourceCommandService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceCommandService extends HandleWrapperBase {
     ResourceCommandService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18339,10 +21230,14 @@ public class ResourceCommandService extends HandleWrapperBase {
         return executeCommandAsync(AspireUnion.of(resource), commandName);
     }
 
+    public ExecuteCommandResult executeCommandAsync(ResourceBuilderBase resource, String commandName) {
+        return executeCommandAsync(new IResource(resource.getHandle(), resource.getClient()), commandName);
+    }
+
     /** Executes a command for the specified resource. */
-    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName, ExecuteCommandAsyncOptions options) {
-        var arguments = options == null ? null : options.getArguments();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName, ExecuteCommandAsyncOptions optionsBag) {
+        var arguments = optionsBag == null ? null : optionsBag.getArguments();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         return executeCommandAsyncImpl(resource, commandName, arguments, cancellationToken);
     }
 
@@ -18368,15 +21263,13 @@ public class ResourceCommandService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceCommandState.java =====
+// ===== aspire/ResourceCommandState.java =====
 // ResourceCommandState.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ResourceCommandState enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ResourceCommandState implements WireValueEnum {
     ENABLED("Enabled"),
     DISABLED("Disabled"),
@@ -18398,15 +21291,13 @@ public enum ResourceCommandState implements WireValueEnum {
     }
 }
 
-// ===== ResourceCommandVisibility.java =====
+// ===== aspire/ResourceCommandVisibility.java =====
 // ResourceCommandVisibility.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** ResourceCommandVisibility enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum ResourceCommandVisibility implements WireValueEnum {
     NONE("None"),
     UI("UI"),
@@ -18428,15 +21319,16 @@ public enum ResourceCommandVisibility implements WireValueEnum {
     }
 }
 
-// ===== ResourceEndpointsAllocatedEvent.java =====
+// ===== aspire/ResourceEndpointsAllocatedEvent.java =====
 // ResourceEndpointsAllocatedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceEndpointsAllocatedEvent extends HandleWrapperBase {
     ResourceEndpointsAllocatedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18460,22 +21352,23 @@ public class ResourceEndpointsAllocatedEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceEventDto.java =====
+// ===== aspire/ResourceEventDto.java =====
 // ResourceEventDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ResourceEventDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceEventDto implements JsonSerializable {
     private String resourceName;
     private String resourceId;
     private String state;
     private String stateStyle;
     private String healthStatus;
-    private Double exitCode;
+    private Number exitCode;
 
     public String getResourceName() { return resourceName; }
     public void setResourceName(String value) { this.resourceName = value; }
@@ -18487,8 +21380,8 @@ public class ResourceEventDto implements JsonSerializable {
     public void setStateStyle(String value) { this.stateStyle = value; }
     public String getHealthStatus() { return healthStatus; }
     public void setHealthStatus(String value) { this.healthStatus = value; }
-    public Double getExitCode() { return exitCode; }
-    public void setExitCode(Double value) { this.exitCode = value; }
+    public Number getExitCode() { return exitCode; }
+    public void setExitCode(Number value) { this.exitCode = value; }
 
     @SuppressWarnings("unchecked")
     public static ResourceEventDto fromMap(Map<String, Object> map) {
@@ -18520,15 +21413,16 @@ public class ResourceEventDto implements JsonSerializable {
     }
 }
 
-// ===== ResourceLoggerService.java =====
+// ===== aspire/ResourceLoggerService.java =====
 // ResourceLoggerService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceLoggerService extends HandleWrapperBase {
     ResourceLoggerService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18556,15 +21450,16 @@ public class ResourceLoggerService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceNotificationService.java =====
+// ===== aspire/ResourceNotificationService.java =====
 // ResourceNotificationService.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceNotificationService extends HandleWrapperBase {
     ResourceNotificationService(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18626,9 +21521,9 @@ public class ResourceNotificationService extends HandleWrapperBase {
     }
 
     /** Publishes an update for a resource's state. */
-    public void publishResourceUpdate(IResource resource, PublishResourceUpdateOptions options) {
-        var state = options == null ? null : options.getState();
-        var stateStyle = options == null ? null : options.getStateStyle();
+    public void publishResourceUpdate(IResource resource, PublishResourceUpdateOptions optionsBag) {
+        var state = optionsBag == null ? null : optionsBag.getState();
+        var stateStyle = optionsBag == null ? null : optionsBag.getStateStyle();
         publishResourceUpdateImpl(resource, state, stateStyle);
     }
 
@@ -18660,15 +21555,16 @@ public class ResourceNotificationService extends HandleWrapperBase {
 
 }
 
-// ===== ResourceReadyEvent.java =====
+// ===== aspire/ResourceReadyEvent.java =====
 // ResourceReadyEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceReadyEvent extends HandleWrapperBase {
     ResourceReadyEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18692,15 +21588,16 @@ public class ResourceReadyEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceStoppedEvent.java =====
+// ===== aspire/ResourceStoppedEvent.java =====
 // ResourceStoppedEvent.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceStoppedEvent extends HandleWrapperBase {
     ResourceStoppedEvent(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18724,15 +21621,16 @@ public class ResourceStoppedEvent extends HandleWrapperBase {
 
 }
 
-// ===== ResourceUrlAnnotation.java =====
+// ===== aspire/ResourceUrlAnnotation.java =====
 // ResourceUrlAnnotation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** ResourceUrlAnnotation DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
@@ -18772,15 +21670,16 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     }
 }
 
-// ===== ResourceUrlsCallbackContext.java =====
+// ===== aspire/ResourceUrlsCallbackContext.java =====
 // ResourceUrlsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlsCallbackContext extends HandleWrapperBase {
     ResourceUrlsCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18829,15 +21728,16 @@ public class ResourceUrlsCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== ResourceUrlsEditor.java =====
+// ===== aspire/ResourceUrlsEditor.java =====
 // ResourceUrlsEditor.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class ResourceUrlsEditor extends HandleWrapperBase {
     ResourceUrlsEditor(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18900,15 +21800,47 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
 
 }
 
-// ===== TestCallbackContext.java =====
+// ===== aspire/RunConfiguration.java =====
+// RunConfiguration.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** RunConfiguration DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class RunConfiguration implements JsonSerializable {
+    private Boolean watchEnabled;
+
+    public Boolean getWatchEnabled() { return watchEnabled; }
+    public void setWatchEnabled(Boolean value) { this.watchEnabled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static RunConfiguration fromMap(Map<String, Object> map) {
+        var value = new RunConfiguration();
+        var watchEnabledValue = map.get("WatchEnabled");
+        value.setWatchEnabled(watchEnabledValue == null ? null : (Boolean) watchEnabledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("WatchEnabled", AspireClient.serializeValue(watchEnabled));
+        return map;
+    }
+}
+
+// ===== aspire/TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestCallbackContext extends HandleWrapperBase {
     TestCallbackContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -18969,15 +21901,15 @@ public class TestCallbackContext extends HandleWrapperBase {
 
 }
 
-// ===== TestCollectionContext.java =====
+// ===== aspire/TestCollectionContext.java =====
 // TestCollectionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.List;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestCollectionContext extends HandleWrapperBase {
     TestCollectionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -19003,15 +21935,16 @@ public class TestCollectionContext extends HandleWrapperBase {
 
 }
 
-// ===== TestConfigDto.java =====
+// ===== aspire/TestConfigDto.java =====
 // TestConfigDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** TestConfigDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestConfigDto implements JsonSerializable {
     private String name;
     private double port;
@@ -19051,14 +21984,12 @@ public class TestConfigDto implements JsonSerializable {
     }
 }
 
-// ===== TestConfigs.java =====
+// ===== aspire/TestConfigs.java =====
 // TestConfigs.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class TestConfigs {
     private TestConfigs() { }
 
@@ -19077,15 +22008,17 @@ public final class TestConfigs {
 
 }
 
-// ===== TestDatabaseResource.java =====
+// ===== aspire/TestDatabaseResource.java =====
 // TestDatabaseResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestDatabaseResource extends ContainerResource {
     TestDatabaseResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -19209,9 +22142,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestDatabaseResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestDatabaseResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -19295,10 +22228,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestDatabaseResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestDatabaseResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -19340,6 +22273,30 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    public TestDatabaseResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback) {
+        return withContainerFilesCallback(destinationPath, callback, null);
+    }
+
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
+    public TestDatabaseResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg1 = (ContainerFileSystemCallbackContext) args[0];
+            var arg2 = CancellationToken.fromValue(args[1]);
+            return AspireClient.awaitValue(callback.invoke(arg1, arg2));
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFilesCallback", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -19365,9 +22322,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -19399,9 +22356,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestDatabaseResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -19459,6 +22416,29 @@ public class TestDatabaseResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public TestDatabaseResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -19608,6 +22588,10 @@ public class TestDatabaseResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestDatabaseResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestDatabaseResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -19625,10 +22609,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestDatabaseResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestDatabaseResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -19679,9 +22663,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -19712,9 +22696,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -19745,15 +22729,15 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestDatabaseResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestDatabaseResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -19762,7 +22746,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestDatabaseResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestDatabaseResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -19803,12 +22787,12 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestDatabaseResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestDatabaseResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -19817,7 +22801,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestDatabaseResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestDatabaseResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -19840,12 +22824,12 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestDatabaseResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestDatabaseResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -19854,7 +22838,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestDatabaseResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestDatabaseResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -20031,7 +23015,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestDatabaseResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestDatabaseResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -20042,7 +23026,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    public TestDatabaseResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestDatabaseResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -20056,10 +23040,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -20068,7 +23052,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestDatabaseResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestDatabaseResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -20201,6 +23185,38 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public TestDatabaseResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public TestDatabaseResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public TestDatabaseResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20271,14 +23287,14 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -20287,7 +23303,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestDatabaseResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestDatabaseResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -20333,9 +23349,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestDatabaseResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestDatabaseResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -20344,7 +23360,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestDatabaseResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestDatabaseResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -20391,12 +23407,20 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestDatabaseResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -20450,9 +23474,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestDatabaseResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestDatabaseResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -20571,10 +23595,26 @@ public class TestDatabaseResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public TestDatabaseResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestDatabaseResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -20823,9 +23863,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -20834,7 +23874,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -20849,9 +23889,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -20860,7 +23900,7 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -20902,15 +23942,17 @@ public class TestDatabaseResource extends ContainerResource {
 
 }
 
-// ===== TestDeeplyNestedDto.java =====
+// ===== aspire/TestDeeplyNestedDto.java =====
 // TestDeeplyNestedDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /** TestDeeplyNestedDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestDeeplyNestedDto implements JsonSerializable {
     private Map<String, List<TestConfigDto>> nestedData;
     private Map<String, String>[] metadataArray;
@@ -20926,7 +23968,7 @@ public class TestDeeplyNestedDto implements JsonSerializable {
         var nestedDataValue = map.get("NestedData");
         value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
         var metadataArrayValue = map.get("MetadataArray");
-        value.setMetadataArray((AspireDict<String, String>[]) metadataArrayValue);
+        value.setMetadataArray((Map<String, String>[]) metadataArrayValue);
         return value;
     }
 
@@ -20938,15 +23980,16 @@ public class TestDeeplyNestedDto implements JsonSerializable {
     }
 }
 
-// ===== TestEnvironmentContext.java =====
+// ===== aspire/TestEnvironmentContext.java =====
 // TestEnvironmentContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestEnvironmentContext extends HandleWrapperBase {
     TestEnvironmentContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21005,15 +24048,16 @@ public class TestEnvironmentContext extends HandleWrapperBase {
 
 }
 
-// ===== TestMutableCollectionContext.java =====
+// ===== aspire/TestMutableCollectionContext.java =====
 // TestMutableCollectionContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestMutableCollectionContext extends HandleWrapperBase {
     TestMutableCollectionContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21038,8 +24082,8 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
     }
 
     /** Gets the Counts property */
-    private AspireDict<String, Double> countsField;
-    public AspireDict<String, Double> counts() {
+    private AspireDict<String, Number> countsField;
+    public AspireDict<String, Number> counts() {
         if (countsField == null) {
             countsField = new AspireDict<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts");
         }
@@ -21047,7 +24091,7 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
     }
 
     /** Sets the Counts property */
-    public TestMutableCollectionContext setCounts(AspireDict<String, Double> value) {
+    public TestMutableCollectionContext setCounts(AspireDict<String, Number> value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
@@ -21057,20 +24101,22 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
 
 }
 
-// ===== TestNestedDto.java =====
+// ===== aspire/TestNestedDto.java =====
 // TestNestedDto.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /** TestNestedDto DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
     private List<String> tags;
-    private Map<String, Double> counts;
+    private Map<String, Number> counts;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
@@ -21078,8 +24124,8 @@ public class TestNestedDto implements JsonSerializable {
     public void setConfig(TestConfigDto value) { this.config = value; }
     public List<String> getTags() { return tags; }
     public void setTags(List<String> value) { this.tags = value; }
-    public Map<String, Double> getCounts() { return counts; }
-    public void setCounts(Map<String, Double> value) { this.counts = value; }
+    public Map<String, Number> getCounts() { return counts; }
+    public void setCounts(Map<String, Number> value) { this.counts = value; }
 
     @SuppressWarnings("unchecked")
     public static TestNestedDto fromMap(Map<String, Object> map) {
@@ -21091,7 +24137,7 @@ public class TestNestedDto implements JsonSerializable {
         var tagsValue = map.get("Tags");
         value.setTags(((List<Object>) tagsValue).stream().map(item0 -> (String) item0).toList());
         var countsValue = map.get("Counts");
-        value.setCounts((Map<String, Double>) countsValue);
+        value.setCounts((Map<String, Number>) countsValue);
         return value;
     }
 
@@ -21105,15 +24151,13 @@ public class TestNestedDto implements JsonSerializable {
     }
 }
 
-// ===== TestPersistenceMode.java =====
+// ===== aspire/TestPersistenceMode.java =====
 // TestPersistenceMode.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** TestPersistenceMode enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum TestPersistenceMode implements WireValueEnum {
     NONE("None"),
     VOLUME("Volume"),
@@ -21135,15 +24179,17 @@ public enum TestPersistenceMode implements WireValueEnum {
     }
 }
 
-// ===== TestRedisResource.java =====
+// ===== aspire/TestRedisResource.java =====
 // TestRedisResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestRedisResource extends ContainerResource {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -21267,9 +24313,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestRedisResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestRedisResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -21353,10 +24399,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestRedisResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestRedisResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -21398,6 +24444,30 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    public TestRedisResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback) {
+        return withContainerFilesCallback(destinationPath, callback, null);
+    }
+
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
+    public TestRedisResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg1 = (ContainerFileSystemCallbackContext) args[0];
+            var arg2 = CancellationToken.fromValue(args[1]);
+            return AspireClient.awaitValue(callback.invoke(arg1, arg2));
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFilesCallback", reqArgs);
+        return this;
+    }
+
     public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -21423,9 +24493,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestRedisResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestRedisResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -21457,9 +24527,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestRedisResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -21517,6 +24587,29 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public TestRedisResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -21684,6 +24777,10 @@ public class TestRedisResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestRedisResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestRedisResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -21701,10 +24798,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestRedisResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestRedisResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -21764,9 +24861,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -21797,9 +24894,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -21830,15 +24927,15 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestRedisResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestRedisResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -21847,7 +24944,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestRedisResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestRedisResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -21888,12 +24985,12 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestRedisResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestRedisResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -21902,7 +24999,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestRedisResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestRedisResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -21925,12 +25022,12 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestRedisResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestRedisResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -21939,7 +25036,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestRedisResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestRedisResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -22116,7 +25213,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestRedisResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestRedisResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -22127,7 +25224,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    public TestRedisResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestRedisResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -22141,10 +25238,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -22153,7 +25250,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestRedisResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestRedisResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -22286,6 +25383,38 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public TestRedisResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public TestRedisResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public TestRedisResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -22356,14 +25485,14 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestRedisResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -22372,7 +25501,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestRedisResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestRedisResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -22418,9 +25547,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestRedisResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestRedisResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -22429,7 +25558,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestRedisResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestRedisResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -22476,12 +25605,20 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestRedisResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -22535,9 +25672,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestRedisResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestRedisResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -22672,6 +25809,22 @@ public class TestRedisResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public TestRedisResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource addTestChildDatabase(String name) {
         return addTestChildDatabase(name, null);
     }
@@ -22704,9 +25857,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an optional string parameter */
-    public TestRedisResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestRedisResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -23016,9 +26169,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a data volume with persistence */
-    public TestRedisResource withDataVolume(WithDataVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestRedisResource withDataVolume(WithDataVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withDataVolumeImpl(name, isReadOnly);
     }
 
@@ -23081,9 +26234,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -23092,7 +26245,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -23107,9 +26260,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -23118,7 +26271,7 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -23160,15 +26313,16 @@ public class TestRedisResource extends ContainerResource {
 
 }
 
-// ===== TestResourceContext.java =====
+// ===== aspire/TestResourceContext.java =====
 // TestResourceContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestResourceContext extends HandleWrapperBase {
     TestResourceContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -23234,15 +26388,13 @@ public class TestResourceContext extends HandleWrapperBase {
 
 }
 
-// ===== TestResourceStatus.java =====
+// ===== aspire/TestResourceStatus.java =====
 // TestResourceStatus.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** TestResourceStatus enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum TestResourceStatus implements WireValueEnum {
     PENDING("Pending"),
     RUNNING("Running"),
@@ -23265,15 +26417,17 @@ public enum TestResourceStatus implements WireValueEnum {
     }
 }
 
-// ===== TestVaultResource.java =====
+// ===== aspire/TestVaultResource.java =====
 // TestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class TestVaultResource extends ContainerResource {
     TestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
@@ -23397,9 +26551,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestVaultResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestVaultResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -23483,10 +26637,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestVaultResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestVaultResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -23528,6 +26682,30 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    public TestVaultResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback) {
+        return withContainerFilesCallback(destinationPath, callback, null);
+    }
+
+    /** Creates or updates files and/or folders at the destination path in the container using entries produced by a callback. */
+    public TestVaultResource withContainerFilesCallback(String destinationPath, AspireFunc2<ContainerFileSystemCallbackContext, CancellationToken, ContainerFileSystemItem[]> callback, ContainerFilesOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("destinationPath", AspireClient.serializeValue(destinationPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg1 = (ContainerFileSystemCallbackContext) args[0];
+            var arg2 = CancellationToken.fromValue(args[1]);
+            return AspireClient.awaitValue(callback.invoke(arg1, arg2));
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerFilesCallback", reqArgs);
+        return this;
+    }
+
     public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -23553,9 +26731,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestVaultResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestVaultResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -23587,9 +26765,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestVaultResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -23647,6 +26825,29 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback) {
+        return withRequiredCommandValidation(command, validationCallback, null);
+    }
+
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic. */
+    public TestVaultResource withRequiredCommandValidation(String command, AspireFunc1<RequiredCommandValidationContext, RequiredCommandValidationResult> validationCallback, String helpLink) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        var validationCallbackId = getClient().registerCallback(args -> {
+            var arg = (RequiredCommandValidationContext) args[0];
+            return AspireClient.awaitValue(validationCallback.invoke(arg));
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
+        }
+        if (helpLink != null) {
+            reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequiredCommandValidation", reqArgs);
         return this;
     }
 
@@ -23796,6 +26997,10 @@ public class TestVaultResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    public TestVaultResource withReference(ResourceBuilderBase source) {
+        return withReference(new IResource(source.getHandle(), source.getClient()));
+    }
+
     public TestVaultResource withReference(EndpointReference source, WithReferenceOptions options) {
         return withReference(AspireUnion.of(source), options);
     }
@@ -23813,10 +27018,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestVaultResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestVaultResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -23867,9 +27072,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -23900,9 +27105,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -23933,15 +27138,15 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestVaultResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestVaultResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -23950,7 +27155,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    private TestVaultResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
+    private TestVaultResource withEndpointImpl(Number port, Number targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -23991,12 +27196,12 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestVaultResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestVaultResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -24005,7 +27210,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    private TestVaultResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestVaultResource withHttpEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -24028,12 +27233,12 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestVaultResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestVaultResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -24042,7 +27247,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    private TestVaultResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
+    private TestVaultResource withHttpsEndpointImpl(Number port, Number targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (port != null) {
@@ -24219,7 +27424,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
-    public TestVaultResource waitForCompletion(IResource dependency, Double exitCode) {
+    public TestVaultResource waitForCompletion(IResource dependency, Number exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("dependency", AspireClient.serializeValue(dependency));
@@ -24230,7 +27435,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    public TestVaultResource waitForCompletion(ResourceBuilderBase dependency, Double exitCode) {
+    public TestVaultResource waitForCompletion(ResourceBuilderBase dependency, Number exitCode) {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
@@ -24244,10 +27449,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -24256,7 +27461,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    private TestVaultResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+    private TestVaultResource withHttpHealthCheckImpl(String path, Number statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (path != null) {
@@ -24389,6 +27594,38 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication. */
+    public TestVaultResource withHttpsCertificateConfiguration(AspireAction1<HttpsCertificateConfigurationCallbackAnnotationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateConfigurationCallbackAnnotationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfiguration", reqArgs);
+        return this;
+    }
+
+    /** Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup. */
+    public TestVaultResource subscribeHttpsEndpointsUpdate(AspireAction1<HttpsEndpointUpdateCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (HttpsEndpointUpdateCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/subscribeHttpsEndpointsUpdate", reqArgs);
+        return this;
+    }
+
     /** Adds a relationship to another resource using its builder. */
     public TestVaultResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -24459,14 +27696,14 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -24475,7 +27712,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    private TestVaultResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
+    private TestVaultResource withHttpProbeImpl(ProbeType probeType, String path, Number initialDelaySeconds, Number periodSeconds, Number timeoutSeconds, Number failureThreshold, Number successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("probeType", AspireClient.serializeValue(probeType));
@@ -24521,9 +27758,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestVaultResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestVaultResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -24532,7 +27769,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    private TestVaultResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+    private TestVaultResource withHiddenOnCompletionImpl(Number exitCode, double[] exitCodes) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (exitCode != null) {
@@ -24579,12 +27816,20 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestVaultResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -24638,9 +27883,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestVaultResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestVaultResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -24759,10 +28004,26 @@ public class TestVaultResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures container build options for a compute resource using an async callback. */
+    public TestVaultResource withContainerBuildOptions(AspireAction1<ContainerBuildOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerBuildOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withContainerBuildOptions", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
-    public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestVaultResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -25020,9 +28281,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -25031,7 +28292,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
+    private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -25046,9 +28307,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -25057,7 +28318,7 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
+    private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Number maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("logLevel", AspireClient.serializeValue(logLevel));
@@ -25099,15 +28360,16 @@ public class TestVaultResource extends ContainerResource {
 
 }
 
-// ===== UpdateCommandStateContext.java =====
+// ===== aspire/UpdateCommandStateContext.java =====
 // UpdateCommandStateContext.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class UpdateCommandStateContext extends HandleWrapperBase {
     UpdateCommandStateContext(Handle handle, AspireClient client) {
         super(handle, client);
@@ -25121,23 +28383,32 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         return UpdateCommandStateResourceSnapshot.fromMap((Map<String, Object>) result);
     }
 
+    /** The service provider. */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services", reqArgs);
+        return (IServiceProvider) result;
+    }
+
 }
 
-// ===== UpdateCommandStateResourceSnapshot.java =====
+// ===== aspire/UpdateCommandStateResourceSnapshot.java =====
 // UpdateCommandStateResourceSnapshot.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /** UpdateCommandStateResourceSnapshot DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     private String resourceType;
     private String state;
     private String stateStyle;
     private HealthStatus healthStatus;
-    private Double exitCode;
+    private Number exitCode;
 
     public String getResourceType() { return resourceType; }
     public void setResourceType(String value) { this.resourceType = value; }
@@ -25147,8 +28418,8 @@ public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     public void setStateStyle(String value) { this.stateStyle = value; }
     public HealthStatus getHealthStatus() { return healthStatus; }
     public void setHealthStatus(HealthStatus value) { this.healthStatus = value; }
-    public Double getExitCode() { return exitCode; }
-    public void setExitCode(Double value) { this.exitCode = value; }
+    public Number getExitCode() { return exitCode; }
+    public void setExitCode(Number value) { this.exitCode = value; }
 
     @SuppressWarnings("unchecked")
     public static UpdateCommandStateResourceSnapshot fromMap(Map<String, Object> map) {
@@ -25177,15 +28448,13 @@ public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
     }
 }
 
-// ===== UrlDisplayLocation.java =====
+// ===== aspire/UrlDisplayLocation.java =====
 // UrlDisplayLocation.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** UrlDisplayLocation enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum UrlDisplayLocation implements WireValueEnum {
     SUMMARY_AND_DETAILS("SummaryAndDetails"),
     DETAILS_ONLY("DetailsOnly");
@@ -25206,15 +28475,13 @@ public enum UrlDisplayLocation implements WireValueEnum {
     }
 }
 
-// ===== WaitBehavior.java =====
+// ===== aspire/WaitBehavior.java =====
 // WaitBehavior.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** WaitBehavior enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public enum WaitBehavior implements WireValueEnum {
     WAIT_ON_RESOURCE_UNAVAILABLE("WaitOnResourceUnavailable"),
     STOP_ON_RESOURCE_UNAVAILABLE("StopOnResourceUnavailable");
@@ -25235,14 +28502,12 @@ public enum WaitBehavior implements WireValueEnum {
     }
 }
 
-// ===== WellKnownPipelineSteps.java =====
+// ===== aspire/WellKnownPipelineSteps.java =====
 // WellKnownPipelineSteps.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WellKnownPipelineSteps {
     private WellKnownPipelineSteps() { }
 
@@ -25293,14 +28558,12 @@ public final class WellKnownPipelineSteps {
 
 }
 
-// ===== WellKnownPipelineTags.java =====
+// ===== aspire/WellKnownPipelineTags.java =====
 // WellKnownPipelineTags.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WellKnownPipelineTags {
     private WellKnownPipelineTags() { }
 
@@ -25318,29 +28581,26 @@ public final class WellKnownPipelineTags {
 
 }
 
-// ===== WireValueEnum.java =====
+// ===== aspire/WireValueEnum.java =====
 // WireValueEnum.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-
 /**
  * Marker interface for generated enums that need a transport value distinct from Enum.name().
  */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public interface WireValueEnum {
     String getValue();
 }
 
-// ===== WithContainerCertificatePathsOptions.java =====
+// ===== aspire/WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithContainerCertificatePaths. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithContainerCertificatePathsOptions {
     private String customCertificatesDestination;
     private String[] defaultCertificateBundlePaths;
@@ -25366,15 +28626,13 @@ public final class WithContainerCertificatePathsOptions {
 
 }
 
-// ===== WithDataVolumeOptions.java =====
+// ===== aspire/WithDataVolumeOptions.java =====
 // WithDataVolumeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDataVolume. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDataVolumeOptions {
     private String name;
     private Boolean isReadOnly;
@@ -25393,15 +28651,13 @@ public final class WithDataVolumeOptions {
 
 }
 
-// ===== WithDockerfileBaseImageOptions.java =====
+// ===== aspire/WithDockerfileBaseImageOptions.java =====
 // WithDockerfileBaseImageOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDockerfileBaseImage. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDockerfileBaseImageOptions {
     private String buildImage;
     private String runtimeImage;
@@ -25420,15 +28676,13 @@ public final class WithDockerfileBaseImageOptions {
 
 }
 
-// ===== WithDockerfileOptions.java =====
+// ===== aspire/WithDockerfileOptions.java =====
 // WithDockerfileOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithDockerfile. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithDockerfileOptions {
     private String dockerfilePath;
     private String stage;
@@ -25447,18 +28701,16 @@ public final class WithDockerfileOptions {
 
 }
 
-// ===== WithEndpointOptions.java =====
+// ===== aspire/WithEndpointOptions.java =====
 // WithEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String scheme;
     private String name;
     private String env;
@@ -25466,14 +28718,14 @@ public final class WithEndpointOptions {
     private Boolean isExternal;
     private ProtocolType protocol;
 
-    public Double getPort() { return port; }
-    public WithEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -25516,21 +28768,19 @@ public final class WithEndpointOptions {
 
 }
 
-// ===== WithHiddenOnCompletionOptions.java =====
+// ===== aspire/WithHiddenOnCompletionOptions.java =====
 // WithHiddenOnCompletionOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHiddenOnCompletion. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHiddenOnCompletionOptions {
-    private Double exitCode;
+    private Number exitCode;
     private double[] exitCodes;
 
-    public Double getExitCode() { return exitCode; }
-    public WithHiddenOnCompletionOptions exitCode(Double value) {
+    public Number getExitCode() { return exitCode; }
+    public WithHiddenOnCompletionOptions exitCode(Number value) {
         this.exitCode = value;
         return this;
     }
@@ -25543,15 +28793,13 @@ public final class WithHiddenOnCompletionOptions {
 
 }
 
-// ===== WithHttpEndpointCallbackOptions.java =====
+// ===== aspire/WithHttpEndpointCallbackOptions.java =====
 // WithHttpEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpEndpointCallback. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpEndpointCallbackOptions {
     private String name;
     private Boolean createIfNotExists;
@@ -25570,30 +28818,28 @@ public final class WithHttpEndpointCallbackOptions {
 
 }
 
-// ===== WithHttpEndpointOptions.java =====
+// ===== aspire/WithHttpEndpointOptions.java =====
 // WithHttpEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String name;
     private String env;
     private Boolean isProxied;
 
-    public Double getPort() { return port; }
-    public WithHttpEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithHttpEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithHttpEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithHttpEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -25618,18 +28864,16 @@ public final class WithHttpEndpointOptions {
 
 }
 
-// ===== WithHttpHealthCheckOptions.java =====
+// ===== aspire/WithHttpHealthCheckOptions.java =====
 // WithHttpHealthCheckOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpHealthCheck. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpHealthCheckOptions {
     private String path;
-    private Double statusCode;
+    private Number statusCode;
     private String endpointName;
 
     public String getPath() { return path; }
@@ -25638,8 +28882,8 @@ public final class WithHttpHealthCheckOptions {
         return this;
     }
 
-    public Double getStatusCode() { return statusCode; }
-    public WithHttpHealthCheckOptions statusCode(Double value) {
+    public Number getStatusCode() { return statusCode; }
+    public WithHttpHealthCheckOptions statusCode(Number value) {
         this.statusCode = value;
         return this;
     }
@@ -25652,22 +28896,20 @@ public final class WithHttpHealthCheckOptions {
 
 }
 
-// ===== WithHttpProbeOptions.java =====
+// ===== aspire/WithHttpProbeOptions.java =====
 // WithHttpProbeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpProbe. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpProbeOptions {
     private String path;
-    private Double initialDelaySeconds;
-    private Double periodSeconds;
-    private Double timeoutSeconds;
-    private Double failureThreshold;
-    private Double successThreshold;
+    private Number initialDelaySeconds;
+    private Number periodSeconds;
+    private Number timeoutSeconds;
+    private Number failureThreshold;
+    private Number successThreshold;
     private String endpointName;
 
     public String getPath() { return path; }
@@ -25676,32 +28918,32 @@ public final class WithHttpProbeOptions {
         return this;
     }
 
-    public Double getInitialDelaySeconds() { return initialDelaySeconds; }
-    public WithHttpProbeOptions initialDelaySeconds(Double value) {
+    public Number getInitialDelaySeconds() { return initialDelaySeconds; }
+    public WithHttpProbeOptions initialDelaySeconds(Number value) {
         this.initialDelaySeconds = value;
         return this;
     }
 
-    public Double getPeriodSeconds() { return periodSeconds; }
-    public WithHttpProbeOptions periodSeconds(Double value) {
+    public Number getPeriodSeconds() { return periodSeconds; }
+    public WithHttpProbeOptions periodSeconds(Number value) {
         this.periodSeconds = value;
         return this;
     }
 
-    public Double getTimeoutSeconds() { return timeoutSeconds; }
-    public WithHttpProbeOptions timeoutSeconds(Double value) {
+    public Number getTimeoutSeconds() { return timeoutSeconds; }
+    public WithHttpProbeOptions timeoutSeconds(Number value) {
         this.timeoutSeconds = value;
         return this;
     }
 
-    public Double getFailureThreshold() { return failureThreshold; }
-    public WithHttpProbeOptions failureThreshold(Double value) {
+    public Number getFailureThreshold() { return failureThreshold; }
+    public WithHttpProbeOptions failureThreshold(Number value) {
         this.failureThreshold = value;
         return this;
     }
 
-    public Double getSuccessThreshold() { return successThreshold; }
-    public WithHttpProbeOptions successThreshold(Double value) {
+    public Number getSuccessThreshold() { return successThreshold; }
+    public WithHttpProbeOptions successThreshold(Number value) {
         this.successThreshold = value;
         return this;
     }
@@ -25714,15 +28956,13 @@ public final class WithHttpProbeOptions {
 
 }
 
-// ===== WithHttpsEndpointCallbackOptions.java =====
+// ===== aspire/WithHttpsEndpointCallbackOptions.java =====
 // WithHttpsEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpsEndpointCallback. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpsEndpointCallbackOptions {
     private String name;
     private Boolean createIfNotExists;
@@ -25741,30 +28981,28 @@ public final class WithHttpsEndpointCallbackOptions {
 
 }
 
-// ===== WithHttpsEndpointOptions.java =====
+// ===== aspire/WithHttpsEndpointOptions.java =====
 // WithHttpsEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithHttpsEndpoint. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithHttpsEndpointOptions {
-    private Double port;
-    private Double targetPort;
+    private Number port;
+    private Number targetPort;
     private String name;
     private String env;
     private Boolean isProxied;
 
-    public Double getPort() { return port; }
-    public WithHttpsEndpointOptions port(Double value) {
+    public Number getPort() { return port; }
+    public WithHttpsEndpointOptions port(Number value) {
         this.port = value;
         return this;
     }
 
-    public Double getTargetPort() { return targetPort; }
-    public WithHttpsEndpointOptions targetPort(Double value) {
+    public Number getTargetPort() { return targetPort; }
+    public WithHttpsEndpointOptions targetPort(Number value) {
         this.targetPort = value;
         return this;
     }
@@ -25789,15 +29027,13 @@ public final class WithHttpsEndpointOptions {
 
 }
 
-// ===== WithMcpServerOptions.java =====
+// ===== aspire/WithMcpServerOptions.java =====
 // WithMcpServerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMcpServer. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMcpServerOptions {
     private String path;
     private String endpointName;
@@ -25816,18 +29052,16 @@ public final class WithMcpServerOptions {
 
 }
 
-// ===== WithMergeLoggingOptions.java =====
+// ===== aspire/WithMergeLoggingOptions.java =====
 // WithMergeLoggingOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMergeLogging. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMergeLoggingOptions {
     private Boolean enableConsole;
-    private Double maxFiles;
+    private Number maxFiles;
 
     public Boolean getEnableConsole() { return enableConsole; }
     public WithMergeLoggingOptions enableConsole(Boolean value) {
@@ -25835,26 +29069,24 @@ public final class WithMergeLoggingOptions {
         return this;
     }
 
-    public Double getMaxFiles() { return maxFiles; }
-    public WithMergeLoggingOptions maxFiles(Double value) {
+    public Number getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingOptions maxFiles(Number value) {
         this.maxFiles = value;
         return this;
     }
 
 }
 
-// ===== WithMergeLoggingPathOptions.java =====
+// ===== aspire/WithMergeLoggingPathOptions.java =====
 // WithMergeLoggingPathOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithMergeLoggingPath. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithMergeLoggingPathOptions {
     private Boolean enableConsole;
-    private Double maxFiles;
+    private Number maxFiles;
 
     public Boolean getEnableConsole() { return enableConsole; }
     public WithMergeLoggingPathOptions enableConsole(Boolean value) {
@@ -25862,23 +29094,21 @@ public final class WithMergeLoggingPathOptions {
         return this;
     }
 
-    public Double getMaxFiles() { return maxFiles; }
-    public WithMergeLoggingPathOptions maxFiles(Double value) {
+    public Number getMaxFiles() { return maxFiles; }
+    public WithMergeLoggingPathOptions maxFiles(Number value) {
         this.maxFiles = value;
         return this;
     }
 
 }
 
-// ===== WithOptionalStringOptions.java =====
+// ===== aspire/WithOptionalStringOptions.java =====
 // WithOptionalStringOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithOptionalString. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithOptionalStringOptions {
     private String value;
     private Boolean enabled;
@@ -25897,15 +29127,13 @@ public final class WithOptionalStringOptions {
 
 }
 
-// ===== WithPipelineStepFactoryOptions.java =====
+// ===== aspire/WithPipelineStepFactoryOptions.java =====
 // WithPipelineStepFactoryOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithPipelineStepFactory. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithPipelineStepFactoryOptions {
     private String[] dependsOn;
     private String[] requiredBy;
@@ -25938,15 +29166,13 @@ public final class WithPipelineStepFactoryOptions {
 
 }
 
-// ===== WithReferenceOptions.java =====
+// ===== aspire/WithReferenceOptions.java =====
 // WithReferenceOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithReference. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithReferenceOptions {
     private String connectionName;
     private Boolean optional;
@@ -25972,15 +29198,13 @@ public final class WithReferenceOptions {
 
 }
 
-// ===== WithVolumeOptions.java =====
+// ===== aspire/WithVolumeOptions.java =====
 // WithVolumeOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
 
-import java.util.*;
-import java.util.function.*;
-
 /** Options for WithVolume. */
+@SuppressWarnings({"all", "unchecked", "serial"})
 public final class WithVolumeOptions {
     private String name;
     private Boolean isReadOnly;
@@ -26000,207 +29224,245 @@ public final class WithVolumeOptions {
 }
 
 // ===== sources.txt =====
-.aspire/modules/AddContainerOptions.java
-.aspire/modules/AddDockerfileOptions.java
-.aspire/modules/AddParameterOptions.java
-.aspire/modules/AddParameterWithGeneratedValueOptions.java
-.aspire/modules/AddStepOptions.java
-.aspire/modules/AfterPublishEvent.java
-.aspire/modules/AfterResourcesCreatedEvent.java
-.aspire/modules/Aspire.java
-.aspire/modules/AspireAction0.java
-.aspire/modules/AspireAction1.java
-.aspire/modules/AspireAction2.java
-.aspire/modules/AspireAction3.java
-.aspire/modules/AspireAction4.java
-.aspire/modules/AspireClient.java
-.aspire/modules/AspireDict.java
-.aspire/modules/AspireFunc0.java
-.aspire/modules/AspireFunc1.java
-.aspire/modules/AspireFunc2.java
-.aspire/modules/AspireFunc3.java
-.aspire/modules/AspireFunc4.java
-.aspire/modules/AspireList.java
-.aspire/modules/AspireRegistrations.java
-.aspire/modules/AspireUnion.java
-.aspire/modules/BaseRegistrations.java
-.aspire/modules/BeforePublishEvent.java
-.aspire/modules/BeforeResourceStartedEvent.java
-.aspire/modules/BeforeStartEvent.java
-.aspire/modules/BuildOptions.java
-.aspire/modules/CSharpAppResource.java
-.aspire/modules/CancellationToken.java
-.aspire/modules/CapabilityError.java
-.aspire/modules/CertificateTrustExecutionConfigurationContext.java
-.aspire/modules/CertificateTrustExecutionConfigurationExportData.java
-.aspire/modules/CertificateTrustScope.java
-.aspire/modules/CommandLineArgsCallbackContext.java
-.aspire/modules/CommandLineArgsEditor.java
-.aspire/modules/CommandOptions.java
-.aspire/modules/CommandResultData.java
-.aspire/modules/CommandResultFormat.java
-.aspire/modules/CompleteStepMarkdownOptions.java
-.aspire/modules/CompleteStepOptions.java
-.aspire/modules/CompleteTaskMarkdownOptions.java
-.aspire/modules/CompleteTaskOptions.java
-.aspire/modules/ConnectionStringAvailableEvent.java
-.aspire/modules/ContainerFilesOptions.java
-.aspire/modules/ContainerImagePushOptions.java
-.aspire/modules/ContainerImagePushOptionsCallbackContext.java
-.aspire/modules/ContainerImageReference.java
-.aspire/modules/ContainerLifetime.java
-.aspire/modules/ContainerMountAnnotation.java
-.aspire/modules/ContainerMountType.java
-.aspire/modules/ContainerPortReference.java
-.aspire/modules/ContainerRegistryResource.java
-.aspire/modules/ContainerResource.java
-.aspire/modules/CreateBuilderOptions.java
-.aspire/modules/DistributedApplication.java
-.aspire/modules/DistributedApplicationEventSubscription.java
-.aspire/modules/DistributedApplicationExecutionContext.java
-.aspire/modules/DistributedApplicationExecutionContextOptions.java
-.aspire/modules/DistributedApplicationModel.java
-.aspire/modules/DistributedApplicationOperation.java
-.aspire/modules/DistributedApplicationResourceEventSubscription.java
-.aspire/modules/DockerfileBuilder.java
-.aspire/modules/DockerfileBuilderCallbackContext.java
-.aspire/modules/DockerfileFactoryContext.java
-.aspire/modules/DockerfileStage.java
-.aspire/modules/DotnetToolResource.java
-.aspire/modules/EndpointProperty.java
-.aspire/modules/EndpointReference.java
-.aspire/modules/EndpointReferenceExpression.java
-.aspire/modules/EndpointUpdateContext.java
-.aspire/modules/EnvironmentCallbackContext.java
-.aspire/modules/EnvironmentEditor.java
-.aspire/modules/EventingSubscriberRegistrationContext.java
-.aspire/modules/ExecutableResource.java
-.aspire/modules/ExecuteCommandAsyncOptions.java
-.aspire/modules/ExecuteCommandContext.java
-.aspire/modules/ExecuteCommandResult.java
-.aspire/modules/ExternalServiceResource.java
-.aspire/modules/GenerateParameterDefault.java
-.aspire/modules/Handle.java
-.aspire/modules/HandleWrapperBase.java
-.aspire/modules/HealthCheckResult.java
-.aspire/modules/HealthStatus.java
-.aspire/modules/HttpCommandExportOptions.java
-.aspire/modules/HttpCommandPrepareRequestContext.java
-.aspire/modules/HttpCommandRequestExportData.java
-.aspire/modules/HttpCommandResultMode.java
-.aspire/modules/HttpsCertificateExecutionConfigurationContext.java
-.aspire/modules/HttpsCertificateExecutionConfigurationExportData.java
-.aspire/modules/HttpsCertificateInfo.java
-.aspire/modules/IAspireStore.java
-.aspire/modules/IComputeEnvironmentResource.java
-.aspire/modules/IComputeResource.java
-.aspire/modules/IConfiguration.java
-.aspire/modules/IConfigurationSection.java
-.aspire/modules/IContainerFilesDestinationResource.java
-.aspire/modules/IDistributedApplicationBuilder.java
-.aspire/modules/IDistributedApplicationEvent.java
-.aspire/modules/IDistributedApplicationEventing.java
-.aspire/modules/IDistributedApplicationPipeline.java
-.aspire/modules/IDistributedApplicationResourceEvent.java
-.aspire/modules/IExecutionConfigurationBuilder.java
-.aspire/modules/IExecutionConfigurationResult.java
-.aspire/modules/IExpressionValue.java
-.aspire/modules/IHostEnvironment.java
-.aspire/modules/ILogger.java
-.aspire/modules/ILoggerFactory.java
-.aspire/modules/IReportingStep.java
-.aspire/modules/IReportingTask.java
-.aspire/modules/IResource.java
-.aspire/modules/IResourceWithArgs.java
-.aspire/modules/IResourceWithConnectionString.java
-.aspire/modules/IResourceWithContainerFiles.java
-.aspire/modules/IResourceWithEndpoints.java
-.aspire/modules/IResourceWithEnvironment.java
-.aspire/modules/IResourceWithParent.java
-.aspire/modules/IResourceWithWaitSupport.java
-.aspire/modules/IServiceProvider.java
-.aspire/modules/ITestVaultResource.java
-.aspire/modules/IUserSecretsManager.java
-.aspire/modules/IconVariant.java
-.aspire/modules/ImagePullPolicy.java
-.aspire/modules/InitializeResourceEvent.java
-.aspire/modules/InputType.java
-.aspire/modules/InputsDialogValidationContext.java
-.aspire/modules/InteractionInput.java
-.aspire/modules/InteractionInputCollection.java
-.aspire/modules/JsonSerializable.java
-.aspire/modules/LogFacade.java
-.aspire/modules/OtlpProtocol.java
-.aspire/modules/ParameterCustomInputOptions.java
-.aspire/modules/ParameterResource.java
-.aspire/modules/PipelineConfigurationContext.java
-.aspire/modules/PipelineContext.java
-.aspire/modules/PipelineEditor.java
-.aspire/modules/PipelineStep.java
-.aspire/modules/PipelineStepContext.java
-.aspire/modules/PipelineStepFactoryContext.java
-.aspire/modules/PipelineSummary.java
-.aspire/modules/ProbeType.java
-.aspire/modules/ProcessCommandExportOptions.java
-.aspire/modules/ProcessCommandResultExportOptions.java
-.aspire/modules/ProcessCommandSpecExportData.java
-.aspire/modules/ProjectResource.java
-.aspire/modules/ProjectResourceOptions.java
-.aspire/modules/ProtocolType.java
-.aspire/modules/PublishResourceUpdateOptions.java
-.aspire/modules/ReferenceEnvironmentInjectionOptions.java
-.aspire/modules/ReferenceExpression.java
-.aspire/modules/ReferenceExpressionBuilder.java
-.aspire/modules/ResourceBuilderBase.java
-.aspire/modules/ResourceCommandService.java
-.aspire/modules/ResourceCommandState.java
-.aspire/modules/ResourceCommandVisibility.java
-.aspire/modules/ResourceEndpointsAllocatedEvent.java
-.aspire/modules/ResourceEventDto.java
-.aspire/modules/ResourceLoggerService.java
-.aspire/modules/ResourceNotificationService.java
-.aspire/modules/ResourceReadyEvent.java
-.aspire/modules/ResourceStoppedEvent.java
-.aspire/modules/ResourceUrlAnnotation.java
-.aspire/modules/ResourceUrlsCallbackContext.java
-.aspire/modules/ResourceUrlsEditor.java
-.aspire/modules/TestCallbackContext.java
-.aspire/modules/TestCollectionContext.java
-.aspire/modules/TestConfigDto.java
-.aspire/modules/TestConfigs.java
-.aspire/modules/TestDatabaseResource.java
-.aspire/modules/TestDeeplyNestedDto.java
-.aspire/modules/TestEnvironmentContext.java
-.aspire/modules/TestMutableCollectionContext.java
-.aspire/modules/TestNestedDto.java
-.aspire/modules/TestPersistenceMode.java
-.aspire/modules/TestRedisResource.java
-.aspire/modules/TestResourceContext.java
-.aspire/modules/TestResourceStatus.java
-.aspire/modules/TestVaultResource.java
-.aspire/modules/UpdateCommandStateContext.java
-.aspire/modules/UpdateCommandStateResourceSnapshot.java
-.aspire/modules/UrlDisplayLocation.java
-.aspire/modules/WaitBehavior.java
-.aspire/modules/WellKnownPipelineSteps.java
-.aspire/modules/WellKnownPipelineTags.java
-.aspire/modules/WireValueEnum.java
-.aspire/modules/WithContainerCertificatePathsOptions.java
-.aspire/modules/WithDataVolumeOptions.java
-.aspire/modules/WithDockerfileBaseImageOptions.java
-.aspire/modules/WithDockerfileOptions.java
-.aspire/modules/WithEndpointOptions.java
-.aspire/modules/WithHiddenOnCompletionOptions.java
-.aspire/modules/WithHttpEndpointCallbackOptions.java
-.aspire/modules/WithHttpEndpointOptions.java
-.aspire/modules/WithHttpHealthCheckOptions.java
-.aspire/modules/WithHttpProbeOptions.java
-.aspire/modules/WithHttpsEndpointCallbackOptions.java
-.aspire/modules/WithHttpsEndpointOptions.java
-.aspire/modules/WithMcpServerOptions.java
-.aspire/modules/WithMergeLoggingOptions.java
-.aspire/modules/WithMergeLoggingPathOptions.java
-.aspire/modules/WithOptionalStringOptions.java
-.aspire/modules/WithPipelineStepFactoryOptions.java
-.aspire/modules/WithReferenceOptions.java
-.aspire/modules/WithVolumeOptions.java
+.aspire/modules/aspire/AddContainerOptions.java
+.aspire/modules/aspire/AddDockerfileOptions.java
+.aspire/modules/aspire/AddParameterOptions.java
+.aspire/modules/aspire/AddParameterWithGeneratedValueOptions.java
+.aspire/modules/aspire/AddStepOptions.java
+.aspire/modules/aspire/AfterPublishEvent.java
+.aspire/modules/aspire/AfterResourcesCreatedEvent.java
+.aspire/modules/aspire/Aspire.java
+.aspire/modules/aspire/AspireAction0.java
+.aspire/modules/aspire/AspireAction1.java
+.aspire/modules/aspire/AspireAction2.java
+.aspire/modules/aspire/AspireAction3.java
+.aspire/modules/aspire/AspireAction4.java
+.aspire/modules/aspire/AspireClient.java
+.aspire/modules/aspire/AspireDict.java
+.aspire/modules/aspire/AspireFunc0.java
+.aspire/modules/aspire/AspireFunc1.java
+.aspire/modules/aspire/AspireFunc2.java
+.aspire/modules/aspire/AspireFunc3.java
+.aspire/modules/aspire/AspireFunc4.java
+.aspire/modules/aspire/AspireList.java
+.aspire/modules/aspire/AspireRegistrations.java
+.aspire/modules/aspire/AspireUnion.java
+.aspire/modules/aspire/BaseRegistrations.java
+.aspire/modules/aspire/BeforePublishEvent.java
+.aspire/modules/aspire/BeforeResourceStartedEvent.java
+.aspire/modules/aspire/BeforeStartEvent.java
+.aspire/modules/aspire/BoolInteractionResult.java
+.aspire/modules/aspire/BuildOptions.java
+.aspire/modules/aspire/CSharpAppResource.java
+.aspire/modules/aspire/CancellationToken.java
+.aspire/modules/aspire/CapabilityError.java
+.aspire/modules/aspire/CertificateTrustExecutionConfigurationContext.java
+.aspire/modules/aspire/CertificateTrustExecutionConfigurationExportData.java
+.aspire/modules/aspire/CertificateTrustScope.java
+.aspire/modules/aspire/CommandLineArgsCallbackContext.java
+.aspire/modules/aspire/CommandLineArgsEditor.java
+.aspire/modules/aspire/CommandOptions.java
+.aspire/modules/aspire/CommandProgressOptions.java
+.aspire/modules/aspire/CommandResultData.java
+.aspire/modules/aspire/CommandResultFormat.java
+.aspire/modules/aspire/CompleteStepMarkdownOptions.java
+.aspire/modules/aspire/CompleteStepOptions.java
+.aspire/modules/aspire/CompleteTaskMarkdownOptions.java
+.aspire/modules/aspire/CompleteTaskOptions.java
+.aspire/modules/aspire/ConnectionStringAvailableEvent.java
+.aspire/modules/aspire/ContainerBuildOptionsCallbackContext.java
+.aspire/modules/aspire/ContainerFileSystemCallbackContext.java
+.aspire/modules/aspire/ContainerFileSystemItem.java
+.aspire/modules/aspire/ContainerFilesOptions.java
+.aspire/modules/aspire/ContainerImageDestination.java
+.aspire/modules/aspire/ContainerImageFormat.java
+.aspire/modules/aspire/ContainerImagePushOptions.java
+.aspire/modules/aspire/ContainerImagePushOptionsCallbackContext.java
+.aspire/modules/aspire/ContainerImageReference.java
+.aspire/modules/aspire/ContainerLifetime.java
+.aspire/modules/aspire/ContainerMountAnnotation.java
+.aspire/modules/aspire/ContainerMountType.java
+.aspire/modules/aspire/ContainerPortReference.java
+.aspire/modules/aspire/ContainerRegistryResource.java
+.aspire/modules/aspire/ContainerResource.java
+.aspire/modules/aspire/ContainerTargetPlatform.java
+.aspire/modules/aspire/CreateBuilderOptions.java
+.aspire/modules/aspire/CreateCertificateFileOptions.java
+.aspire/modules/aspire/CreateChoiceInputOptions.java
+.aspire/modules/aspire/CreateDirectoryOptions.java
+.aspire/modules/aspire/CreateFileOptions.java
+.aspire/modules/aspire/CreateInteractionInputOptions.java
+.aspire/modules/aspire/DistributedApplication.java
+.aspire/modules/aspire/DistributedApplicationEventSubscription.java
+.aspire/modules/aspire/DistributedApplicationExecutionContext.java
+.aspire/modules/aspire/DistributedApplicationExecutionContextOptions.java
+.aspire/modules/aspire/DistributedApplicationModel.java
+.aspire/modules/aspire/DistributedApplicationOperation.java
+.aspire/modules/aspire/DistributedApplicationResourceEventSubscription.java
+.aspire/modules/aspire/DockerfileBuilder.java
+.aspire/modules/aspire/DockerfileBuilderCallbackContext.java
+.aspire/modules/aspire/DockerfileFactoryContext.java
+.aspire/modules/aspire/DockerfileStage.java
+.aspire/modules/aspire/DotnetToolResource.java
+.aspire/modules/aspire/DynamicLoadingOptions.java
+.aspire/modules/aspire/EndpointProperty.java
+.aspire/modules/aspire/EndpointReference.java
+.aspire/modules/aspire/EndpointReferenceExpression.java
+.aspire/modules/aspire/EndpointUpdateContext.java
+.aspire/modules/aspire/EnvironmentCallbackContext.java
+.aspire/modules/aspire/EnvironmentEditor.java
+.aspire/modules/aspire/EventingSubscriberRegistrationContext.java
+.aspire/modules/aspire/ExecutableResource.java
+.aspire/modules/aspire/ExecuteCommandAsyncOptions.java
+.aspire/modules/aspire/ExecuteCommandContext.java
+.aspire/modules/aspire/ExecuteCommandResult.java
+.aspire/modules/aspire/ExternalServiceResource.java
+.aspire/modules/aspire/GenerateParameterDefault.java
+.aspire/modules/aspire/Handle.java
+.aspire/modules/aspire/HandleWrapperBase.java
+.aspire/modules/aspire/HealthCheckResult.java
+.aspire/modules/aspire/HealthStatus.java
+.aspire/modules/aspire/HttpCommandExportOptions.java
+.aspire/modules/aspire/HttpCommandPrepareRequestContext.java
+.aspire/modules/aspire/HttpCommandRequestExportData.java
+.aspire/modules/aspire/HttpCommandResultMode.java
+.aspire/modules/aspire/HttpsCertificateConfigurationCallbackAnnotationContext.java
+.aspire/modules/aspire/HttpsCertificateExecutionConfigurationContext.java
+.aspire/modules/aspire/HttpsCertificateExecutionConfigurationExportData.java
+.aspire/modules/aspire/HttpsCertificateInfo.java
+.aspire/modules/aspire/HttpsEndpointUpdateCallbackContext.java
+.aspire/modules/aspire/IAspireStore.java
+.aspire/modules/aspire/IComputeEnvironmentResource.java
+.aspire/modules/aspire/IComputeResource.java
+.aspire/modules/aspire/IConfiguration.java
+.aspire/modules/aspire/IConfigurationSection.java
+.aspire/modules/aspire/IContainerFilesDestinationResource.java
+.aspire/modules/aspire/IDistributedApplicationBuilder.java
+.aspire/modules/aspire/IDistributedApplicationEvent.java
+.aspire/modules/aspire/IDistributedApplicationEventing.java
+.aspire/modules/aspire/IDistributedApplicationPipeline.java
+.aspire/modules/aspire/IDistributedApplicationResourceEvent.java
+.aspire/modules/aspire/IExecutionConfigurationBuilder.java
+.aspire/modules/aspire/IExecutionConfigurationResult.java
+.aspire/modules/aspire/IExpressionValue.java
+.aspire/modules/aspire/IHostEnvironment.java
+.aspire/modules/aspire/IInteractionService.java
+.aspire/modules/aspire/ILogger.java
+.aspire/modules/aspire/ILoggerFactory.java
+.aspire/modules/aspire/IReportingStep.java
+.aspire/modules/aspire/IReportingTask.java
+.aspire/modules/aspire/IResource.java
+.aspire/modules/aspire/IResourceWithArgs.java
+.aspire/modules/aspire/IResourceWithConnectionString.java
+.aspire/modules/aspire/IResourceWithContainerFiles.java
+.aspire/modules/aspire/IResourceWithEndpoints.java
+.aspire/modules/aspire/IResourceWithEnvironment.java
+.aspire/modules/aspire/IResourceWithParent.java
+.aspire/modules/aspire/IResourceWithWaitSupport.java
+.aspire/modules/aspire/IServiceProvider.java
+.aspire/modules/aspire/ITestVaultResource.java
+.aspire/modules/aspire/IUserSecretsManager.java
+.aspire/modules/aspire/IconVariant.java
+.aspire/modules/aspire/ImagePullPolicy.java
+.aspire/modules/aspire/InitializeResourceEvent.java
+.aspire/modules/aspire/InputInteractionResult.java
+.aspire/modules/aspire/InputType.java
+.aspire/modules/aspire/InputsDialogValidationContext.java
+.aspire/modules/aspire/InputsInteractionResult.java
+.aspire/modules/aspire/InteractionChoiceOption.java
+.aspire/modules/aspire/InteractionInput.java
+.aspire/modules/aspire/InteractionInputBuilder.java
+.aspire/modules/aspire/InteractionInputCollection.java
+.aspire/modules/aspire/InteractionInputLoadContext.java
+.aspire/modules/aspire/InteractionInputsDialogOptions.java
+.aspire/modules/aspire/InteractionLoadingInput.java
+.aspire/modules/aspire/InteractionMessageBoxOptions.java
+.aspire/modules/aspire/InteractionNotificationOptions.java
+.aspire/modules/aspire/InteractionProgressOptions.java
+.aspire/modules/aspire/JsonSerializable.java
+.aspire/modules/aspire/LogFacade.java
+.aspire/modules/aspire/MessageIntent.java
+.aspire/modules/aspire/OtlpProtocol.java
+.aspire/modules/aspire/ParameterCustomInputOptions.java
+.aspire/modules/aspire/ParameterResource.java
+.aspire/modules/aspire/PipelineConfigurationContext.java
+.aspire/modules/aspire/PipelineContext.java
+.aspire/modules/aspire/PipelineEditor.java
+.aspire/modules/aspire/PipelineStep.java
+.aspire/modules/aspire/PipelineStepContext.java
+.aspire/modules/aspire/PipelineStepFactoryContext.java
+.aspire/modules/aspire/PipelineSummary.java
+.aspire/modules/aspire/ProbeType.java
+.aspire/modules/aspire/ProcessCommandExportOptions.java
+.aspire/modules/aspire/ProcessCommandResultExportOptions.java
+.aspire/modules/aspire/ProcessCommandSpecExportData.java
+.aspire/modules/aspire/ProgressContext.java
+.aspire/modules/aspire/ProjectResource.java
+.aspire/modules/aspire/ProjectResourceOptions.java
+.aspire/modules/aspire/PromptConfirmationOptions.java
+.aspire/modules/aspire/PromptInputOptions.java
+.aspire/modules/aspire/PromptInputsOptions.java
+.aspire/modules/aspire/PromptMessageBoxOptions.java
+.aspire/modules/aspire/PromptNotificationOptions.java
+.aspire/modules/aspire/PromptProgressOptions.java
+.aspire/modules/aspire/ProtocolType.java
+.aspire/modules/aspire/PublishResourceUpdateOptions.java
+.aspire/modules/aspire/ReferenceEnvironmentInjectionOptions.java
+.aspire/modules/aspire/ReferenceExpression.java
+.aspire/modules/aspire/ReferenceExpressionBuilder.java
+.aspire/modules/aspire/RequiredCommandValidationContext.java
+.aspire/modules/aspire/RequiredCommandValidationResult.java
+.aspire/modules/aspire/ResourceBuilderBase.java
+.aspire/modules/aspire/ResourceCommandService.java
+.aspire/modules/aspire/ResourceCommandState.java
+.aspire/modules/aspire/ResourceCommandVisibility.java
+.aspire/modules/aspire/ResourceEndpointsAllocatedEvent.java
+.aspire/modules/aspire/ResourceEventDto.java
+.aspire/modules/aspire/ResourceLoggerService.java
+.aspire/modules/aspire/ResourceNotificationService.java
+.aspire/modules/aspire/ResourceReadyEvent.java
+.aspire/modules/aspire/ResourceStoppedEvent.java
+.aspire/modules/aspire/ResourceUrlAnnotation.java
+.aspire/modules/aspire/ResourceUrlsCallbackContext.java
+.aspire/modules/aspire/ResourceUrlsEditor.java
+.aspire/modules/aspire/RunConfiguration.java
+.aspire/modules/aspire/TestCallbackContext.java
+.aspire/modules/aspire/TestCollectionContext.java
+.aspire/modules/aspire/TestConfigDto.java
+.aspire/modules/aspire/TestConfigs.java
+.aspire/modules/aspire/TestDatabaseResource.java
+.aspire/modules/aspire/TestDeeplyNestedDto.java
+.aspire/modules/aspire/TestEnvironmentContext.java
+.aspire/modules/aspire/TestMutableCollectionContext.java
+.aspire/modules/aspire/TestNestedDto.java
+.aspire/modules/aspire/TestPersistenceMode.java
+.aspire/modules/aspire/TestRedisResource.java
+.aspire/modules/aspire/TestResourceContext.java
+.aspire/modules/aspire/TestResourceStatus.java
+.aspire/modules/aspire/TestVaultResource.java
+.aspire/modules/aspire/UpdateCommandStateContext.java
+.aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java
+.aspire/modules/aspire/UrlDisplayLocation.java
+.aspire/modules/aspire/WaitBehavior.java
+.aspire/modules/aspire/WellKnownPipelineSteps.java
+.aspire/modules/aspire/WellKnownPipelineTags.java
+.aspire/modules/aspire/WireValueEnum.java
+.aspire/modules/aspire/WithContainerCertificatePathsOptions.java
+.aspire/modules/aspire/WithDataVolumeOptions.java
+.aspire/modules/aspire/WithDockerfileBaseImageOptions.java
+.aspire/modules/aspire/WithDockerfileOptions.java
+.aspire/modules/aspire/WithEndpointOptions.java
+.aspire/modules/aspire/WithHiddenOnCompletionOptions.java
+.aspire/modules/aspire/WithHttpEndpointCallbackOptions.java
+.aspire/modules/aspire/WithHttpEndpointOptions.java
+.aspire/modules/aspire/WithHttpHealthCheckOptions.java
+.aspire/modules/aspire/WithHttpProbeOptions.java
+.aspire/modules/aspire/WithHttpsEndpointCallbackOptions.java
+.aspire/modules/aspire/WithHttpsEndpointOptions.java
+.aspire/modules/aspire/WithMcpServerOptions.java
+.aspire/modules/aspire/WithMergeLoggingOptions.java
+.aspire/modules/aspire/WithMergeLoggingPathOptions.java
+.aspire/modules/aspire/WithOptionalStringOptions.java
+.aspire/modules/aspire/WithPipelineStepFactoryOptions.java
+.aspire/modules/aspire/WithReferenceOptions.java
+.aspire/modules/aspire/WithVolumeOptions.java

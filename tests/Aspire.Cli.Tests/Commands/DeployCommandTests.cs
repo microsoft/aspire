@@ -5,10 +5,12 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -18,9 +20,9 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandWithHelpArgumentReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -31,12 +33,129 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DeployCommandInExtensionForwardsResolvedAspireHome()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedAspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".home", ".aspire");
+        DebugSessionOptions? capturedOptions = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp =>
+            {
+                var interactionService = new TestExtensionInteractionService(sp);
+                interactionService.StartDebugSessionCallback = (_, _, _, debugSessionOptions) =>
+                {
+                    capturedOptions = debugSessionOptions;
+                };
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(capturedOptions);
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                [KnownConfigNames.AspireHome] = expectedAspireHome
+            },
+            capturedOptions.EnvironmentVariables);
+    }
+
+    [Theory]
+    [InlineData("deploy", "deploy", null, false, "default-discovery")]
+    [InlineData("deploy", "deploy", null, true, "explicit-cli")]
+    [InlineData("publish", "publish", null, false, "default-discovery")]
+    [InlineData("publish", "publish", null, true, "explicit-cli")]
+    [InlineData("do", "do deploy", "deploy", false, "default-discovery")]
+    [InlineData("do", "do deploy", "deploy", true, "explicit-cli")]
+    public async Task PipelineCommands_WhenDelegatingToExtension_CarryAppHostSelectionOrigin(
+        string commandName,
+        string commandText,
+        string? expectedCommandArg,
+        bool explicitAppHost,
+        string expectedOrigin)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var expectedAspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".home", ".aspire");
+
+        string? workingDirectory = null;
+        string? projectFile = null;
+        bool? debug = null;
+        DebugSessionOptions? capturedOptions = null;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (passedProjectFile, _, _, _) =>
+            {
+                var selectedProjectFile = passedProjectFile ?? appHostFile;
+                return Task.FromResult(new AppHostProjectSearchResult(selectedProjectFile, [selectedProjectFile]));
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp =>
+            {
+                var interactionService = new TestExtensionInteractionService(sp);
+                interactionService.StartDebugSessionCallback = (capturedWorkingDirectory, capturedProjectFile, capturedDebug, debugSessionOptions) =>
+                {
+                    workingDirectory = capturedWorkingDirectory;
+                    projectFile = capturedProjectFile;
+                    debug = capturedDebug;
+                    capturedOptions = debugSessionOptions;
+                };
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var invocation = explicitAppHost ? $"{commandText} --apphost \"{appHostFile.FullName}\"" : commandText;
+
+        var result = command.Parse(invocation);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
+        Assert.Equal(appHostFile.FullName, projectFile);
+        Assert.True(debug);
+        Assert.NotNull(capturedOptions);
+        Assert.Equal(commandName, capturedOptions.Command);
+        if (expectedCommandArg is null)
+        {
+            Assert.Null(capturedOptions.Args);
+        }
+        else
+        {
+            Assert.NotNull(capturedOptions.Args);
+            Assert.Equal([expectedCommandArg], capturedOptions.Args);
+        }
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                [KnownConfigNames.AspireHome] = expectedAspireHome
+            },
+            capturedOptions.EnvironmentVariables);
+        Assert.Equal(expectedOrigin, capturedOptions.AppHostSelectionOrigin);
+    }
+
+    [Fact]
     public async Task DeployCommandFailsWithInvalidProjectFile()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -65,10 +184,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostIsNotCompatible()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -99,10 +218,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostBuildFails()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -133,10 +252,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsWithoutOutputPath()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -201,10 +320,11 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsEndToEnd()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedAspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".home", ".aspire");
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -225,6 +345,8 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         Assert.True(options.NoLaunchProfile);
+                        Assert.NotNull(env);
+                        Assert.Equal(expectedAspireHome, env[KnownConfigNames.AspireHome]);
 
                         // Verify the complete set of expected arguments for deploy command
                         Assert.Contains("--operation", args);
@@ -270,13 +392,13 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandIncludesDeployFlagInArguments()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Use a cross-platform path for testing
         var testOutputPath = Path.Combine(Path.GetTempPath(), "test");
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -341,10 +463,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandReturnsNonZeroExitCodeWhenDeploymentFails()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 

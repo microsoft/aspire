@@ -1,5 +1,6 @@
-﻿<!DOCTYPE html>
-<html lang="@System.Globalization.CultureInfo.CurrentUICulture.Name">
+﻿@inject IStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings> ControlsLoc
+<!DOCTYPE html>
+<html lang="@GlobalizationHelpers.GetHtmlLanguageName(System.Globalization.CultureInfo.CurrentUICulture)">
 
 <head>
     <meta charset="utf-8" />
@@ -9,6 +10,12 @@
     <base href="/" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
+    @* Preload the variable fonts so text paints in Geist without a fallback flash.
+       crossorigin is required for font preloads even when same-origin. *@
+    <link rel="preload" href="fonts/geist/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/geist/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    @* tokens.css must load before app.css so the --aspire-* primitives it defines are available to app.css. *@
+    <link rel="stylesheet" href="css/tokens.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="css/highlight.css" />
     <link rel="stylesheet" href="css/markdown.css" />
@@ -28,23 +35,11 @@
 
 </head>
 
-<body class="before-upgrade">
+<body class="before-upgrade"
+      data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
-    @*
-        Use Blazor JS shipped in dashboard's wwwroot. This is done because the dashboard is currently built for .NET 8, and in .NET 8 the Blazor JS is embedded in the components assembly.
-        But in .NET 10 and later the Blazor JS file is an asset. We can rely on Blazor JS always being available. Remove and use asset file in the future once .NET 10 is the minimum version.
-        - The framework/10 copy is from .NET 10 P4.
-        - The framework/11 copy is from .NET 11 P4.
-    *@
-    @if (Environment.Version.Major >= 11)
-    {
-        <script src="framework/11/blazor.web.js"></script>
-    }
-    else
-    {
-        <script src="framework/10/blazor.web.js"></script>
-    }
+    <BlazorScript />
     <script src="js/app.js"></script>
     <script src="js/app-reconnect.js"></script>
 

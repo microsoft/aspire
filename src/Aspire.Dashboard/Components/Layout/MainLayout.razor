@@ -1,26 +1,28 @@
 ﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
-@using Aspire.Dashboard.Components.Dialogs
-@using Aspire.Dashboard.Model.Assistant
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
-    <div class="aspire-icon">
-        <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
-                      title="@Loc[nameof(Layout.MainLayoutAspire)]"
-                      aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-            <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
-        </FluentAnchor>
-    </div>
-
+<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed")" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
+        @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
+           title form a single brand lockup pinned to the top-left. Because the header spans both grid
+           columns (it is no longer confined to the column beside the rail), the lockup keeps a fixed
+           left edge when the nav rail below collapses/expands instead of shifting with the rail width. *@
         <FluentHeader>
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo brand-logo"
+                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                <AspireLogo />
+            </FluentAnchor>
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
                 <ApplicationName/>
             </FluentAnchor>
+            <div class="page-title-slot">
+                <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
+            </div>
             <div class="flex-filler"></div>
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
@@ -29,7 +31,8 @@
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
             </FluentAnchor>
             <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchHelpAsync"
+                          Id="@HelpButtonId"
+                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
             </FluentButton>
@@ -41,31 +44,48 @@
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
                 </FluentButton>
             }
-            @if (AIContextProvider.Enabled)
-            {
-                <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAssistantAsync"
-                              Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
-                    <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
-                </FluentButton>
-            }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchSettingsAsync"
+                          Id="@SettingsButtonId"
+                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Neutral"/>
             </FluentButton>
             <UserProfile/>
         </FluentHeader>
 
-        @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm })" />
-        }
-        <DesktopNavMenu/>
+        @* The nav rail is a flex column so DesktopNavMenu fills the available space while the collapse/expand
+           toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
+           still lives in MainLayout. *@
+        <div class="desktop-nav-rail">
+            <DesktopNavMenu/>
+            <FluentButton Class="nav-toggle-button nav-toggle-bottom"
+                          Appearance="Appearance.Stealth" OnClick="@ToggleNavMenuExpandedAsync"
+                          Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
+                          aria-label="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])">
+                <span class="nav-toggle-content">
+                    @* The glyph mirrors the action the toggle performs so it reads as a real collapse/expand
+                       control rather than a static hamburger: when the rail is expanded, show the "contract"
+                       panel icon (arrow pointing into the panel = collapse); when collapsed, show the "expand"
+                       panel icon (arrow pointing out = expand). This stays in sync with the dynamic Title/aria-label.
+                       No visible text label: the icon plus the dynamic Title/aria-label carry the meaning, and a
+                       written "Collapse sidebar" beside it read as redundant chrome (review feedback). *@
+                    <FluentIcon Value="@(_isNavMenuExpanded
+                        ? new Icons.Regular.Size24.PanelLeftContract()
+                        : (Icon)new Icons.Regular.Size24.PanelLeftExpand())" Color="Color.Neutral"/>
+                </span>
+            </FluentButton>
+        </div>
     }
     else
     {
+        <div class="aspire-icon">
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                <AspireLogo />
+            </FluentAnchor>
+        </div>
         <FluentHeader>
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
                 <ApplicationName/>
@@ -75,6 +95,7 @@
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
+                Id="@NavigationButtonId"
                 Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
                 Appearance="Appearance.Stealth"
                 BackgroundColor="transparent"
@@ -84,38 +105,29 @@
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
-            IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
-            LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
 
     <div class="messagebar-container">
         <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
     </div>
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
             @Body
         </FluentBodyContent>
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
     </div>
 
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
     <InteractionsProvider />
+    <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>

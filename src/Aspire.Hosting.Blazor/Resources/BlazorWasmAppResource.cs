@@ -27,7 +27,7 @@ public sealed class BlazorWasmAppResource(string name, string projectPath) : Res
 
     /// <summary>
     /// Gets the parent gateway resource whose lifecycle state is mirrored to this resource.
-    /// Set internally when <see cref="BlazorGatewayExtensions.WithBlazorClientApp"/> associates
+    /// Set internally when <see cref="BlazorGatewayExtensions.WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/> associates
     /// this WASM app with a gateway.
     /// </summary>
     public IResource Parent { get; internal set; } = null!;

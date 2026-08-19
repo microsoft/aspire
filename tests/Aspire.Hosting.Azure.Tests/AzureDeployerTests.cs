@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -15,13 +14,13 @@ using Azure.Core;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -193,7 +192,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
     public async Task DeployAsync_WithAzureStorageResourcesWorks()
     {
         // Arrange
@@ -682,6 +681,60 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task Diagnostics_CrossScopeAcrPullRoleModulesPrecedeTargetedWorkloadProvisioning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "diagnostics");
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
+
+        var acaRegistry = builder.AddAzureContainerRegistry("aca-registry")
+            .PublishAsExisting("acaregistry", "shared-registry-rg");
+        var aasRegistry = builder.AddAzureContainerRegistry("aas-registry")
+            .PublishAsExisting("aasregistry", "shared-registry-rg");
+        var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env")
+            .WithAzureContainerRegistry(acaRegistry);
+        var aasEnv = builder.AddAzureAppServiceEnvironment("aas-env")
+            .WithAzureContainerRegistry(aasRegistry);
+
+        builder.AddRedis("cache").WithComputeEnvironment(acaEnv);
+        builder.AddProject<Project>("api-service", launchProfileName: null).WithComputeEnvironment(aasEnv);
+        builder.AddDockerfile("python-app", "python-app.Dockerfile").WithComputeEnvironment(acaEnv);
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        var diagnostics = string.Join(
+            Environment.NewLine,
+            mockActivityReporter.LoggedMessages
+                .Where(message => message.StepTitle == "diagnostics")
+                .Select(message => message.Message));
+
+        // Target diagnostics are emitted as:
+        //   If targeting 'deploy-api-service':
+        //     Direct dependencies: ...
+        //     Execution order:
+        //       [0] ...
+        // Snapshot only the relevant target sections so unrelated pipeline changes do not create churn.
+        static string GetTargetSection(string diagnostics, string target)
+        {
+            var marker = $"If targeting '{target}':";
+            var start = diagnostics.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Diagnostics did not contain the '{target}' target.");
+
+            var end = diagnostics.IndexOf($"{Environment.NewLine}{Environment.NewLine}If targeting '", start + marker.Length, StringComparison.Ordinal);
+            return end >= 0 ? diagnostics[start..end] : diagnostics[start..];
+        }
+
+        await Verify(new
+        {
+            ApiService = GetTargetSection(diagnostics, "deploy-api-service"),
+            Cache = GetTargetSection(diagnostics, "deploy-cache"),
+            PythonApp = GetTargetSection(diagnostics, "deploy-python-app")
+        });
+    }
+
+    [Fact]
     public async Task DeployAsync_WithUnresolvedParameters_PromptsForParameterValues()
     {
         // Arrange
@@ -796,7 +849,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
     public async Task DeployAsync_WithSingleRedisCache_CallsDeployingComputeResources()
     {
         // Arrange
@@ -1284,7 +1337,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .AsHostedAgent(foundryProject);
+            .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithExternalHttpEndpoints()
@@ -1489,7 +1542,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
     private sealed class NoOpBicepProvisioner : IBicepProvisioner
     {
-        public Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
+        public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
         {
             return Task.FromResult(true);
         }
@@ -1498,11 +1551,16 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         {
             return Task.CompletedTask;
         }
+
+        public Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class FailingBicepProvisioner : IBicepProvisioner
     {
-        public Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
+        public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
         {
             return Task.FromResult(false);
         }
@@ -1517,6 +1575,11 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             var response = new TestAzureResponse(400, "Bad Request", jsonContent);
 
             throw new global::Azure.RequestFailedException(response);
+        }
+
+        public Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
         }
     }
 

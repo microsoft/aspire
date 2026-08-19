@@ -21,6 +21,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool SupportsV2 { get; set; } = true;
     public bool SupportsV3 { get; set; }
+    public bool SupportsTerminalsV1 { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
@@ -313,6 +314,27 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public Task<GetDashboardInfoResponse?> GetDashboardInfoV2Async(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardInfoResponse);
+    }
+
+    /// <summary>
+    /// Gets or sets the terminal info response to return from GetTerminalInfoAsync.
+    /// </summary>
+    public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
+
+    public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(TerminalInfoResponse);
+    }
+
+    /// <summary>
+    /// Gets or sets the response returned by ListTerminalsAsync. Defaults to an empty list so
+    /// existing tests that don't care about the new RPC don't have to set anything.
+    /// </summary>
+    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+
+    public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(ListTerminalsResponse);
     }
 
     public void Dispose()

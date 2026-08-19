@@ -23,7 +23,7 @@ public class SecretClientConformanceTests : ConformanceTests<SecretClient, Azure
 
     protected override string ActivitySourceName => "Azure.Security.KeyVault.Secrets.SecretClient";
 
-    protected override string[] RequiredLogCategories => new string[] { "Azure.Core" };
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Core")];
 
     protected override bool SupportsKeyedRegistrations => true;
 

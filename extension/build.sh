@@ -58,6 +58,12 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
+node_major_version="$(node -p 'process.versions.node.split(".")[0]')"
+if (( node_major_version < 22 )); then
+    echo "Error: Node.js 22 or later is required. Found $(node --version)."
+    exit 1
+fi
+
 # npm is required to install our pinned Corepack. It ships with every official
 # Node.js distribution, so this should only fail on broken installs.
 if ! command -v npm &> /dev/null; then

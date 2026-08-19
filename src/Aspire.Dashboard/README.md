@@ -35,14 +35,14 @@ Example JSON configuration file:
 - `ASPNETCORE_URLS` specifies one or more HTTP endpoints through which the dashboard frontend is served. The frontend endpoint is used to view the dashboard in a browser. Defaults to http://localhost:18888.
 - `DOTNET_DASHBOARD_OTLP_ENDPOINT_URL` specifies the OTLP/gRPC endpoint. OTLP/gRPC endpoint hosts an OTLP service and receives telemetry using gRPC. Defaults to http://localhost:18889.
 - `DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL` specifies the OTLP/HTTP endpoint. OTLP/HTTP endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP. Defaults to http://localhost:18890.
-- `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS` specifies the dashboard doesn't use authentication and accepts anonymous access. This setting is a shortcut to configuring `Dashboard:Frontend:AuthMode` and `Dashboard:Otlp:AuthMode` to `Unsecured`.
+- `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS` specifies the dashboard doesn't use authentication and accepts anonymous access. This setting is a shortcut to configuring `Dashboard:Frontend:AuthMode`, `Dashboard:Otlp:AuthMode`, and `Dashboard:Api:AuthMode` to `Unsecured`. When the corresponding endpoints are enabled, the dashboard writes warnings to the logs and displays a warning in the UI to inform users about the risks of anonymous access. Review the [dashboard security considerations](https://aspire.dev/dashboard/security-considerations/) before enabling this setting.
 - `DOTNET_DASHBOARD_CONFIG_FILE_PATH` specifies the path for an optional JSON configuration file.
 
 ### Frontend authentication
 
 The dashboard frontend endpoint can be secured with OpenID Connect (OIDC) or browser token authentication.
 
-It may also be run unsecured. Set `Dashboard:Frontend:AuthMode` to `Unsecured`. The frontend endpoint will allow anonymous access. This setting should only be used during local development. It's not recommended when hosting the dashboard publicly or in other settings.
+It may also be run unsecured. Set `Dashboard:Frontend:AuthMode` to `Unsecured`. The frontend endpoint will allow anonymous access. This setting should only be used during local development. It's not recommended when hosting the dashboard publicly or in other settings. Review the [dashboard security considerations](https://aspire.dev/dashboard/security-considerations/) before enabling this setting.
 
 #### Frontend browser token authentication
 
@@ -71,7 +71,7 @@ Set `Dashboard:Frontend:AuthMode` to `OpenIdConnect`, then add the following con
 
 The OTLP endpoint can be secured with [client certificate](https://learn.microsoft.com/aspnet/core/security/authentication/certauth) or API key authentication.
 
-It may also be run unsecured. Set `Dashboard:Otlp:AuthMode` to `Unsecured`. The OTLP endpoint will allow anonymous access. This setting is used during local development, but is not recommended if you attempt to host the dashboard in other settings.
+It may also be run unsecured. Set `Dashboard:Otlp:AuthMode` to `Unsecured`. The OTLP endpoint will allow anonymous access. This setting is used during local development, but is not recommended if you attempt to host the dashboard in other settings. Review the [dashboard security considerations](https://aspire.dev/dashboard/security-considerations/) before enabling this setting.
 
 For more information, see the official Aspire docs—[Dashboard configuration: OTLP authentication](https://aspire.dev/dashboard/configuration#otlp-authentication).
 

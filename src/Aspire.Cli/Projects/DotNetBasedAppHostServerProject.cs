@@ -7,10 +7,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Documentation;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -23,16 +26,17 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 {
     private const string ProjectHashFileName = ".projecthash";
     private const string AppsFolder = "hosts";
+
+    /// <summary>
+    /// Bump when the scaffold's shape changes in a way that requires a rewrite even though the
+    /// generated content for a given input would hash the same as a previously-cached scaffold.
+    /// </summary>
+    private const int ScaffoldSchemaVersion = 1;
     public const string ProjectFileName = "AppHostServer.csproj";
     private const string ProjectDllName = "AppHostServer.dll";
     internal const string TargetFramework = "net10.0";
     public const string BuildFolder = "build";
     private const string AssemblyName = "AppHostServer";
-
-    /// <summary>
-    /// Gets the default Aspire SDK version based on the CLI version.
-    /// </summary>
-    public static string DefaultSdkVersion => VersionHelper.GetDefaultSdkVersion();
 
     private readonly string _projectModelPath;
     private readonly string _appPath;
@@ -41,6 +45,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -50,6 +56,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
+        IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
         string? logFilePath = null)
@@ -61,6 +69,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
+        _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -96,7 +106,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public string GetProjectFilePath() => Path.Combine(_projectModelPath, ProjectFileName);
 
-    public string GetProjectHash()
+    private string GetProjectHash()
     {
         var hashFilePath = Path.Combine(_projectModelPath, ProjectHashFileName);
 
@@ -108,7 +118,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         return string.Empty;
     }
 
-    public void SaveProjectHash(string hash)
+    private void SaveProjectHash(string hash)
     {
         var hashFilePath = Path.Combine(_projectModelPath, ProjectHashFileName);
         File.WriteAllText(hashFilePath, hash);
@@ -264,20 +274,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string? packageSourceOverride = null,
         CancellationToken cancellationToken = default)
     {
-        // Clean obj folder to ensure fresh NuGet restore
-        var objPath = Path.Combine(_projectModelPath, "obj");
-        if (Directory.Exists(objPath))
-        {
-            try
-            {
-                Directory.Delete(objPath, recursive: true);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Failed to delete obj folder at {ObjPath}", objPath);
-            }
-        }
-
         // Create Program.cs
         var programCs = """
             await Aspire.Hosting.RemoteHost.RemoteHostServer.RunAsync(args);
@@ -316,17 +312,14 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
               ]
             }
             """;
-        File.WriteAllText(Path.Combine(_projectModelPath, "appsettings.json"), appSettingsJson);
 
         // Handle NuGet config and channel resolution
         string? channelName = null;
 
         var userNugetConfig = FindNuGetConfig(_appPath);
-        if (userNugetConfig is not null)
-        {
-            var nugetConfigPath = Path.Combine(_projectModelPath, "nuget.config");
-            File.Copy(userNugetConfig, nugetConfigPath, overwrite: true);
-        }
+        var nugetConfigContent = userNugetConfig is not null
+            ? File.ReadAllText(userNugetConfig)
+            : null;
 
         var configuredChannelName = requestedChannel
             ?? AspireConfigFile.Load(_appPath)?.Channel
@@ -399,22 +392,148 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
               <Import Project="{repoDirectoryPackagesProps}" />
             </Project>
             """;
-        File.WriteAllText(Path.Combine(_projectModelPath, "Directory.Packages.props"), directoryPackagesProps);
-
-        // Write empty Directory.Build.props/targets to prevent MSBuild from walking up and
-        // importing the repo's build infrastructure (Arcade SDK, etc.) which can rewrite
-        // project reference paths and cause resolution failures from the temp directory.
-        File.WriteAllText(Path.Combine(_projectModelPath, "Directory.Build.props"), "<Project />");
-        File.WriteAllText(Path.Combine(_projectModelPath, "Directory.Build.targets"), "<Project />");
 
         var projectFileName = Path.Combine(_projectModelPath, ProjectFileName);
 
         // Log the full project XML for debugging
         _logger.LogTrace("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
 
-        doc.Save(projectFileName);
+        // Every file this method owns, keyed by name relative to _projectModelPath. Writing the
+        // scaffold wipes obj/, so the whole set is fingerprinted together and rewritten only when
+        // something actually changed. Directory.Build.props/targets are deliberately empty: they
+        // stop MSBuild walking up into the repo's Arcade infrastructure, which rewrites project
+        // reference paths and breaks resolution from this directory.
+        var scaffold = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Program.cs"] = programCs,
+            ["appsettings.json"] = appSettingsJson,
+            ["Directory.Packages.props"] = directoryPackagesProps,
+            ["Directory.Build.props"] = "<Project />",
+            ["Directory.Build.targets"] = "<Project />",
+            [ProjectFileName] = doc.ToString(),
+        };
+
+        // nuget.config is copied from the user's config rather than generated, so its *content*
+        // participates in the fingerprint. When the user's config disappears the key is absent,
+        // which both busts the hash and drives deletion of the stale copy below.
+        if (nugetConfigContent is not null)
+        {
+            scaffold["nuget.config"] = nugetConfigContent;
+        }
+
+        if (TryReuseScaffold(scaffold))
+        {
+            _logger.LogDebug("AppHostServer scaffold is up to date; preserving restore artifacts in {ProjectModelPath}", _projectModelPath);
+            return (projectFileName, channelName);
+        }
+
+        WriteScaffold(scaffold, doc);
 
         return (projectFileName, channelName);
+    }
+
+    /// <summary>
+    /// Determines whether the on-disk scaffold already matches <paramref name="scaffold"/> and is
+    /// backed by a usable NuGet restore, in which case it can be left alone.
+    /// </summary>
+    /// <remarks>
+    /// Rewriting the scaffold deletes obj/, which discards project.assets.json and the generated
+    /// nuget.g.props/targets. That forces a full restore and a full project-reference graph walk on
+    /// the next build. Doing that on every launch dominated in-repo polyglot startup, so the
+    /// destructive path is now taken only when the generated content actually changes.
+    ///
+    /// This deliberately does not attempt to detect changes to the repo sources this project
+    /// references. <c>BuildAsync</c> still runs on every launch, so MSBuild's own incremental
+    /// build remains the source of truth for those; skipping the scaffold only preserves the
+    /// restore output that describes an unchanged project.
+    /// </remarks>
+    private bool TryReuseScaffold(Dictionary<string, string> scaffold)
+    {
+        var fingerprint = ComputeScaffoldFingerprint(scaffold);
+
+        if (!string.Equals(GetProjectHash(), fingerprint, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // A matching fingerprint only says the *inputs* are unchanged. The outputs still have to be
+        // present: a half-written scaffold or a hand-deleted file would otherwise be cached forever.
+        foreach (var fileName in scaffold.Keys)
+        {
+            if (!File.Exists(Path.Combine(_projectModelPath, fileName)))
+            {
+                return false;
+            }
+        }
+
+        // Preserving obj/ is the entire point of the cache, so there has to be something worth
+        // preserving. Without project.assets.json the next build would restore from scratch anyway,
+        // and an interrupted restore can leave obj/ populated but unusable.
+        if (!File.Exists(Path.Combine(_projectModelPath, "obj", "project.assets.json")))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void WriteScaffold(Dictionary<string, string> scaffold, XDocument projectDocument)
+    {
+        // Clean obj folder to ensure fresh NuGet restore
+        var objPath = Path.Combine(_projectModelPath, "obj");
+        if (Directory.Exists(objPath))
+        {
+            try
+            {
+                Directory.Delete(objPath, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to delete obj folder at {ObjPath}", objPath);
+            }
+        }
+
+        foreach (var (fileName, content) in scaffold)
+        {
+            // The csproj is written through XDocument.Save so it keeps its XML declaration;
+            // the dictionary holds only the declaration-less string form used for hashing.
+            if (string.Equals(fileName, ProjectFileName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            File.WriteAllText(Path.Combine(_projectModelPath, fileName), content);
+        }
+
+        projectDocument.Save(Path.Combine(_projectModelPath, ProjectFileName));
+
+        // The user's nuget.config can be removed between launches. Leaving our copy behind would
+        // keep feeding the build sources the user has deleted.
+        if (!scaffold.ContainsKey("nuget.config"))
+        {
+            var staleNugetConfig = Path.Combine(_projectModelPath, "nuget.config");
+            if (File.Exists(staleNugetConfig))
+            {
+                File.Delete(staleNugetConfig);
+            }
+        }
+
+        // Persisted last so an interrupted write can never be mistaken for a complete scaffold.
+        SaveProjectHash(ComputeScaffoldFingerprint(scaffold));
+    }
+
+    private static string ComputeScaffoldFingerprint(Dictionary<string, string> scaffold)
+    {
+        var builder = new StringBuilder();
+
+        foreach (var fileName in scaffold.Keys.Order(StringComparer.Ordinal))
+        {
+            // The NUL separators keep file boundaries unambiguous: without them a rename that
+            // shifts content across the boundary could hash identically.
+            builder.Append(fileName).Append('\0').Append(scaffold[fileName]).Append('\0');
+        }
+
+        return SourceContentFingerprint.Compute(builder.ToString(), ScaffoldSchemaVersion);
     }
 
     /// <summary>
@@ -467,15 +586,19 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string GetInstanceIdentifier() => GetProjectFilePath();
 
     /// <inheritdoc />
-    public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
-        var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
+        // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
+        // only if the isolated path is requested. Sharing the env/arg construction avoids drift
+        // between the two branches — every env var and argument lives in exactly one place.
         var startInfo = new ProcessStartInfo(dotnetExe)
         {
             WorkingDirectory = _projectModelPath,
@@ -496,13 +619,35 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
+
+        // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
+        // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
+        // the terminal host via ASPIRE_TERMINAL_HOST_PATH or assembly metadata. No per-RID
+        // NuGet stamps the metadata path today, so without this env var the AppHostServer
+        // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
+        // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
+        // Skipped when the caller pre-populates the path so a user-side override always wins.
+        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
+        }
 
         if (environmentVariables is not null)
         {
@@ -518,32 +663,58 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 
+        startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
-        var process = Process.Start(startInfo)!;
-
         var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
 
-        return (_socketPath, process, outputCollector);
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
+        // (line only), but the AppHost wants the pid in each trace line (#16729). ProcessExecution
+        // publishes the child pid before it starts stdout/stderr pumps so immediate output can read
+        // ProcessId.
+        IProcessExecution execution = null!;
+
+        void OnStdout(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            outputCollector.AppendOutput(line);
+        }
+
+        void OnStderr(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            outputCollector.AppendError(line);
+        }
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            // The graceful ladder always tree-kills on escalation; this fallback only matters when
+            // graceful services were not wired (non-Run callers), where it preserves the old session
+            // behavior of force-killing the tree on Unix but only the root on Windows.
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
+        };
+
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
+
+        try
+        {
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     private static string? FindNuGetConfig(string workingDirectory)
@@ -604,10 +775,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
     }
 
-    private static (string Os, string Arch) GetBuildPlatform()
+    private (string Os, string Arch) GetBuildPlatform()
     {
-        var os = OperatingSystem.IsLinux() ? "linux"
-            : OperatingSystem.IsMacOS() ? "darwin"
+        var os = _environment.IsLinux() ? "linux"
+            : _environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch
@@ -644,5 +815,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             return fallbackVersion;
         }
+    }
+
+    private static bool ContainsKey(IReadOnlyDictionary<string, string>? env, string key)
+    {
+        return env is not null && env.ContainsKey(key);
     }
 }

@@ -10,7 +10,8 @@
                   Href="@GetResourceErrorStructuredLogsUrl()"
                   Appearance="Appearance.Stealth"
                   Class="unread-logs-errors-link"
-                  @onclick:stopPropagation="true">
+                  @onclick:stopPropagation="true"
+                  @onkeydown:stopPropagation="true">
         <FluentBadge
             Appearance="Appearance.Accent"
             Circular="true"

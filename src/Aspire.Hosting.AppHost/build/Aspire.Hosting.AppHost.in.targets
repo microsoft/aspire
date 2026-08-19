@@ -16,8 +16,12 @@
   <!-- Use TaskHostFactory when running in the repo so the Aspire.Hosting.Tasks.dll assembly is not locked. -->
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="ResolveAspireCliInvocation" AssemblyFile="$(_AspireTasksAssembly)" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="ResolveAspireCliInvocation" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="RunAspireCliCommand" AssemblyFile="$(_AspireTasksAssembly)" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="RunAspireCliCommand" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
 
   <ItemGroup>
     <ProjectCapability Include="Aspire" Condition=" '$(IsAspireHost)' == 'true' " />
@@ -149,6 +153,12 @@ namespace Projects%3B
     <Warning Code="ASPIRE001" Text="The '$(Language)' language isn't fully supported by Aspire - some code generation targets will not run, so will require manual authoring." HelpLink="https://aka.ms/aspire/diagnostics/aspire001" />
   </Target>
 
+  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
+    <Warning Code="ASPIRE010"
+             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information."
+             HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
+  </Target>
+
   <!--
   Validates that all the ProjectReferences of an Aspire AppHost project are executables and
   informs the developer to set 'IsAspireProjectResource=false' if they really intended on ProjectReferencing a library.
@@ -186,23 +196,238 @@ namespace Projects%3B
      and reference them for compilation. There will be a ClassName.ProjectMetadata.g.cs file for each referenced project. -->
   <Target Name="WriteAspireProjectMetadataSources" DependsOnTargets="$(WriteAspireProjectMetadataSourcesDependsOn)" BeforeTargets="CoreCompile" />
 
+  <PropertyGroup>
+    <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' == ''">Path</_AspireCliInvocationMode>
+    <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
+    <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireUseDnxCliRunHook>
+    <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
+    <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
+         or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
+         version paired with the AppHost SDK. Project Resource v2 is expected to remove Aspire.AppHost.Sdk;
+         when that happens, replace AspireHostingSDKVersion as the paired CLI version source.
+         See https://github.com/microsoft/aspire/issues/16386. -->
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
+  </PropertyGroup>
+
+  <Target Name="_ResolveAspireCliInvocation"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true'">
+    <ResolveAspireCliInvocation AspireCliPath="$(AspireCliPath)"
+                                AspireCliInvocationMode="$(_AspireCliInvocationMode)"
+                                PathEnvironmentVariable="$(Path)">
+      <Output TaskParameter="ResolvedInvocationMode" PropertyName="_AspireResolvedCliInvocationMode" />
+      <Output TaskParameter="ResolvedAspireCliPath" PropertyName="_AspireResolvedCliPath" />
+      <Output TaskParameter="ResolvedDnxPath" PropertyName="_AspireResolvedDnxPath" />
+      <Output TaskParameter="ResolvedDnxHostPath" PropertyName="_AspireResolvedDnxHostPath" />
+      <Output TaskParameter="ResolvedDnxHostArguments" PropertyName="_AspireResolvedDnxHostArguments" />
+      <Output TaskParameter="ResolvedDnxHostArgumentItems" ItemName="_AspireResolvedDnxHostArgument" />
+    </ResolveAspireCliInvocation>
+
+    <PropertyGroup>
+      <_AspireResolvedDnxHostArgumentsPrefix Condition="'$(_AspireResolvedDnxHostArguments)' != ''">$(_AspireResolvedDnxHostArguments) </_AspireResolvedDnxHostArgumentsPrefix>
+    </PropertyGroup>
+
+    <Message Text="Aspire CLI invocation selection: $(_AspireResolvedCliInvocationMode) (aspire: $(_AspireResolvedCliPath), dnx: $(_AspireResolvedDnxPath))" Importance="Low" />
+  </Target>
+
   <Target Name="ResolveAspireCliBundlePaths"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+          DependsOnTargets="_ResolveAspireCliInvocation"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+    <!-- Bundle discovery must follow the invocation selected above so an unselected PATH CLI
+         cannot supply runtime metadata. DNX layouts are resolved from Aspire home instead. -->
+    <PropertyGroup>
+      <_AspireCliBundleSelectedCliPath Condition="'$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliBundleSelectedCliPath>
+      <!-- Suppress the expected invalid-layout warning only when an existing CLI can prepare its
+           bundle. Explicit bundle paths and missing explicit CLI paths cannot be recovered. -->
+      <_AspireCliBundleWarnOnInvalidPaths>false</_AspireCliBundleWarnOnInvalidPaths>
+      <_AspireCliBundleWarnOnInvalidPaths Condition="'$(AspireCliBundlePath)' != '' or ('$(AspireCliPath)' != '' and !Exists('$(AspireCliPath)'))">true</_AspireCliBundleWarnOnInvalidPaths>
+    </PropertyGroup>
+
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
-                             AspireCliPath="$(AspireCliPath)">
+                             AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                             SearchPathForAspireCli="false"
+                             WarnOnInvalidPaths="$(_AspireCliBundleWarnOnInvalidPaths)">
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+      <Output TaskParameter="AspireHomeDirectory" PropertyName="_AspireDefaultHomeDirectory" />
     </ResolveAspireCliBundle>
 
     <PropertyGroup>
       <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
       <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
       <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
+      <_AspireCliSetupPath Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</_AspireCliSetupPath>
+      <_AspireCliSetupPath Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">$(_AspireResolvedCliPath)</_AspireCliSetupPath>
+      <_AspireCliSetupHome Condition="'$(_AspireCliSetupHome)' == ''">$(_AspireDefaultHomeDirectory)</_AspireCliSetupHome>
+      <_AspireCliBundleSetupTimeout Condition="'$(_AspireCliBundleSetupTimeout)' == ''">120000</_AspireCliBundleSetupTimeout>
+
+      <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and Exists('$(_AspireCliSetupPath)')">$(_AspireCliSetupPath)</_AspireCliSetupExecutable>
+      <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">$(_AspireResolvedDnxHostPath)</_AspireCliSetupExecutable>
+      <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' != ''">"$(_AspireCliSetupPath)" setup</_AspireCliSetupDiagnosticCommand>
+      <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupDiagnosticCommand>
+    </PropertyGroup>
+
+    <!-- Argument values are metadata so paths containing MSBuild item separators remain one argument. -->
+    <ItemGroup>
+      <_AspireCliSetupArgument Remove="@(_AspireCliSetupArgument)" />
+      <_AspireCliSetupArgument Include="AspireSetup" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' != ''">
+        <Value>setup</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="@(_AspireResolvedDnxHostArgument)" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''" />
+      <_AspireCliSetupArgument Include="DnxNonInteractive" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>--yes</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="DnxPackage" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>$(_AspireCliDnxPackageReference)</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="DnxSeparator" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>--</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="DnxSetup" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>setup</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="DnxInstallPathOption" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>--install-path</Value>
+      </_AspireCliSetupArgument>
+      <_AspireCliSetupArgument Include="DnxInstallPath" Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">
+        <Value>$(_AspireCliSetupHome)</Value>
+      </_AspireCliSetupArgument>
+    </ItemGroup>
+
+    <!-- Script installs normally extract during installation. This fallback also covers older
+         installers and DNX-only machines, and runs during real builds so IDE and command-line
+         builds stamp concrete DCP and dashboard assembly metadata. -->
+    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)' to prepare it." Importance="Low"
+            Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
+    <RunAspireCliCommand FileName="$(_AspireCliSetupExecutable)"
+                         Arguments="@(_AspireCliSetupArgument)"
+                         TimeoutMilliseconds="$(_AspireCliBundleSetupTimeout)"
+                         Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
+      <Output TaskParameter="TimedOut" PropertyName="_AspireCliSetupTimedOut" />
+      <Output TaskParameter="FailureMessage" PropertyName="_AspireCliSetupFailureMessage" />
+    </RunAspireCliCommand>
+
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                            AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            SearchPathForAspireCli="false"
+                            WarnOnInvalidPaths="false"
+                            Condition="'$(_AspireCliSetupExecutable)' != ''">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')">
+      <!-- An unusable PATH CLI must not shadow the paired CLI package when DNX is available.
+           Explicit AspireCliPath remains authoritative and never falls back. -->
+      <_AspireCliFallbackDnxSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and Exists('$(_AspireResolvedDnxHostPath)')">$(_AspireResolvedDnxHostPath)</_AspireCliFallbackDnxSetupExecutable>
+      <_AspireCliFallbackDnxSetupDiagnosticCommand Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliFallbackDnxSetupDiagnosticCommand>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_AspireCliFallbackDnxSetupArgument Remove="@(_AspireCliFallbackDnxSetupArgument)" />
+      <_AspireCliFallbackDnxSetupArgument Include="@(_AspireResolvedDnxHostArgument)" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''" />
+      <_AspireCliFallbackDnxSetupArgument Include="DnxNonInteractive" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>--yes</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+      <_AspireCliFallbackDnxSetupArgument Include="DnxPackage" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>$(_AspireCliDnxPackageReference)</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+      <_AspireCliFallbackDnxSetupArgument Include="DnxSeparator" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>--</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+      <_AspireCliFallbackDnxSetupArgument Include="DnxSetup" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>setup</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+      <_AspireCliFallbackDnxSetupArgument Include="DnxInstallPathOption" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>--install-path</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+      <_AspireCliFallbackDnxSetupArgument Include="DnxInstallPath" Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        <Value>$(_AspireCliSetupHome)</Value>
+      </_AspireCliFallbackDnxSetupArgument>
+    </ItemGroup>
+
+    <Message Text="The PATH Aspire CLI did not prepare a usable bundle. Running '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' through DNX." Importance="Low"
+             Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''" />
+    <RunAspireCliCommand FileName="$(_AspireCliFallbackDnxSetupExecutable)"
+                         Arguments="@(_AspireCliFallbackDnxSetupArgument)"
+                         TimeoutMilliseconds="$(_AspireCliBundleSetupTimeout)"
+                         Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
+      <Output TaskParameter="TimedOut" PropertyName="_AspireCliFallbackDnxSetupTimedOut" />
+      <Output TaskParameter="FailureMessage" PropertyName="_AspireCliFallbackDnxSetupFailureMessage" />
+    </RunAspireCliCommand>
+
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                            AspireCliPath="$(_AspireCliBundleSelectedCliPath)"
+                            SearchPathForAspireCli="false"
+                            WarnOnInvalidPaths="false"
+                            Condition="'$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
     </PropertyGroup>
 
     <PropertyGroup>
-      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured with AspireUseCliBundle=true, but the Aspire CLI bundle could not be resolved. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError>
+        $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
+        Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupExecutable)' != '' or '$(_AspireCliFallbackDnxSetupExecutable)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Automatic Aspire CLI bundle setup failed: $(_AspireCliSetupFailureMessage) Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' == '' and '$(_AspireCliSetupExitCode)' != '' and '$(_AspireCliSetupExitCode)' != '0'">
+        $(_AspireCliBundleNotFoundError)
+        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Paired Aspire CLI bundle setup through DNX failed: $(_AspireCliFallbackDnxSetupFailureMessage) Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' == '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
+        $(_AspireCliBundleNotFoundError)
+        Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"
@@ -213,43 +438,193 @@ namespace Projects%3B
   <PropertyGroup>
     <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
     <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
+    <_AspireMinimumCliVersion>13.5.0</_AspireMinimumCliVersion>
+    <_AspireCliVersionSupportsRunHook>false</_AspireCliVersionSupportsRunHook>
   </PropertyGroup>
+
+  <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
+  <Target Name="_AspireCheckCliVersion"
+          DependsOnTargets="_ResolveAspireCliInvocation"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <PropertyGroup>
+      <!-- Probe the exact executable selected above so the version check and the eventual launch
+           cannot resolve different commands. This matters for DNX because dotnet run can prefer
+           an SDK-adjacent dnx over the command selected from PATH. Exec owns the process, timeout,
+           and concurrent stream draining. -->
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">"$(_AspireResolvedCliPath)" --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- --version</_AspireCliVersionCommand>
+      <!-- A first-time DNX invocation may need to restore Aspire.Cli before reporting its version. -->
+      <_AspireCliVersionTimeout>5000</_AspireCliVersionTimeout>
+      <_AspireCliVersionTimeout Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx'">120000</_AspireCliVersionTimeout>
+    </PropertyGroup>
+
+    <!-- Capture probe failures without stopping Exec so mode-specific behavior can be applied below.
+         A PATH Aspire probe has a 5-second budget; an unusable PATH candidate retries through DNX
+         when available, otherwise preserving plain "dotnet run". DNX may restore for up to 120
+         seconds, and its failures are reported below because a direct launch would be missing
+         CLI-supplied runtime metadata. -->
+    <Exec Command="$(_AspireCliVersionCommand)"
+          Condition="'$(_AspireCliVersionCommand)' != ''"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="$(_AspireCliVersionTimeout)"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_AspireCliVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliVersionExitCode" />
+    </Exec>
+
+    <!-- ConsoleToMSBuild merges stdout and stderr in arrival order, so the version is not
+         necessarily the first captured line (a CLI may emit diagnostics on stderr before writing
+         the version to stdout). Only trust the output when the probe exited cleanly, then keep the
+         first line shaped like a version. Raw forms emitted by the CLI version command:
+           13.5.0
+           13.5.0-preview.1.26319.9
+           13.5.0+gabcdef
+           13.5.0-preview.1.26319.9+gabcdef -->
+    <ItemGroup Condition="'$(_AspireCliVersionExitCode)' == '0'">
+      <_AspireCliVersionCandidate Include="@(_AspireCliVersionOutput)"
+                                  Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', '^\s*\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]*)?\s*$'))" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_AspireResolvedCliVersion>@(_AspireCliVersionCandidate)</_AspireResolvedCliVersion>
+      <!-- Keep only the first matching line when several were captured. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion)', ';.*$', ''))</_AspireResolvedCliVersion>
+      <!-- VersionGreaterThanOrEquals parses with System.Version, which only accepts numeric
+           components, so strip the SemVer prerelease/build-metadata suffix. Build metadata may
+           itself contain '-', so cut at the first '-' or '+'. Reducing a 13.5.0 prerelease to
+           13.5.0 is intentional: 13.5 previews satisfy the minimum. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion.Trim())', '[-+].*$', ''))</_AspireResolvedCliVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
+    </PropertyGroup>
+
+    <ResolveAspireCliInvocation Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireCliVersionSupportsRunHook)' != 'true'"
+                                AspireCliInvocationMode="Dnx"
+                                PathEnvironmentVariable="$(Path)">
+      <Output TaskParameter="ResolvedDnxPath" PropertyName="_AspireFallbackDnxPath" />
+      <Output TaskParameter="ResolvedDnxHostPath" PropertyName="_AspireFallbackDnxHostPath" />
+      <Output TaskParameter="ResolvedDnxHostArguments" PropertyName="_AspireFallbackDnxHostArguments" />
+    </ResolveAspireCliInvocation>
+
+    <PropertyGroup>
+      <_AspireFallbackDnxHostArgumentsPrefix Condition="'$(_AspireFallbackDnxHostArguments)' != ''">$(_AspireFallbackDnxHostArguments) </_AspireFallbackDnxHostArgumentsPrefix>
+      <_AspireShouldFallbackToDnx Condition="'$(_AspireFallbackDnxHostPath)' != ''">true</_AspireShouldFallbackToDnx>
+      <_AspireDnxCliVersionCommand Condition="'$(_AspireShouldFallbackToDnx)' == 'true'">"$(_AspireFallbackDnxHostPath)" $(_AspireFallbackDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- --version</_AspireDnxCliVersionCommand>
+    </PropertyGroup>
+
+    <!-- A PATH Aspire candidate that cannot run this AppHost does not block the paired CLI package
+         from being restored through an available DNX host. Explicit AspireCliPath remains authoritative. -->
+    <Exec Command="$(_AspireDnxCliVersionCommand)"
+          Condition="'$(_AspireShouldFallbackToDnx)' == 'true'"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="120000"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_AspireDnxCliVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_AspireDnxCliVersionExitCode" />
+    </Exec>
+
+    <ItemGroup Condition="'$(_AspireShouldFallbackToDnx)' == 'true' and '$(_AspireDnxCliVersionExitCode)' == '0'">
+      <_AspireDnxCliVersionCandidate Include="@(_AspireDnxCliVersionOutput)"
+                                    Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', '^\s*\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]*)?\s*$'))" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(_AspireShouldFallbackToDnx)' == 'true'">
+      <_AspireResolvedCliInvocationMode>Dnx</_AspireResolvedCliInvocationMode>
+      <_AspireResolvedDnxPath>$(_AspireFallbackDnxPath)</_AspireResolvedDnxPath>
+      <_AspireResolvedDnxHostPath>$(_AspireFallbackDnxHostPath)</_AspireResolvedDnxHostPath>
+      <_AspireResolvedDnxHostArguments>$(_AspireFallbackDnxHostArguments)</_AspireResolvedDnxHostArguments>
+      <_AspireResolvedDnxHostArgumentsPrefix>$(_AspireFallbackDnxHostArgumentsPrefix)</_AspireResolvedDnxHostArgumentsPrefix>
+      <_AspireCliVersionCommand>$(_AspireDnxCliVersionCommand)</_AspireCliVersionCommand>
+      <_AspireCliVersionExitCode>$(_AspireDnxCliVersionExitCode)</_AspireCliVersionExitCode>
+      <_AspireResolvedCliVersion>@(_AspireDnxCliVersionCandidate)</_AspireResolvedCliVersion>
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion)', ';.*$', ''))</_AspireResolvedCliVersion>
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion.Trim())', '[-+].*$', ''))</_AspireResolvedCliVersion>
+      <_AspireCliVersionSupportsRunHook>false</_AspireCliVersionSupportsRunHook>
+      <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
+    </PropertyGroup>
+
+    <!-- A DNX-selected build cannot safely fall back to launching the AppHost directly because its
+         DCP and Dashboard paths are intentionally supplied by the CLI at runtime. Surface probe
+         failures instead of constructing a direct launch that is guaranteed to be incomplete. -->
+    <Error Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireCliVersionExitCode)' != '0'"
+           Text="DNX could not restore or run $(_AspireCliDnxPackageReference) (exit code $(_AspireCliVersionExitCode)). Run '$(_AspireCliVersionCommand)' to diagnose package sources, authentication, or connectivity." />
+    <Error Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireCliVersionExitCode)' == '0' and '$(_AspireResolvedCliVersion)' == ''"
+           Text="DNX ran $(_AspireCliDnxPackageReference), but its version output could not be determined. Run '$(_AspireCliVersionCommand)' to diagnose the installed package." />
+    <Error Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(_AspireResolvedCliVersion)' != '' and '$(_AspireCliVersionSupportsRunHook)' != 'true'"
+           Text="DNX resolved Aspire CLI version $(_AspireResolvedCliVersion), but version $(_AspireMinimumCliVersion) or later is required to run this AppHost." />
+
+    <Message Text="Aspire CLI version check: $(_AspireResolvedCliVersion) (minimum required: $(_AspireMinimumCliVersion), supported: $(_AspireCliVersionSupportsRunHook))" Importance="Low" />
+  </Target>
 
   <Target Name="_AspireComputeRunArguments"
           BeforeTargets="ComputeRunArguments"
+          DependsOnTargets="_ValidateAspireCliDnxInvocationMode;_AspireCheckCliVersion"
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
-    <ItemGroup Condition="'$(FileBasedProgram)' == 'true'">
+    <ItemGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true' and '$(FileBasedProgram)' == 'true'">
       <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
                                    Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
       <_AspireFileBasedAppHostDirectory Include="%(RuntimeHostConfigurationOption.Value)"
                                         Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFileDirectoryPath'" />
     </ItemGroup>
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true'">
       <_AspireOriginalRunArguments>$(RunArguments)</_AspireOriginalRunArguments>
       <_AspireRunProject>$(MSBuildProjectFullPath)</_AspireRunProject>
       <!-- File-based dotnet run uses a synthetic apphost.csproj for MSBuild, but the Aspire CLI needs the original .cs file. -->
       <_AspireRunProject Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostPath)' != ''">@(_AspireFileBasedAppHostPath)</_AspireRunProject>
       <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
-      <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
-      <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
-           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
-           lookup to get the same PATHEXT resolution as an interactive shell. -->
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
+      <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
+      <_AspireCliPathForCommandShim Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(AspireCliPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireCliPathForCommandShim>
+      <_AspireResolvedCliPathIsWindowsCommandShim Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT' and ($(_AspireResolvedCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(_AspireResolvedCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireResolvedCliPathIsWindowsCommandShim>
+      <_AspireResolvedCliPathForCommandShim Condition="'$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace($(_AspireResolvedCliPath), '[ \t()[\]{}!^`&lt;&gt;&amp;|;,+="~@]', '^$0'))</_AspireResolvedCliPathForCommandShim>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">$(AspireCliPath)</RunCommand>
+      <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostPath)</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(_AspireResolvedCliPathIsWindowsCommandShim)' != 'true'">$(_AspireResolvedCliPath)</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
-      <RunArguments>run --project "$(_AspireRunProject)" --no-build --</RunArguments>
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' != '' or '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <!-- Bundle opt-in authorizes DNX to restore the selected Aspire CLI package from the user's
+           configured NuGet sources. dotnet run is noninteractive, so DNX cannot ask for confirmation
+           during the launch. -->
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <!-- The explicit-shim command line is emitted as:
+             cmd /D /V:OFF /C C:\path^ with^ spaces\aspire.cmd run [separator] user-arg
+           Keep the caret-escaped shim path unquoted because a leading quote makes cmd.exe strip
+           the first and last quotes after dotnet run appends application arguments. Avoid call
+           because its second parsing pass consumes carets in otherwise valid Windows paths.
+           Appended arguments retain cmd.exe metacharacter semantics, as in the existing PATH
+           branch, and percent expansion remains an unavoidable cmd command-string limitation.
+           See https://learn.microsoft.com/windows-server/administration/windows-commands/cmd. -->
+      <RunArguments Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">/D /V:OFF /C $(_AspireCliPathForCommandShim) $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(_AspireResolvedCliPathIsWindowsCommandShim)' == 'true'">/D /V:OFF /C $(_AspireResolvedCliPathForCommandShim) $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
       <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>
     </PropertyGroup>
   </Target>
 
+  <Target Name="_ValidateAspireCliDnxInvocationMode"
+          DependsOnTargets="_ResolveAspireCliInvocation"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireUseDnxCliRunHook)' == 'true' and '$(AspireCliPath)' == ''">
+    <Error Code="ASPIRE011"
+           Condition="'$(_AspireResolvedDnxPath)' == ''"
+           Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />
+  </Target>
+
   <!-- This target registers the location of the Aspire orchestration dependencies -->
   <Target Name="SetOrchestrationDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' or '$(AspireUseCliBundle)' == 'true' ">
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(DcpDir)' != ''">
       <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(DcpDir)'))</DcpDir>
       <DcpExtensionsDir Condition=" '$(DcpExtensionsDir)' == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'ext'))</DcpExtensionsDir>
       <DcpExtensionsDir>$([MSBuild]::EnsureTrailingSlash('$(DcpExtensionsDir)'))</DcpExtensionsDir>
@@ -257,7 +632,7 @@ namespace Projects%3B
       <DcpCliPath Condition=" '$(OS)' == 'Windows_NT' and !$(DcpCliPath.EndsWith('.exe')) ">$(DcpCliPath).exe</DcpCliPath>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(DcpDir)' != ''">
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>dcpclipath</_Parameter1>
         <_Parameter2>$(DcpCliPath)</_Parameter2>
@@ -266,6 +641,9 @@ namespace Projects%3B
         <_Parameter1>dcpextensionpaths</_Parameter1>
         <_Parameter2>$(DcpExtensionsDir)</_Parameter2>
       </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>apphostprojectpath</_Parameter1>
         <_Parameter2>$(MSBuildProjectDirectory)</_Parameter2>
@@ -278,7 +656,7 @@ namespace Projects%3B
   </Target>
 
   <Target Name="SetDashboardDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' or '$(AspireDashboardPath)' != '' or '$(AspireUseCliBundle)' == 'true' ">
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(AspireDashboardDir)' != '' or '$(AspireDashboardPath)' != ''">
       <AspireDashboardDir Condition=" '$(AspireDashboardDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
       <_AspireDashboardPathInferredFromDir Condition=" '$(AspireDashboardPath)' == '' and '$(AspireDashboardDir)' != '' ">true</_AspireDashboardPathInferredFromDir>
       <AspireDashboardPath Condition=" '$(AspireDashboardPath)' == '' ">$([MSBuild]::NormalizePath($(AspireDashboardDir), 'Aspire.Dashboard'))</AspireDashboardPath>
@@ -286,10 +664,32 @@ namespace Projects%3B
       <AspireDashboardPath Condition=" '$(_AspireDashboardPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(AspireDashboardPath)' != ''">
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>aspiredashboardpath</_Parameter1>
         <_Parameter2>$(AspireDashboardPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SetTerminalHostDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireTerminalHostDir)' != '' or '$(AspireTerminalHostPath)' != '' ">
+    <PropertyGroup>
+      <AspireTerminalHostDir Condition=" '$(AspireTerminalHostDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+      <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
+      <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspireterminalhostpath</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostPath)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata"
+                         Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
+        <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

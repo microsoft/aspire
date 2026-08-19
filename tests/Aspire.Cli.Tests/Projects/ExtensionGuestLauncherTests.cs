@@ -31,6 +31,8 @@ public class ExtensionGuestLauncherTests
             ["tsx", "/tmp/apphost.ts"],
             new DirectoryInfo("/tmp"),
             new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: null,
             CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
@@ -51,7 +53,7 @@ public class ExtensionGuestLauncherTests
         var appHostFile = new FileInfo("/home/user/project/apphost.ts");
         var launcher = new ExtensionGuestLauncher(service, appHostFile, debug: true);
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, capturedProjectFile);
     }
@@ -66,7 +68,7 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: true);
-        await launcher.LaunchAsync("npx", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("npx", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.True(capturedDebug);
     }
@@ -87,7 +89,7 @@ public class ExtensionGuestLauncherTests
             ["NODE_ENV"] = "development"
         };
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), envVars, CancellationToken.None);
+        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), envVars, afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedEnv);
         Assert.Equal(2, capturedEnv.Count);
@@ -101,7 +103,7 @@ public class ExtensionGuestLauncherTests
         var service = new FakeLaunchExtensionService((_, _, _, _) => { });
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
 
-        var (exitCode, output) = await launcher.LaunchAsync("cmd", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        var (exitCode, output) = await launcher.LaunchAsync("cmd", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.Null(output);
@@ -117,7 +119,7 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
-        await launcher.LaunchAsync("python", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("python", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
         Assert.Single(capturedArgs);
@@ -171,7 +173,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public void DisplaySuccess(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => throw new NotImplementedException();
-        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
+        public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayEmptyLine() => throw new NotImplementedException();

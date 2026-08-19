@@ -7,7 +7,6 @@ using System.Globalization;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -29,13 +28,29 @@ internal static class DcpModelUtilities
             modelResource.GetLifetimeType() != Lifetime.Persistent;
     }
 
+    internal static void ValidateEndpointPorts(IResource modelResource, EndpointAnnotation endpoint)
+    {
+        var modelResourceName = modelResource.Name ?? "(unknown)";
+
+        if (modelResource.IsContainer())
+        {
+            if (EndpointAnnotation.NormalizePort(endpoint.TargetPort) is null)
+            {
+                throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+            }
+        }
+        else if (!endpoint.IsProxied && endpoint.Port is int && endpoint.Port != endpoint.TargetPort)
+        {
+            throw new InvalidOperationException($"The endpoint '{endpoint.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
+        }
+    }
+
     /// <summary>
     /// Examines the Aspire resource annotations and adds equivalent ServiceProducerAnnotations to the corresponding DCP resource.
     /// </summary>
     internal static void AddServicesProducedInfo<TDcpResource>(
         RenderedModelResource<TDcpResource> appResource,
-        IEnumerable<IAppResource> appResources,
-        ILogger? logger = null)
+        IEnumerable<IAppResource> appResources)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         var modelResource = appResource.ModelResource;
@@ -45,40 +60,32 @@ internal static class DcpModelUtilities
         foreach (var sp in servicesProduced)
         {
             var ea = sp.EndpointAnnotation;
+            ValidateEndpointPorts(modelResource, ea);
 
-            if (modelResource.IsContainer())
+            if (!modelResource.IsContainer())
             {
-                if (ea.TargetPort is null)
+                if (!ea.IsProxied)
                 {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for container resource '{modelResourceName}' must specify the {nameof(EndpointAnnotation.TargetPort)} value");
+                    if (HasMultipleReplicas(appResource.DcpResource))
+                    {
+                        throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
+                    }
                 }
-            }
-            else if (!ea.IsProxied)
-            {
-                if (HasMultipleReplicas(appResource.DcpResource))
+                else
                 {
-                    throw new InvalidOperationException($"Resource '{modelResourceName}' uses multiple replicas and a proxy-less endpoint '{ea.Name}'. These features do not work together.");
-                }
+                    Debug.Assert(ea.IsProxied);
 
-                if (ea.Port is int && ea.Port != ea.TargetPort)
-                {
-                    throw new InvalidOperationException($"The endpoint '{ea.Name}' for resource '{modelResourceName}' is not using a proxy, and it has a value of {nameof(EndpointAnnotation.Port)} property that is different from the value of {nameof(EndpointAnnotation.TargetPort)} property. For proxy-less endpoints they must match.");
-                }
-            }
-            else
-            {
-                Debug.Assert(ea.IsProxied);
+                    if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
+                    {
+                        throw new InvalidOperationException(
+                            $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
+                    }
 
-                if (ea.TargetPort is int && ea.Port is int && ea.TargetPort == ea.Port)
-                {
-                    throw new InvalidOperationException(
-                        $"The endpoint '{ea.Name}' for resource '{modelResourceName}' requested a proxy ({nameof(ea.IsProxied)} is true). Non-container resources cannot be proxied when both {nameof(ea.TargetPort)} and {nameof(ea.Port)} are specified with the same value.");
-                }
-
-                if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
-                {
-                    throw new InvalidOperationException(
-                        $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    if (HasMultipleReplicas(appResource.DcpResource) && ea.TargetPort is int)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{modelResourceName}' can have multiple replicas, and it uses endpoint '{ea.Name}' that has {nameof(ea.TargetPort)} property set. Each replica must have a unique port; setting {nameof(ea.TargetPort)} is not allowed.");
+                    }
                 }
             }
 
@@ -87,16 +94,6 @@ internal static class DcpModelUtilities
             spAnn.Port = ea.TargetPort;
             appResource.DcpResource.AnnotateAsObjectList(CustomResource.ServiceProducerAnnotation, spAnn);
             appResource.ServicesProduced.Add(sp);
-        }
-
-        if (appResource.ServicesProduced.Any(sp => IsDynamicProxylessContainerEndpoint(appResource, sp)) &&
-            !modelResource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().Any())
-        {
-            // These endpoints normally get their host port during container creation. If a
-            // reference needs the allocated endpoint while building the container configuration,
-            // commit the fallback port before waiting would deadlock resource creation.
-            modelResource.Annotations.Add(new OnDemandEndpointAllocationAnnotation(
-                (endpoint, networkId) => TryAllocateDynamicProxylessContainerEndpoint(appResource, endpoint, networkId, logger)));
         }
 
         static bool HasMultipleReplicas(CustomResource resource)
@@ -117,22 +114,19 @@ internal static class DcpModelUtilities
     {
         foreach (var res in resources)
         {
-            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName, allowPendingDynamicProxylessContainerEndpoints: false);
+            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName);
         }
     }
 
     internal static bool TryAddWorkloadAllocatedEndpoints<TDcpResource>(
         RenderedModelResource<TDcpResource> resource,
         bool enableAspireContainerTunnel,
-        string containerHostName,
-        bool allowPendingDynamicProxylessContainerEndpoints)
+        string containerHostName)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         foreach (var sp in resource.ServicesProduced)
         {
-            if (TryAddLocalhostAllocatedEndpoint(
-                sp,
-                allowPending: allowPendingDynamicProxylessContainerEndpoints && IsDynamicProxylessContainerEndpoint(resource, sp)))
+            if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false))
             {
                 AddContainerNetworkAllocatedEndpoint(resource, sp);
                 AddExecutableContainerNetworkAllocatedEndpoint(resource, sp, enableAspireContainerTunnel, containerHostName);
@@ -142,57 +136,20 @@ internal static class DcpModelUtilities
         return AreResourceEndpointsAllocated(resource.ModelResource);
     }
 
-    internal static async Task TryAllocateDependentDynamicProxylessContainerEndpointsAsync<TDcpResource>(
-        RenderedModelResource<TDcpResource> resource,
-        DistributedApplicationExecutionContext executionContext,
-        ILogger? logger,
-        CancellationToken cancellationToken)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        if (resource.ServicesProduced.All(sp => !IsDynamicProxylessContainerEndpoint(resource, sp)))
-        {
-            return;
-        }
-
-        var dependencies = await resource.ModelResource.GetResourceDependenciesAsync(
-            executionContext,
-            new ResourceDependencyDiscoveryOptions
-            {
-                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
-                CacheAnnotationCallbackResults = true
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        if (!dependencies.Any())
-        {
-            return;
-        }
-
-        foreach (var sp in resource.ServicesProduced.Where(sp => IsDynamicProxylessContainerEndpoint(resource, sp)))
-        {
-            TryAllocateDynamicProxylessContainerEndpoint(resource, sp.EndpointAnnotation, KnownNetworkIdentifiers.LocalhostNetwork, logger);
-        }
-    }
-
-    internal static bool TryApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources, [NotNullWhen(true)] out IResource? modelResource)
+    internal static void ApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources)
     {
         var serviceResource = appResources.OfType<ServiceWithModelResource>()
             .FirstOrDefault(swr => string.Equals(swr.DcpResource.Metadata.Name, observedService.Metadata.Name, StringComparison.Ordinal));
 
         if (serviceResource is null)
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         serviceResource.Service.ApplyAddressInfoFrom(observedService);
-        var isDynamicProxylessContainerEndpoint = appResources.OfType<RenderedModelResource<Container>>()
-            .Any(resource => ReferenceEquals(resource.ModelResource, serviceResource.ModelResource) &&
-                IsDynamicProxylessContainerEndpoint(resource, serviceResource));
         if (!TryAddLocalhostAllocatedEndpoint(serviceResource, allowPending: true))
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         foreach (var containerResource in appResources.OfType<RenderedModelResource<Container>>()
@@ -200,9 +157,6 @@ internal static class DcpModelUtilities
         {
             AddContainerNetworkAllocatedEndpoint(containerResource, serviceResource);
         }
-
-        modelResource = serviceResource.ModelResource;
-        return isDynamicProxylessContainerEndpoint && AreResourceEndpointsAllocated(modelResource);
     }
 
     private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending, int? fallbackPort = null)
@@ -313,50 +267,6 @@ internal static class DcpModelUtilities
     internal static bool AreResourceEndpointsAllocated(IResource resource)
     {
         return !resource.TryGetEndpoints(out var endpoints) || endpoints.All(e => e.AllocatedEndpoint is not null);
-    }
-
-    private static bool IsDynamicProxylessContainerEndpoint<TDcpResource>(RenderedModelResource<TDcpResource> resource, ServiceWithModelResource sp)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        return resource.DcpResource is Container &&
-            !sp.EndpointAnnotation.IsProxied &&
-            sp.EndpointAnnotation.SpecifiedPort is null;
-    }
-
-    private static AllocatedEndpoint? TryAllocateDynamicProxylessContainerEndpoint<TDcpResource>(
-        RenderedModelResource<TDcpResource> resource,
-        EndpointAnnotation endpoint,
-        NetworkIdentifier networkId,
-        ILogger? logger)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        var sp = resource.ServicesProduced.SingleOrDefault(sp =>
-            ReferenceEquals(sp.EndpointAnnotation, endpoint) &&
-            IsDynamicProxylessContainerEndpoint(resource, sp));
-        if (sp is null)
-        {
-            return null;
-        }
-
-        Debug.Assert(endpoint.TargetPort is not null);
-
-        var targetPort = endpoint.TargetPort.Value;
-        endpoint.Port = targetPort;
-        logger?.LogInformation(
-            "Endpoint '{EndpointName}' on container resource '{ResourceName}' was resolved before the container was created, so Aspire is assigning public port {PublicPort} to match target port {TargetPort} for proxyless access.",
-            endpoint.Name,
-            sp.ModelResource.Name,
-            targetPort,
-            targetPort);
-
-        if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false, fallbackPort: targetPort))
-        {
-            AddContainerNetworkAllocatedEndpoint(resource, sp);
-        }
-
-        return endpoint.AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var allocatedEndpoint)
-            ? allocatedEndpoint
-            : null;
     }
 
     internal static void AddContainerTunnelAllocatedEndpoints(

@@ -471,17 +471,23 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         Func<Exception, bool> isRetryable,
         CancellationToken cancellationToken)
     {
-        var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
         using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
-        activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
         var retryCount = 0;
 
         var resiliencePipeline = CreateKubernetesCallResiliencePipeline(isRetryable, activity, () => retryCount++);
 
         try
         {
-            return await resiliencePipeline.ExecuteAsync<TResult>(async (cancellationToken) =>
+            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
             {
+                // Establish (or re-establish) the connection to DCP inside the retry loop,
+                // to guard against a failure from missing or partially-written kubeconfig.
+                var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
+                if (clientReady.Initialized)
+                {
+                    activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
+                }
+
                 return await operation(_kubernetes!).ConfigureAwait(false);
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -593,43 +599,44 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             readStopwatch.Start();
 
             var readPipeline = CreateReadKubeconfigResiliencePipeline();
-            var timeoutPipeline = new ResiliencePipelineBuilder<DcpKubernetesClient>()
-                .AddTimeout(new TimeoutStrategyOptions { Timeout = MaxRetryDuration })
-                .Build();
 
             try
             {
-                _kubernetes = await timeoutPipeline.ExecuteAsync(async (cancellationToken) =>
+                _kubernetes = await readPipeline.ExecuteAsync(async (cancellationToken) =>
                 {
-                    return await readPipeline.ExecuteAsync<DcpKubernetesClient>(async (cancellationToken) =>
+                    var fileWaitStopwatch = Stopwatch.StartNew();
+                    var fileInfo = new FileInfo(locations.DcpKubeconfigPath);
+                    while (!fileInfo.Exists)
                     {
-                        var fileWaitStopwatch = Stopwatch.StartNew();
-                        var fileInfo = new FileInfo(locations.DcpKubeconfigPath);
-                        while (!fileInfo.Exists)
-                        {
-                            await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), cancellationToken).ConfigureAwait(false);
-                            fileInfo = new FileInfo(locations.DcpKubeconfigPath);
-                        }
-                        fileWaitStopwatch.Stop();
-                        activity.SetDcpKubeconfigFileWait(fileWaitStopwatch.ElapsedMilliseconds);
-                        activity.AddKubeconfigFileDetected();
+                        await Task.Delay(TimeSpan.FromMilliseconds(dcpOptions.Value.KubernetesConfigReadRetryIntervalMilliseconds), cancellationToken).ConfigureAwait(false);
+                        fileInfo = new FileInfo(locations.DcpKubeconfigPath);
+                    }
+                    fileWaitStopwatch.Stop();
+                    activity.SetDcpKubeconfigFileWait(fileWaitStopwatch.ElapsedMilliseconds);
+                    activity.AddKubeconfigFileDetected();
 
-                        var buildConfigStopwatch = Stopwatch.StartNew();
-                        var config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfig: fileInfo, useRelativePaths: false).ConfigureAwait(false);
-                        buildConfigStopwatch.Stop();
-                        readStopwatch.Stop();
+                    var buildConfigStopwatch = Stopwatch.StartNew();
+                    // Open the file with FileShare.ReadWrite | FileShare.Delete so we do not interfere with DCP
+                    // if we happen to open the file while DCP is still writing to it.
+                    var kubeconfigStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    KubernetesClientConfiguration config;
+                    await using (kubeconfigStream.ConfigureAwait(false))
+                    {
+                        config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(kubeconfigStream).ConfigureAwait(false);
+                    }
+                    buildConfigStopwatch.Stop();
+                    readStopwatch.Stop();
 
-                        logger.LogDebug(
-                            "Successfully read Kubernetes configuration from '{DcpKubeconfigPath}' after {DurationMs} milliseconds.",
-                            locations.DcpKubeconfigPath,
-                            readStopwatch.ElapsedMilliseconds
-                            );
-                        activity.SetDcpKubeconfigBuildDuration(buildConfigStopwatch.ElapsedMilliseconds);
-                        activity.SetDcpKubeconfigReadDuration(readStopwatch.ElapsedMilliseconds);
-                        activity.AddKubeconfigReadComplete();
+                    logger.LogDebug(
+                        "Successfully read Kubernetes configuration from '{DcpKubeconfigPath}' after {DurationMs} milliseconds.",
+                        locations.DcpKubeconfigPath,
+                        readStopwatch.ElapsedMilliseconds
+                        );
+                    activity.SetDcpKubeconfigBuildDuration(buildConfigStopwatch.ElapsedMilliseconds);
+                    activity.SetDcpKubeconfigReadDuration(readStopwatch.ElapsedMilliseconds);
+                    activity.AddKubeconfigReadComplete();
 
-                        return new DcpKubernetesClient(config);
-                    }, cancellationToken).ConfigureAwait(false);
+                    return new DcpKubernetesClient(config);
                 }, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)

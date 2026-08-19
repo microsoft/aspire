@@ -152,6 +152,9 @@
   <data name="NpmSelfUpdateMessage" xml:space="preserve">
     <value>To update the Aspire CLI when installed from npm, run:</value>
   </data>
+  <data name="NixSelfUpdateMessage" xml:space="preserve">
+    <value>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</value>
+  </data>
   <data name="ProjectUpdateSkippedAfterCliUpdateMessage" xml:space="preserve">
     <value>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</value>
   </data>
@@ -199,5 +202,17 @@
   </data>
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
+  <data name="PendingMigrationsHeader" xml:space="preserve">
+    <value>This project has pending migrations:</value>
+  </data>
+  <data name="PendingMigrationsHint" xml:space="preserve">
+    <value>Run 'aspire update --migrate' to apply them.</value>
+  </data>
+  <data name="MigrateOptionDescription" xml:space="preserve">
+    <value>Apply any pending migrations to the project after updating its packages.</value>
+  </data>
+  <data name="MigrationApplyFailedWarning" xml:space="preserve">
+    <value>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</value>
   </data>
 </root>

@@ -4,6 +4,10 @@
 using System.Globalization;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+#if DEBUG
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
+#endif
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -23,7 +27,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("docs --format json", false)]
     public async Task BaseCommand_FormatOption_SetsConsoleOutputCorrectly(string args, bool expectErrorConsole)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -43,7 +47,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_IntegrationListFormatJson_SetsConsoleOutputCorrectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -68,7 +72,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_WithNoUpdateNotification_DoesNotDisplayTrailingBlankLine()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var testNotifier = new TestCliUpdateNotifier();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -90,7 +94,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_WithUpdateNotification_DoesNotDisplayTrailingBlankLine()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var testNotifier = new TestCliUpdateNotifier
         {
@@ -112,13 +116,84 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
     }
 
+#if DEBUG
+    [Fact]
+    public async Task BaseCommand_UpdateNotificationValidationFailureEscapesInDebugBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedException = new PackageMetadataPrefetchingValidationException("Package metadata prefetching validation failed.");
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            NotifyIfUpdateAvailableCallback = () => throw expectedException
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+        var action = Assert.IsAssignableFrom<System.CommandLine.Invocation.AsynchronousCommandLineAction>(result.Action);
+
+        var actualException = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() => action.InvokeAsync(result, TestContext.Current.CancellationToken));
+
+        Assert.Same(expectedException, actualException);
+    }
+
+    [Fact]
+    public async Task BaseCommand_ExecuteValidationFailureEscapesInDebugBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = new TemplateMetadataConsumingCommand(
+            provider.GetRequiredService<CommonCommandServices>(),
+            provider.GetRequiredService<IPackagingService>(),
+            workspace.WorkspaceRoot);
+        var result = command.Parse("test");
+        var action = Assert.IsAssignableFrom<System.CommandLine.Invocation.AsynchronousCommandLineAction>(result.Action);
+
+        var exception = await Assert.ThrowsAsync<PackageMetadataPrefetchingValidationException>(() => action.InvokeAsync(result, TestContext.Current.CancellationToken));
+
+        Assert.Contains(nameof(BaseCommand.PrefetchesTemplatePackageMetadata), exception.Message);
+    }
+#endif
+
+#if !DEBUG
+    [Fact]
+    public async Task BaseCommand_UpdateNotificationFailureIsIgnoredInReleaseBuilds()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            NotifyIfUpdateAvailableCallback = () => throw new InvalidOperationException("Update notification failed.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        _ = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(testNotifier.NotifyWasCalled);
+    }
+#endif
+
     [Theory]
     [InlineData("run --format json", false)]
     [InlineData("run", true)]
     [InlineData("docs", false)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var testNotifier = new TestCliUpdateNotifier
         {
@@ -143,7 +218,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnFailure_DisplaysLogFilePathOnStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
@@ -174,7 +249,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnFailure_DisplaysAppHostLogFilePathOnStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
@@ -216,7 +291,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnCancellationWithErrorExitCode_DisplaysCancellationMessageOnStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
@@ -239,14 +314,15 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         // add catches OperationCanceledException and returns CommandResult.Cancelled() (exit code 130)
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
 
-        var cancellationOverride = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Equal(ConsoleOutput.Error, cancellationOverride);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
+        Assert.Equal(ConsoleOutput.Error, cancellation.ConsoleOverride);
     }
 
     [Fact]
     public async Task BaseCommand_OnCancellationWithSuccessExitCode_DisplaysCancellationMessageOnStdout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
@@ -272,14 +348,15 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        var cancellationOverride = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellationOverride);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
+        Assert.Null(cancellation.ConsoleOverride);
     }
 
     [Fact]
     public async Task BaseCommand_OnSuccess_DoesNotDisplayLogFilePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -302,7 +379,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnUnexpectedException_ReturnsInvalidCommandExitCode_AndDisplaysError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
         {
@@ -337,7 +414,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnCancellation_DisplaysStoppingMessageAfterDelay()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var handlerEnteredTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var projectLocator = new TestProjectLocator
@@ -389,7 +466,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BaseCommand_OnCancellation_DoesNotDisplayStoppingMessageIfHandlerCompletesQuickly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
@@ -423,4 +500,240 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         // since the handler completed before the 200ms timer.
         Assert.Single(testInteractionService.DisplayedCancellations);
     }
+
+    [Theory]
+    [InlineData("run --AppHost somepath", "--AppHost", "--apphost")]
+    [InlineData("run --Apphost somepath", "--Apphost", "--apphost")]
+    [InlineData("run --APPHOST somepath", "--APPHOST", "--apphost")]
+    [InlineData("start --AppHost somepath", "--AppHost", "--apphost")]
+    [InlineData("run --No-Build", "--No-Build", "--no-build")]
+    [InlineData("run --Project somepath", "--Project", "--project")]
+    [InlineData("run --Debug", "--Debug", "--debug")]
+    [InlineData("run --AppHost=somepath", "--AppHost", "--apphost")]
+    [InlineData("run --APPHOST=somepath", "--APPHOST", "--apphost")]
+    public async Task BaseCommand_MiscasedOption_ReturnsErrorWithSuggestion(string args, string badOption, string correctOption)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(args);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, badOption, correctOption);
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+    }
+
+    [Fact]
+    public async Task BaseCommand_CorrectlyCasedOption_DoesNotReturnMiscasedError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --apphost is the correct casing — should not trigger the miscased option check
+        var result = command.Parse("run --apphost somepath");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Empty(testInteractionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("--apphost", "somepath", false)]
+    [InlineData("--AppHost", "somepath", true)]
+    [InlineData("--APPHOST", "somepath", true)]
+    public async Task BaseCommand_OptionWithEqualsValue_ParsedCorrectlyOrFlaggedAsMiscased(string optionName, string value, bool expectError)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run {optionName}={value}");
+
+        if (expectError)
+        {
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, "--apphost");
+            Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+        }
+        else
+        {
+            // System.CommandLine accepted the --option=value syntax
+            Assert.Empty(result.Errors);
+            Assert.Empty(result.UnmatchedTokens);
+
+            // The option value was parsed correctly
+            var parsedValue = result.GetValue(AppHostLauncher.s_appHostOption);
+            Assert.NotNull(parsedValue);
+            Assert.Equal(value, parsedValue.Name);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Empty(testInteractionService.DisplayedErrors);
+        }
+    }
+
+    [Fact]
+    public async Task BaseCommand_UnrelatedUnmatchedToken_DoesNotReturnMiscasedError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --custom-arg is a completely unknown option, not a miscased version of a known option
+        var result = command.Parse("run --custom-arg value");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Empty(testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task BaseCommand_MiscasedOptionAfterDoubleDash_IsNotFlagged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --AppHost after "--" is an intentional pass-through argument, not a typo
+        var result = command.Parse("run -- --AppHost somepath");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Empty(testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task BaseCommand_MiscasedOptionBeforeDoubleDash_WithSameTokenAfter_IsFlagged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --AppHost before "--" is a typo and should be flagged even though
+        // the same token also appears after "--" as a pass-through argument.
+        var result = command.Parse("run --AppHost foo -- --AppHost bar");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, "--AppHost", "--apphost");
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+    }
+
+    [Fact]
+    public void BaseCommand_TreatUnmatchedTokensAsErrorsTrue_DoesNotCheckMiscasedOptions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // "add" has TreatUnmatchedTokensAsErrors = true (the default), so System.CommandLine
+        // handles unrecognized options. The miscased check should not run.
+        var result = command.Parse("add --AppHost somepath");
+
+        // System.CommandLine itself should report the error.
+        Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public async Task BaseCommand_ResourceCommand_MiscasedOptionBeforeDoubleDash_IsFlagged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --AppHost before "--" collides case-insensitively with the CLI's --apphost option.
+        // Users who need to pass an argument named AppHost to a resource command should use
+        // the "--" separator to disambiguate.
+        var result = command.Parse("resource myresource mycommand --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, "--AppHost", "--apphost");
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+    }
+
+#if DEBUG
+    private sealed class TemplateMetadataConsumingCommand(
+        CommonCommandServices services,
+        IPackagingService packagingService,
+        DirectoryInfo workingDirectory)
+        : BaseCommand("test", "Test command", services)
+    {
+        protected override async Task<CommandResult> ExecuteAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            var channel = (await packagingService.GetChannelsAsync(cancellationToken)).First();
+            _ = await channel.GetTemplatePackagesAsync(workingDirectory, cancellationToken);
+
+            return CommandResult.Success();
+        }
+    }
+#endif
 }

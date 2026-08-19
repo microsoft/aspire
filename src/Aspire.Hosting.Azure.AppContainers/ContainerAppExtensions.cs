@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
@@ -56,7 +55,6 @@ public static class ContainerAppExtensions
     /// </remarks>
     /// <ats-remarks />
     [AspireExport]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -151,7 +149,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the container app job via a callback.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource, Action<AzureResourceInfrastructure, ContainerAppJob> configure)
         where T : IComputeResource
     {
@@ -188,7 +186,7 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource)
         where T : IComputeResource
     {
@@ -237,7 +235,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the scheduled container app job via a callback.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression, Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
         where T : IComputeResource
     {

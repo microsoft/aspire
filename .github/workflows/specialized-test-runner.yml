@@ -54,7 +54,7 @@ jobs:
           ./build.sh
           --restore
           --build
-          -c Release
+          -c Debug
           /p:GeneratePackageOnBuild=false
           /p:InstallBrowsersForPlaywright=false
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
@@ -68,12 +68,12 @@ jobs:
           --test
           /p:TestRunnerName=${{ inputs.testRunnerName }}
           ${{ inputs.extraRunSheetBuilderArgs }}
-          -c Release
+          -c Debug
           /p:Restore=false
           /p:Build=false
           /p:InstallBrowsersForPlaywright=false
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
-          /bl:${{ github.workspace }}/artifacts/log/Release/runsheet.binlog
+          /bl:${{ github.workspace }}/artifacts/log/Debug/runsheet.binlog
 
       - name: Inject enablePlaywrightInstall into runsheet properties
         id: inject_properties

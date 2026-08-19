@@ -47,12 +47,27 @@
 */
 @media (min-width: 768px) {
     ::deep .details-container > header {
-        background-color: var(--neutral-layer-4);
+        /* neutral-layer-2 is a subtle, on-theme elevation that distinguishes the header from the
+           panel body without the harsh contrast of neutral-layer-4, which renders near-black in the
+           dark violet theme after the neutral base-color retint. */
+        background-color: var(--neutral-layer-2);
+    }
+
+    /* Line the flyout's trailing controls up with the page toolbar's right edge. The header
+       (panel-resize + Close buttons) ships a 12px inline padding and the filter toolbar falls back
+       to Fluent's default 8px, so on the desktop split view the Close button and the filter options
+       button stair-step ~4-6px short of the page toolbar's trailing control. Pinning both to the
+       shared page gutter (--layout-right-padding, the same token .main-toolbar uses) collapses that
+       ragged edge into one clean vertical line. Desktop-only: below 768px the flyout stacks
+       full-width and its header doubles as the page header, which keeps its own inset. */
+    ::deep .details-container > header,
+    ::deep .details-container fluent-toolbar {
+        padding-right: var(--layout-right-padding);
     }
 }
 
 ::deep .details-container > header fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background-color: var(--neutral-layer-4);
+    background-color: var(--neutral-layer-2);
 }
 
 ::deep .details-container > *:last-child {
@@ -62,7 +77,7 @@
 ::deep .details-container > header > .details-header-title {
     grid-area: title;
     font-size: var(--type-ramp-plus-1-font-size);
-    font-weight: bold;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;

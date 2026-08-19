@@ -36,6 +36,8 @@ export interface ConfigInfo {
     capabilities?: string[];
 }
 
+export type CapabilityStatus = 'supported' | 'unsupported' | 'unavailable';
+
 /**
  * Capability advertised by the CLI when `aspire describe` supports the hidden
  * `--include-disabled-commands` flag. Tooling uses this to avoid passing the flag to older CLIs
@@ -43,3 +45,23 @@ export interface ConfigInfo {
  * `KnownCapabilities.DescribeIncludeDisabledCommands` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const describeIncludeDisabledCommandsCapability = 'describe-include-disabled-commands.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire ls --format json --stream` emits AppHost
+ * candidates as newline-delimited JSON. Tooling uses this to avoid probing localized CLI errors
+ * for CLIs that do not recognize the hidden streaming flag.
+ * Keep in sync with `KnownCapabilities.LsJsonStream` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const lsJsonStreamCapability = 'ls-json-stream.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire run` accepts the `--isolated` option.
+ * Tooling uses this to avoid passing the option to older CLIs that reject it.
+ * Keep in sync with `KnownCapabilities.IsolatedLaunch` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const isolatedLaunchCapability = 'isolated-launch.v1';
+
+/**
+ * First Aspire CLI version that accepts `aspire run --isolated`.
+ */
+export const isolatedLaunchMinimumVersion = '13.2.0';

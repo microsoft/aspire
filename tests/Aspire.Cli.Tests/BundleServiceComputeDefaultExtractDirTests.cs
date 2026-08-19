@@ -14,7 +14,7 @@ namespace Aspire.Cli.Tests;
 // directory whose versions/ subdirectory the bundle should populate. They are
 // the regression net against a packager moving the sidecar or the bundle
 // pipeline changing its switch on the sidecar's source field.
-public class BundleServiceComputeDefaultExtractDirTests
+public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper outputHelper)
 {
     private const string SidecarFileName = ".aspire-install.json";
 
@@ -28,8 +28,8 @@ public class BundleServiceComputeDefaultExtractDirTests
         // so extraction must land at <prefix>/ (parent of the binary's dir) so
         // the eventual versions/<id>/ tree sits next to the bin/ directory
         // rather than inside it.
-        using var temp = new TestTempDirectory();
-        var prefixDir = Path.Combine(temp.Path, "aspire");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var prefixDir = Path.Combine(workspace.Path, "aspire");
         var binDir = Path.Combine(prefixDir, "bin");
         Directory.CreateDirectory(binDir);
 
@@ -51,8 +51,8 @@ public class BundleServiceComputeDefaultExtractDirTests
         // directory layout. Extraction must land at the dogfood/pr-<N>/ directory
         // — not the outer install root — to keep stable and PR-route versions/
         // trees from colliding.
-        using var temp = new TestTempDirectory();
-        var prDir = Path.Combine(temp.Path, "dogfood", "pr-12345");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var prDir = Path.Combine(workspace.Path, "dogfood", "pr-12345");
         var binDir = Path.Combine(prDir, "bin");
         Directory.CreateDirectory(binDir);
 
@@ -72,8 +72,8 @@ public class BundleServiceComputeDefaultExtractDirTests
         // same install dir. Extraction must land in that directory (beside the binary),
         // not its parent — otherwise versions/<id>/ would leak above the package-managed
         // prefix that winget owns.
-        using var temp = new TestTempDirectory();
-        var installDir = Path.Combine(temp.Path, "WindowsApps", "Microsoft.Aspire_8wekyb3d8bbwe");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var installDir = Path.Combine(workspace.Path, "WindowsApps", "Microsoft.Aspire_8wekyb3d8bbwe");
         Directory.CreateDirectory(installDir);
 
         var binaryPath = Path.Combine(installDir, "aspire.exe");
@@ -98,15 +98,15 @@ public class BundleServiceComputeDefaultExtractDirTests
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var temp = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var cellarDir = Path.Combine(temp.Path, "Caskroom", "aspire", "13.2.0");
+        var cellarDir = Path.Combine(workspace.Path, "Caskroom", "aspire", "13.2.0");
         Directory.CreateDirectory(cellarDir);
         var cellarBinary = Path.Combine(cellarDir, "aspire");
         File.WriteAllText(cellarBinary, string.Empty);
         File.WriteAllText(Path.Combine(cellarDir, SidecarFileName), "{\"source\":\"brew\"}");
 
-        var brewBinDir = Path.Combine(temp.Path, "bin");
+        var brewBinDir = Path.Combine(workspace.Path, "bin");
         Directory.CreateDirectory(brewBinDir);
         var symlinkPath = Path.Combine(brewBinDir, "aspire");
         File.CreateSymbolicLink(symlinkPath, cellarBinary);
@@ -126,9 +126,9 @@ public class BundleServiceComputeDefaultExtractDirTests
         // with aspire and .aspire-install.json colocated. The dotnet-tool runtime
         // launches the binary directly from this RID directory; extraction must stay
         // within that same directory so versions/<id>/ moves with the tool.
-        using var temp = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var ridDir = Path.Combine(
-            temp.Path,
+            workspace.Path,
             ".dotnet",
             "tools",
             ".store",
@@ -156,8 +156,8 @@ public class BundleServiceComputeDefaultExtractDirTests
         // No sidecar anywhere means no install route opted in to writing next to
         // the binary, so the fallback must be user-owned Aspire home rather than
         // an arbitrary binary parent that may be read-only.
-        using var temp = new TestTempDirectory();
-        var prefixDir = Path.Combine(temp.Path, "nix", "store", "aspire");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var prefixDir = Path.Combine(workspace.Path, "nix", "store", "aspire");
         var binDir = Path.Combine(prefixDir, "bin");
         Directory.CreateDirectory(binDir);
 

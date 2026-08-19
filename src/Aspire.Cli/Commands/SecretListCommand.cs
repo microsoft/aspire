@@ -58,7 +58,7 @@ internal sealed class SecretListCommand : BaseCommand
                 obj[key] = value;
             }
 
-            var json = obj.ToJsonString(SecretsStore.s_jsonOptions);
+            var json = obj.ToJsonString(UserSecretsJsonOptions.s_instance);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else

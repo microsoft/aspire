@@ -28,7 +28,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnRedisBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -66,7 +66,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyRedisCommanderResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -96,7 +96,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyRedisResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -133,7 +133,42 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task WithModuleLoadsNativeModule()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var redis = builder.AddRedis("redis")
+            .WithModule(RedisModules.Json);
+
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(redis.Resource.Name, cts.Token);
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        hb.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [$"ConnectionStrings:{redis.Resource.Name}"] = $"{await redis.Resource.GetConnectionStringAsync()},allowAdmin=true"
+        });
+
+        hb.AddRedisClient(redis.Resource.Name);
+
+        using var host = hb.Build();
+
+        await host.StartAsync(cts.Token);
+
+        var redisClient = host.Services.GetRequiredService<IConnectionMultiplexer>();
+        var modules = await redisClient.GetDatabase().ExecuteAsync("MODULE", "LIST");
+
+        Assert.Contains(GetModuleNames(modules), static name => string.Equals(name, "ReJSON", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithRedisInsightImportDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -195,7 +230,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataVolumeShouldPersistStateBetweenUsages()
     {
         // Use a volume to do a snapshot save
@@ -282,7 +317,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataBindMountShouldPersistStateBetweenUsages()
     {
         var bindMountPath = Directory.CreateTempSubdirectory().FullName;
@@ -369,7 +404,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task PersistenceIsDisabledByDefault()
     {
         // Checks that without enabling Redis Persistence the tests fail
@@ -443,7 +478,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task RedisInsightWithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -603,8 +638,26 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         await EnsureRedisInsightEulaAccepted(client, ct);
     }
 
+    private static IEnumerable<string> GetModuleNames(RedisResult modules)
+    {
+        // Redis returns MODULE LIST as an array of name/value arrays:
+        //   1) 1) "name" 2) "ReJSON" 3) "ver" 4) (integer) 80209 ...
+        foreach (var module in (RedisResult[]?)modules ?? [])
+        {
+            var values = (RedisResult[]?)module ?? [];
+
+            for (var i = 0; i < values.Length - 1; i += 2)
+            {
+                if ((string?)values[i] == "name" && (string?)values[i + 1] is { } name)
+                {
+                    yield return name;
+                }
+            }
+        }
+    }
+
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithRedisCommanderShouldWorkWithPassword()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -646,7 +699,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
         public string? Name { get; set; }
     }
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task Redis_WithPersistentLifetime_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
@@ -657,7 +710,7 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task Redis_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
     {
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(

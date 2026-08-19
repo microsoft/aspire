@@ -196,6 +196,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
     }
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
+
+    internal static ActivitySource ActivitySource => s_activitySource;
+
     private static readonly ConcurrentQueue<AppHostStartupEvent> s_startupEvents = new();
 
     private readonly IConfiguration _configuration = configuration;

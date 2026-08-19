@@ -88,9 +88,9 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     public bool IsEmulator => this.IsContainer();
 
     /// <summary>
-    /// Is this instance running a preview emulator version?
+    /// Is this instance running the Linux-based (vNext) emulator?
     /// </summary>
-    internal bool IsPreviewEmulator
+    internal bool IsVNextEmulator
     {
         get => IsEmulator && field;
         set => field = value;
@@ -125,7 +125,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
         IsEmulator ?
-            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsPreviewEmulator) :
+            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsVNextEmulator) :
             UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}");

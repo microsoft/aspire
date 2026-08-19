@@ -35,15 +35,27 @@ internal sealed class TemplateNuGetConfigService(
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
-        if (channel.Type is not PackageChannelType.Explicit)
-        {
-            return;
-        }
-
+        // Implicit channels (and any explicit channel without feed mappings) resolve from the
+        // ambient NuGet config, so there's nothing to create or merge — return before touching
+        // the output directory (which may not exist yet during `aspire new`).
         var mappings = channel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
             return;
+        }
+
+        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
+        // only update an *existing* config in the target directory to clean up stale feeds from a
+        // previous channel; never create a new one, because a <clear/>-based config would wipe the
+        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
+        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
+        if (!channel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return;
+            }
         }
 
         var workingDir = executionContext.WorkingDirectory;
@@ -127,15 +139,32 @@ internal sealed class TemplateNuGetConfigService(
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
+        if (matchingChannel is null)
         {
             return false;
         }
 
+        // Implicit channels (and any explicit channel without feed mappings) resolve from the
+        // ambient NuGet config, so there's nothing to create or merge — return before touching
+        // the output directory (which may not exist yet).
         var mappings = matchingChannel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
             return false;
+        }
+
+        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
+        // only update an *existing* config to clean up stale feeds from a previous channel; never
+        // create a new one — a <clear/>-based config would hide the ambient nuget.org feed and the
+        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
+        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
+        if (!matchingChannel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return false;
+            }
         }
 
         // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a
@@ -168,7 +197,7 @@ internal sealed class TemplateNuGetConfigService(
                 string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
         }
 
-        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
+        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride);
     }
 
     /// <summary>
@@ -178,14 +207,15 @@ internal sealed class TemplateNuGetConfigService(
         string? sourceOverride,
         PackageChannel? channel,
         string outputPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? nugetServiceIndexOverride = null)
     {
         if (string.IsNullOrWhiteSpace(sourceOverride))
         {
             return false;
         }
 
-        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel);
+        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel, nugetServiceIndexOverride);
         await NuGetConfigMerger.CreateOrUpdateAsync(
             new DirectoryInfo(outputPath),
             mappings,
@@ -210,9 +240,18 @@ internal sealed class TemplateNuGetConfigService(
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
         // PR dogfood installs can discover a matching local-build channel outside the default
         // hives directory, so also treat an installed local-build source as a hive signal.
-        var hasPrHives = query.IncludePrHives &&
-            (executionContext.GetHiveCount() > 0 ||
-                allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c)));
+        //
+        // An ASPIRE_CLI_PACKAGES / sidecar `packages` override is different from a stale hive: it
+        // is a deliberate, per-invocation instruction to resolve Aspire.* from a local directory
+        // (used to emulate a released/staging build entirely from locally built packages). Honor it
+        // unconditionally — even when PR-hive discovery is suppressed (e.g. `init`) and regardless of
+        // the emulated channel name (stable/daily/staging) — otherwise template resolution silently
+        // falls back to nuget.org instead of the local packages. See docs/specs/cli-identity-sidecar.md.
+        var hasLocalPackagesOverride = executionContext.IdentityPackagesDirectory is not null;
+        var hasPrHives = hasLocalPackagesOverride ||
+            (query.IncludePrHives &&
+                (executionContext.GetHiveCount() > 0 ||
+                    allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c))));
 
         IEnumerable<PackageChannel> channels;
         if (!string.IsNullOrEmpty(query.RequestedChannel))
@@ -223,6 +262,13 @@ internal sealed class TemplateNuGetConfigService(
                     $"No channel found matching '{query.RequestedChannel}'. Valid options are: " +
                     $"{string.Join(", ", allChannels.Select(c => c.Name))}");
             channels = [matchingChannel];
+        }
+        else if (!string.IsNullOrWhiteSpace(query.SourceOverride))
+        {
+            // Every channel would query the same explicit source, so querying PR/local channels as
+            // well would attach identical results to whichever channel finishes first. Keep the
+            // implicit channel as the deterministic owner unless the user requested a channel.
+            channels = allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
         else
         {
@@ -240,7 +286,10 @@ internal sealed class TemplateNuGetConfigService(
 
             await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
             {
-                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, ct);
+                var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
+                    ? channel.Mappings
+                    : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
+                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, templateSearchMappings, ct);
                 lock (resultsLock)
                 {
                     results.AddRange(templatePackages.Select(p => (p, channel)));
@@ -269,6 +318,7 @@ internal sealed class TemplateNuGetConfigService(
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             orderedPackagesFromChannels,
             p => p.Package.Version,
+            executionContext.IdentitySdkVersion,
             out var cliVersionMatch,
             channelName: query.RequestedChannel,
             hasPrHives: hasPrHives))
@@ -299,17 +349,14 @@ internal sealed class TemplateNuGetConfigService(
     private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)
     {
         return VersionHelper.IsLocalBuildChannel(channel.Name) &&
-            channel.Mappings?.Any(static mapping =>
-                mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
-                mapping.PackageFilter != PackageMapping.AllPackages &&
-                !UrlHelper.IsHttpUrl(mapping.Source) &&
-                Directory.Exists(mapping.Source)) == true;
+            channel.Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
     }
 
     /// <summary>
-    /// Installs the resolved Aspire project templates package, generating a temporary NuGet.config from the channel mappings when the channel is explicit.
+    /// Installs the resolved Aspire project templates package, generating a temporary NuGet.config from source-adjusted mappings when needed.
     /// </summary>
     /// <param name="selection">The template package + channel returned by <see cref="ResolveTemplatePackageAsync"/>.</param>
+    /// <param name="sourceOverride">Optional package source override applied to Aspire packages for installation.</param>
     /// <param name="runner">The .NET CLI runner used to invoke <c>dotnet new install</c>. Passed in (rather than injected) because the runner has a transient DI lifetime.</param>
     /// <param name="statusMessage">Status text shown while the install runs.</param>
     /// <param name="statusEmoji">Optional emoji prefix shown next to the status message.</param>
@@ -317,23 +364,27 @@ internal sealed class TemplateNuGetConfigService(
     /// <returns>The install exit code, the parsed template version (if available), and the captured stdout/stderr lines.</returns>
     public async Task<TemplateInstallOutcome> InstallTemplatePackageAsync(
         TemplatePackageSelection selection,
+        string? sourceOverride,
         IDotNetCliRunner runner,
         string statusMessage,
         KnownEmoji? statusEmoji,
         CancellationToken cancellationToken)
     {
-        // Whilst we install the templates - if we are using an explicit channel we need to
-        // generate a temporary NuGet.config file to make sure we install the right package
-        // from the right feed. If we are using an implicit channel then we just use the
-        // ambient configuration (although we should still specify the source) because
-        // the user would have selected it.
+        var templateInstallMappings = string.IsNullOrWhiteSpace(sourceOverride)
+            ? selection.Channel.Mappings
+            : PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride);
+
+        // Whilst we install the templates - if source mappings are available we need
+        // to generate a temporary NuGet.config file to make sure we install the right package
+        // from the right feed. Without mappings we just use the ambient configuration
+        // (although we should still specify the source) because the user would have selected it.
         //
         // The temporary config is disposed when this method returns. That is intentional —
         // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
         // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
         // template hive and uses the ambient NuGet configuration.
-        using var temporaryConfig = selection.Channel.Type == PackageChannelType.Explicit
-            ? await TemporaryNuGetConfig.CreateAsync(selection.Channel.Mappings!)
+        using var temporaryConfig = templateInstallMappings is not null
+            ? await TemporaryNuGetConfig.CreateAsync(templateInstallMappings)
             : null;
 
         var collector = new OutputCollector();
@@ -352,7 +403,7 @@ internal sealed class TemplateNuGetConfigService(
                     packageName: TemplatesPackageName,
                     version: selection.Package.Version,
                     nugetConfigFile: temporaryConfig?.ConfigFile,
-                    nugetSource: selection.Package.Source,
+                    nugetSource: string.IsNullOrWhiteSpace(sourceOverride) ? selection.Package.Source : sourceOverride,
                     force: true,
                     options: options,
                     cancellationToken: cancellationToken);
@@ -373,7 +424,11 @@ internal sealed class TemplateNuGetConfigService(
 /// back to PR-hive discovery or implicit-only depending on <paramref name="IncludePrHives"/>.
 /// </param>
 /// <param name="VersionOverride">Optional explicit template version (e.g. from <c>--version</c>).</param>
-/// <param name="SourceOverride">Optional source override carried for symmetry with <see cref="TemplateInputs"/>; not consulted by resolution today.</param>
+/// <param name="SourceOverride">
+/// Optional package source override used exclusively for template discovery and installation. Without
+/// <paramref name="RequestedChannel"/>, the implicit channel owns the result so installed hives cannot
+/// assign an unrelated channel identity to a package discovered from this source.
+/// </param>
 /// <param name="IncludePrHives">When true (e.g. for <c>aspire new</c>), local PR hive directories under <c>~/.aspire/hives</c> participate in channel discovery; when false (e.g. for <c>aspire init</c>), they are ignored.</param>
 internal sealed record TemplatePackageQuery(
     string? RequestedChannel,

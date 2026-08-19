@@ -393,6 +393,7 @@ public class ListStructuredLogsToolTests
         IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListStructuredLogsTool(
             dashboardInfoProvider,
+            actualMonitor,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListStructuredLogsTool>.Instance);
     }

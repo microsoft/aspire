@@ -6,7 +6,8 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Provides helper methods for validating localhost addresses.
+/// Provides helper methods for validating localhost addresses and for resolving endpoint URLs
+/// against a configured target host.
 /// </summary>
 public static class EndpointHostHelpers
 {
@@ -120,8 +121,11 @@ public static class EndpointHostHelpers
     /// <param name="endpoint">The endpoint reference.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The URL with the appropriate hostname.</returns>
-    internal static async ValueTask<string?> GetUrlWithTargetHostAsync(EndpointReference endpoint, CancellationToken cancellationToken = default)
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpoint"/> is null.</exception>
+    public static async ValueTask<string?> GetUrlWithTargetHostAsync(EndpointReference endpoint, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
+
         var allocatedUrl = await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(allocatedUrl))
@@ -132,8 +136,13 @@ public static class EndpointHostHelpers
         // If the configured TargetHost is a localhost TLD (e.g., aspire-dashboard.dev.localhost),
         // we need to use that instead of the allocated address (localhost) since the TLD hostname
         // is what the user expects to see and use in the browser.
+        //
+        // Only do this when the resolved address is itself loopback. The same endpoint resolves to a
+        // routable address (e.g. container1.dev.internal) when the reference carries a non-local
+        // ContextNetworkID, and a *.localhost name always resolves to the caller's own loopback, so
+        // substituting there would point a container at itself.
         var targetHost = endpoint.EndpointAnnotation.TargetHost;
-        if (IsLocalhostTld(targetHost) && Uri.TryCreate(allocatedUrl, UriKind.Absolute, out var uri))
+        if (IsLocalhostTld(targetHost) && Uri.TryCreate(allocatedUrl, UriKind.Absolute, out var uri) && uri.IsLoopback)
         {
             return $"{uri.Scheme}://{targetHost}:{uri.Port}";
         }

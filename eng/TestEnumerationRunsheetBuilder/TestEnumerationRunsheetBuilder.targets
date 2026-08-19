@@ -42,11 +42,39 @@
   <Target Name="RunTests"
           Outputs="%(TestToRun.ResultsStdOutPath)"
           Condition="'$(_ShouldSkipProject)' != 'true' and '$(IsGitHubActionsRunner)' == 'true' and '$(RunOnGithubActions)' == 'true'">
-    <!-- Build and generate test partitions for split test projects -->
+    <!-- Split-test partition discovery without compiling the closure.
+
+         For SplitTestsOnCI projects we first try to read [Trait("Partition","<n>")]
+         literals straight from source (no build). Partition-mode projects such as
+         Aspire.Hosting.Tests reference the whole hosting "god-edge" closure (~40
+         integrations); building that closure just to reflect partition traits off
+         the test DLL is the bulk of the enumerate-tests step. The trait values are
+         compile-time string literals, so a source scan yields the identical set,
+         and build-test-matrix.ps1 always appends an "uncollected:*" entry (which
+         maps to filter-not-trait Partition=*) so any class the scan misses runs.
+
+         The scan writes the .tests-partitions.json only when it finds partitions.
+         If none are found (class-mode projects like Aspire.Cli.EndToEnd.Tests /
+         Aspire.Templates.Tests, which enumerate classes against the built assembly),
+         the file is absent and we fall back to the original Build + class discovery.
+         GenerateTestPartitionsForCI itself is untouched, so the AzDO/Helix prepare
+         path that calls it directly is unaffected. -->
+    <PropertyGroup Condition="'$(SplitTestsOnCI)' == 'true'">
+      <_SourcePartitionScanScript>$(MSBuildThisFileDirectory)../scripts/scan-test-partitions-from-source.ps1</_SourcePartitionScanScript>
+      <_SourcePartitionsJsonPath>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestArchiveTestsDir)$(MSBuildProjectName).tests-partitions.json'))</_SourcePartitionsJsonPath>
+    </PropertyGroup>
+
+    <Exec Condition="'$(SplitTestsOnCI)' == 'true'"
+          Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(_SourcePartitionScanScript)&quot; -ProjectDirectory &quot;$(MSBuildProjectDirectory)&quot; -TestPartitionsJsonFile &quot;$(_SourcePartitionsJsonPath)&quot;"
+          IgnoreExitCode="false"
+          WorkingDirectory="$(RepoRoot)" />
+
+    <!-- Class-mode fallback (and any partition-mode project where the scan found nothing):
+         build the project + its closure and discover via the original DLL-based path. -->
     <MSBuild Projects="$(MSBuildProjectFullPath)"
              Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
              Targets="Build;GenerateTestPartitionsForCI"
-             Condition="'$(SplitTestsOnCI)' == 'true'" />
+             Condition="'$(SplitTestsOnCI)' == 'true' and '$(TestEnumerationMetadataOnly)' != 'true' and !Exists('$(_SourcePartitionsJsonPath)')" />
 
     <!-- Write .tests-metadata.json file -->
     <PropertyGroup>

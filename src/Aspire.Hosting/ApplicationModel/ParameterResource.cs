@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -89,6 +91,17 @@ public class ParameterResource : Resource, IExpressionValue
     /// </summary>
     internal TaskCompletionSource<string>? WaitForValueTcs { get; set; }
 
+    internal ResourcePropertySnapshot CreateValueSnapshotProperty(string value)
+    {
+        return new(KnownProperties.Parameter.Value, value)
+        {
+            IsSensitive = Secret,
+            DisplayName = ResourcePropertyParameterValueDisplayName,
+            IsHighlighted = true,
+            SortOrder = 0
+        };
+    }
+
     /// <summary>
     /// Gets the value of the parameter asynchronously, waiting if necessary for the value to be set.
     /// </summary>
@@ -127,7 +140,6 @@ public class ParameterResource : Resource, IExpressionValue
     /// </summary>
     public bool EnableDescriptionMarkdown { get; set; }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal InteractionInput CreateInput(string? name = null, bool? required = null, InputLoadOptions? dynamicLoading = null)
     {
         if (this.TryGetLastAnnotation<InputGeneratorAnnotation>(out var annotation))
@@ -164,5 +176,4 @@ public class ParameterResource : Resource, IExpressionValue
         };
         return input;
     }
-#pragma warning restore ASPIREINTERACTION001
 }

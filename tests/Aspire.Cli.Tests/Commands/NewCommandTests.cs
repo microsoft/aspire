@@ -20,6 +20,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -29,7 +30,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
 
@@ -43,7 +44,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void NewCommandWithPolyglotEnabled_ExposesTemplateSubcommands()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.FeatureFlagsFactory = _ =>
@@ -72,7 +73,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void NewCommandWithPolyglotDisabled_ExposesTemplateSubcommands()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
 
@@ -84,7 +85,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
@@ -102,7 +103,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var configServices = CreateServiceCollection(workspace);
         using (var configProvider = configServices.BuildServiceProvider())
@@ -159,7 +160,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandInteractiveFlowSmokeTest()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
 
@@ -174,7 +175,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     // Quarantined due to flakiness. See linked issue for details.
     public async Task NewCommandDerivesProjectNameFromTemplateNameForStarterTemplate()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedDefaultProjectName = null;
         string? capturedDefaultOutputPath = null;
         var services = CreateServiceCollection(workspace, options =>
@@ -215,7 +216,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         var promptedForName = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -247,7 +248,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         bool promptedForPath = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -277,7 +278,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithChannelOptionUsesSpecifiedChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         string? channelNameUsed = null;
         bool promptedForVersion = false;
@@ -319,8 +320,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
@@ -358,7 +359,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithChannelOptionAutoSelectsHighestVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         string? selectedVersion = null;
         bool promptedForVersion = false;
@@ -397,7 +398,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
                 
@@ -435,7 +436,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithPrChannelPrefersCurrentCliVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
         string? selectedVersion = null;
@@ -474,7 +475,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
 
-                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
+                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
                 };
 
@@ -514,7 +515,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         bool promptedForTemplate = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -546,7 +547,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         bool promptedForTemplateVersion = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -578,7 +579,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         TestInteractionService? testInteractionService = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options => {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = (sp) => {
@@ -610,7 +611,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommand_WhenCertificateServiceThrows_ReturnsNonZeroExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) => {
@@ -649,7 +650,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithExitCode73ShowsUserFriendlyError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -748,6 +749,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             throw new CertificateServiceException("Failed to trust certificates");
         }
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     [Fact]
@@ -755,7 +758,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         var operationOrder = new List<string>();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -826,7 +829,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var capturedProjectNameDefault = string.Empty;
         var capturedOutputPathDefault = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -872,7 +875,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithoutTemplateCanCreateTypeScriptEmptyTemplate()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldedLanguageId = string.Empty;
         (string Name, string Description)[]? promptedTemplates = null;
 
@@ -935,7 +938,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void NewCommandTemplateSubcommandsListTechnicalNamesForNonInteractiveFlows()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
@@ -953,7 +956,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithoutTemplatePromptsWithSingleGenericEmptyTemplate()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string[]? promptedTemplateDescriptions = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -999,7 +1002,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplateOmitsDisabledLanguagesFromLanguagePrompt()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string[]? promptedLanguages = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1039,7 +1042,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplatePromptsForEnabledLanguages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string[]? promptedLanguages = null;
         string? scaffoldedLanguageId = null;
 
@@ -1101,7 +1104,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplateIgnoresConfiguredLanguage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), """
             {
               "language": "typescript/nodejs"
@@ -1158,7 +1161,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithExplicitLanguageAfterEmptyTemplateSubcommandCreatesTypeScriptAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? scaffoldedLanguageId = null;
 
         var services = CreateServiceCollection(workspace);
@@ -1183,6 +1186,114 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        var expectedSource = sourceOverride;
+
+        string? discoveryAspireSource = null;
+        string? discoveryFallbackSource = null;
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfig, _) =>
+            {
+                Assert.NotNull(nugetConfig);
+
+                var document = XDocument.Load(nugetConfig.FullName);
+                var sourceMappings = document.Root!
+                    .Element("packageSourceMapping")!
+                    .Elements("packageSource");
+                discoveryAspireSource = (string?)sourceMappings
+                    .Single(source => source
+                        .Elements("package")
+                        .Any(package => (string?)package.Attribute("pattern") == "Aspire*"))
+                    .Attribute("key");
+                discoveryFallbackSource = (string?)sourceMappings
+                    .Single(source => source
+                        .Elements("package")
+                        .Any(package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages))
+                    .Attribute("key");
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = expectedSource, Version = "9.2.0" }]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [
+                new PackageMapping("Aspire*", "https://channel.example/v3/index.json"),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(expectedSource, discoveryAspireSource);
+        Assert.Equal(expectedSource, discoveryFallbackSource);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
+    }
+
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndRelativeLocalSourceOverrideDiscoversTemplatesFromResolvedDirectory()
+    {
+        // A local directory passed to --source is enumerated directly instead of going through
+        // `dotnet package search`, which cannot see hierarchical local feeds. The relative path must
+        // still be resolved against the invocation directory before it is used or persisted.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedSource = Path.Combine(workspace.WorkspaceRoot.FullName, "relative-feed");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(expectedSource, "aspire.projecttemplates", "9.2.0"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [
+                new PackageMapping("Aspire*", "https://channel.example/v3/index.json"),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging --source relative-feed");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
+    }
+
     [Theory]
     [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
@@ -1191,8 +1302,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("rust", "experimentalPolyglot:rust", "apphost.rs")]
     public async Task NewCommandWithEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore(string language, string? featureFlag, string scaffoldFileName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
+        Directory.CreateDirectory(sourceOverride);
         string? capturedPackageSourceOverride = null;
         TestInteractionService? interactionService = null;
 
@@ -1222,7 +1334,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language {language} --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language {language} --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -1237,14 +1349,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
+        Directory.CreateDirectory(sourceOverride);
 
         var services = CreateServiceCollection(workspace);
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1258,7 +1371,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("https://example.invalid/v3/index.json#token")]
     public async Task NewCommandWithCredentialBearingHttpSourceFailsBeforeCreatingProject(string sourceOverride)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldingInvoked = false;
         TestInteractionService? interactionService = null;
 
@@ -1290,9 +1403,44 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithMissingLocalSourceFailsBeforeCreatingProject()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scaffoldingInvoked = false;
+        TestInteractionService? interactionService = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (_, _) =>
+            {
+                scaffoldingInvoked = true;
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source nuget.org");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var expectedSource = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.org");
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(scaffoldingInvoked);
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
+        Assert.NotNull(interactionService);
+        Assert.Contains(interactionService!.DisplayedErrors, error => error.Contains(expectedSource, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task NewCommandWithEmptyTemplateWithoutSourceOverrideDoesNotWarn()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestInteractionService? interactionService = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1324,7 +1472,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithExplicitJavaEmptyTemplateCreatesJavaAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? scaffoldedLanguageId = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1361,7 +1509,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithExplicitPythonEmptyTemplateCreatesPythonAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? scaffoldedLanguageId = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1397,7 +1545,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithExplicitCSharpEmptyTemplateCreatesCSharpAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
@@ -1411,9 +1559,47 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWaitsForBundleExtractionAfterCreatingAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var extractionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowExtraction = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            EnsureExtractedAsyncCallback = async cancellationToken =>
+            {
+                extractionStarted.SetResult();
+                await allowExtraction.Task.WaitAsync(cancellationToken);
+            }
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.BundleServiceFactory = _ => bundleService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld false --suppress-agent-init");
+        var invocationTask = result.InvokeAsync();
+
+        await extractionStarted.Task.DefaultTimeout();
+
+        var appHostCreated = File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs"));
+        var commandCompletedBeforeExtraction = invocationTask.IsCompleted;
+
+        allowExtraction.SetResult();
+        var exitCode = await invocationTask.DefaultTimeout();
+
+        Assert.True(appHostCreated);
+        Assert.False(commandCompletedBeforeExtraction);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
     public async Task NewCommandWithCSharpEmptyTemplateEmitsAppHostRunJsonAndAspireConfigJsonWithoutDuplicateProfiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
@@ -1447,7 +1633,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithCSharpEmptyTemplateAndLocalhostTldEmitsAppHostRunJsonWithDevLocalhostUrls()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreateServiceCollection(workspace);
         using var provider = services.BuildServiceProvider();
@@ -1493,7 +1679,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplateAndCSharpPromptsForLocalhostTldAndUsesConfirmation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localhostPrompted = false;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1552,7 +1738,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithTypeScriptEmptyTemplateUsesScaffolding()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldingInvoked = false;
 
         var services = CreateServiceCollection(workspace);
@@ -1578,7 +1764,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithTypeScriptEmptyTemplatePassesResolvedVersionAndChannelToScaffolding()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? scaffoldSdkVersion = null;
         string? scaffoldChannel = null;
 
@@ -1596,7 +1782,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
 
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
 
@@ -1627,7 +1813,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplateNormalizesDefaultOutputPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedTargetDirectory = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -1674,7 +1860,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithEmptyTemplateAndTypeScriptPromptsForLocalhostTldAndUsesConfirmation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scaffoldingInvoked = false;
         var localhostPrompted = false;
 
@@ -1751,7 +1937,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithTypeScriptStarterGeneratesSdkArtifacts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var buildAndGenerateCalled = false;
         string? channelSeenByProject = null;
@@ -1793,7 +1979,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1828,7 +2014,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithTypeScriptStarterReturnsFailedToBuildArtifactsWhenSdkGenerationFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService();
 
@@ -1868,7 +2054,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1891,9 +2077,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithTypeScriptStarterAndSourceOverridePersistsSourceAndPlumbsOverride()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
-
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
+        Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -1919,7 +2108,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1935,7 +2124,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source \"{sourceOverride}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1951,8 +2140,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWithDotNetTemplateAndSourceOverridePersistsSourceForLaterRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string sourceOverride = "https://proxy.example/v3/index.json";
 
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -1961,6 +2150,17 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var runner = CreateTestRunnerWithStandardPackages();
                 runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, cancellationToken) =>
                 {
+                    Assert.NotNull(nugetConfigFile);
+
+                    var document = XDocument.Load(nugetConfigFile.FullName);
+                    var installPackageSources = document.Root!
+                        .Element("packageSources")!
+                        .Elements("add")
+                        .Select(element => (string)element.Attribute("value")!)
+                        .ToArray();
+
+                    Assert.Equal([sourceOverride], installPackageSources);
+
                     return (0, version);
                 };
                 runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, cancellationToken) =>
@@ -1987,8 +2187,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         // The warning is only meaningful when the scaffold succeeded — surfacing it on a failed
         // restore would just add noise behind a more prominent error. Pin that the starter path
         // mirrors the empty-template path here.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
+        Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
 
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
@@ -2015,7 +2219,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2039,7 +2243,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractiveDoesNotPrompt()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             // Configure non-interactive host environment
@@ -2064,12 +2268,65 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --skill-locations none");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var agentsDir = Path.Combine(outputDir, ".agents", "skills");
+        Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
+    }
+
+    [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --skill-locations standard --skills {CommonAgentApplicators.AspireSkillName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
+
+        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
         string? availableTemplatesMessage = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = (sp) =>
@@ -2114,7 +2371,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractiveUsesDefaultNameWhenNotProvided()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedProjectName = null;
         string? capturedOutputPath = null;
 
@@ -2158,7 +2415,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractiveWithAllOptions_Succeeds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedProjectName = null;
         string? capturedOutputPath = null;
 
@@ -2204,7 +2461,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractiveWithAllOptions_SuppressAgentInitTrue_SkipsAgentInit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -2246,7 +2503,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         TestInteractionService? testInteractionService = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2294,7 +2551,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         TestInteractionService? testInteractionService = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2327,7 +2584,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandInExtensionModeAppendsProjectNameToOutputPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedOutputPath = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -2386,7 +2643,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandInExtensionModeDoesNotDoubleAppendProjectName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedOutputPath = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -2445,7 +2702,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandInConsoleModeDoesNotAppendProjectName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedOutputPath = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -2506,7 +2763,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         async Task AssertOutputPathAsync(Func<string, string> selectedPathFactory, Func<string, string> expectedPathFactory)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             string? capturedOutputPath = null;
 
             var services = CreateServiceCollection(workspace, options =>
@@ -2574,7 +2831,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string projectName = "MyFirstApp";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         DirectoryInfo? capturedTargetDirectory = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -2627,7 +2884,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string projectName = "MyFirstApp";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var selectedParent = workspace.CreateDirectory("source");
         File.WriteAllText(Path.Combine(selectedParent.FullName, "existing.txt"), "existing content");
 
@@ -2691,7 +2948,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string projectName = "MyFirstApp";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var selectedParent = workspace.CreateDirectory("source");
         DirectoryInfo? capturedTargetDirectory = null;
         var selectionPrompted = false;
@@ -2763,7 +3020,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string projectName = "MyFirstApp";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var selectedOutputPath = workspace.CreateDirectory("source");
         DirectoryInfo? capturedTargetDirectory = null;
         var selectionPrompted = false;
@@ -2832,7 +3089,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         const string projectName = "MyFirstApp";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         DirectoryInfo? capturedTargetDirectory = null;
 
         var services = CreateServiceCollection(workspace, options =>
@@ -2883,7 +3140,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractive_SuppressAgentInitTrue_SkipsAgentInit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = (sp) =>
@@ -2909,7 +3166,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractive_SuppressAgentInitFalse_RunsAgentInit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = (sp) =>
@@ -2937,7 +3194,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandNonInteractive_NoSuppressAgentInitOption_DefaultsToRunAgentInit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = (sp) =>
@@ -2965,7 +3222,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandRejectsExplicitOutputToNonEmptyDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a non-empty directory at the output path
         var existingDir = workspace.CreateDirectory("existing-output");
@@ -2996,7 +3253,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandAllowsExplicitOutputToEmptyDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create an empty directory at the output path
         var emptyDir = workspace.CreateDirectory("empty-output");
@@ -3014,7 +3271,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandDefaultOutputPathUsesUniqueProjectNameWhenDirectoryExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a non-empty directory matching the default project name (template name)
         var existingDir = workspace.CreateDirectory("aspire-starter");
@@ -3050,7 +3307,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandRejectsExplicitOutputWithInvalidPathCharacters()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         TestInteractionService? testInteractionService = null;
         var services = CreateServiceCollection(workspace, options =>
@@ -3078,7 +3335,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandCreatesProjectInCurrentDirectoryWithOutputDot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create an empty subdirectory to use as the CLI working directory.
         // Keep options.WorkingDirectory as the workspace root so test infra
@@ -3120,7 +3377,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void OutputPathValidatorRejectsPathWithInvalidCharacters()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var validator = OutputPathHelper.CreateOutputPathValidator(workspace.WorkspaceRoot.FullName);
 
         var invalidPath = "output\0path";
@@ -3133,7 +3390,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommandWhenChannelTemplateSearchFailsDisplaysFriendlyError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var interactionService = new TestInteractionService();
 
@@ -3149,7 +3406,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])

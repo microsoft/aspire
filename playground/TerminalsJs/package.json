@@ -1,0 +1,19 @@
+{
+  "name": "terminals-js",
+  "version": "1.0.0",
+  "description": "Aspire TypeScript AppHost demonstrating WithTerminal() on a node app.",
+  "main": "apphost.mts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "aspire run"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.0"
+  }
+}
