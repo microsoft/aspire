@@ -659,6 +659,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
         Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", firstLine, StringComparison.Ordinal);
         Assert.NotEqual("#:sdk Aspire.AppHost.Sdk@", firstLine);
+        Assert.Contains("#:property AspireUseCliBundle=true", appHostContent);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { execFileSync, spawn } from 'child_process';
 import * as path from 'path';
 
+import { removeDirectorySafely } from './testHelpers';
 const extensionRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(extensionRoot, '..');
 const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'e2e-download-cache-tests');
@@ -422,6 +423,36 @@ function withLockedDirectoryRemoval(directoryPath: string, failureCount: number,
     return attempts;
 }
 
+/**
+ * Drops a new file into `directoryPath` right after it is listed, reproducing the cleanup race
+ * where a Java language server or build daemon is still writing while the run root is torn down.
+ *
+ * Hooking the listing rather than racing a real writer keeps this deterministic - a timing-based
+ * version of this test would only reproduce the bug intermittently.
+ */
+function withLateWriterDuringRemoval(directoryPath: string, writeCount: number, body: () => void): number {
+    const nodeFs = require('fs') as typeof fs;
+    const realReaddirSync = nodeFs.readdirSync;
+    let writes = 0;
+
+    try {
+        nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+            const entries = (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+            if (target === directoryPath && writes < writeCount) {
+                nodeFs.writeFileSync(path.join(directoryPath, `late-writer-${writes++}.log`), 'written after listing');
+            }
+
+            return entries;
+        }) as typeof fs.readdirSync;
+
+        body();
+    } finally {
+        nodeFs.readdirSync = realReaddirSync;
+    }
+
+    return writes;
+}
+
 async function waitForPaths(pathsToCheck: string[], timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
 
@@ -582,7 +613,7 @@ suite('E2E download cache', () => {
         while (createdTestRoots.length > 0) {
             const root = createdTestRoots.pop();
             if (root) {
-                fs.rmSync(root, { recursive: true, force: true });
+                removeDirectorySafely(root);
             }
         }
     });
@@ -2093,6 +2124,39 @@ suite('E2E download cache', () => {
         assert.strictEqual(attempts, 3);
     });
 
+    test('re-sweeps a directory that gains an entry between listing and removal', () => {
+        const root = createTestRoot('link-safe-removal-late-writer');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A retry of the same rmdir can never clear this: the entry that appeared is still on disk,
+        // so only a fresh listing removes it. maxRetries is 0 here, matching Linux CI, to show the
+        // recovery comes from re-sweeping rather than from the lock retry budget.
+        const writes = withLateWriterDuringRemoval(refilled, 1, () => {
+            cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 });
+        });
+
+        assert.strictEqual(writes, 1);
+        assert.strictEqual(fs.existsSync(refilled), false);
+    });
+
+    test('gives up on a directory that keeps being refilled during removal', () => {
+        const root = createTestRoot('link-safe-removal-sweep-budget');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A process that never stops writing has to surface as a cleanup failure rather than hang
+        // the shard, so the sweeps are bounded.
+        const writes = withLateWriterDuringRemoval(refilled, Number.POSITIVE_INFINITY, () => {
+            assert.throws(
+                () => cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 }),
+                /ENOTEMPTY/);
+        });
+
+        assert.strictEqual(writes, 6);
+        assert.ok(fs.existsSync(refilled));
+    });
+
     test('replaces stale projected entries so a reused storage directory tracks the cache', () => {        const root = createTestRoot('replaces-stale-projection');
         const result = cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
             populate(stagingDirectory) {
@@ -2130,7 +2194,55 @@ suite('E2E download cache', () => {
         assert.strictEqual(fs.readFileSync(projectedDriver, 'utf8'), 'run-local driver');
     });
 
-    test('accepts the internal Electron symlink that ExTester creates in real macOS bundles', () => {
+    test('accepts the Code executable in VS Code 1.131 macOS bundles when ExTester supports it', () => {
+        const root = createTestRoot('darwin-code-executable');
+        const bundle = 'Visual Studio Code.app';
+        const extesterVersion = '8.24.0';
+
+        const result = cache.ensureDownloadCache({
+            ...getDefaultCacheOptions(path.join(root, 'cache'), {
+                platform: 'darwin',
+                architecture: 'arm64',
+                populate(stagingDirectory) {
+                    writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode 1.131 binary');
+                    writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+                },
+            }),
+            extesterVersion,
+        });
+
+        assert.strictEqual(result.cacheHit, false);
+        assert.strictEqual(result.manifest.vscodeDirectory, bundle);
+
+        const reused = cache.ensureDownloadCache({
+            ...getDefaultCacheOptions(path.join(root, 'cache'), {
+                platform: 'darwin',
+                architecture: 'arm64',
+                populate() {
+                    throw new Error('populate must not run when the cached bundle is valid.');
+                },
+            }),
+            extesterVersion,
+        });
+
+        assert.strictEqual(reused.cacheHit, true);
+    });
+
+    test('rejects Code-only macOS bundles when ExTester still requires Electron', () => {
+        const root = createTestRoot('darwin-code-with-legacy-extester');
+        const bundle = 'Visual Studio Code.app';
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate(stagingDirectory) {
+                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode binary');
+                writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+            },
+        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Electron'/);
+    });
+
+    test('accepts a legacy internal Electron symlink in older macOS bundles', () => {
         const root = createTestRoot('darwin-internal-electron-symlink');
         const bundle = 'Visual Studio Code.app';
 
@@ -2138,8 +2250,8 @@ suite('E2E download cache', () => {
             platform: 'darwin',
             architecture: 'arm64',
             populate(stagingDirectory) {
-                // Mirror the real downloaded layout: ExTester unpacks the bundle with the actual
-                // Mach-O binary named `Code` and then links `Electron -> Code` beside it.
+                // Mirror an older downloaded layout with the actual Mach-O binary named `Code`
+                // and an `Electron -> Code` compatibility link beside it.
                 writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'real vscode binary');
                 fs.symlinkSync('Code', path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Electron'));
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');

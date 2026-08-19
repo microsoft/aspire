@@ -1,0 +1,26 @@
+[package]
+name = "rust-apphost-playground"
+version = "0.1.0"
+edition = "2021"
+
+# The binary has to be called `apphost` because the Rust runtime spec launches the AppHost with
+# `cargo run --bin apphost --` (see AppHostBinaryName in RustLanguageSupport). Scaffolded AppHosts
+# get that name from the template, so the playground has to match it to be launchable the same way.
+[[bin]]
+name = "apphost"
+path = "apphost.rs"
+
+# Only what the generated SDK under .aspire/modules needs. The AppHost itself does no telemetry
+# export; the sample app under ./app owns its OTLP/tonic dependencies.
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+lazy_static = "1.4"
+
+# The generated SDK under .aspire/modules is large, and incremental compilation splits it into
+# thousands of codegen units. On macOS debug info stays in those object files, because
+# split-debuginfo defaults to "unpacked", so LLDB has to stitch a debug map across all of them
+# and fails to resolve any type whose definition landed in a different unit. Compiling the
+# AppHost in one pass keeps the debugger working and is not measurably slower.
+[profile.dev]
+incremental = false

@@ -751,8 +751,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		}
 
 		progress, err := interactionService.PromptProgress("Completing **work**...", &aspire.PromptProgressOptions{
-			Title: aspire.StringPtr("Progress"),
 			Options: &aspire.InteractionProgressOptions{
+				Title:                 aspire.StringPtr("Progress"),
 				PrimaryButtonText:     aspire.StringPtr("Cancel"),
 				EnableMessageMarkdown: aspire.BoolPtr(true),
 				Work: func(progressContext aspire.ProgressContext) {

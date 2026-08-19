@@ -37,7 +37,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">The namespace name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
     public HelmChartOptions WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
@@ -53,7 +53,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">A parameter resource builder for the namespace value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
     public HelmChartOptions WithNamespace(IResourceBuilder<ParameterResource> @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -84,7 +84,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">The release name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
     public HelmChartOptions WithReleaseName(string releaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseName);
@@ -100,7 +100,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">A parameter resource builder for the release name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
     public HelmChartOptions WithReleaseName(IResourceBuilder<ParameterResource> releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -136,7 +136,7 @@ public sealed partial class HelmChartOptions
     /// semantic version. Leading zeros are not allowed.
     /// </param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
     public HelmChartOptions WithChartVersion(string version)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
@@ -152,7 +152,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="version">A parameter resource builder for the chart version value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
     public HelmChartOptions WithChartVersion(IResourceBuilder<ParameterResource> version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -183,7 +183,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="name">The chart name. Must match Helm's chart-name format (alphanumeric, <c>-</c>, <c>_</c>, or <c>.</c>).</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
     public HelmChartOptions WithChartName(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -199,7 +199,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="name">A parameter resource builder for the chart name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
     public HelmChartOptions WithChartName(IResourceBuilder<ParameterResource> name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -230,7 +230,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="description">The chart description.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
     public HelmChartOptions WithChartDescription(string description)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
@@ -246,7 +246,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="description">A parameter resource builder for the chart description value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
     public HelmChartOptions WithChartDescription(IResourceBuilder<ParameterResource> description)
     {
         ArgumentNullException.ThrowIfNull(description);

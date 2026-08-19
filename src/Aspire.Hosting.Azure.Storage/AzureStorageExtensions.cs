@@ -392,10 +392,14 @@ public static class AzureStorageExtensions
         {
             // If the name is the default name, use the GetBlobService method instead so we keep
             // track of the default resource.
-            return GetBlobService(builder);
+            var defaultService = GetBlobService(builder);
+            builder.Resource.ImplicitBlobService ??= defaultService;
+            return defaultService;
         }
 
-        return CreateBlobService(builder, name);
+        var service = CreateBlobService(builder, name);
+        builder.Resource.ImplicitBlobService ??= service;
+        return service;
     }
 
     /// <summary>
@@ -417,10 +421,14 @@ public static class AzureStorageExtensions
         {
             // If the name is the default name, use the GetDataLakeService method instead so we keep
             // track of the default resource.
-            return GetDataLakeService(builder);
+            var defaultService = GetDataLakeService(builder);
+            builder.Resource.ImplicitDataLakeService ??= defaultService;
+            return defaultService;
         }
 
-        return CreateDataLakeService(builder, name);
+        var service = CreateDataLakeService(builder, name);
+        builder.Resource.ImplicitDataLakeService ??= service;
+        return service;
     }
 
     /// <summary>
@@ -481,7 +489,8 @@ public static class AzureStorageExtensions
 
         blobContainerName ??= name;
 
-        AzureBlobStorageContainerResource resource = new(name, blobContainerName, GetBlobService(builder).Resource);
+        var parentBuilder = builder.Resource.ImplicitBlobService ??= GetBlobService(builder);
+        AzureBlobStorageContainerResource resource = new(name, blobContainerName, parentBuilder.Resource);
         builder.Resource.BlobContainers.Add(resource);
 
         string? connectionString = null;
@@ -523,7 +532,8 @@ public static class AzureStorageExtensions
 
         dataLakeFileSystemName ??= name;
 
-        AzureDataLakeStorageFileSystemResource resource = new(name, dataLakeFileSystemName, GetDataLakeService(builder).Resource);
+        var parentBuilder = builder.Resource.ImplicitDataLakeService ??= GetDataLakeService(builder);
+        AzureDataLakeStorageFileSystemResource resource = new(name, dataLakeFileSystemName, parentBuilder.Resource);
         builder.Resource.DataLakeFileSystems.Add(resource);
 
         return builder.ApplicationBuilder
@@ -602,10 +612,14 @@ public static class AzureStorageExtensions
         {
             // If the name is the default name, use the GetQueueService method instead so we keep
             // track of the default resource.
-            return GetQueueService(builder);
+            var defaultService = GetQueueService(builder);
+            builder.Resource.ImplicitQueueService ??= defaultService;
+            return defaultService;
         }
 
-        return CreateQueueService(builder, name);
+        var service = CreateQueueService(builder, name);
+        builder.Resource.ImplicitQueueService ??= service;
+        return service;
     }
 
     /// <summary>
@@ -639,7 +653,8 @@ public static class AzureStorageExtensions
 
         queueName ??= name;
 
-        AzureQueueStorageQueueResource resource = new(name, queueName, builder.GetQueueService().Resource);
+        var parentBuilder = builder.Resource.ImplicitQueueService ??= builder.GetQueueService();
+        AzureQueueStorageQueueResource resource = new(name, queueName, parentBuilder.Resource);
         builder.Resource.Queues.Add(resource);
 
         string? connectionString = null;

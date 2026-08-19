@@ -21,6 +21,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public partial class KubernetesResource(string name, IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>
 {
+    private const long DefaultPersistentVolumeFsGroup = 2000;
+    private const string DefaultPersistentVolumeFsGroupChangePolicy = "OnRootMismatch";
+
     /// <inheritdoc/>
     public KubernetesEnvironmentResource Parent => kubernetesEnvironmentResource;
 
@@ -164,18 +167,31 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void CreateApplication()
     {
+        var hasPersistentVolumeBinding = resource.HasAnnotationOfType<KubernetesPersistentVolumeBindingAnnotation>();
+
         // Promote to a StatefulSet when the workload is bound to a first-class persistent
         // volume — Kubernetes requires stable identity and ordered rollout for pods that
         // share named PVCs. The historical IResourceWithConnectionString rule remains so
         // existing integrations that imply state continue to render as StatefulSets.
-        if (resource is IResourceWithConnectionString ||
-            resource.HasAnnotationOfType<KubernetesPersistentVolumeBindingAnnotation>())
+        if (resource is IResourceWithConnectionString || hasPersistentVolumeBinding)
         {
             Workload = resource.ToStatefulSet(this);
-            return;
+        }
+        else
+        {
+            Workload = resource.ToDeployment(this);
         }
 
-        Workload = resource.ToDeployment(this);
+        if (hasPersistentVolumeBinding)
+        {
+            // fsGroup is a supplemental group, not the image's primary GID. A stable
+            // publisher-owned value lets non-root images access supported volumes without
+            // coupling the manifest to image-specific identities. Kubernetes customization
+            // callbacks run after this default is applied and can replace or remove it.
+            var securityContext = Workload.PodTemplate.Spec.SecurityContext ??= new();
+            securityContext.FsGroup ??= DefaultPersistentVolumeFsGroup;
+            securityContext.FsGroupChangePolicy ??= DefaultPersistentVolumeFsGroupChangePolicy;
+        }
     }
 
     internal string GetContainerImageName(IResource resourceInstance)

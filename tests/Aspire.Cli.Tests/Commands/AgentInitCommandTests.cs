@@ -865,7 +865,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                     new SkillBundleFile
                     {
                         RelativePath = "SKILL.md",
-                        Sha256 = ComputeSha256(skillPath)
+                        Sha512 = ComputeSha512(skillPath)
                     }
                 ]
             });
@@ -883,14 +883,17 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
 
         var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
-        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, "skill-manifest.json");
+        await File.WriteAllTextAsync(manifestPath, manifestJson);
+        return await new AspireSkillsBundleProvider().LoadAsync(
+            bundleDirectory,
+            CancellationToken.None);
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
     [Fact]

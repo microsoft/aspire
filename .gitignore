@@ -140,9 +140,14 @@ target/
 dependency-reduced-pom.xml
 
 # Java AppHost build artifacts
-playground/**/.java-build/
+#
+# .java-build is where the CLI compiles a single-file Java AppHost before launching it with
+# `java -cp .java-build AppHost`, so it appears next to any Java AppHost - the playgrounds, the
+# polyglot test fixtures, and the scratch workspace the extension E2E runner creates under
+# extension/. Scoping the rule to known directories left the others untracked-but-visible, which is
+# how build output ends up in a commit.
+.java-build/
 playground/**/*.class
-tests/PolyglotAppHosts/**/.java-build/
 tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Ignore cache created with the Angular CLI.

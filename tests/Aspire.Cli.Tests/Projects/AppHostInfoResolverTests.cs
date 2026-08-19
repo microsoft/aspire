@@ -168,15 +168,17 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
+    public async Task GetAppHostInfoAsync_RequestsOnlyEvaluationSafeTarget()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
+        string[]? capturedProperties = null;
         string[]? capturedTargets = null;
         var runner = new TestDotNetCliRunner
         {
-            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, properties, targets, _, _) =>
             {
+                capturedProperties = properties;
                 capturedTargets = targets;
                 return (0, CreateAppHostInfoJson());
             },
@@ -189,8 +191,12 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         // The direct-launch path reads RunCommand/RunArguments/RunWorkingDirectory, which the
         // SDK only populates after ComputeRunArguments has run. The resolver must request that
         // target on its single MSBuild probe so the cached run metadata is correct.
+        Assert.NotNull(capturedProperties);
+        Assert.Equal(
+            ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            capturedProperties);
         Assert.NotNull(capturedTargets);
-        Assert.Contains("ComputeRunArguments", capturedTargets);
+        Assert.Equal(["ComputeRunArguments"], capturedTargets);
     }
 
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)

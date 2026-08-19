@@ -4,8 +4,10 @@ import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { VSBrowser } from './extester';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
+import { reloadWindow } from './vscode';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -85,6 +87,31 @@ export async function executeE2eControlCommand(
 ): Promise<AspireExtensionE2EControlStatus> {
     const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
+}
+
+export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+    const controlFilePath = getControlFilePath();
+    if (controlFilePath) {
+        fs.rmSync(controlFilePath, { force: true });
+    }
+
+    await reloadWindow();
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
+}
+
+export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolders', folders }, { timeoutMs: 30000 });
+    return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
+export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
+    await setWorkspaceFoldersForE2E([{ folderPath: getWorkspaceRoot() }]);
 }
 
 export async function snapshotClipboardForE2E(): Promise<void> {
@@ -228,6 +255,55 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     });
 }
 
+export function writeTokenlessStableCliWrapper(invocationLogPath: string): string {
+    removePath(invocationLogPath, { force: true });
+    if (process.platform !== 'win32') {
+        return writeTokenlessStablePosixCliWrapper(invocationLogPath);
+    }
+
+    return writeCliWrapper('aspire-tokenless-stable-13-2', {
+        configInfoJson: createConfigInfo(),
+        invocationLogPath,
+        versionOutput: '13.2.0',
+    }, path.dirname(getCliPath()));
+}
+
+function writeTokenlessStablePosixCliWrapper(invocationLogPath: string): string {
+    // AppHost targets validate that AspireCliPath belongs to a complete CLI bundle. Keep this
+    // capability/version shim beside the isolated real CLI so the configured path retains that
+    // bundle identity while the wrapper still controls the probe responses.
+    const wrapperDirectory = path.dirname(getCliPath());
+    const wrapperPath = path.join(wrapperDirectory, 'aspire-tokenless-stable-13-2');
+    const logInvocationScript = `require('fs').appendFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)) + '\\n')`;
+    fs.mkdirSync(wrapperDirectory, { recursive: true });
+
+    // The F5 argv assertion is tied to the configured CLI path. After handling the simulated
+    // version and capability probes, replace the shell with the real CLI while preserving that
+    // configured path as argv[0], so the long-lived process has the same identity as a native CLI.
+    fs.writeFileSync(wrapperPath, [
+        '#!/usr/bin/env bash',
+        `${quotePosixShellArgument(process.execPath)} -e ${quotePosixShellArgument(logInvocationScript)} ${quotePosixShellArgument(invocationLogPath)} "$@"`,
+        'if [ "$1" = "--version" ]; then',
+        '  echo "13.2.0"',
+        '  exit 0',
+        'fi',
+        'if [ "$1" = "config" ] && [ "$2" = "info" ]; then',
+        `  printf "%s\\n" ${quotePosixShellArgument(JSON.stringify(createConfigInfo()))}`,
+        '  exit 0',
+        'fi',
+        'for argument in "$@"; do',
+        '  if [ "$argument" = "--include-disabled-commands" ]; then',
+        '    echo "simulated old CLI does not support --include-disabled-commands" >&2',
+        '    exit 123',
+        '  fi',
+        'done',
+        `exec -a "$0" ${quotePosixShellArgument(getCliPath())} "$@"`,
+        '',
+    ].join('\n'), { mode: 0o755 });
+
+    return wrapperPath;
+}
+
 export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayMs = 1_500): string {
     return writeCliWrapper('aspire-streaming-discovery', {
         configInfoJson: createConfigInfo([lsJsonStreamCapability]),
@@ -240,6 +316,47 @@ export function writeStreamingDiscoveryCliWrapper(delayMs = 5_000, initialDelayM
         streamedLsDelayMs: delayMs,
         streamedLsInitialDelayMs: initialDelayMs,
     });
+}
+
+export function writeGatedStreamingDiscoveryCliWrapper(psSnapshotAppHostPath: string, psSnapshotAppHostPid: number): {
+    cliPath: string;
+    waitForPsSnapshotRequest: () => Promise<void>;
+    waitForLsCandidateRequest: () => Promise<void>;
+    releasePsSnapshot: () => void;
+    releaseLsCandidate: () => void;
+} {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-streaming-discovery');
+    const psSnapshotRequestFilePath = path.join(gateDirectory, 'ps-snapshot-request');
+    const lsCandidateRequestFilePath = path.join(gateDirectory, 'ls-candidate-request');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    const lsCandidateReleaseFilePath = path.join(gateDirectory, 'release-ls-candidate');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper('aspire-gated-streaming-discovery', {
+        configInfoJson: createConfigInfo([lsJsonStreamCapability]),
+        streamedLsCandidate: {
+            path: getPrimaryAppHostProjectPath(),
+            language: 'csharp',
+            status: 'buildable',
+            selected: true,
+        },
+        streamedLsDelayMs: 5_000,
+        streamedLsRequestFilePath: lsCandidateRequestFilePath,
+        streamedLsReleaseFilePath: lsCandidateReleaseFilePath,
+        psSnapshotRequestFilePath,
+        psSnapshotReleaseFilePath,
+        psSnapshotAppHostPath,
+        psSnapshotAppHostPid,
+    });
+
+    return {
+        cliPath,
+        waitForPsSnapshotRequest: () => waitForPath(psSnapshotRequestFilePath, 30_000),
+        waitForLsCandidateRequest: () => waitForPath(lsCandidateRequestFilePath, 30_000),
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+        releaseLsCandidate: () => writeFileWithRetry(lsCandidateReleaseFilePath, ''),
+    };
 }
 
 export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initialDelayMs = 500): { cliPath: string; invocationLogPath: string } {
@@ -269,6 +386,19 @@ export function getCliWrapperInvocationCount(invocationLogPath: string): number 
         .split(/\r?\n/)
         .filter(line => line.length > 0)
         .length;
+}
+
+export async function waitForCliWrapperInvocation(invocationLogPath: string, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (getCliWrapperInvocationCount(invocationLogPath) > 0) {
+            return;
+        }
+
+        await delay(500);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for an Aspire CLI wrapper invocation in ${invocationLogPath}.`);
 }
 
 export function touchPrimaryAppHostProject(): void {
@@ -656,6 +786,19 @@ function getRunningAppHostFromState(appHostPath: string) {
         : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
 }
 
+export function isProcessAlive(pid: number): boolean {
+    return isProcessRunning(pid);
+}
+
+export async function waitForKnownProcessExit(pid: number, description: string, timeoutMs: number): Promise<void> {
+    try {
+        await waitForProcessExit(pid, timeoutMs);
+    }
+    catch (error) {
+        throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description} ${pid} to exit. Last error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
@@ -736,21 +879,49 @@ function writeCliWrapper(
         streamedLsCandidate?: unknown;
         streamedLsDelayMs?: number;
         streamedLsInitialDelayMs?: number;
+        streamedLsRequestFilePath?: string;
+        streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
+        psSnapshotRequestFilePath?: string;
+        psSnapshotReleaseFilePath?: string;
+        psSnapshotAppHostPath?: string;
+        psSnapshotAppHostPid?: number;
+        versionOutput?: string;
     },
+    wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers'),
 ): string {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
 
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
     fs.writeFileSync(scriptPath, `#!/usr/bin/env node
 const { spawnSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
-${options.invocationLogPath === undefined ? '' : `require('fs').appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
+${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
+function waitForReleaseFile(filePath, description) {
+  const deadline = Date.now() + 120000;
+  while (!fs.existsSync(filePath)) {
+    if (Date.now() >= deadline) {
+      console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
+      process.exit(124);
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+}
+
+${options.versionOutput === undefined
+        ? ''
+        : `if (args.length === 1 && args[0] === '--version') {
+  console.log(${JSON.stringify(options.versionOutput)});
+  process.exit(0);
+}
+
+`}
 if (args.includes('--include-disabled-commands')) {
   console.error('simulated old CLI does not support --include-disabled-commands');
   process.exit(123);
@@ -767,20 +938,82 @@ ${options.configInfoJson === undefined
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
-${options.streamedLsInvocationLogPath === undefined ? '' : `  require('fs').appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
+${options.streamedLsInvocationLogPath === undefined ? '' : `  fs.appendFileSync(${JSON.stringify(options.streamedLsInvocationLogPath)}, 'ls\\n');`}
   if (!args.includes('--format') || args[args.indexOf('--format') + 1] !== 'json' || !args.includes('--stream')) {
     console.error('Expected AppHost discovery to use ls --format json --stream.');
     process.exit(126);
   }
 
+${options.streamedLsRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.streamedLsRequestFilePath)}, '');`}
+${options.streamedLsReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.streamedLsReleaseFilePath)}, 'streamed ls candidate');`}
   setTimeout(() => {
     console.log(${JSON.stringify(JSON.stringify(options.streamedLsCandidate))});
     setTimeout(() => process.exit(0), ${options.streamedLsDelayMs ?? 5_000});
   }, ${options.streamedLsInitialDelayMs ?? 0});
 }
 else {`}
-if (args[0] === 'ps' && !args.includes('--follow')) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+if (args[0] === 'ps') {
+${options.psSnapshotAppHostPath === undefined || options.psSnapshotAppHostPid === undefined
+        ? ''
+        : `  if (args.includes('--follow')) {
+    // Keep the follow process alive without emitting a real-PID update that could overwrite the
+    // marked authoritative snapshot. Restoring the E2E CLI path terminates this process.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_147_483_647);
+    process.exit(0);
+  }
+`}
+  if (!args.includes('--follow')) {
+${options.psSnapshotRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.psSnapshotRequestFilePath)}, '');`}
+${options.psSnapshotReleaseFilePath === undefined ? '' : `  waitForReleaseFile(${JSON.stringify(options.psSnapshotReleaseFilePath)}, 'ps snapshot');`}
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${options.psSnapshotDelayMs ?? 0});
+${options.psSnapshotAppHostPath === undefined || options.psSnapshotAppHostPid === undefined
+        ? ''
+        : `    const result = spawnSync(realCli, args, {
+      cwd: process.cwd(),
+      env: process.env,
+      encoding: 'utf8',
+      shell: false,
+    });
+    if (result.error) {
+      console.error(result.error.stack || result.error.message);
+      process.exit(1);
+    }
+    if (result.stderr) {
+      fs.writeSync(process.stderr.fd, result.stderr);
+    }
+    if ((result.status ?? (result.signal ? 1 : 0)) !== 0) {
+      if (result.stdout) {
+        fs.writeSync(process.stdout.fd, result.stdout);
+      }
+      process.exit(result.status ?? 1);
+    }
+
+    try {
+      // aspire ps --format json emits one AppHost object or an array:
+      //   [{ "appHostPath": "/workspace/AppHost.csproj", "appHostPid": 123, ... }]
+      const payload = JSON.parse(result.stdout);
+      const appHosts = Array.isArray(payload) ? payload : [payload];
+      const normalizeAppHostPath = value => process.platform === 'win32'
+        ? path.normalize(value).toLowerCase()
+        : path.normalize(value);
+      const targetPath = normalizeAppHostPath(${JSON.stringify(options.psSnapshotAppHostPath)});
+      const appHost = appHosts.find(candidate =>
+        typeof candidate?.appHostPath === 'string'
+        && normalizeAppHostPath(candidate.appHostPath) === targetPath);
+      if (!appHost) {
+        console.error(\`The gated ps snapshot did not contain AppHost \${targetPath}: \${result.stdout}\`);
+        process.exit(125);
+      }
+      appHost.appHostPid = ${options.psSnapshotAppHostPid};
+      fs.writeSync(process.stdout.fd, JSON.stringify(payload) + '\\n');
+      process.exit(0);
+    }
+    catch (error) {
+      console.error(\`Failed to mark the gated ps snapshot: \${error instanceof Error ? error.stack || error.message : String(error)}\`);
+      process.exit(125);
+    }
+`}
+  }
 }
 
 const result = spawnSync(realCli, args, {
@@ -811,6 +1044,10 @@ ${options.streamedLsCandidate === undefined ? '' : '}'}
     fs.chmodSync(wrapperPath, 0o755);
 
     return wrapperPath;
+}
+
+function quotePosixShellArgument(value: string): string {
+    return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function getPackageSourceArgs(): string[] {
@@ -872,7 +1109,7 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function removePath(targetPath: string, options: fs.RmOptions): void {
+export function removePath(targetPath: string, options: fs.RmOptions): void {
     const maxAttempts = process.platform === 'win32' ? 40 : 1;
     for (let attempt = 1; ; attempt++) {
         try {

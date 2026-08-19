@@ -611,8 +611,8 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
 
         progress = interaction_service.prompt_progress(
             "Completing **work**...",
-            title="Progress",
             options={
+                "Title": "Progress",
                 "PrimaryButtonText": "Cancel",
                 "EnableMessageMarkdown": True,
                 "Work": complete_progress_work,

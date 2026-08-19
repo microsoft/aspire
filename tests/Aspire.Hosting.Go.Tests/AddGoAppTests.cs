@@ -538,8 +538,11 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithVSCodeDebugging_RemovesGoToolArguments()
+    public async Task WithVSCodeDebugging_KeepsGoToolArgumentsInTheAppModel()
     {
+        // The `go run [build flags] <pkg>` prefix is declared as launch tool arguments, so it stays part of the
+        // resource's command line even during a debug session. Withholding it from the launched program is a
+        // DCP-level concern (see DcpExecutorTests), which keeps the app model and the dashboard accurate.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
@@ -566,8 +569,42 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
         Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("-race", arg),
+            arg => Assert.Equal("-tags=integration", arg),
+            arg => Assert.Equal("-ldflags=-X main.version=1.0.0", arg),
+            arg => Assert.Equal("-gcflags=all=-N -l", arg),
+            arg => Assert.Equal("./cmd/server", arg),
             arg => Assert.Equal("--config", arg),
             arg => Assert.Equal("prod.yaml", arg));
+
+        // The "go" launch configuration owns that prefix, which is what makes DCP withhold it from the debugger.
+        var debugAnnotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
+        Assert.True(app.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
+    }
+
+    [Fact]
+    public async Task WithVSCodeDebugging_GoToolArgumentsLeadTheCommandLineRegardlessOfCallOrder()
+    {
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the tool prefix used to be
+        // removed by an ordinary WithArgs callback, which silently no-opped when it ran before the callback that
+        // added the prefix. Arguments added by the user must always land after the prefix, whenever they are added.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+
+        var app = builder.AddGoApp("api", sourceDir.FullName, packagePath: "./cmd/server")
+            .WithArgs("--login", "user");
+
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("./cmd/server", arg),
+            arg => Assert.Equal("--login", arg),
+            arg => Assert.Equal("user", arg));
     }
 
     [Fact]
@@ -1151,7 +1188,8 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "go");
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug, CancellationToken.None);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

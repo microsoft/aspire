@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -18,6 +19,7 @@ namespace Aspire.Cli.Commands;
 internal abstract class IntegrationDiscoveryCommand : BaseCommand
 {
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
+    private readonly IFeatures _features;
     private readonly OptionWithLegacy<FileInfo?> _appHostOption = new("--apphost", "--project", AddCommandStrings.IntegrationSearchAppHostOptionDescription);
     private readonly Option<OutputFormat> _formatOption = new("--format")
     {
@@ -36,6 +38,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         : base(name, description, services)
     {
         _integrationPackageSearchService = integrationPackageSearchService;
+        _features = services.Features;
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
@@ -64,7 +67,15 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             // Match `aspire add`: a non-C# (polyglot) AppHost can only consume integrations with ATS
             // export coverage (the `polyglot` NuGet tag), so list/search hide the rest unless --all is
             // passed. The language is only known when an AppHost was resolved; otherwise show everything.
-            var applyPolyglotFilter = languageId is not null && languageId != KnownLanguageId.CSharp && !includeAllIntegrations;
+            //
+            // The filter is opt-in and off by default for the same reason as `aspire add`: no remote feed
+            // answers a `tags:polyglot` search usefully (see PackageChannel.PolyglotTagSearchTerm), so the
+            // allow-list comes back empty and the filter fails closed, hiding every integration.
+            // See https://github.com/microsoft/aspire/issues/19161.
+            var applyPolyglotFilter = _features.IsFeatureEnabled(KnownFeatures.PolyglotIntegrationFilterEnabled, false)
+                && languageId is not null
+                && languageId != KnownLanguageId.CSharp
+                && !includeAllIntegrations;
 
             (NuGetPackage Package, PackageChannel Channel)[] packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;

@@ -8,6 +8,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -224,7 +225,11 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return [];
             }
 
-            var result = JsonSerializer.Deserialize(output, BundleSearchJsonContext.Default.BundleSearchResult);
+            // The aspire-managed helper writes the search result as JSON to stdout, but a NuGet credential
+            // provider can write diagnostics before or after that payload. Extract exactly one complete root object
+            // with the expected bundle-search shape so provider diagnostics cannot be deserialized as the result.
+            // See https://github.com/microsoft/aspire/issues/19339.
+            var result = JsonSerializer.Deserialize(PackageUpdateHelpers.ExtractJsonPayload(output, IsBundleSearchPayload), BundleSearchJsonContext.Default.BundleSearchResult);
             if (result?.Packages is null)
             {
                 return [];
@@ -261,6 +266,15 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError(ex, "Failed to parse search results");
             throw new NuGetPackageCacheException(ErrorStrings.FailedToParsePackageSearchResults);
         }
+    }
+
+    private static bool IsBundleSearchPayload(JsonElement root)
+    {
+        return root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("packages", out var packages) &&
+            packages.ValueKind == JsonValueKind.Array &&
+            root.TryGetProperty("totalHits", out var totalHits) &&
+            totalHits.ValueKind == JsonValueKind.Number;
     }
 
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)

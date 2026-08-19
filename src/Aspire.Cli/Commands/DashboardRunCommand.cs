@@ -50,6 +50,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         Description = DashboardCommandStrings.OtlpHttpUrlOptionDescription
     };
 
+    // This option explicitly opts into unsecured endpoints. See the security considerations at
+    // https://aspire.dev/dashboard/security-considerations/ before enabling it outside local development.
+    // When the corresponding endpoints are enabled, the dashboard logs warnings and displays a warning
+    // in the UI to inform users about the risks of anonymous access.
     private static readonly Option<bool> s_allowAnonymousOption = new("--allow-anonymous")
     {
         Description = DashboardCommandStrings.AllowAnonymousOptionDescription

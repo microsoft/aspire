@@ -20,8 +20,7 @@ public class ChartFiltersTests : DashboardTestContext
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
-        dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
-        dimensionFilter.SelectedValues.Add(dimensionFilter.Values[1]);
+        dimensionFilter.SetSelectedValues(dimensionFilter.Values);
 
         Assert.True(dimensionFilter.AreAllValuesSelected);
 
@@ -36,7 +35,7 @@ public class ChartFiltersTests : DashboardTestContext
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
-        dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[0]]);
 
         Assert.Null(dimensionFilter.AreAllValuesSelected);
 
@@ -52,7 +51,7 @@ public class ChartFiltersTests : DashboardTestContext
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
-        dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[0]]);
 
         dimensionFilter.AreAllValuesSelected = true;
 
@@ -61,21 +60,21 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
-    public void OnTagSelectionChanged_RemovesValue_LeavesOthersSelected()
+    public void OnTagSelectionChanged_ReplacesSnapshotAndRemovesValue()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
         var getValue = new DimensionValueViewModel { Text = "GET", Value = "GET", };
         var postValue = new DimensionValueViewModel { Text = "POST", Value = "POST", };
         dimensionFilter.Values.Add(getValue);
         dimensionFilter.Values.Add(postValue);
-        dimensionFilter.SelectedValues.Add(getValue);
-        dimensionFilter.SelectedValues.Add(postValue);
+        dimensionFilter.SetSelectedValues([getValue, postValue]);
+        var selectedValuesSnapshot = dimensionFilter.SelectedValues;
 
         dimensionFilter.OnTagSelectionChanged(getValue, isChecked: false);
 
         Assert.Single(dimensionFilter.SelectedValues);
         Assert.Contains(postValue, dimensionFilter.SelectedValues);
-        Assert.DoesNotContain(getValue, dimensionFilter.SelectedValues);
+        Assert.True(selectedValuesSnapshot.SetEquals([getValue, postValue]));
     }
 
     [Fact]
@@ -93,23 +92,61 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_FilterValueTags_AreKeyboardAccessible()
+    public void Render_FilterValueTags_UseNativeButtons()
     {
         SetupChartFilters();
         var dimensionFilter = CreateDimensionFilter();
-        var changed = false;
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values.Single(v => v.Text == "POST")]);
 
-        var cut = RenderChartFilters(dimensionFilter, _ => changed = true);
+        var cut = RenderChartFilters(dimensionFilter);
         var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
 
-        Assert.Equal("button", getTag.GetAttribute("role"));
-        Assert.Equal("0", getTag.GetAttribute("tabindex"));
+        Assert.Equal("BUTTON", getTag.TagName);
+        Assert.Equal("button", getTag.GetAttribute("type"));
+    }
 
-        getTag.KeyDown(new KeyboardEventArgs { Key = "Enter" });
+    [Fact]
+    public void Click_FilterValueTag_SelectsOnlyClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values.Single(v => v.Text == "POST")]);
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
 
-        Assert.True(changed);
-        Assert.Single(dimensionFilter.SelectedValues);
-        Assert.Equal("GET", dimensionFilter.SelectedValues.Single().Text);
+        getTag.Click(new MouseEventArgs());
+
+        var selectedValue = Assert.Single(dimensionFilter.SelectedValues);
+        Assert.Equal("GET", selectedValue.Text);
+    }
+
+    [Fact]
+    public void ShiftClick_UnselectedFilterValueTag_AddsClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values.Single(v => v.Text == "POST")]);
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.Click(new MouseEventArgs { ShiftKey = true });
+
+        Assert.Equal(["GET", "POST"], dimensionFilter.SelectedValues.Select(v => v.Text).Order());
+    }
+
+    [Fact]
+    public void ShiftClick_SelectedFilterValueTag_RemovesClickedValue()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SetSelectedValues(dimensionFilter.Values);
+        var cut = RenderChartFilters(dimensionFilter);
+        var getTag = cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "GET");
+
+        getTag.Click(new MouseEventArgs { ShiftKey = true });
+
+        var selectedValue = Assert.Single(dimensionFilter.SelectedValues);
+        Assert.Equal("POST", selectedValue.Text);
     }
 
     [Fact]

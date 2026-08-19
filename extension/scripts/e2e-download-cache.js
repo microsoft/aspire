@@ -32,6 +32,12 @@ const UNREADABLE_DIRECTORY_ERROR_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 
 const MAX_PUBLISH_ATTEMPTS = 8;
 const MAX_CANDIDATE_CREATE_ATTEMPTS = 3;
 
+// A late writer racing cleanup settles within a few hundred milliseconds once its process is gone,
+// so a handful of sweeps covers it while still failing fast against a process that never stops
+// writing. See removeDirectoryContentsAndSelf for why re-sweeping is what clears ENOTEMPTY.
+const MAX_DIRECTORY_SWEEP_RETRIES = 5;
+const DIRECTORY_SWEEP_RETRY_DELAY_MS = 100;
+
 // Candidates only exist while a download is in flight, so a non-generation group child this old is
 // debris left by a crash or by an older cache layout. Published generations are never swept on
 // age; see sweepAbandonedGroupChildren.
@@ -123,7 +129,11 @@ function ensureDownloadCache(options) {
     normalizedOptions.populate(candidateDirectory);
     pruneDownloadArchives(candidateDirectory);
 
-    const artifacts = discoverCacheArtifacts(candidateDirectory, normalizedOptions.platform, normalizedOptions.architecture);
+    const artifacts = discoverCacheArtifacts(
+      candidateDirectory,
+      normalizedOptions.platform,
+      normalizedOptions.architecture,
+      normalizedOptions.extesterVersion);
     assertCacheEntryTreeIsContained(candidateDirectory);
     writeCacheManifest(candidateDirectory, { ...expectedManifest, ...artifacts });
 
@@ -545,11 +555,51 @@ function removePathWithoutFollowingLinks(targetPath, options = {}) {
     return;
   }
 
-  for (const entry of fs.readdirSync(targetPath)) {
-    removePathWithoutFollowingLinks(path.join(targetPath, entry), options);
-  }
+  removeDirectoryContentsAndSelf(targetPath, options);
+}
 
-  removeEmptyDirectory(targetPath, options);
+/**
+ * Empties a directory and removes it, re-listing it when `rmdir` reports it is not empty.
+ *
+ * A directory can gain an entry between the listing and the `rmdir`: the Java language server and
+ * Maven/Gradle daemons keep writing for a moment after a test finishes, so a tree that was walked
+ * empty is not empty by the time it is removed. Observed in CI as a shard that passed its tests and
+ * then failed in cleanup with `ENOTEMPTY: directory not empty, rmdir`.
+ *
+ * Retrying the `rmdir` alone cannot clear that, because the entry that appeared is still on disk -
+ * only a fresh listing can remove it - which is why this re-sweeps instead of leaning on the
+ * `maxRetries` budget. That budget stays useful for its own case: on Windows a removed entry can
+ * linger until the last handle closes, and there retrying the same `rmdir` does eventually succeed.
+ */
+function removeDirectoryContentsAndSelf(directoryPath, options) {
+  for (let sweep = 0; ; sweep++) {
+    let entries;
+    try {
+      entries = fs.readdirSync(directoryPath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        return;
+      }
+
+      throw error;
+    }
+
+    for (const entry of entries) {
+      removePathWithoutFollowingLinks(path.join(directoryPath, entry), options);
+    }
+
+    try {
+      removeEmptyDirectory(directoryPath, options);
+      return;
+    } catch (error) {
+      // Bounded so a process writing continuously fails the cleanup instead of hanging the shard.
+      if (!error || error.code !== 'ENOTEMPTY' || sweep >= MAX_DIRECTORY_SWEEP_RETRIES) {
+        throw error;
+      }
+
+      sleepSync((sweep + 1) * DIRECTORY_SWEEP_RETRY_DELAY_MS);
+    }
+  }
 }
 
 function removeEmptyDirectory(directoryPath, options) {
@@ -655,7 +705,7 @@ function normalizeEnsureDownloadCacheOptions(options) {
   // Validate the VS Code layout up front so unsupported combinations fail before
   // populate() starts an expensive download into a staging directory.
   getVsCodeDirectoryName(platform, architecture);
-  getVsCodeExecutableRelativePath(platform, architecture);
+  getVsCodeExecutableRelativePaths(platform, architecture, options.extesterVersion);
 
   return {
     cacheRoot: path.resolve(options.cacheRoot),
@@ -733,7 +783,12 @@ function readCacheManifest(cacheDirectory, expectedManifest, { cacheRoot }) {
   assertOrdinaryRelativePath(cacheDirectory, realCacheDirectory, manifestPaths.chromeDriverEntry, 'chromeDriverEntry', 'directory-or-file');
   assertOrdinaryRelativePath(cacheDirectory, realCacheDirectory, manifestPaths.chromeDriverBinary, 'chromeDriverBinary', 'file');
 
-  const discoveredArtifacts = discoverCacheArtifacts(cacheDirectory, expectedManifest.platform, expectedManifest.architecture, realCacheDirectory);
+  const discoveredArtifacts = discoverCacheArtifacts(
+    cacheDirectory,
+    expectedManifest.platform,
+    expectedManifest.architecture,
+    expectedManifest.extesterVersion,
+    realCacheDirectory);
   for (const [field, expectedValue] of Object.entries(discoveredArtifacts)) {
     if (manifestPaths[field] !== expectedValue) {
       throw new Error(`${field} must be '${expectedValue}' for ${expectedManifest.platform}/${expectedManifest.architecture}, but found '${manifest[field]}'.`);
@@ -1012,10 +1067,9 @@ function assertOrdinaryRelativePath(rootDirectory, realRootDirectory, relativePa
 
     const candidateRelativePath = path.join(...segments.slice(0, index + 1));
     if (candidateStats.isSymbolicLink()) {
-      // Genuine VS Code macOS bundles contain internal symlinks: ExTester creates
-      // `Visual Studio Code.app/Contents/MacOS/Electron -> Code` while unpacking the archive
-      // because its launcher resolves the executable as `Electron`. Rejecting every symlink
-      // outright rejects the real artifact, so follow links that stay inside the cache entry
+      // Older cached VS Code macOS bundles can contain internal symlinks such as
+      // `Visual Studio Code.app/Contents/MacOS/Electron -> Code`. Rejecting every symlink
+      // outright rejects a valid artifact, so follow links that stay inside the cache entry
       // and reject only those that redirect outside it.
       let linkTargetRealPath;
       try {
@@ -1116,12 +1170,18 @@ function isPathContainedWithin(rootPath, candidatePath) {
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
-function discoverCacheArtifacts(rootDirectory, platform, architecture, realRootDirectory = resolveRealPath(rootDirectory)) {
+function discoverCacheArtifacts(rootDirectory, platform, architecture, extesterVersion, realRootDirectory = resolveRealPath(rootDirectory)) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
-  const vscodeExecutableRelativePath = getVsCodeExecutableRelativePath(platform, architecture);
+  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion);
+  const vscodeExecutableRelativePath = vscodeExecutableRelativePaths.find(
+    relativePath => pathExistsWithoutFollowingLinks(path.join(rootDirectory, relativePath)));
   const chromeDriverBinaryName = getChromeDriverBinaryName(platform);
 
   assertOrdinaryRelativePath(rootDirectory, realRootDirectory, vscodeDirectory, 'vscodeDirectory', 'directory');
+  if (!vscodeExecutableRelativePath) {
+    const expectedPaths = vscodeExecutableRelativePaths.map(relativePath => `'${relativePath}'`).join(', ');
+    throw new Error(`vscodeExecutable points to missing paths: ${expectedPaths}.`);
+  }
   assertOrdinaryRelativePath(rootDirectory, realRootDirectory, vscodeExecutableRelativePath, 'vscodeExecutable', 'file');
 
   const legacyChromeDriverPath = path.join(rootDirectory, chromeDriverBinaryName);
@@ -1175,19 +1235,48 @@ function getVsCodeDirectoryName(platform, architecture) {
   }
 }
 
-function getVsCodeExecutableRelativePath(platform, architecture) {
+function getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
 
   switch (platform) {
     case 'darwin':
-      return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
+      // VS Code 1.131 removes the legacy Contents/MacOS/Electron -> Code compatibility symlink. The
+      // cache key includes ExTester because 8.23 can launch only Electron while 8.24 falls back to
+      // Code. Validate against the executable that keyed dependency can actually launch rather than
+      // publishing a cache entry that will fail later in install-vsix or run-tests.
+      const legacyExecutable = path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
+      if (!isConcreteVersionAtLeast(extesterVersion, '8.24.0')) {
+        return [legacyExecutable];
+      }
+
+      return [
+        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code'),
+        legacyExecutable,
+      ];
     case 'linux':
-      return path.join(vscodeDirectory, 'code');
+      return [path.join(vscodeDirectory, 'code')];
     case 'win32':
-      return path.join(vscodeDirectory, 'Code.exe');
+      return [path.join(vscodeDirectory, 'Code.exe')];
     default:
       throw new Error(`Unsupported VS Code platform/architecture combination: ${platform}/${architecture}.`);
   }
+}
+
+function isConcreteVersionAtLeast(version, minimumVersion) {
+  const versionParts = version.split('.').map(Number);
+  const minimumParts = minimumVersion.split('.').map(Number);
+  if (versionParts.some(part => !Number.isInteger(part) || part < 0)) {
+    return false;
+  }
+
+  for (let index = 0; index < Math.max(versionParts.length, minimumParts.length); index++) {
+    const difference = (versionParts[index] ?? 0) - (minimumParts[index] ?? 0);
+    if (difference !== 0) {
+      return difference > 0;
+    }
+  }
+
+  return true;
 }
 
 function getChromeDriverBinaryName(platform) {
@@ -1213,6 +1302,19 @@ function isPublishRaceError(error) {
 function isFile(filePath) {
   try {
     return fs.statSync(filePath).isFile();
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function pathExistsWithoutFollowingLinks(candidatePath) {
+  try {
+    fs.lstatSync(candidatePath);
+    return true;
   } catch (error) {
     if (error && error.code === 'ENOENT') {
       return false;
