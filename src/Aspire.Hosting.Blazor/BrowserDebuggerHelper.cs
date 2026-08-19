@@ -17,6 +17,10 @@ namespace Aspire.Hosting;
 /// </summary>
 internal static class BrowserDebuggerHelper
 {
+    private const string BrowserCapability = "browser";
+    private const string BrowserDebuggingUnavailableMessage =
+        "Browser debugging requires an active IDE debug session that supports the 'browser' launch configuration.";
+
     /// <summary>
     /// Creates a hidden child ExecutableResource with WithExplicitStart that launches a debug browser
     /// via DCP/IDE when started. Registers "Debug in Browser" and "Stop Browser Debug" commands
@@ -96,7 +100,7 @@ internal static class BrowserDebuggerHelper
                         Browser = browser
                     };
                 },
-                "browser");
+                BrowserCapability);
 
         // Register "Debug in Browser" command — shown when no debug session is active.
         commandTarget.WithCommand(
@@ -107,6 +111,11 @@ internal static class BrowserDebuggerHelper
                 await debugSessionLock.WaitAsync(context.CancellationToken).ConfigureAwait(false);
                 try
                 {
+                    if (!debuggerResource.SupportsDebugging(builder.Configuration, out _))
+                    {
+                        return CommandResults.Failure(BrowserDebuggingUnavailableMessage);
+                    }
+
                     if (debugSessionActive)
                     {
                         return CommandResults.Success();
@@ -152,7 +161,8 @@ internal static class BrowserDebuggerHelper
                         return ResourceCommandState.Hidden;
                     }
 
-                    return ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
+                    return debuggerResource.SupportsDebugging(builder.Configuration, out _)
+                        && ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
                         ? ResourceCommandState.Enabled
                         : ResourceCommandState.Disabled;
                 },
