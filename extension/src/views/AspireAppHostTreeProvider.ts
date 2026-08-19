@@ -4,6 +4,7 @@ import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTermi
 import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 import { resolvePipelineStep } from '../utils/pipelineStep';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { compareResourceCommands } from '../utils/resourceDisplay';
 import {
     pidDescription,
@@ -117,6 +118,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         private readonly _launchService: AppHostLaunchService,
         private readonly _secretWarningState?: vscode.Memento,
         private readonly _clipboard: Clipboard = vscode.env.clipboard,
+        private readonly _configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(_terminalProvider),
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._clearLaunchingPathsForRunningAppHosts();
@@ -927,7 +929,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
-        const step = await resolvePipelineStep(this._terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(this._configInfoProvider, target, cliPath);
         if (step === undefined) {
             throw new vscode.CancellationError();
         }

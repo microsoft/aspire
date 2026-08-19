@@ -12,6 +12,7 @@ import { resolvePipelineStep } from '../utils/pipelineStep';
 suite('pipeline step resolution', () => {
     let sandbox: sinon.SinonSandbox;
     let terminalProvider: AspireTerminalProvider;
+    let configInfoProvider: ConfigInfoProvider;
     const cliPath = '/repo/b/tools/aspire';
     const appHostPath = '/repo/b/AppHost/AppHost.csproj';
     const workspaceFolder: vscode.WorkspaceFolder = {
@@ -24,6 +25,7 @@ suite('pipeline step resolution', () => {
     setup(() => {
         sandbox = sinon.createSandbox();
         terminalProvider = {} as AspireTerminalProvider;
+        configInfoProvider = new ConfigInfoProvider(terminalProvider);
     });
 
     teardown(() => {
@@ -34,7 +36,7 @@ suite('pipeline step resolution', () => {
         const hasCapabilityStub = sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
         const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
 
-        const step = await resolvePipelineStep(terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
 
         assert.strictEqual(step, null);
         assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath, suppressErrors: true }));
@@ -45,7 +47,7 @@ suite('pipeline step resolution', () => {
         sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').resolves(false);
         sandbox.stub(vscode.window, 'showInputBox').resolves('  deploy  ');
 
-        const step = await resolvePipelineStep(terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
 
         assert.strictEqual(step, 'deploy');
     });
@@ -57,7 +59,7 @@ suite('pipeline step resolution', () => {
             return undefined;
         });
 
-        const step = await resolvePipelineStep(terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
 
         assert.strictEqual(step, undefined);
         assert.strictEqual(showInputBoxStub.calledOnce, true);
@@ -67,7 +69,7 @@ suite('pipeline step resolution', () => {
         sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').resolves(false);
         sandbox.stub(vscode.window, 'showInputBox').resolves(undefined);
 
-        const step = await resolvePipelineStep(terminalProvider, target, cliPath);
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
 
         assert.strictEqual(step, undefined);
     });
@@ -77,7 +79,7 @@ suite('pipeline step resolution', () => {
         sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').rejects(error);
         const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
 
-        await assert.rejects(resolvePipelineStep(terminalProvider, target, cliPath), error);
+        await assert.rejects(resolvePipelineStep(configInfoProvider, target, cliPath), error);
 
         assert.strictEqual(showInputBoxStub.called, false);
     });
@@ -90,7 +92,7 @@ suite('pipeline step resolution', () => {
             tryExecuteDoAppHost: tryExecuteDoAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
-        await doCommand(terminalProvider, editorCommandProvider, appHostPath, target, cliPath);
+        await doCommand(configInfoProvider, editorCommandProvider, appHostPath, target, cliPath);
 
         assert.ok(hasCapabilityStub.calledOnceWithExactly('pipelines', { target, cliPath, suppressErrors: true }));
         assert.ok(tryExecuteDoAppHostStub.calledOnceWithExactly(false, 'release', appHostPath, target, cliPath));
@@ -105,7 +107,7 @@ suite('pipeline step resolution', () => {
         } as unknown as AspireEditorCommandProvider;
 
         await assert.rejects(
-            doCommand(terminalProvider, editorCommandProvider, appHostPath, target, cliPath),
+            doCommand(configInfoProvider, editorCommandProvider, appHostPath, target, cliPath),
             error => error instanceof vscode.CancellationError);
 
         assert.strictEqual(tryExecuteDoAppHostStub.called, false);

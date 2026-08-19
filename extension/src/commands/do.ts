@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { noAppHostInWorkspace } from '../loc/strings';
 import { CliPathResolutionTarget } from '../utils/cliPathVariables';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { resolvePipelineStep } from '../utils/pipelineStep';
 
 export async function doCommand(
-    terminalProvider: AspireTerminalProvider,
+    configInfoProvider: ConfigInfoProvider,
     editorCommandProvider: AspireEditorCommandProvider,
     appHostPath: string | undefined,
     target: CliPathResolutionTarget,
@@ -17,7 +17,7 @@ export async function doCommand(
         throw new vscode.CancellationError();
     }
 
-    const step = await resolvePipelineStep(terminalProvider, target, cliPath);
+    const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
     if (step === undefined) {
         throw new vscode.CancellationError();
     }

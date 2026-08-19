@@ -62,7 +62,7 @@ suite('registerCliCommands', () => {
             tryExecuteDoAppHost: tryExecuteDoAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
-        registerCliCommands(terminalProvider, editorCommandProvider);
+        registerCliCommands(terminalProvider, editorCommandProvider, new ConfigInfoProvider(terminalProvider));
     });
 
     teardown(() => {
