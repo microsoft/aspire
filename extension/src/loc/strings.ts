@@ -151,6 +151,10 @@ export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied t
 export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
+export const appHostDeployingDescription = vscode.l10n.t('Deploying...');
+export const appHostPublishingDescription = vscode.l10n.t('Publishing...');
+export const appHostRunningPipelineStepDescription = vscode.l10n.t('Running pipeline step...');
+export const appHostDebuggingPipelineStepDescription = vscode.l10n.t('Debugging pipeline step...');
 export const appHostDiscoveryProgress = vscode.l10n.t('Discovering AppHosts...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);

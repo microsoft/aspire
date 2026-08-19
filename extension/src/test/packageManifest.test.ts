@@ -95,10 +95,12 @@ suite('extension/package.json', () => {
         const runAppHost = contextMenus.find(item => item.command === 'aspire-vscode.runAppHost');
         const debugAppHost = contextMenus.find(item => item.command === 'aspire-vscode.debugAppHost');
 
+        // The idle workspace AppHost context value carries the actions its CLI supports as
+        // `:can*` suffixes, so run and debug match the shape rather than the bare string.
         assertContains(runAppHost?.when, "view == aspire-vscode.appHosts");
-        assertContains(runAppHost?.when, 'viewItem == workspaceAppHost');
+        assertContains(runAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
         assertContains(debugAppHost?.when, "view == aspire-vscode.appHosts");
-        assertContains(debugAppHost?.when, 'viewItem == workspaceAppHost');
+        assertContains(debugAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
     });
 
     test('resource command context action targets apphosts view', () => {

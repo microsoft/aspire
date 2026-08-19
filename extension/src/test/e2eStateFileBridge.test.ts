@@ -9,6 +9,7 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { executeE2eControlCommand } from '../testing/e2eStateFileBridge';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import * as cliPathModule from '../utils/cliPath';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
@@ -50,7 +51,11 @@ suite('E2E state file bridge', () => {
         } as unknown as AspireTerminalProvider;
         const launchService = createLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
+        // The tree resolves the CLI itself through the canonical resolver, so pin it here rather
+        // than letting a CLI installed on the test machine decide what the actions forward.
+        sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath, available: true, source: 'configured' });
         sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getCapabilityStatus').resolves('supported');
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
         const registeredCommands = captureRegisteredTreeCommands(sandbox, provider, repository);
         sandbox.stub(vscode.commands, 'executeCommand').callsFake(async (commandId: string, ...args: unknown[]) => {

@@ -238,6 +238,9 @@
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebuggingPipelineStepDescription">
+      <source xml:lang="en">Debugging pipeline step...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostDeployActionLabel">
       <source xml:lang="en">Deploy AppHost</source>
     </trans-unit>
@@ -246,6 +249,9 @@
     </trans-unit>
     <trans-unit id="command.deploy">
       <source xml:lang="en">Deploy app</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDeployingDescription">
+      <source xml:lang="en">Deploying...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.directUrl">
       <source xml:lang="en">Direct: {0}</source>
@@ -622,6 +628,9 @@
     <trans-unit id="command.publish">
       <source xml:lang="en">Publish deployment artifacts</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPublishingDescription">
+      <source xml:lang="en">Publishing...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.rpcServerError">
       <source xml:lang="en">RPC server error: {0}.</source>
     </trans-unit>
@@ -684,6 +693,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestore">
       <source xml:lang="en">Running aspire restore on {0} ...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostRunningPipelineStepDescription">
+      <source xml:lang="en">Running pipeline step...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustLabel">
       <source xml:lang="en">Rust</source>

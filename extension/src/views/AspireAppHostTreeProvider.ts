@@ -4,6 +4,7 @@ import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTermi
 import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { resolvePipelineStep } from '../utils/pipelineStep';
+import { resolveCliPath } from '../utils/cliPath';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { compareResourceCommands } from '../utils/resourceDisplay';
 import {
@@ -38,6 +39,9 @@ import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsL
 import { executeResourceCommand as executeResourceCommandWithUi, getErrorMessage, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
+import { getAppHostIdentityKey } from '../utils/appHostIdentity';
+import { extensionLogOutputChannel } from '../utils/logging';
+import { deployCommandCapability, doCommandCapability, publishCommandCapability } from '../types/configInfo';
 import { isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
 import {
@@ -68,10 +72,40 @@ import {
     WorkspaceAppHostPathItem,
     WorkspaceAppHostsGroupItem,
     WorkspaceResourcesItem,
+    type AppHostActionAvailability,
+    type AppHostItemOperation,
 } from './treeItems';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 type AppHostActionElement = AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem;
+type AppHostActionCommand = 'deploy' | 'publish' | 'do';
+
+/**
+ * The exact Aspire CLI selected for an AppHost together with the actions that CLI advertises.
+ * Both halves travel together so an action runs against the same executable the row was gated on.
+ */
+interface AppHostActionSupport {
+    readonly target: CliPathResolutionTarget;
+    readonly cliPath: string;
+    readonly availability: AppHostActionAvailability;
+}
+
+/** Durable non-Run state plus capability-gated actions for one rendered AppHost row. */
+interface AppHostRenderState {
+    readonly operation: AppHostItemOperation | undefined;
+    readonly actions: AppHostActionAvailability | undefined;
+}
+
+function isActionSupported(support: AppHostActionSupport, command: AppHostActionCommand): boolean {
+    switch (command) {
+        case 'deploy':
+            return support.availability.deploy;
+        case 'publish':
+            return support.availability.publish;
+        case 'do':
+            return support.availability.do;
+    }
+}
 
 function isSamePath(left: string, right: string): boolean {
     return isSameFileSystemEntry(left, right);
@@ -105,7 +139,19 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private readonly _dataSubscription: vscode.Disposable;
     private readonly _launchingSubscription: vscode.Disposable;
+    private readonly _operationSubscription: vscode.Disposable;
+    private readonly _cliPathConfigurationSubscription: vscode.Disposable;
     private readonly _stoppingAppHostTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+    /**
+     * Probed action support per AppHost identity. `null` records a probe that produced no usable
+     * answer - an unavailable CLI, or one that could not report its capabilities - and is cached
+     * like any other result because re-probing on every render would loop between render and the
+     * refresh the probe fires. An explicit action re-probes such an entry, and selecting a
+     * different CLI clears them all.
+     */
+    private readonly _actionSupportByAppHost = new Map<string, AppHostActionSupport | null>();
+    private readonly _pendingActionSupportByAppHost = new Map<string, Promise<AppHostActionSupport | null>>();
+    private _disposed = false;
     private _contentProviderRegistration: vscode.Disposable | undefined;
     private readonly _appHostSourceContents = new Map<string, string>();
     private _treeView: vscode.TreeView<TreeElement> | undefined;
@@ -129,6 +175,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         // When the launch service's launching state changes, refresh the tree.
         this._launchingSubscription = this._launchService.onDidChangeLaunchingState(() => {
             this._onDidChangeTreeData.fire();
+        });
+
+        // A durable deploy/publish/do is only visible on the AppHost row that owns it, so the
+        // tree has to redraw when one starts or finishes.
+        this._operationSubscription = this._launchService.onDidChangeOperationState(() => {
+            this._onDidChangeTreeData.fire();
+        });
+
+        // Probed support describes one exact executable. Selecting a different CLI invalidates
+        // every answer, so drop them and let the next render re-probe rather than gating rows -
+        // and forwarding a launch - against the CLI that was configured before.
+        this._cliPathConfigurationSubscription = vscode.workspace.onDidChangeConfiguration(event => {
+            if (event.affectsConfiguration('aspire.aspireCliExecutablePath')) {
+                this._actionSupportByAppHost.clear();
+                this._onDidChangeTreeData.fire();
+            }
         });
     }
 
@@ -174,8 +236,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     dispose(): void {
+        this._disposed = true;
         this._dataSubscription.dispose();
         this._launchingSubscription.dispose();
+        this._operationSubscription.dispose();
+        this._cliPathConfigurationSubscription.dispose();
         for (const timeout of this._stoppingAppHostTimeouts.values()) {
             clearTimeout(timeout);
         }
@@ -288,6 +353,130 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 this._clearStoppingAppHost(stoppingPath, false);
             }
         }
+    }
+
+    // ── Durable operation state and capability-gated actions ──
+
+    /**
+     * The durable non-Run state and the capability-gated actions for one AppHost row.
+     *
+     * Rendering is synchronous, so a row can only show what has already been probed. The first
+     * render of an AppHost starts one probe and renders no capability-gated actions; the probe
+     * refreshes the tree when it completes, and the second render picks up the answer.
+     */
+    private _getAppHostRenderState(appHostPath: string | undefined): AppHostRenderState {
+        return {
+            operation: this._getActiveOperation(appHostPath),
+            actions: this._getCachedActionSupport(appHostPath)?.availability,
+        };
+    }
+
+    private _getActiveOperation(appHostPath: string | undefined): AppHostItemOperation | undefined {
+        if (!appHostPath) {
+            return undefined;
+        }
+
+        const operation = this._launchService.getActiveOperation(appHostPath);
+        return operation && operation.command !== 'run'
+            ? { command: operation.command, noDebug: operation.noDebug }
+            : undefined;
+    }
+
+    private _getCachedActionSupport(appHostPath: string | undefined): AppHostActionSupport | null {
+        if (!appHostPath) {
+            return null;
+        }
+
+        const key = getAppHostIdentityKey(appHostPath);
+        const cached = this._actionSupportByAppHost.get(key);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        if (!this._pendingActionSupportByAppHost.has(key)) {
+            void this._startActionSupportProbe(appHostPath, key, false);
+        }
+
+        // Fail closed: an unprobed AppHost offers no deploy/publish/do until its CLI answers.
+        return null;
+    }
+
+    /**
+     * Resolves the exact CLI and supported actions for an invocation. A probed pair is reused so
+     * the action runs against the same executable the row was gated on; anything else re-resolves
+     * through the interactive availability gate, which is where a missing CLI is reported and
+     * where a CLI installed since the row was drawn is picked up.
+     */
+    private async _resolveActionSupportForInvocation(appHostPath: string): Promise<AppHostActionSupport | null> {
+        const key = getAppHostIdentityKey(appHostPath);
+        const pending = this._pendingActionSupportByAppHost.get(key);
+        const probed = pending ? await pending : this._actionSupportByAppHost.get(key);
+        if (probed) {
+            return probed;
+        }
+
+        return await this._startActionSupportProbe(appHostPath, key, true);
+    }
+
+    private _startActionSupportProbe(appHostPath: string, key: string, notifyWhenUnavailable: boolean): Promise<AppHostActionSupport | null> {
+        const probe = this._probeActionSupport(appHostPath, notifyWhenUnavailable)
+            .catch(err => {
+                extensionLogOutputChannel.warn(`Unable to determine Aspire CLI action support for '${appHostPath}': ${getErrorMessage(err)}`);
+                return null;
+            })
+            .then(support => {
+                this._pendingActionSupportByAppHost.delete(key);
+                if (!this._disposed) {
+                    this._actionSupportByAppHost.set(key, support);
+                    this._onDidChangeTreeData.fire();
+                }
+
+                return support;
+            });
+
+        this._pendingActionSupportByAppHost.set(key, probe);
+        return probe;
+    }
+
+    private async _probeActionSupport(appHostPath: string, notifyWhenUnavailable: boolean): Promise<AppHostActionSupport | null> {
+        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        // Drawing the tree is not something the user asked for, so the render probe resolves the
+        // CLI silently through the canonical resolver that the availability gate itself uses.
+        // Only an explicit action goes through the gate, which reports a missing CLI and offers
+        // the install instructions.
+        const result = notifyWhenUnavailable
+            ? await checkCliAvailableOrRedirect('debug_gate', target)
+            : await resolveCliPath(target);
+        if (!result.available) {
+            return null;
+        }
+
+        // The three probes share one `aspire config info` invocation: ConfigInfoProvider caches
+        // and de-duplicates by CLI executable and working directory.
+        const options = { target, cliPath: result.cliPath, suppressErrors: true };
+        const [deploy, publish, doCommand] = await Promise.all([
+            this._configInfoProvider.getCapabilityStatus(deployCommandCapability, options),
+            this._configInfoProvider.getCapabilityStatus(publishCommandCapability, options),
+            this._configInfoProvider.getCapabilityStatus(doCommandCapability, options),
+        ]);
+
+        // A CLI that could not answer at all is a transient failure rather than a negative answer.
+        // ConfigInfoProvider deliberately does not cache those, so this reports no support instead
+        // of recording an authoritative "supports nothing" for the rest of the session.
+        if ([deploy, publish, doCommand].includes('unavailable')) {
+            return null;
+        }
+
+        return {
+            target,
+            cliPath: result.cliPath,
+            availability: {
+                // An older CLI that answers without advertising the capability leaves it hidden.
+                deploy: deploy === 'supported',
+                publish: publish === 'supported',
+                do: doCommand === 'supported',
+            },
+        };
     }
 
     findResourceElement(resourceName: string, appHostPath?: string): TreeElement | undefined {
@@ -531,7 +720,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                     const launching = this._launchService.isLaunching(candidatePath);
 
                     if (!runningAppHost) {
-                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath)));
+                        const candidateState = this._getAppHostRenderState(candidatePath);
+                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath), candidateState.operation, candidateState.actions));
                         continue;
                     }
 
@@ -543,15 +733,16 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                         && hasNoResources(runningAppHost.resources)
                         ? { ...runningAppHost, resources: workspaceResources }
                         : runningAppHost;
+                    const runningState = this._getAppHostRenderState(appHost.appHostPath);
 
                     if (runningItems.length > 0) {
                         // Multiple running — use global-style AppHostItem (nested view)
-                        runningItems.push(new AppHostItem(appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
+                        runningItems.push(new AppHostItem(appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath), runningState.operation, runningState.actions));
                     } else {
                         const resources = [...appHost.resources ?? []];
                         const rawDashboardUrl = appHost.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                         const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
-                        runningItems.push(new WorkspaceResourcesItem(resources, dashboardUrl, appHost.appHostPath, appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
+                        runningItems.push(new WorkspaceResourcesItem(resources, dashboardUrl, appHost.appHostPath, appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath), runningState.operation, runningState.actions));
                     }
                 }
 
@@ -559,7 +750,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 if (runningItems.length > 1 && runningItems[0] instanceof WorkspaceResourcesItem) {
                     const first = runningItems[0];
                     const appHost = first.appHost!;
-                    runningItems[0] = new AppHostItem(appHost, first.label as string, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath));
+                    runningItems[0] = new AppHostItem(appHost, first.label as string, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath), first.operation, first.actions);
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
@@ -600,7 +791,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const rawDashboardUrl = workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
             const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
             const appHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-            return [new WorkspaceResourcesItem(resources, dashboardUrl, appHostPath, workspaceAppHost, this._repository.workspaceAppHostName, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHostPath))];
+            const renderState = this._getAppHostRenderState(appHostPath);
+            return [new WorkspaceResourcesItem(resources, dashboardUrl, appHostPath, workspaceAppHost, this._repository.workspaceAppHostName, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHostPath), renderState.operation, renderState.actions)];
         }
 
         if (element instanceof AppHostItem || element instanceof ResourcesGroupItem) {
@@ -617,13 +809,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         if (element instanceof WorkspaceAppHostItem) {
             const items: TreeElement[] = [new WorkspaceAppHostActionItem(element, 'openSource')];
-            if (!element.launching && !element.stopping) {
+            // A durable deploy/publish/do owns the AppHost until it finishes, so every launch
+            // action - Run included - is withheld while one is in flight. Only the source and
+            // path affordances remain.
+            if (!element.launching && !element.stopping && !element.operation) {
                 items.push(new WorkspaceAppHostActionItem(element, 'run'));
                 items.push(new WorkspaceAppHostActionItem(element, 'debug'));
-                items.push(new WorkspaceAppHostActionItem(element, 'deploy'));
-                items.push(new WorkspaceAppHostActionItem(element, 'publish'));
-                items.push(new WorkspaceAppHostActionItem(element, 'runPipelineStep'));
-                items.push(new WorkspaceAppHostActionItem(element, 'debugPipelineStep'));
+                if (element.actions?.deploy) {
+                    items.push(new WorkspaceAppHostActionItem(element, 'deploy'));
+                }
+                if (element.actions?.publish) {
+                    items.push(new WorkspaceAppHostActionItem(element, 'publish'));
+                }
+                if (element.actions?.do) {
+                    items.push(new WorkspaceAppHostActionItem(element, 'runPipelineStep'));
+                    items.push(new WorkspaceAppHostActionItem(element, 'debugPipelineStep'));
+                }
             }
             items.push(new WorkspaceAppHostPathItem(element));
 
@@ -679,7 +880,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!element) {
             const appHosts = this._repository.appHosts;
             const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
-            return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
+            return appHosts.map((appHost, index) => {
+                const renderState = this._getAppHostRenderState(appHost.appHostPath);
+                return new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath), renderState.operation, renderState.actions);
+            });
         }
 
         if (element instanceof AppHostItem) {
@@ -890,24 +1094,24 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    async deployAppHost(element: AppHostActionElement): Promise<void> {
+    async deployAppHost(element: AppHostActionElement | undefined): Promise<void> {
         await this._launchAppHostAction(element, 'deploy', false);
     }
 
-    async publishAppHost(element: AppHostActionElement): Promise<void> {
+    async publishAppHost(element: AppHostActionElement | undefined): Promise<void> {
         await this._launchAppHostAction(element, 'publish', false);
     }
 
-    async runPipelineStepAppHost(element: AppHostActionElement): Promise<void> {
+    async runPipelineStepAppHost(element: AppHostActionElement | undefined): Promise<void> {
         await this._launchPipelineStep(element, true);
     }
 
-    async debugPipelineStepAppHost(element: AppHostActionElement): Promise<void> {
+    async debugPipelineStepAppHost(element: AppHostActionElement | undefined): Promise<void> {
         await this._launchPipelineStep(element, false);
     }
 
     private async _launchAppHostAction(
-        element: AppHostActionElement,
+        element: AppHostActionElement | undefined,
         command: 'deploy' | 'publish',
         noDebug: boolean,
     ): Promise<void> {
@@ -917,18 +1121,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
-        await this._launchService.launch(appHostPath, command, noDebug, undefined, target, cliPath);
+        const support = await this._resolveSupportedActionCli(appHostPath, command);
+        await this._launchService.launch(appHostPath, command, noDebug, undefined, support.target, support.cliPath);
     }
 
-    private async _launchPipelineStep(element: AppHostActionElement, noDebug: boolean): Promise<void> {
+    private async _launchPipelineStep(element: AppHostActionElement | undefined, noDebug: boolean): Promise<void> {
         const appHostPath = this._getAppHostPath(element);
         if (!appHostPath) {
             vscode.window.showWarningMessage(appHostSourceNotFound);
             return;
         }
 
-        const { target, cliPath } = await this._resolveAppHostCli(appHostPath);
+        const { target, cliPath } = await this._resolveSupportedActionCli(appHostPath, 'do');
         const step = await resolvePipelineStep(this._configInfoProvider, target, cliPath);
         if (step === undefined) {
             throw new vscode.CancellationError();
@@ -937,18 +1141,29 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, target, cliPath);
     }
 
-    private async _resolveAppHostCli(appHostPath: string): Promise<{ target: CliPathResolutionTarget; cliPath: string }> {
-        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
-        const result = await checkCliAvailableOrRedirect('debug_gate', target);
-        if (!result.available) {
+    /**
+     * Resolves the exact CLI for an action and confirms that CLI still advertises it. The row and
+     * context menu already hide unsupported actions, so reaching this check means the request came
+     * from somewhere that never saw the gate: it fails silently rather than running a command the
+     * CLI does not understand.
+     */
+    private async _resolveSupportedActionCli(appHostPath: string, command: AppHostActionCommand): Promise<AppHostActionSupport> {
+        const support = await this._resolveActionSupportForInvocation(appHostPath);
+        if (!support) {
+            // An unavailable CLI has already told the user through the availability gate.
             throw new vscode.CancellationError();
         }
 
-        return { target, cliPath: result.cliPath };
+        if (!isActionSupported(support, command)) {
+            extensionLogOutputChannel.warn(`The Aspire CLI at '${support.cliPath}' does not support '${command}' for AppHost '${appHostPath}'.`);
+            throw new vscode.CancellationError();
+        }
+
+        return support;
     }
 
-    private _getAppHostPath(element: AppHostActionElement): string | undefined {
-        return element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
+    private _getAppHostPath(element: AppHostActionElement | undefined): string | undefined {
+        return element instanceof AppHostItem ? element.appHost?.appHostPath : element?.appHostPath;
     }
 
     notifyAppHostStopping(appHostPath: string, markStopping = true): void {
