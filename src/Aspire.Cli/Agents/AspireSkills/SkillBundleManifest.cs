@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Describes a published Aspire skills bundle.
+/// Describes a published Aspire-skills bundle.
 /// </summary>
 internal sealed class SkillBundleManifest
 {
@@ -15,7 +15,7 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill?[] Skills { get; init; } = [];
+    public SkillBundleAsset?[] Assets { get; init; } = [];
 }
 
 /// <summary>
@@ -31,7 +31,7 @@ internal sealed class SkillBundleSupports
 /// <summary>
 /// Describes a single skill in an Aspire skills bundle.
 /// </summary>
-internal sealed class SkillBundleSkill
+internal sealed class SkillBundleAsset
 {
     public string? Name { get; init; }
 

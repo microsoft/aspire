@@ -30,6 +30,9 @@ internal sealed class AgentInitCommand : BaseCommand
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
 
+    private static readonly IReadOnlyList<AgentAssetLocation> s_skillLocations =
+        AgentAssetLocation.GetLocations(AgentAssetKind.Skills);
+
     public AgentInitCommand(
         IAgentEnvironmentDetector agentEnvironmentDetector,
         IAspireSkillsInstaller aspireSkillsInstaller,
@@ -60,7 +63,7 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillLocationsOptionDescription,
-            string.Join(",", SkillLocation.All.Select(l => l.Id)),
+            string.Join(",", s_skillLocations.Select(static location => location.Id)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
@@ -234,14 +237,14 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 1: Skill location selection ---
-        var defaultLocationIds = string.Join(",", SkillLocation.All.Where(l => l.IsDefault).Select(l => l.Id));
+        var defaultLocationIds = string.Join(",", s_skillLocations.Where(static location => location.IsDefault).Select(static location => location.Id));
         var skillLocationsBindingWithDefault = skillLocationsBinding.WithDefault(defaultLocationIds);
 
         var selectedLocations = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkillLocations,
-            SkillLocation.All,
+            s_skillLocations,
             loc => $"{loc.DisplayName} — {loc.Description}",
-            preSelected: SkillLocation.All.Where(l => l.IsDefault),
+            preSelected: s_skillLocations.Where(static location => location.IsDefault),
             optional: true,
             binding: skillLocationsBindingWithDefault,
             echoSelected: false,
@@ -353,7 +356,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
         foreach (var location in selectedLocations)
         {
-            context.AddSkillBaseDirectory(location.RelativeSkillDirectory);
+            if (location.Scopes.HasFlag(AgentAssetLocationScope.Workspace))
+            {
+                context.AddSkillBaseDirectory(location.RelativeAssetDirectory);
+            }
 
             foreach (var skill in selectedSkills)
             {
@@ -368,24 +374,27 @@ internal sealed class AgentInitCommand : BaseCommand
                     continue;
                 }
 
-                var installResult = await InstallSkillAsync(
-                    workspaceRoot,
-                    location.RelativeSkillDirectory,
-                    skill,
-                    aspireSkillsBundle,
-                    isUserLevel: false,
-                    cancellationToken);
-                hasErrors |= !installResult.Succeeded;
-                if (installResult.UpdatedSkill is not null)
+                if (location.Scopes.HasFlag(AgentAssetLocationScope.Workspace))
                 {
-                    installedSkills.Add(installResult.UpdatedSkill);
+                    var installResult = await InstallSkillAsync(
+                        workspaceRoot,
+                        location.RelativeAssetDirectory,
+                        skill,
+                        aspireSkillsBundle,
+                        isUserLevel: false,
+                        cancellationToken);
+                    hasErrors |= !installResult.Succeeded;
+                    if (installResult.UpdatedSkill is not null)
+                    {
+                        installedSkills.Add(installResult.UpdatedSkill);
+                    }
                 }
 
-                if (location.IncludeUserLevel)
+                if (location.Scopes.HasFlag(AgentAssetLocationScope.User))
                 {
-                    installResult = await InstallSkillAsync(
+                    var installResult = await InstallSkillAsync(
                         ExecutionContext.HomeDirectory,
-                        location.RelativeSkillDirectory,
+                        location.RelativeAssetDirectory,
                         skill,
                         aspireSkillsBundle,
                         isUserLevel: true,
@@ -402,7 +411,10 @@ internal sealed class AgentInitCommand : BaseCommand
         DisplayInstalledSkillsSummary(installedSkills);
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
-        var selectedSkillDirs = selectedLocations.Select(l => l.RelativeSkillDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectedSkillDirs = selectedLocations
+            .Where(static location => location.Scopes.HasFlag(AgentAssetLocationScope.Workspace))
+            .Select(static location => location.RelativeAssetDirectory)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (selectedSkills.Contains(SkillDefinition.PlaywrightCli) && selectedLocations.Count > 0)
         {
             try
@@ -498,7 +510,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (result.ConfiguredClients.Count > 0)
         {
-            var clientNames = string.Join(", ", result.ConfiguredClients.Select(GetClientDisplayName));
+            var clientNames = string.Join(", ", result.ConfiguredClients.Select(static client => client.Name));
             InteractionService.DisplayMessage(
                 KnownEmojis.BarChart,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
@@ -506,7 +518,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         foreach (var skip in result.Skipped)
         {
-            var clientName = GetClientDisplayName(skip.Client);
+            var clientName = skip.Client.Name;
             var message = skip.Reason switch
             {
                 TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
@@ -520,27 +532,20 @@ internal sealed class AgentInitCommand : BaseCommand
         }
     }
 
-    private static string GetClientDisplayName(AgentClientKind client)
-        => client switch
-        {
-            AgentClientKind.CopilotCli => "GitHub Copilot CLI",
-            AgentClientKind.ClaudeCode => "Claude Code",
-            AgentClientKind.VsCode => "VS Code",
-            AgentClientKind.OpenCode => "OpenCode",
-            _ => client.ToString(),
-        };
-
     private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
     {
         var skills = new List<SkillDefinition>();
         AspireSkillsBundle? bundle = null;
         string? failureMessage = null;
 
-        var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
+        var result = await _aspireSkillsInstaller.InstallAsync(AgentAssetKind.Skills, cancellationToken);
         if (result.Status is AspireSkillsInstallStatus.Installed)
         {
             bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
-            skills.AddRange(bundle.GetSkillDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
+            skills.AddRange(bundle
+                .GetAssetDefinitions()
+                .OfType<SkillDefinition>()
+                .Where(static skill => !IsCliDefinedSkillName(skill.Name)));
         }
         else
         {
@@ -793,8 +798,13 @@ internal sealed class AgentInitCommand : BaseCommand
         return isUserLevel ? $"~/{displayRelativeSkillDirectory}" : displayRelativeSkillDirectory;
     }
 
-    private static async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, AspireSkillsBundle? aspireSkillsBundle, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(
+        SkillDefinition skill,
+        AspireSkillsBundle? aspireSkillsBundle,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (skill.SkillContent is not null)
         {
             return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
@@ -807,7 +817,12 @@ internal sealed class AgentInitCommand : BaseCommand
                 throw new InvalidOperationException($"Aspire skills bundle was not resolved for skill '{skill.Name}'.");
             }
 
-            return await aspireSkillsBundle.GetSkillFilesAsync(skill, cancellationToken);
+            var assetFiles = await aspireSkillsBundle.GetAssetFilesAsync(skill, cancellationToken).ConfigureAwait(false);
+            var files = assetFiles
+                .Select(static file => new SkillAssetFile(file.RelativePath, file.Content))
+                .ToList();
+
+            return files;
         }
 
         throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
@@ -820,5 +835,5 @@ internal sealed class AgentInitCommand : BaseCommand
 
 internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
-    IReadOnlyList<SkillLocation> SelectedLocations,
+    IReadOnlyList<AgentAssetLocation> SelectedLocations,
     IReadOnlyList<SkillDefinition> SelectedSkills);

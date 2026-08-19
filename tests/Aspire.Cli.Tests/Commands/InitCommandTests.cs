@@ -493,9 +493,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
+                return [AgentAssetLocation.Standard, AgentAssetLocation.ClaudeCode, AgentAssetLocation.OpenCode];
             }
 
             return items
@@ -541,9 +541,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard];
+                return [AgentAssetLocation.Standard];
             }
 
             return items

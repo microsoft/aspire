@@ -7,11 +7,77 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Semver;
 
 namespace Aspire.Cli.Agents.AspireSkills;
+
+/// <summary>
+/// Describes localized messages used while acquiring an Aspire-skills bundle.
+/// </summary>
+internal sealed record AspireSkillsBundleInstallerMessages(
+    string InstallingStatus,
+    string GitHubUnavailable,
+    string InvalidBundle,
+    string InvalidMetadata,
+    string MissingMetadataVersion,
+    string MetadataRepositoryMismatch,
+    string MissingMetadataTag,
+    string MissingMetadataAssetName,
+    string MissingMetadataSha512);
+
+/// <summary>
+/// Describes one Aspire-skills bundle and the agent asset type it contains.
+/// </summary>
+internal sealed record AspireSkillsBundleDescriptor(
+    AgentAssetKind AssetKind,
+    string AssetPrefix,
+    string CacheDirectoryName,
+    string DisplayName,
+    string ManifestFileName,
+    string ManifestAssetsPropertyName,
+    string EmbeddedArchiveResourceName,
+    string EmbeddedMetadataResourceName,
+    AspireSkillsBundleInstallerMessages Messages)
+{
+    private JsonTypeInfo<SkillBundleManifest>? _manifestTypeInfo;
+
+    /// <summary>
+    /// Gets the source-generated JSON contract for this bundle's manifest.
+    /// </summary>
+    public JsonTypeInfo<SkillBundleManifest> ManifestTypeInfo => LazyInitializer.EnsureInitialized(
+        ref _manifestTypeInfo,
+        () => CreateManifestTypeInfo(ManifestAssetsPropertyName));
+
+    private static JsonTypeInfo<SkillBundleManifest> CreateManifestTypeInfo(string manifestAssetsPropertyName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(manifestAssetsPropertyName);
+
+        var resolver = AspireSkillsJsonSerializerContext.Default.WithAddedModifier(typeInfo =>
+        {
+            if (typeInfo.Type != typeof(SkillBundleManifest))
+            {
+                return;
+            }
+
+            var assetsPropertyName = JsonNamingPolicy.CamelCase.ConvertName(nameof(SkillBundleManifest.Assets));
+            var assetsProperty = typeInfo.Properties.Single(property =>
+                string.Equals(property.Name, assetsPropertyName, StringComparison.Ordinal));
+            // Published manifests use an asset-specific collection property:
+            // { "skills": [...] }. Keep the in-memory model generalized as Assets and customize
+            // only this descriptor's source-generated JSON contract.
+            assetsProperty.Name = manifestAssetsPropertyName;
+        });
+        var options = new JsonSerializerOptions(AspireSkillsJsonSerializerContext.Default.Options)
+        {
+            TypeInfoResolver = resolver,
+        };
+
+        return (JsonTypeInfo<SkillBundleManifest>)options.GetTypeInfo(typeof(SkillBundleManifest));
+    }
+}
 
 /// <summary>
 /// Creates and loads validated Aspire skills bundles.
@@ -23,6 +89,7 @@ internal interface IAspireSkillsBundleProvider
     /// in a dedicated staging directory.
     /// </summary>
     Task<AspireSkillsBundle> CreateAsync(
+        AgentAssetKind assetKind,
         FileInfo archive,
         DirectoryInfo bundleDirectory,
         string expectedArchiveSha512,
@@ -32,12 +99,15 @@ internal interface IAspireSkillsBundleProvider
     /// <summary>
     /// Loads an Aspire skills bundle from disk.
     /// </summary>
-    Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken, bool skipCompatibilityCheck = false);
+    Task<AspireSkillsBundle> LoadAsync(
+        AgentAssetKind assetKind,
+        DirectoryInfo bundleDirectory,
+        CancellationToken cancellationToken,
+        bool skipCompatibilityCheck = false);
 }
 
 internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 {
-    private const string ManifestFileName = "skill-manifest.json";
     private const string SkillsDirectoryName = "skills";
     private const string SkillFileName = "SKILL.md";
     private const int MaxSkillNameLength = 64;
@@ -74,12 +144,15 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     }
 
     public async Task<AspireSkillsBundle> CreateAsync(
+        AgentAssetKind assetKind,
         FileInfo archive,
         DirectoryInfo bundleDirectory,
         string expectedArchiveSha512,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false)
     {
+        var descriptor = AspireSkillsBundleDescriptors.Get(assetKind);
+
         ArgumentNullException.ThrowIfNull(archive);
         ArgumentNullException.ThrowIfNull(bundleDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedArchiveSha512);
@@ -102,21 +175,24 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         ExtractArchive(archive.FullName, extractionDirectory.FullName);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var bundleRoot = FindBundleRoot(extractionDirectory.FullName);
-        var bundle = await LoadAsync(bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
+        var bundleRoot = FindBundleRoot(extractionDirectory.FullName, descriptor.ManifestFileName);
+        var bundle = await LoadAsync(assetKind, bundleRoot, cancellationToken, skipCompatibilityCheck).ConfigureAwait(false);
 
         CopyDirectory(bundleRoot.FullName, bundleDirectory.FullName);
         return bundle;
     }
 
     public async Task<AspireSkillsBundle> LoadAsync(
+        AgentAssetKind assetKind,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken,
         bool skipCompatibilityCheck = false)
     {
+        var descriptor = AspireSkillsBundleDescriptors.Get(assetKind);
+
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var manifestPath = Path.Combine(bundleDirectory.FullName, ManifestFileName);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, descriptor.ManifestFileName);
         if (!File.Exists(manifestPath))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest was not found at '{0}'.", manifestPath));
@@ -128,7 +204,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             await using var manifestStream = File.OpenRead(manifestPath);
             manifest = await JsonSerializer.DeserializeAsync(
                 manifestStream,
-                AspireSkillsJsonSerializerContext.Default.SkillBundleManifest,
+                descriptor.ManifestTypeInfo,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (JsonException ex)
@@ -142,10 +218,11 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return CreateBundle(bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
+        return CreateBundle(assetKind, bundleDirectory, manifest, _currentCliVersion, _currentSdkVersion, skipCompatibilityCheck);
     }
 
     private static AspireSkillsBundle CreateBundle(
+        AgentAssetKind assetKind,
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
         string currentCliVersion,
@@ -168,15 +245,15 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
         }
 
-        var skills = manifest.Skills;
-        if (skills is not { Length: > 0 })
+        var assets = manifest.Assets;
+        if (assets is not { Length: > 0 })
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
         }
 
         var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        List<ValidatedAspireSkill> validatedSkills = [];
-        foreach (var skill in skills)
+        List<ValidatedAspireSkillsBundleAsset> validatedAssets = [];
+        foreach (var skill in assets)
         {
             if (skill is null)
             {
@@ -222,7 +299,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
             var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hasSkillFile = false;
-            List<SkillAssetFile> files = [];
+            List<AgentAssetFile> files = [];
             foreach (var file in skillFiles)
             {
                 if (file is null)
@@ -249,10 +326,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must contain SKILL.md.", skillName));
             }
 
-            validatedSkills.Add(new ValidatedAspireSkill(definition, files));
+            validatedAssets.Add(new ValidatedAspireSkillsBundleAsset(definition, files));
         }
 
-        return new AspireSkillsBundle(version, validatedSkills);
+        return new AspireSkillsBundle(version, assetKind, validatedAssets);
     }
 
     private static void ValidateSkillName(string skillName)
@@ -273,7 +350,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         }
     }
 
-    private static SkillAssetFile ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
+    private static AgentAssetFile ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
         var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
@@ -321,7 +398,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             ValidateSkillFileFrontmatter(skillName, content);
         }
 
-        return new SkillAssetFile(relativePath, content);
+        return new AgentAssetFile(relativePath, content);
     }
 
     private static void ValidateSkillFileFrontmatter(string skillName, string content)
@@ -572,16 +649,16 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         return destinationPath;
     }
 
-    private static DirectoryInfo FindBundleRoot(string extractionDirectory)
+    private static DirectoryInfo FindBundleRoot(string extractionDirectory, string manifestFileName)
     {
-        var rootManifestPath = Path.Combine(extractionDirectory, ManifestFileName);
+        var rootManifestPath = Path.Combine(extractionDirectory, manifestFileName);
         if (File.Exists(rootManifestPath))
         {
             return new DirectoryInfo(extractionDirectory);
         }
 
         var packageDirectory = Path.Combine(extractionDirectory, "package");
-        var packageManifestPath = Path.Combine(packageDirectory, ManifestFileName);
+        var packageManifestPath = Path.Combine(packageDirectory, manifestFileName);
         if (File.Exists(packageManifestPath))
         {
             return new DirectoryInfo(packageDirectory);
@@ -589,7 +666,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         var topLevelBundleDirectories = Directory
             .EnumerateDirectories(extractionDirectory)
-            .Where(directory => File.Exists(Path.Combine(directory, ManifestFileName)))
+            .Where(directory => File.Exists(Path.Combine(directory, manifestFileName)))
             .ToArray();
 
         if (topLevelBundleDirectories.Length == 1)

@@ -11,7 +11,7 @@ namespace Aspire.Cli.Agents;
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
 [DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
-internal sealed class SkillDefinition
+internal sealed class SkillDefinition : AgentAssetDefinition
 {
     /// <summary>
     /// The Playwright CLI skill for browser automation.
@@ -63,25 +63,11 @@ internal sealed class SkillDefinition
     }
 
     private SkillDefinition(string name, string description, string? skillContent, SkillSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
+        : base(name, description, installExcludedRelativePaths, isDefault, applicableLanguages)
     {
-        Name = name;
-        Description = description;
         SkillContent = skillContent;
         SourceKind = sourceKind;
-        InstallExcludedRelativePaths = installExcludedRelativePaths;
-        IsDefault = isDefault;
-        ApplicableLanguages = applicableLanguages ?? [];
     }
-
-    /// <summary>
-    /// Gets the skill name (used as the folder name under skill locations).
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// Gets the description shown in the selection prompt.
-    /// </summary>
-    public string Description { get; }
 
     /// <summary>
     /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle.
@@ -99,86 +85,10 @@ internal sealed class SkillDefinition
     public bool HasInstallableFiles => SkillContent is not null || SourceKind is SkillSourceKind.AspireSkillsBundle;
 
     /// <summary>
-    /// Gets relative paths that should be excluded when the skill is installed into a workspace.
-    /// </summary>
-    public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
-
-    /// <summary>
-    /// Gets whether a bundled file should be installed into a workspace.
-    /// </summary>
-    public bool ShouldInstallFile(string relativePath)
-    {
-        foreach (var excludedPath in InstallExcludedRelativePaths)
-        {
-            if (PathMatchesOrIsUnder(relativePath, excludedPath))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Gets whether this skill should be selected by default.
-    /// </summary>
-    public bool IsDefault { get; }
-
-    /// <summary>
-    /// Gets the set of language identifiers (from <see cref="KnownLanguageId"/>) this skill applies to.
-    /// An empty list means the skill is language-agnostic and always offered.
-    /// When non-empty, the skill is only offered when the detected language matches one of the entries.
-    /// </summary>
-    public IReadOnlyList<string> ApplicableLanguages { get; }
-
-    /// <summary>
-    /// Returns whether this skill is applicable for the given detected language.
-    /// A skill with no <see cref="ApplicableLanguages"/> restrictions is always applicable.
-    /// A skill with restrictions is only applicable when the detected language matches one of the entries.
-    /// When no language is detected (<paramref name="detectedLanguage"/> is <c>null</c>), language-restricted skills are excluded.
-    /// </summary>
-    public bool IsApplicableToLanguage(LanguageId? detectedLanguage)
-    {
-        if (ApplicableLanguages.Count == 0)
-        {
-            return true;
-        }
-
-        if (detectedLanguage is null)
-        {
-            return false;
-        }
-
-        return ApplicableLanguages.Any(l => string.Equals(l, detectedLanguage.Value.Value, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Returns whether this skill has the specified name.
-    /// </summary>
-    public bool HasName(string name, StringComparison comparison = StringComparison.Ordinal) => string.Equals(Name, name, comparison);
-
-    private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
-    {
-        if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        if (!relativePath.StartsWith(excludedPath, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return relativePath.Length > excludedPath.Length && relativePath[excludedPath.Length] == Path.DirectorySeparatorChar;
-    }
-
-    /// <summary>
     /// Gets CLI-defined skills that are not sourced from the Aspire skills bundle.
     /// </summary>
     public static IReadOnlyList<SkillDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
 
-    /// <inheritdoc />
-    public override string ToString() => Name;
 }
 
 /// <summary>

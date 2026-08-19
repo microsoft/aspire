@@ -64,15 +64,19 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         _result = result;
     }
 
-    public async Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
+    public async Task<AspireSkillsInstallResult> InstallAsync(
+        AgentAssetKind assetKind,
+        CancellationToken cancellationToken)
     {
+        Assert.Equal(AgentAssetKind.Skills, assetKind);
+
         if (_result is not null)
         {
             return _result;
         }
 
         await EnsureBundleAsync(cancellationToken);
-        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(AgentAssetKind.Skills, _bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
@@ -159,7 +163,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 AspireCli = ">=0.0.0 <999.0.0",
                 AspireSdk = ">=0.0.0 <999.0.0"
             },
-            Skills =
+            Assets =
             [
                 CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
                 CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
@@ -170,13 +174,13 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             ]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsBundleDescriptors.Skills.ManifestTypeInfo);
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleSkill CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private SkillBundleAsset CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
     {
-        return new SkillBundleSkill
+        return new SkillBundleAsset
         {
             Name = skillName,
             Description = $"{skillName} skill",

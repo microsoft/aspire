@@ -11,38 +11,40 @@ public class CommonAgentApplicatorsTests
     private const int MaxSkillDescriptionLength = 1024;
 
     [Fact]
-    public void SkillLocation_All_ContainsAllLocations()
+    public void AgentAssetLocation_All_ContainsAllLocations()
     {
-        Assert.Equal(4, SkillLocation.All.Count);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.Standard);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.ClaudeCode);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.GitHubSkills);
-        Assert.Contains(SkillLocation.All, l => l == SkillLocation.OpenCode);
+        Assert.Equal(4, AgentAssetLocation.All.Count);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.Standard);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.ClaudeCode);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.GitHubSkills);
+        Assert.Contains(AgentAssetLocation.All, l => l == AgentAssetLocation.OpenCode);
     }
 
     [Fact]
-    public void SkillLocation_Standard_IsDefaultAndIncludesUserLevel()
+    public void AgentAssetLocation_Standard_IsDefaultForWorkspaceAndUser()
     {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.True(SkillLocation.Standard.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".agents", "skills"), SkillLocation.Standard.RelativeSkillDirectory);
+        Assert.True(AgentAssetLocation.Standard.IsDefault);
+        Assert.Equal(
+            AgentAssetLocationScope.Workspace | AgentAssetLocationScope.User,
+            AgentAssetLocation.Standard.Scopes);
+        Assert.Equal(Path.Combine(".agents", "skills"), AgentAssetLocation.Standard.RelativeAssetDirectory);
     }
 
     [Fact]
-    public void SkillLocation_ClaudeCode_IsNotDefaultAndNoUserLevel()
+    public void AgentAssetLocation_ClaudeCode_IsNotDefaultAndWorkspaceOnly()
     {
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IncludeUserLevel);
-        Assert.Equal(Path.Combine(".claude", "skills"), SkillLocation.ClaudeCode.RelativeSkillDirectory);
+        Assert.False(AgentAssetLocation.ClaudeCode.IsDefault);
+        Assert.Equal(AgentAssetLocationScope.Workspace, AgentAssetLocation.ClaudeCode.Scopes);
+        Assert.Equal(Path.Combine(".claude", "skills"), AgentAssetLocation.ClaudeCode.RelativeAssetDirectory);
     }
 
     [Fact]
-    public void SkillLocation_OnlyStandardIsDefault()
+    public void AgentAssetLocation_OnlyStandardIsDefault()
     {
-        Assert.True(SkillLocation.Standard.IsDefault);
-        Assert.False(SkillLocation.ClaudeCode.IsDefault);
-        Assert.False(SkillLocation.GitHubSkills.IsDefault);
-        Assert.False(SkillLocation.OpenCode.IsDefault);
+        Assert.True(AgentAssetLocation.Standard.IsDefault);
+        Assert.False(AgentAssetLocation.ClaudeCode.IsDefault);
+        Assert.False(AgentAssetLocation.GitHubSkills.IsDefault);
+        Assert.False(AgentAssetLocation.OpenCode.IsDefault);
     }
 
     [Fact]
