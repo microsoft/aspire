@@ -26,12 +26,12 @@ internal static class WebSocketOriginValidator
             return false;
         }
 
-        // Uri.Authority omits default ports, so construct the authority explicitly
-        // and compare it with HostString's equivalent normalized representation.
-        var originAuthority = originUri.IsDefaultPort
-            ? originUri.Host
-            : originUri.Host + ":" + originUri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (!Uri.TryCreate($"{context.Request.Scheme}://{expectedHost}", UriKind.Absolute, out var expectedUri))
+        {
+            return false;
+        }
 
-        return string.Equals(originAuthority, expectedHost.ToString(), StringComparison.OrdinalIgnoreCase);
+        return string.Equals(originUri.Host, expectedUri.Host, StringComparison.OrdinalIgnoreCase) &&
+            originUri.Port == expectedUri.Port;
     }
 }

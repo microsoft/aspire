@@ -13,6 +13,8 @@ public class WebSocketOriginValidatorTests
     [InlineData("https", "dashboard.example.com", "https://dashboard.example.com", true)]
     [InlineData("https", "dashboard.example.com:8443", "https://dashboard.example.com:8443", true)]
     [InlineData("https", "dashboard.example.com", "https://dashboard.example.com:443", true)]
+    [InlineData("https", "dashboard.example.com:443", "https://dashboard.example.com", true)]
+    [InlineData("http", "dashboard.example.com:80", "http://dashboard.example.com", true)]
     [InlineData("HTTPS", "Dashboard.Example.Com", "https://dashboard.example.com", true)]
     [InlineData("http", "localhost:5101", "http://localhost:5101", true)]
     [InlineData("https", "dashboard.example.com", "http://dashboard.example.com", false)]

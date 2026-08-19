@@ -513,7 +513,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // upgrades before SignalR allocates a connection or circuit.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Equals("/_blazor", StringComparisons.UrlPath) &&
+            if (context.Request.Path.StartsWithSegments("/_blazor", StringComparisons.UrlPath) &&
                 context.WebSockets.IsWebSocketRequest &&
                 !WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
             {

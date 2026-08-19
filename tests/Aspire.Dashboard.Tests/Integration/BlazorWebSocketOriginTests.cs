@@ -11,16 +11,17 @@ namespace Aspire.Dashboard.Tests.Integration;
 public class BlazorWebSocketOriginTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
-    [InlineData(null)]
-    [InlineData("https://evil.example.com")]
-    public async Task BlazorWebSocket_InvalidOrigin_ReturnsForbidden(string? origin)
+    [InlineData(null, "/_blazor")]
+    [InlineData("https://evil.example.com", "/_blazor")]
+    [InlineData("https://evil.example.com", "/_blazor/")]
+    public async Task BlazorWebSocket_InvalidOrigin_ReturnsForbidden(string? origin, string path)
     {
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
         await app.StartAsync().DefaultTimeout();
 
         var frontendUri = new Uri(app.FrontendSingleEndPointAccessor().GetResolvedAddress());
         using var client = new HttpClient { BaseAddress = frontendUri };
-        using var request = CreateWebSocketUpgradeRequest(origin);
+        using var request = CreateWebSocketUpgradeRequest(origin, path);
         using var response = await client.SendAsync(request).DefaultTimeout();
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -43,9 +44,9 @@ public class BlazorWebSocketOriginTests(ITestOutputHelper testOutputHelper)
         await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Test complete", CancellationToken.None).DefaultTimeout();
     }
 
-    private static HttpRequestMessage CreateWebSocketUpgradeRequest(string? origin)
+    private static HttpRequestMessage CreateWebSocketUpgradeRequest(string? origin, string path)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, "/_blazor")
+        var request = new HttpRequestMessage(HttpMethod.Get, path)
         {
             Version = HttpVersion.Version11,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact
