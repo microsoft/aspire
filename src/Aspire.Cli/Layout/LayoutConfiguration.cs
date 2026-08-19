@@ -99,6 +99,8 @@ public sealed class LayoutConfiguration
     /// <returns>The path to the Dashboard executable.</returns>
     public string? GetDashboardPath()
     {
+        // Current bundles keep the Native AOT Dashboard and its static assets isolated from
+        // aspire-managed so each executable can use its own content root.
         var dashboardDir = GetComponentPath(LayoutComponent.Dashboard);
         if (dashboardDir is not null)
         {
@@ -111,6 +113,9 @@ public sealed class LayoutConfiguration
             }
         }
 
+        // Preserve compatibility with bundles created before dashboard/ became a separate
+        // component. Transitional bundles placed Aspire.Dashboard in managed/, while older
+        // bundles dispatch the "dashboard" subcommand through aspire-managed itself.
         var managedDir = GetComponentPath(LayoutComponent.Managed);
         if (managedDir is null)
         {

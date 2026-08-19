@@ -230,6 +230,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         var dcpPath = Path.Combine(dcpDir, IsWindows() ? "dcp.exe" : "dcp");
         var managedDir = Path.Combine(bundleRoot, "managed");
         var managedPath = Path.Combine(managedDir, IsWindows() ? "aspire-managed.exe" : "aspire-managed");
+
+        // Current bundles isolate the Native AOT Dashboard and its static assets in dashboard/.
+        // Preserve compatibility with transitional bundles that placed Aspire.Dashboard in managed/;
+        // if neither executable exists, resolution below falls back to the older aspire-managed
+        // dispatcher, which launches the Dashboard through its "dashboard" subcommand.
         var dashboardDir = Path.Combine(bundleRoot, "dashboard");
         var dashboardPath = Path.Combine(dashboardDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
         if (!File.Exists(dashboardPath))

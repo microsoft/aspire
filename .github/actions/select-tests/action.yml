@@ -98,10 +98,8 @@ runs:
           exit 1
         fi
         ./eng/common/dotnet-install.sh \
-          --runtime dotnet \
-          --version "$runtime_version" \
-          --install-dir "$GITHUB_WORKSPACE/.dotnet" \
-          --skip-non-versioned-files
+          -runtime dotnet \
+          -version "$runtime_version"
 
     - name: Select relevant tests
       id: select
