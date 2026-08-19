@@ -1251,18 +1251,17 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     throw new InvalidOperationException($"Unexpected resource type: {appResource.DcpResourceKind}");
             }
         }
-        catch (FailedToApplyEnvironmentException ex)
-        {
-            // For this exception we don't want the noise of the stack trace, we've already
-            // provided more detail where we detected the issue (e.g. envvar name). To get
-            // more diagnostic information reduce logging level for DCP log category to Debug.
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
-        }
         catch (Exception ex)
         {
             activity.SetError(ex);
-            _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+            if (ex is not FailedToApplyEnvironmentException)
+            {
+                // FailedToApplyEnvironmentException is logged with actionable details where it is detected,
+                // so avoid duplicating that entry with a generic stack trace.
+                _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
+            }
+
+            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
             throw;
         }
     }
