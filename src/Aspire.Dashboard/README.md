@@ -165,7 +165,7 @@ The dashboard connects to a resource service to load and display resource inform
 
 #### Telemetry limits
 
-Telemetry is stored in memory. To avoid excessive memory usage, the dashboard limits the count and size of stored telemetry. When a count limit is reached, new telemetry is added and the oldest telemetry is removed. When a size limit is reached, data is truncated to the limit.
+Telemetry is stored in memory. To avoid excessive memory usage, the dashboard limits stored telemetry. Log, trace, and metric retention limits evict the oldest stored values when full; attribute and span-event limits truncate incoming data, and the resource limit rejects telemetry for new resources after the limit is reached.
 
 Telemetry limits have different scopes depending on the telemetry type:
 
