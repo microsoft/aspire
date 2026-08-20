@@ -17,11 +17,13 @@ async function runScenario(scenario, context) {
   const controller = createShellController(context, scenario.description, timeoutMs, artifactCounts);
   const execution = runCallback(scenario.callback, controller);
   let failure = null;
+  let terminalOutput = '';
 
   try {
     await withTimeout(execution, timeoutMs);
   } catch (error) {
     failure = error;
+    terminalOutput = controller.getLatestOutput();
     await controller.dispose();
     await waitForSettlement(execution, callbackSettlementTimeoutMs);
   } finally {
@@ -40,6 +42,7 @@ async function runScenario(scenario, context) {
     } catch (error) {
       if (!failure) {
         failure = error;
+        terminalOutput = cleanupController.getLatestOutput();
       }
     } finally {
       await cleanupController.dispose();
@@ -47,13 +50,16 @@ async function runScenario(scenario, context) {
   }
 
   if (failure) {
-    throw new Error(`${scenario.description}: ${failure.message}`, { cause: failure });
+    const scenarioError = new Error(`${scenario.description}: ${failure.message}`, { cause: failure });
+    scenarioError.terminalOutput = terminalOutput;
+    throw scenarioError;
   }
 }
 
 function createShellController(context, description, timeoutMs, artifactCounts) {
   let activeRun = null;
   let disposed = false;
+  let latestRun = null;
   let session = null;
   let sessionCwd = null;
 
@@ -108,6 +114,7 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     }
 
     activeRun = startedRun;
+    latestRun = startedRun;
   }
 
   function waitFor(text, waitDescription, waitTimeoutMs = timeoutMs) {
@@ -132,6 +139,10 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
 
   function ctrlC() {
     return getActiveRun().ctrlC();
+  }
+
+  function getLatestOutput() {
+    return latestRun?.getLatestOutput() || '';
   }
 
   function getActiveRun() {
@@ -162,6 +173,7 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     ...context,
     ctrlC,
     enter,
+    getLatestOutput,
     runAspireCommand,
     type,
     waitFor,
