@@ -1,0 +1,56 @@
+{
+  "run_id": 32311965446,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32311965446",
+  "analyzed_at": "2026-08-20T00:10:08Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19501,
+    "title": "Pin GitHub Actions to full-length commit SHAs",
+    "author": "danfiedler-msft",
+    "state": "closed",
+    "head_branch": "danfiedler/pin-actions",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19501"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (macOS) / Build CLI (osx-arm64)",
+      "id": 96262371944,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32311965446/job/96262371944",
+      "classification": "transient-infra",
+      "reason": "Artifact upload failed with ENOTFOUND DNS resolution error during 'Upload RID-specific packages' step, matching a known recurring GitHub Actions artifact-upload infra issue unrelated to PR changes (workflow/dependabot config only).",
+      "failed_steps": ["Upload RID-specific packages"]
+    },
+    {
+      "name": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "id": 96262723536,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32311965446/job/96262723536",
+      "classification": "flaky-test",
+      "reason": "Test failure is a vswhere.exe timeout while locating full-framework MSBuild on the Windows runner, an environmental/timing issue unrelated to the PR which only touches GitHub Actions workflow pinning and dependabot config.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Azure.Npgsql.EntityFrameworkCore.PostgreSQL / Azure.Npgsql.EntityFrameworkCore.PostgreSQL (windows-latest)",
+      "id": 96262728279,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32311965446/job/96262728279",
+      "classification": "transient-infra",
+      "reason": "Process repeatedly exited with code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) in post-test steps (hang dump check, upload logs, generate summary), matching a known recurring Windows runner process-initialization failure unrelated to PR changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild",
+      "job": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "error": "System.TimeoutException : C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe timed out after 00:00:30.",
+      "stack_trace": "at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunProcessWithArgumentsAsync(String fileName, String workingDirectory, String[] arguments, IDictionary`2 environment, TimeSpan timeout) in /_/tests/Aspire.Hosting.Sdk.Tests/AppHostSdkTargetsTests.cs:line 1894\n   at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.FindFullFrameworkMSBuildAsync() in /_/tests/Aspire.Hosting.Sdk.Tests/AppHostSdkTargetsTests.cs:line 1642\n   at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild() in /_/tests/Aspire.Hosting.Sdk.Tests/AppHostSdkTargetsTests.cs:line 782",
+      "classification": "flaky",
+      "reason": "The test invokes vswhere.exe to locate full-framework MSBuild with a fixed 30s timeout; this is a runner environment/timing-dependent operation, and the PR only modifies GitHub Actions workflow pinning/dependabot config, not this test or the SDK targets it exercises."
+    }
+  ],
+  "causes": ["artifact-upload-enotfound", "vswhere-msbuild-lookup-timeout", "windows-process-init-0xc0000142"]
+}

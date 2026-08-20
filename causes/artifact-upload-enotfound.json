@@ -10,6 +10,13 @@
       "job": "Tests / Templates-BuildAndRunTemplateTests / Templates-BuildAndRunTemplateTests (macos-latest)",
       "pr_number": 19247,
       "observed_at": "2026-08-11T21:51:55Z"
+    },
+    {
+      "run_id": 32311965446,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32311965446",
+      "job": "Tests / Build native CLI archive (macOS) / Build CLI (osx-arm64)",
+      "pr_number": 19501,
+      "observed_at": "2026-08-20T00:10:08Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19252"

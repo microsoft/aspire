@@ -1,0 +1,17 @@
+{
+  "id": "vswhere-msbuild-lookup-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostSdkTargetsTests full-framework MSBuild test times out locating MSBuild via vswhere.exe",
+  "test_name": "Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild",
+  "error_pattern": "System.TimeoutException : C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe timed out after 00:00:30.\n   at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.FindFullFrameworkMSBuildAsync()",
+  "occurrences": [
+    {
+      "run_id": 32311965446,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32311965446",
+      "job": "Tests / Build native CLI archive (macOS) / Build CLI (osx-arm64)",
+      "pr_number": 19501,
+      "observed_at": "2026-08-20T00:10:08Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19517"
+}

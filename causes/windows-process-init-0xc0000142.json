@@ -24,6 +24,13 @@
       "job": "Tests / Hosting.PostgreSQL / Hosting.PostgreSQL (windows-latest)",
       "pr_number": 17811,
       "observed_at": "2026-08-13T20:13:28Z"
+    },
+    {
+      "run_id": 32311965446,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32311965446",
+      "job": "Tests / Build native CLI archive (macOS) / Build CLI (osx-arm64)",
+      "pr_number": 19501,
+      "observed_at": "2026-08-20T00:10:08Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19144"
