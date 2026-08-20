@@ -17,8 +17,8 @@ import { isCommandCancellation, withCommandTelemetry } from '../utils/telemetry'
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { isE2eBridgeEnabled } from '../testing/e2eStateFileBridge';
 import { registerInstrumentedCommand } from './instrumentedCommand';
 import { AppHostCommandTarget, getAppHostArgs } from '../utils/appHostArgs';
