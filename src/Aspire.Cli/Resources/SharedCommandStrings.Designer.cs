@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AppHostNotRunningInCurrentWorktree {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningInCurrentWorktree", resourceCulture);
+            }
+        }
+
         internal static string AppHostNotRunningAtPath {
             get {
                 return ResourceManager.GetString("AppHostNotRunningAtPath", resourceCulture);

@@ -82,6 +82,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.RustEmptyAppHost, ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.PythonStarter, ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.GoStarter, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.JavaStarter, ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-ts-cs-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.DotNet(KnownTemplateId.DotNetEmptyAppHost, ["--localhost-tld", "false"]),
@@ -123,6 +124,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
+    [InlineData(KnownTemplateId.JavaStarter, "AppHost.java")]
     public async Task ChannelPinningTemplate_IdentityNotRegistered_DoesNotPinChannel(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
@@ -150,6 +152,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
+    [InlineData(KnownTemplateId.JavaStarter, "AppHost.java")]
     public async Task ChannelPinningTemplate_IdentityMatchesRegisteredChannel_PinsThatChannel(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
@@ -176,6 +179,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
+    [InlineData(KnownTemplateId.JavaStarter, "AppHost.java")]
     public async Task ChannelPinningTemplate_ExplicitChannelArg_OverridesIdentityAndPersists(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(

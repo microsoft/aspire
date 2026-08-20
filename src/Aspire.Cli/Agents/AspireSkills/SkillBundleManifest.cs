@@ -15,7 +15,7 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill[] Skills { get; init; } = [];
+    public SkillBundleSkill?[] Skills { get; init; } = [];
 }
 
 /// <summary>
@@ -41,7 +41,7 @@ internal sealed class SkillBundleSkill
 
     public string[] InstallExcludedRelativePaths { get; init; } = [];
 
-    public SkillBundleFile[] Files { get; init; } = [];
+    public SkillBundleFile?[] Files { get; init; } = [];
 }
 
 /// <summary>
@@ -53,7 +53,7 @@ internal sealed class SkillBundleFile
 
     // Lowercase hex SHA-512 of the file contents (preferred), read from `skill-manifest.json` inside the
     // bundle archive (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by current
-    // microsoft/aspire-skills' build-aspire-bundles.mjs and verified by AspireSkillsBundle.ValidateFile.
+    // microsoft/aspire-skills' build-aspire-bundles.mjs and verified by AspireSkillsBundleProvider.
     public string? Sha512 { get; init; }
 
     // Lowercase hex SHA-256 of the file contents, accepted only for bundles published before the SHA-512

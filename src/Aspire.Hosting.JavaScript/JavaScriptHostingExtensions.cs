@@ -32,7 +32,10 @@ public static partial class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
-    private const string DefaultNpmRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+    // Default to the public npm registry so generated Dockerfiles work for customers out of the box.
+    // Operators who want an internal mirror can override it at build time via `--build-arg NPM_REGISTRY=...`.
+    // See https://github.com/microsoft/aspire/issues/19370.
+    private const string DefaultNpmRegistry = "https://registry.npmjs.org/";
     private const string DefaultPnpmVersion = "10.30.1";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;

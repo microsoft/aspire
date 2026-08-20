@@ -69,7 +69,6 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
-    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="KubernetesClient" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
@@ -135,8 +134,10 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />

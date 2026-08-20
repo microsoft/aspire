@@ -2,20 +2,22 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as sinon from 'sinon';
 import {
     determineBaseLaunchProfile,
     determineDefaultLaunchProfile,
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction,
     readLaunchSettings,
     expandEnvironmentVariables,
     LaunchSettings,
     LaunchProfile
 } from '../debugger/launchProfiles';
 import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { extensionLogOutputChannel } from '../utils/logging';
 
+import { removeDirectorySafely } from './testHelpers';
 suite('Launch Profile Tests', () => {
     suite('determineBaseLaunchProfile', () => {
         const sampleLaunchSettings: LaunchSettings = {
@@ -515,13 +517,28 @@ suite('Launch Profile Tests', () => {
     });
 
     suite('determineArguments', () => {
-        test('uses run session args when provided', () => {
+        test('clones run session args when provided so token boundaries are preserved', () => {
             const baseProfileArgs = '--base-arg value';
-            const runSessionArgs = ['--session-arg', 'value'];
+            const runSessionArgs = ['--custom', 'value with spaces', '', 'literal "quote"', String.raw`C:\tools\backslash\path`];
 
             const result = determineArguments(baseProfileArgs, runSessionArgs);
 
-            assert.deepStrictEqual(result, '--session-arg value');
+            assert.deepStrictEqual(result, runSessionArgs);
+            assert.notStrictEqual(result, runSessionArgs);
+        });
+
+        test('logs only the run session argument count', () => {
+            const debugStub = sinon.stub(extensionLogOutputChannel, 'debug');
+
+            try {
+                const result = determineArguments(undefined, ['--api-key', 'secret-value']);
+
+                assert.deepStrictEqual(result, ['--api-key', 'secret-value']);
+                assert.strictEqual(debugStub.callCount, 1);
+                assert.strictEqual(debugStub.firstCall.args[0], 'Using run session arguments (count: 2)');
+            } finally {
+                debugStub.restore();
+            }
         });
 
         test('uses empty run session args when explicitly provided', () => {
@@ -530,7 +547,8 @@ suite('Launch Profile Tests', () => {
 
             const result = determineArguments(baseProfileArgs, runSessionArgs);
 
-            assert.deepStrictEqual(result, '');
+            assert.deepStrictEqual(result, []);
+            assert.notStrictEqual(result, runSessionArgs);
         });
 
         test('uses base profile args when run session args are null', () => {
@@ -543,12 +561,13 @@ suite('Launch Profile Tests', () => {
         });
 
         test('uses base profile args when run session args are undefined', () => {
-            const baseProfileArgs = '--base-arg value --flag';
+            const baseProfileArgs = '--custom "value with spaces" "" "literal \\"quote\\"" "C:\\tools\\backslash\\path"';
             const runSessionArgs = undefined;
 
             const result = determineArguments(baseProfileArgs, runSessionArgs);
 
-            assert.deepStrictEqual(result, baseProfileArgs);
+            assert.strictEqual(result, baseProfileArgs);
+            assert.strictEqual(typeof result, 'string');
         });
 
         test('returns undefined when no args available', () => {
@@ -630,95 +649,6 @@ suite('Launch Profile Tests', () => {
         });
     });
 
-    suite('determineServerReadyAction', () => {
-        test('returns undefined when launchBrowser is false', () => {
-            const result = determineServerReadyAction(false, 'https://localhost:5001', undefined);
-            assert.strictEqual(result, undefined);
-        });
-
-        test('returns undefined when applicationUrl is undefined', () => {
-            const result = determineServerReadyAction(true, undefined, undefined);
-            assert.strictEqual(result, undefined);
-        });
-
-        test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
-            const applicationUrl = 'https://localhost:5001';
-            const result = determineServerReadyAction(true, applicationUrl, undefined);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, applicationUrl);
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-
-        test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
-            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const result = determineServerReadyAction(true, applicationUrl, undefined);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-
-        test('returns serverReadyAction with absolute launchUrl', () => {
-            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const launchUrl = 'https://localhost:5001/some/path';
-            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-
-        test('returns serverReadyAction with relative launchUrl', () => {
-            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const launchUrl = '/some/path';
-            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-
-        test('absolute launchUrl overrides wildcard-host applicationUrl', () => {
-            const result = determineServerReadyAction(
-                true,
-                'http://*:80/;https://*:443/',
-                'https://mywebsite.localhost');
-
-            assert.strictEqual(result?.uriFormat, 'https://mywebsite.localhost/');
-        });
-
-        test('falls back to applicationUrl when relative launchUrl resolves against wildcard-host applicationUrl', () => {
-            const applicationUrl = 'http://*:80/';
-            const result = determineServerReadyAction(true, applicationUrl, '/some/path');
-
-            assert.strictEqual(result?.uriFormat, applicationUrl);
-        });
-
-        test('falls back to applicationUrl when relative launchUrl cannot be resolved', () => {
-            const result = determineServerReadyAction(true, 'localhost:5001', '/some/path');
-
-            assert.strictEqual(result?.uriFormat, 'localhost:5001');
-        });
-
-        test('falls back to applicationUrl when applicationUrl is empty', () => {
-            const result = determineServerReadyAction(true, ';http://localhost:5000', '/some/path');
-
-            assert.strictEqual(result?.uriFormat, '');
-        });
-
-        test('falls back to applicationUrl when absolute launchUrl is not http or https', () => {
-            const applicationUrl = 'https://localhost:5001';
-            const result = determineServerReadyAction(true, applicationUrl, 'javascript:alert(1)');
-
-            assert.strictEqual(result?.uriFormat, applicationUrl);
-        });
-    });
-
     suite('readLaunchSettings', () => {
         let tempDir: string;
         let projectPath: string;
@@ -741,7 +671,7 @@ suite('Launch Profile Tests', () => {
 
         teardown(() => {
             if (fs.existsSync(tempDir)) {
-                fs.rmSync(tempDir, { recursive: true, force: true });
+                removeDirectorySafely(tempDir);
             }
         });
 

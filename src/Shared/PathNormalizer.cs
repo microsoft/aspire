@@ -107,6 +107,22 @@ internal static class PathNormalizer
         return ResolveSymlinksCore(path, depth: 0);
     }
 
+    /// <summary>
+    /// Attempts to resolve symbolic links along every segment of <paramref name="path"/>.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ResolveSymlinks"/>, this method reports IO, permission, and circular-link failures
+    /// instead of returning a partially canonicalized path. An ordinary missing segment that is not observable
+    /// as a symbolic link remains lexical; callers must still account for filesystem changes after validation.
+    /// </remarks>
+    /// <param name="path">The path to canonicalize.</param>
+    /// <param name="resolvedPath">The canonical path when the method returns <see langword="true"/>.</param>
+    /// <returns><see langword="true"/> when every observable symbolic link was resolved; otherwise, <see langword="false"/>.</returns>
+    public static bool TryResolveSymlinks(string path, out string resolvedPath)
+    {
+        return TryResolveSymlinksCore(path, depth: 0, out resolvedPath);
+    }
+
     // Hard depth limit on recursive canonicalization to defend against pathological
     // symlink chains; well-formed real-world paths resolve in a handful of levels.
     private const int MaxResolveSymlinksDepth = 40;
@@ -196,6 +212,82 @@ internal static class PathNormalizer
             }
 
             return current;
+        }
+    }
+
+    private static bool TryResolveSymlinksCore(string path, int depth, out string resolvedPath)
+    {
+        resolvedPath = path;
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return true;
+        }
+
+        if (depth > MaxResolveSymlinksDepth)
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
+            {
+                resolvedPath = fullPath;
+                return true;
+            }
+
+            var relative = fullPath[root.Length..];
+            var segments = relative.Split(
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+
+            var current = root;
+            for (var i = 0; i < segments.Length; i++)
+            {
+                current = Path.Combine(current, segments[i]);
+
+                var storedLinkTarget = new FileInfo(current).LinkTarget ?? new DirectoryInfo(current).LinkTarget;
+                if (storedLinkTarget is null && !File.Exists(current) && !Directory.Exists(current))
+                {
+                    try
+                    {
+                        _ = File.GetAttributes(current);
+                    }
+                    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+                    {
+                        for (var j = i + 1; j < segments.Length; j++)
+                        {
+                            current = Path.Combine(current, segments[j]);
+                        }
+
+                        resolvedPath = current;
+                        return true;
+                    }
+                }
+
+                var linkTarget = i < segments.Length - 1
+                    ? Directory.ResolveLinkTarget(current, returnFinalTarget: true)
+                    : File.ResolveLinkTarget(current, returnFinalTarget: true)
+                      ?? Directory.ResolveLinkTarget(current, returnFinalTarget: true);
+
+                if (linkTarget?.FullName is { Length: > 0 } resolved)
+                {
+                    if (!TryResolveSymlinksCore(resolved, depth + 1, out current))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            resolvedPath = current;
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

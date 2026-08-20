@@ -4,18 +4,37 @@
 #pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREPERSISTENCE001
+#pragma warning disable ASPIREPIPELINES001
 
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 {
+    private static readonly string[] s_unsupportedPublishMessageFragments =
+    [
+        "is not supported",
+        "C# AppHost",
+        "AddProject<TProject>(...)",
+        "AddCSharpApp(...)",
+        "addCSharpApp(...)",
+        "PublishAsDockerFile(...)",
+        "publishAsDockerFile(...)",
+        "ExcludeFromManifest()",
+        "excludeFromManifest()",
+        "TypeScript"
+    ];
+
     [Fact]
     public async Task AddDotnetProject_ProjectFile_ProducesDotnetRunProjectArgs()
     {
@@ -85,6 +104,321 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         Assert.True(app.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata));
         Assert.Equal(projectPath, metadata.ProjectPath);
+    }
+
+    [Theory]
+    [InlineData("project")]
+    [InlineData("directory")]
+    [InlineData("file")]
+    public async Task AddDotnetProject_InPublishMode_ManifestPublishingThrows(string appKind)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = appKind switch
+        {
+            "project" => CreateFile(workspace.Path, "MyService.csproj"),
+            "directory" => CreateProjectDirectory(workspace.Path),
+            "file" => CreateFile(workspace.Path, "service.cs"),
+            _ => throw new ArgumentOutOfRangeException(nameof(appKind), appKind, null)
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var app = builder.AddDotnetProject("svc", appPath, o => o.ExcludeLaunchProfile = true);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ManifestUtils.GetManifest(app.Resource, workspace.Path));
+
+        AssertUnsupportedPublishMessage(exception, "Resource 'svc' is a DotnetProjectResource.");
+    }
+
+    [Theory]
+    [InlineData(WellKnownPipelineSteps.Publish)]
+    [InlineData(WellKnownPipelineSteps.Deploy)]
+    public async Task AddDotnetProject_InPublishMode_PipelineThrows(string step)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateFile(workspace.Path, "MyService.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: step);
+        builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app));
+
+        AssertUnsupportedPublishMessage(exception, "Resource 'svc' is a DotnetProjectResource.");
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_InPublishMode_ManifestPipelineFailsBeforeCreatingOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        using var app = builder.Build();
+        await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app));
+
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "aspire-manifest.json")));
+    }
+
+    [Theory]
+    [InlineData(WellKnownPipelineSteps.Publish)]
+    [InlineData(WellKnownPipelineSteps.Deploy)]
+    public async Task AddDotnetProject_InPublishMode_BlocksSiblingPublishAndDeployWork(string step)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: step);
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        // This matches publish steps such as Docker Compose's:
+        //   test-{step}-work --RequiredBy--> publish/deploy
+        // The sibling intentionally has no dependency on publish-prereq/deploy-prereq.
+        var workExecuted = false;
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = $"test-{step}-work",
+            Action = _ =>
+            {
+                workExecuted = true;
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [step]
+        });
+
+        using var app = builder.Build();
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecutePipelineAsync(app));
+
+        Assert.False(workExecuted);
+    }
+
+    [Theory]
+    [InlineData(WellKnownPipelineSteps.Build)]
+    [InlineData(WellKnownPipelineSteps.Push)]
+    public async Task AddDotnetProject_InDeployMode_BlocksWorkWiredByLaterConfigurationCallback(string workRootStep)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            step: WellKnownPipelineSteps.Deploy);
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        var workStepName = $"test-{workRootStep}-work";
+        var deployStepName = $"test-{workRootStep}-deploy";
+        var workExecuted = 0;
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = workStepName,
+            Action = _ =>
+            {
+                Interlocked.Exchange(ref workExecuted, 1);
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [workRootStep]
+        });
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = deployStepName,
+            Action = _ => Task.CompletedTask,
+            RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+        });
+
+        // The resource is deliberately added after the .NET project so this callback runs after the validation
+        // callback, matching compute environments that attach build and push work to deploy late.
+        builder.AddContainer("late-wiring", "image")
+            .WithPipelineConfiguration(context =>
+                context.Steps.Single(step => step.Name == deployStepName).DependsOn(workStepName));
+
+        using var app = builder.Build();
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecutePipelineAsync(app));
+
+        Assert.Equal(0, Volatile.Read(ref workExecuted));
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_InBuildMode_DoesNotRunPublishValidation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            step: WellKnownPipelineSteps.Build);
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        // This matches build work registered by buildable project and container resources:
+        //   build -> test-build-work -> build-prereq -> process-parameters
+        var workExecuted = false;
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = "test-build-work",
+            Action = _ =>
+            {
+                workExecuted = true;
+                return Task.CompletedTask;
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+            RequiredBySteps = [WellKnownPipelineSteps.Build]
+        });
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+
+        Assert.True(workExecuted);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_InPushMode_DoesNotRunPublishValidation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            step: WellKnownPipelineSteps.Push);
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        var workExecuted = false;
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = "test-push-work",
+            Action = _ =>
+            {
+                workExecuted = true;
+                return Task.CompletedTask;
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.PushPrereq],
+            RequiredBySteps = [WellKnownPipelineSteps.Push]
+        });
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+
+        Assert.True(workExecuted);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_InRunMode_DoesNotGateSharedBeforeStartWork()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Services.Configure<PipelineOptions>(options => options.Step = WellKnownPipelineSteps.BeforeStart);
+        builder.AddDotnetProject("svc", CreateFile(workspace.Path, "MyService.csproj"), o => o.ExcludeLaunchProfile = true);
+
+        // This matches the Docker Compose dependency shape:
+        //   deploy -> test-deploy -> test-prepare -> validate-compute-environments <- before-start
+        // The shared validation step must remain usable by Run mode without invoking publish validation.
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = "test-prepare",
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
+        });
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = "test-deploy",
+            Action = _ => Task.CompletedTask,
+            DependsOnSteps = ["test-prepare"],
+            RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+        });
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+    }
+
+    [Fact]
+    public async Task DirectlyConstructedDotnetProjectResource_InPublishMode_PipelineThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddResource(new DotnetProjectResource("svc", workspace.Path));
+
+        using var app = builder.Build();
+        await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app));
+    }
+
+    [Fact]
+    public async Task MultipleDotnetProjectResources_WithExplicitOptIns_InPublishMode_PipelineThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddDotnetProject("api", CreateFile(workspace.Path, "Api.csproj"), o => o.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", CreateFile(workspace.Path, "Worker.csproj"), o => o.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("excluded", CreateFile(workspace.Path, "Excluded.csproj"), o => o.ExcludeLaunchProfile = true)
+            .ExcludeFromManifest();
+        builder.AddDotnetProject("containerized", CreateFile(workspace.Path, "Containerized.csproj"), o => o.ExcludeLaunchProfile = true)
+            .PublishAsDockerFile();
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app));
+
+        AssertUnsupportedPublishMessage(
+            exception,
+            "Resources 'api', 'worker' are DotnetProjectResource instances.");
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_ExcludedFromManifest_DoesNotFailPublishing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateFile(workspace.Path, "MyService.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+            .ExcludeFromManifest();
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+
+        var manifest = await ManifestUtils.GetManifestOrNull(resource.Resource, workspace.Path);
+        Assert.Null(manifest);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_WithManifestPublishingCallback_ProducesCustomManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateFile(workspace.Path, "MyService.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+            .WithManifestPublishingCallback(context => context.Writer.WriteString("type", "custom.v0"));
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource, workspace.Path);
+        Assert.Equal("""{"type":"custom.v0"}""", manifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_PublishAsDockerFile_ProducesContainerManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateFile(workspace.Path, "MyService.csproj");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Dockerfile"), "FROM scratch");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+            .PublishAsDockerFile();
+
+        using var app = builder.Build();
+        await ExecutePipelineAsync(app);
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource, workspace.Path);
+        var expected =
+            """
+            {
+              "type": "container.v1",
+              "build": {
+                "context": ".",
+                "dockerfile": "Dockerfile"
+              },
+              "env": {
+                "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory"
+              }
+            }
+            """;
+
+        Assert.Equal(expected, manifest.ToString(), ignoreLineEndingDifferences: true, ignoreWhiteSpaceDifferences: true);
     }
 
     [Fact]
@@ -567,5 +901,44 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         context.Args.Add("package");
         context.Args.Add("--yes");
         context.Args.Add("--");
+    }
+
+    private static void AssertUnsupportedPublishMessage(
+        DistributedApplicationException exception,
+        string expectedSubject)
+    {
+        Assert.StartsWith($"{expectedSubject} Automatic project publishing", exception.Message);
+        Assert.All(
+            s_unsupportedPublishMessageFragments,
+            fragment => Assert.Contains(fragment, exception.Message));
+    }
+
+    private static async Task ExecutePipelineAsync(DistributedApplication app)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cts.CancelAfter(TestConstants.LongTimeoutTimeSpan);
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<ILogger<DotnetProjectResourceTests>>(),
+            cts.Token);
+
+        await pipeline.ExecuteAsync(context).WaitAsync(cts.Token);
+    }
+
+    private static string CreateProjectDirectory(string workspacePath)
+    {
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspacePath, "MyService"));
+        CreateFile(projectDirectory.FullName, "MyService.csproj");
+        return projectDirectory.FullName;
+    }
+
+    private static string CreateFile(string directory, string fileName)
+    {
+        var path = Path.Combine(directory, fileName);
+        File.WriteAllText(path, string.Empty);
+        return path;
     }
 }

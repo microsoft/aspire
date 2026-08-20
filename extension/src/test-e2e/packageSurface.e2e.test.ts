@@ -118,6 +118,7 @@ suite('Aspire package contribution surface E2E', function () {
             'aspire-vscode.debugAppHost',
             'aspire-vscode.refreshAppHosts',
             'aspire-vscode.codeLensRevealResource',
+            'aspire-vscode.codeLensRevealAppHost',
             'aspire-vscode.openInIntegratedBrowser',
             'aspire-vscode.copyEndpointUrl',
             'aspire-vscode.openResourceTerminal',
@@ -465,6 +466,10 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.js',
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
+    'workspaceContains:**/apphost.rs',
+    'workspaceContains:**/AppHost.java',
+    'workspaceContains:**/apphost.java',
+    'workspaceContains:**/src/main/java/AppHost.java',
     'onCommand:aspire-vscode.installCli',
     'onCommand:aspire-vscode.verifyCliInstalled',
     'onLanguageModelTool:aspire_apphost_start',
@@ -476,6 +481,7 @@ const expectedSourceLanguageModelTools = createExpectedLanguageModelTools({
     startModelDescription: '%languageModelTool.aspireAppHostStart.modelDescription%',
     startUserDescription: '%languageModelTool.aspireAppHostStart.userDescription%',
     startModeDescription: '%languageModelTool.aspireAppHostStart.mode.description%',
+    startIsolatedDescription: '%languageModelTool.aspireAppHostStart.isolated.description%',
     stopDisplayName: '%languageModelTool.aspireAppHostStop.displayName%',
     stopModelDescription: '%languageModelTool.aspireAppHostStop.modelDescription%',
     stopUserDescription: '%languageModelTool.aspireAppHostStop.userDescription%',
@@ -484,9 +490,10 @@ const expectedSourceLanguageModelTools = createExpectedLanguageModelTools({
 
 const expectedInstalledLanguageModelTools = createExpectedLanguageModelTools({
     startDisplayName: 'Start Aspire AppHost',
-    startModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor\'s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in \'run\' mode (no debugger attached) or \'debug\' mode (debugger attached). Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started.',
+    startModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor\'s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in \'run\' mode (no debugger attached) or \'debug\' mode (debugger attached). Optional \'isolated\' starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective \'isolated\' value; idempotent or uncertain results omit it.',
     startUserDescription: 'Start an Aspire AppHost from this workspace in run or debug mode.',
     startModeDescription: 'How to start the AppHost: \'run\' starts it without attaching the debugger, \'debug\' starts it with the debugger attached.',
+    startIsolatedDescription: 'When true, start with randomized ports and isolated user secrets. When false, do not isolate. When omitted, linked git worktrees start isolated automatically.',
     stopDisplayName: 'Stop Aspire AppHost',
     stopModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through \'aspire stop --apphost\' for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.',
     stopUserDescription: 'Stop a running Aspire AppHost from this workspace.',
@@ -498,6 +505,7 @@ function createExpectedLanguageModelTools(strings: {
     startModelDescription: string;
     startUserDescription: string;
     startModeDescription: string;
+    startIsolatedDescription?: string;
     stopDisplayName: string;
     stopModelDescription: string;
     stopUserDescription: string;
@@ -522,6 +530,10 @@ function createExpectedLanguageModelTools(strings: {
                         type: 'string',
                         enum: ['run', 'debug'],
                         description: strings.startModeDescription,
+                    },
+                    isolated: {
+                        type: 'boolean',
+                        description: strings.startIsolatedDescription,
                     },
                 },
                 required: ['appHostPath', 'mode'],
@@ -555,6 +567,7 @@ const expectedCommandIds = [
     'aspire-vscode.codeLensDebugPipelineStep',
     'aspire-vscode.codeLensOpenDashboard',
     'aspire-vscode.codeLensResourceAction',
+    'aspire-vscode.codeLensRevealAppHost',
     'aspire-vscode.codeLensRevealResource',
     'aspire-vscode.codeLensViewAppHostLogs',
     'aspire-vscode.codeLensViewLogs',

@@ -238,8 +238,8 @@ fluent-combobox {
     --focus-stroke-width: var(--aspire-focus-stroke-width);
     --focus-stroke-outer: var(--dash-focus-ring-color);
     --focus-stroke-inner: var(--dash-focus-ring-color);
-    /* This default supports content outside the application token scope. The application scope below
-       redeclares the focus properties so they resolve against its explicit Fluent accent tokens. */
+    /* The body redeclares the focus properties below so they resolve against its explicit Fluent
+       accent tokens. */
     --dash-focus-ring-color: var(--accent-fill-rest);
     /* Message bar surfaces derive from the shared --aspire-status-* seeds (tokens.css)
        so each intent hue is defined once and every theme mixes its own surface from it.
@@ -341,9 +341,9 @@ fluent-combobox {
     --accent-olive-text: #fff;
 }
 
-#aspire-design-system {
-    /* Fluent emits the approved semantic accent values on this scope. Resolve the focus-ring variables
-       here as well so they do not capture the generated accent value from the document ancestor. */
+body {
+    /* Fluent emits the approved semantic accent values on the body. Resolve the focus-ring variables
+       here as well so they do not capture the generated accent value from the document root. */
     --dash-focus-ring-color: var(--accent-fill-rest);
     --focus-stroke-outer: var(--dash-focus-ring-color);
     --focus-stroke-inner: var(--dash-focus-ring-color);

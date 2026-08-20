@@ -134,6 +134,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         // If running in the extension context (Aspire terminal) without a debug session,
         // intercept and tell VS Code to start a proper debug session for this command.
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var explicitAppHost = passedAppHostProjectFile is not null;
         if (ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
@@ -161,6 +162,9 @@ internal abstract class PipelineCommandBase : BaseCommand
                 {
                     Command = Name,
                     Args = commandArgs.Length > 0 ? commandArgs : null,
+                    AppHostSelectionOrigin = explicitAppHost
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin,
                     EnvironmentVariables = new Dictionary<string, string>
                     {
                         [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName

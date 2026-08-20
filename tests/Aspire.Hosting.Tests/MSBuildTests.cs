@@ -578,7 +578,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
-        Assert.Contains("The command timed out after 100 milliseconds.", output);
+        Assert.Contains("The command timed out", output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

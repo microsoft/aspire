@@ -441,7 +441,7 @@ internal sealed partial class PsCommand
             var columns = new List<string>
             {
                 Markup.Escape(shortPath),
-                Markup.Escape(appHost.Status),
+                GetStatusMarkup(appHost.Status),
                 Markup.Escape(appHost.SdkVersion ?? "-"),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
@@ -453,6 +453,16 @@ internal sealed partial class PsCommand
         }
 
         InteractionService.DisplayRenderable(table);
+    }
+
+    internal static string GetStatusMarkup(string status)
+    {
+        return status switch
+        {
+            AppHostDisplayStatus.Running => $"[green]{AppHostDisplayStatus.Running}[/]",
+            AppHostDisplayStatus.Stopped => $"[red]{AppHostDisplayStatus.Stopped}[/]",
+            _ => Markup.Escape(status)
+        };
     }
 
 }

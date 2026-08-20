@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { execFileSync, spawn } from 'child_process';
 import * as path from 'path';
 
+import { removeDirectorySafely } from './testHelpers';
 const extensionRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(extensionRoot, '..');
 const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'e2e-download-cache-tests');
@@ -422,6 +423,36 @@ function withLockedDirectoryRemoval(directoryPath: string, failureCount: number,
     return attempts;
 }
 
+/**
+ * Drops a new file into `directoryPath` right after it is listed, reproducing the cleanup race
+ * where a Java language server or build daemon is still writing while the run root is torn down.
+ *
+ * Hooking the listing rather than racing a real writer keeps this deterministic - a timing-based
+ * version of this test would only reproduce the bug intermittently.
+ */
+function withLateWriterDuringRemoval(directoryPath: string, writeCount: number, body: () => void): number {
+    const nodeFs = require('fs') as typeof fs;
+    const realReaddirSync = nodeFs.readdirSync;
+    let writes = 0;
+
+    try {
+        nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+            const entries = (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+            if (target === directoryPath && writes < writeCount) {
+                nodeFs.writeFileSync(path.join(directoryPath, `late-writer-${writes++}.log`), 'written after listing');
+            }
+
+            return entries;
+        }) as typeof fs.readdirSync;
+
+        body();
+    } finally {
+        nodeFs.readdirSync = realReaddirSync;
+    }
+
+    return writes;
+}
+
 async function waitForPaths(pathsToCheck: string[], timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
 
@@ -582,7 +613,7 @@ suite('E2E download cache', () => {
         while (createdTestRoots.length > 0) {
             const root = createdTestRoots.pop();
             if (root) {
-                fs.rmSync(root, { recursive: true, force: true });
+                removeDirectorySafely(root);
             }
         }
     });
@@ -2091,6 +2122,39 @@ suite('E2E download cache', () => {
         });
 
         assert.strictEqual(attempts, 3);
+    });
+
+    test('re-sweeps a directory that gains an entry between listing and removal', () => {
+        const root = createTestRoot('link-safe-removal-late-writer');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A retry of the same rmdir can never clear this: the entry that appeared is still on disk,
+        // so only a fresh listing removes it. maxRetries is 0 here, matching Linux CI, to show the
+        // recovery comes from re-sweeping rather than from the lock retry budget.
+        const writes = withLateWriterDuringRemoval(refilled, 1, () => {
+            cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 });
+        });
+
+        assert.strictEqual(writes, 1);
+        assert.strictEqual(fs.existsSync(refilled), false);
+    });
+
+    test('gives up on a directory that keeps being refilled during removal', () => {
+        const root = createTestRoot('link-safe-removal-sweep-budget');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A process that never stops writing has to surface as a cleanup failure rather than hang
+        // the shard, so the sweeps are bounded.
+        const writes = withLateWriterDuringRemoval(refilled, Number.POSITIVE_INFINITY, () => {
+            assert.throws(
+                () => cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 }),
+                /ENOTEMPTY/);
+        });
+
+        assert.strictEqual(writes, 6);
+        assert.ok(fs.existsSync(refilled));
     });
 
     test('replaces stale projected entries so a reused storage directory tracks the cache', () => {        const root = createTestRoot('replaces-stale-projection');

@@ -4,13 +4,15 @@ import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled } from '../capabilities';
+import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isJavaInstalled, isMauiInstalled, isPythonInstalled, isRustInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
 import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
+import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { bunDebuggerExtension } from "./languages/bun";
+import { javaDebuggerExtension } from "./languages/java";
 import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
 import { waitForRunStartIdle } from "./runStartRegistry";
@@ -89,7 +91,7 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
     };
 }
 
-export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
+export function getResourceDebuggerExtensions(platform: NodeJS.Platform = process.platform): ResourceDebuggerExtension[] {
     const extensions = [];
     if (isCsharpInstalled()) {
         extensions.push(projectDebuggerExtension);
@@ -105,6 +107,16 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
 
     if (isGoInstalled()) {
         extensions.push(goDebuggerExtension);
+    }
+
+    if (isRustInstalled(platform)) {
+        // Adapter availability can change when an extension is installed without reloading VS Code.
+        // Resolve the Rust descriptor with the same current platform/extension state as capabilities.
+        extensions.push(createDefaultRustDebuggerExtension(platform));
+    }
+
+    if (isJavaInstalled()) {
+        extensions.push(javaDebuggerExtension);
     }
 
     extensions.push(nodeDebuggerExtension);
