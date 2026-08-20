@@ -2651,12 +2651,15 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         await callbacks.get('aspire-vscode.debugPipelineStepAppHost')!(secondaryAppHost);
 
         // Each AppHost resolves its own CLI once while rendering, and the four actions reuse that
-        // exact pair instead of resolving again.
+        // exact pair instead of resolving again. Pipeline actions check the pinned executable again
+        // after the CLI-owned step selection or legacy input prompt completes.
         assert.deepStrictEqual(resolveCliPathStub.getCalls().map(call => call.args), [
             [windowCliPathTarget],
             [secondaryTarget],
         ]);
         assert.deepStrictEqual(checkCliAvailableStub.getCalls().map(call => call.args), [
+            ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
+            ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
             ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
             ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
             ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
@@ -5015,6 +5018,83 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
+    test('a pinned CLI deleted while choosing a legacy step does not launch', async () => {
+        let completeInput!: (value: string | undefined) => void;
+        const input = new Promise<string | undefined>(resolve => completeInput = resolve);
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [
+                    deployCommandCapability,
+                    publishCommandCapability,
+                    doCommandCapability,
+                ],
+            }),
+        });
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox').returns(input);
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        const action = harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
+        await waitForCondition(() => showInputBox.called, 'Expected the legacy pipeline prompt to open.');
+        harness.checkCliAvailable.onSecondCall().resolves({
+            cliPath: '/repo/tools/aspire',
+            available: false,
+        });
+        completeInput('deploy');
+
+        await assert.rejects(action, vscode.CancellationError);
+        assert.deepStrictEqual(harness.checkCliAvailable.getCalls().map(call => call.args), [
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
+        ]);
+        assert.strictEqual(harness.launch.called, false);
+        harness.dispose();
+    });
+
+    test('a pinned CLI that loses do support while choosing a legacy step does not launch', async () => {
+        let completeInput!: (value: string | undefined) => void;
+        const input = new Promise<string | undefined>(resolve => completeInput = resolve);
+        let doSupported = true;
+        const harness = makeGatingHarness({
+            capabilityStatus: (capability, callOptions) =>
+                capability === doCommandCapability && callOptions?.forceRefresh && !doSupported
+                    ? 'unsupported'
+                    : 'supported',
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [
+                    deployCommandCapability,
+                    publishCommandCapability,
+                    doCommandCapability,
+                ],
+            }),
+        });
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox').returns(input);
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        const action = harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
+        await waitForCondition(() => showInputBox.called, 'Expected the legacy pipeline prompt to open.');
+        doSupported = false;
+        completeInput('deploy');
+
+        await assert.rejects(action, vscode.CancellationError);
+        assert.strictEqual(
+            harness.capabilityStatus.getCalls().filter(call =>
+                call.args[0] === doCommandCapability
+                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
+            1);
+        assert.strictEqual(harness.launch.called, false);
+        harness.dispose();
+    });
+
     test('a legacy CLI still prompts for the pipeline step locally', async () => {
         const harness = makeGatingHarness({
             forceRefreshConfigInfo: () => ({
@@ -5036,6 +5116,15 @@ suite('AppHost tree action gating', () => {
         await harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
 
         assert.strictEqual(showInputBox.callCount, 1);
+        assert.strictEqual(
+            harness.capabilityStatus.getCalls().filter(call =>
+                call.args[0] === doCommandCapability
+                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
+            1);
+        assert.deepStrictEqual(harness.checkCliAvailable.getCalls().map(call => call.args), [
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
+        ]);
         assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
             [appHostPath, 'do', true, 'migrate', windowCliPathTarget, '/repo/tools/aspire'],
         ]);

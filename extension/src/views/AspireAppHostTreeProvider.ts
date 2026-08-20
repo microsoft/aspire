@@ -1274,7 +1274,62 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
+        await this._revalidatePipelineStepCli(appHostPath, support);
         await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, support.target, support.cliPath);
+    }
+
+    private async _revalidatePipelineStepCli(
+        appHostPath: string,
+        support: ResolvedAppHostActionSupport,
+    ): Promise<void> {
+        const key = getActionSupportCacheKey(appHostPath);
+        const availability = await checkCliAvailableOrRedirect(
+            'debug_gate',
+            support.target,
+            { pinnedCliPath: support.cliPath });
+        if (!this._isResolvedActionSupportCurrent(support)) {
+            throw new vscode.CancellationError();
+        }
+        if (!availability.available) {
+            this._setCachedActionSupportForValidation(
+                key,
+                null,
+                support.generation,
+                support.invocationSequence);
+            throw new vscode.CancellationError();
+        }
+
+        const capabilityStatus = await this._configInfoProvider.getCapabilityStatus(doCommandCapability, {
+            target: support.target,
+            cliPath: support.cliPath,
+            suppressErrors: true,
+            forceRefresh: true,
+        });
+        if (!this._isResolvedActionSupportCurrent(support)) {
+            throw new vscode.CancellationError();
+        }
+        if (capabilityStatus === 'unavailable') {
+            this._setCachedActionSupportForValidation(
+                key,
+                null,
+                support.generation,
+                support.invocationSequence);
+            throw new vscode.CancellationError();
+        }
+
+        if (!this._setCachedActionCapability(
+            key,
+            support,
+            'do',
+            capabilityStatus === 'supported',
+            support.generation,
+            support.invocationSequence)) {
+            throw new vscode.CancellationError();
+        }
+        if (capabilityStatus !== 'supported') {
+            extensionLogOutputChannel.warn(`The Aspire CLI at '${support.cliPath}' no longer supports 'do' for AppHost '${appHostPath}'.`);
+            throw new vscode.CancellationError();
+        }
     }
 
     /**
@@ -1395,19 +1450,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     private _isResolvedActionSupportCurrent(support: ResolvedAppHostActionSupport): boolean {
         return support.generation === this._actionSupportGeneration
             && this._actionSupportInvocationSequenceByAction.get(support.invocationKey) === support.invocationSequence;
-    }
-
-    private _setCachedActionSupport(
-        key: string,
-        support: AppHostActionSupport | null,
-        generation: number,
-    ): void {
-        if (this._disposed || generation !== this._actionSupportGeneration) {
-            return;
-        }
-
-        this._actionSupportByAppHost.set(key, support);
-        this._onDidChangeTreeData.fire();
     }
 
     private _setCachedActionSupportForValidation(
