@@ -8,11 +8,13 @@
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsWindows()) and $(DashboardRuntime.StartsWith('win-'))">true</CanPublishDashboardNativeAot>
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsLinux()) and $(DashboardRuntime.StartsWith('linux-'))">true</CanPublishDashboardNativeAot>
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsMacOS()) and $(DashboardRuntime.StartsWith('osx-'))">true</CanPublishDashboardNativeAot>
-    <IsPackable>$(CanPublishDashboardNativeAot)</IsPackable>
+    <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(CanPublishDashboardNativeAot)' == 'true'">true</IsPackable>
     <!-- Unset PackageType as that is being set by Workload.targets to DotnetPlatform, which this package no longer is. -->
     <PackageType />
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <GeneratePackageOnBuild>$(CanPublishDashboardNativeAot)</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild Condition="'$(CanPublishDashboardNativeAot)' == 'true'">true</GeneratePackageOnBuild>
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <PackageOutputPath Condition=" '$(PackageOutputPath)' == '' ">$(ArtifactsShippingPackagesDir)</PackageOutputPath>

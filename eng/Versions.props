@@ -14,7 +14,7 @@
     <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>
     <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
     <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
-    <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26413.103</DotNetSdkNet11VersionForTesting>
+    <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26419.129</DotNetSdkNet11VersionForTesting>
     <!-- Keep these aliases for global.json and non-template test infrastructure. -->
     <DotNetRuntimePreviousVersionForTesting>$(DotNetRuntimeNet8VersionForTesting)</DotNetRuntimePreviousVersionForTesting>
     <DotNetRuntimeCurrentVersionForTesting>$(DotNetRuntimeNet9VersionForTesting)</DotNetRuntimeCurrentVersionForTesting>
@@ -68,11 +68,11 @@
   </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
-    <MicrosoftAspNetCoreAuthenticationCertificateNet11Version>11.0.0-rc.1.26413.103</MicrosoftAspNetCoreAuthenticationCertificateNet11Version>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>11.0.0-rc.1.26413.103</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>
-    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.1.26413.103</MicrosoftAspNetCoreOpenApiNet11Version>
-    <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26413.103</MicrosoftAspNetCoreTestHostNet11Version>
-    <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26413.103</MicrosoftExtensionsCachingMemoryNet11Version>
+    <MicrosoftAspNetCoreAuthenticationCertificateNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreAuthenticationCertificateNet11Version>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>
+    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreOpenApiNet11Version>
+    <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreTestHostNet11Version>
+    <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26419.129</MicrosoftExtensionsCachingMemoryNet11Version>
   </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">

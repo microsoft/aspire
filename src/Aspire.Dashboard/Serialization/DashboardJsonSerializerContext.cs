@@ -19,6 +19,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(ViewportSize))]
 [JsonSerializable(typeof(BrowserInfo))]
 [JsonSerializable(typeof(TerminalSizePreset[]))]
+[JsonSerializable(typeof(KeyCode[]))]
 [JsonSerializable(typeof(ConsoleLogsFilters))]
 [JsonSerializable(typeof(ConsoleLogs.ConsoleLogConsoleSettings))]
 [JsonSerializable(typeof(TextVisualizerDialog.TextVisualizerDialogSettings))]

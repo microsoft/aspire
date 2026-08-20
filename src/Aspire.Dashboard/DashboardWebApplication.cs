@@ -6,7 +6,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text.Json.Serialization.Metadata;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Authentication.Connection;
@@ -32,7 +31,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Components.Server;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -231,8 +230,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Add services to the container.
         builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
         {
-            AddDashboardJsonTypeInfoResolver(options);
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
         });
+        builder.Services.Replace(ServiceDescriptor.Scoped<IComponentActivator, DashboardComponentActivator>());
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -958,21 +960,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         options.ValidateValidityPeriod = configuration.GetValue(
             nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
             options.ValidateValidityPeriod);
-    }
-
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2075:'this' argument does not satisfy 'DynamicallyAccessedMemberTypes.PublicProperties' in call to target method",
-        Justification = "The .NET 11 resolver property is public and its declaring framework type is statically rooted.")]
-    private static void AddDashboardJsonTypeInfoResolver(CircuitOptions options)
-    {
-        // The resolver API was merged after .NET 11 Preview 7. Keep the Dashboard buildable with
-        // earlier 11.0 targeting packs while using the public API as soon as the matching runtime is present.
-        if (typeof(CircuitOptions).GetProperty("JsonTypeInfoResolvers")?.GetValue(options)
-            is IList<IJsonTypeInfoResolver> resolvers)
-        {
-            resolvers.Add(DashboardJsonSerializerContext.Default);
-        }
     }
 
     internal static Action<OpenIdConnectOptions> GetOidcClaimActionConfigure(ClaimAction action)
