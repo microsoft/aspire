@@ -3,15 +3,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const { runAspireAddInteractive } = require('../commands/aspire-add');
-const { runAspireNewInteractive } = require('../commands/aspire-new');
-const { runAspireResources } = require('../commands/aspire-resources');
-const { runAspireRunInteractive } = require('../commands/aspire-run');
-const { runAspireStart } = require('../commands/aspire-start');
-const { cleanupProject, runAspireStop } = require('../commands/aspire-stop');
-const { runAspireWait } = require('../commands/aspire-wait');
+const { runAspireAddInteractive } = require('../scenarios/aspire-add');
+const { runAspireNewInteractive } = require('../scenarios/aspire-new');
+const { runAspireResources } = require('../scenarios/aspire-resources');
+const { runAspireRunInteractive } = require('../scenarios/aspire-run');
+const { runAspireStart } = require('../scenarios/aspire-start');
+const { cleanupProject, runAspireStop } = require('../scenarios/aspire-stop');
+const { runAspireWait } = require('../scenarios/aspire-wait');
 
-async function runStarterScenario(
+async function runStarterValidation(
   {
     expectedResources,
     hasTestProjectPrompt,
@@ -97,5 +97,5 @@ async function runStarterScenario(
 }
 
 module.exports = {
-  runStarterScenario
+  runStarterValidation
 };
