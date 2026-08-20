@@ -1,6 +1,5 @@
 'use strict';
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function runAspireStop({
@@ -10,12 +9,14 @@ async function runAspireStop({
   timeoutMs
 }) {
   await runInteractiveCommand({
+    aspireCommand,
     cwd: projectRoot,
     diagnosticsDir,
     fileName: 'aspire-stop.log',
-    command: buildAspireCommand(aspireCommand, ['stop']),
     timeoutMs,
-    interact: async run => {
+    body: async runAspireCommand => {
+      const run = await runAspireCommand(['stop']);
+
       await run.waitForText(
         'Running instance stopped successfully.',
         timeoutMs,

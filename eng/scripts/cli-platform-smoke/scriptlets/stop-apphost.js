@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function stopAppHost({
@@ -16,12 +15,14 @@ async function stopAppHost({
 
   try {
     await runInteractiveCommand({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
       fileName: 'cleanup-aspire-stop.log',
-      command: buildAspireCommand(aspireCommand, ['stop']),
       timeoutMs: 120_000,
-      interact: async run => {
+      body: async runAspireCommand => {
+        const run = await runAspireCommand(['stop']);
+
         await run.waitForAnyText(
           ['Running instance stopped successfully.', 'No running AppHost found.'],
           120_000,

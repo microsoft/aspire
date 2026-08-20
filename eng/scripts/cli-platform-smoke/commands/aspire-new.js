@@ -1,6 +1,5 @@
 'use strict';
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function runAspireNewInteractive({
@@ -12,12 +11,14 @@ async function runAspireNewInteractive({
   timeoutMs
 }) {
   await runInteractiveCommand({
+    aspireCommand,
     cwd: scenarioRoot,
     diagnosticsDir,
     fileName: 'aspire-new.log',
-    command: buildAspireCommand(aspireCommand, ['new', '--channel', channel]),
     timeoutMs,
-    interact: async run => {
+    body: async runAspireCommand => {
+      const run = await runAspireCommand(['new', '--channel', channel]);
+
       await run.waitForText('> Starter App', timeoutMs, 'template selection prompt');
       await run.type(template.selectionText);
       await run.enter();

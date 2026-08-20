@@ -1,6 +1,5 @@
 'use strict';
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function runAspireResources({
@@ -11,12 +10,14 @@ async function runAspireResources({
   timeoutMs
 }) {
   await runInteractiveCommand({
+    aspireCommand,
     cwd: projectRoot,
     diagnosticsDir,
     fileName: 'aspire-resources.log',
-    command: buildAspireCommand(aspireCommand, ['resources']),
     timeoutMs,
-    interact: async run => {
+    body: async runAspireCommand => {
+      const run = await runAspireCommand(['resources']);
+
       for (const resourceName of expectedResources) {
         await run.waitForText(resourceName, timeoutMs, `resource '${resourceName}'`);
       }
