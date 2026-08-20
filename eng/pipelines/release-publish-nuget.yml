@@ -77,7 +77,7 @@ parameters:
   - name: SkipWinGetPublish
     displayName: '[Advanced] Skip WinGet Publishing (re-run after success)'
     type: boolean
-    default: true
+    default: false
 
   - name: SkipGitHubTasks
     displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
