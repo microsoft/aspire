@@ -105,8 +105,11 @@ public class OtlpHttpServiceTests
         return request;
     }
 
-    [Fact]
-    public async Task CallService_OtlpHttpEndPoint_RequiredApiKeyMissing_Failure()
+    [Theory]
+    [InlineData("/v1/logs")]
+    [InlineData("/v1/metrics")]
+    [InlineData("/v1/traces")]
+    public async Task CallService_OtlpHttpEndPoint_RequiredApiKeyMissing_Failure(string path)
     {
         // Arrange
         var apiKey = "TestKey123!";
@@ -123,10 +126,12 @@ public class OtlpHttpServiceTests
         content.Headers.TryAddWithoutValidation("content-type", OtlpHttpEndpointsBuilder.ProtobufContentType);
 
         // Act
-        var responseMessage = await httpClient.PostAsync("/v1/logs", content).DefaultTimeout();
+        var responseMessage = await httpClient.PostAsync(path, content).DefaultTimeout();
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, responseMessage.StatusCode);
+        Assert.Null(responseMessage.Content.Headers.ContentType);
+        Assert.Equal(string.Empty, await responseMessage.Content.ReadAsStringAsync().DefaultTimeout());
     }
 
     [Fact]

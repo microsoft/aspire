@@ -367,8 +367,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(bundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -391,8 +391,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(newestBundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(newestBundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(newestBundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(newestBundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(newestBundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -415,8 +415,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(newestBundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(newestBundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(newestBundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(newestBundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(newestBundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -461,8 +461,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(bundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -487,10 +487,10 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         var bundleRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleDiscovery.BundleDirectoryName);
         var expectedDcpDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "dcp"));
-        var expectedManagedDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "managed"));
+        var expectedDashboardDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.DashboardDirectoryName));
         Assert.Equal(expectedDcpDir, resolvedPaths[0]);
-        Assert.Equal(expectedManagedDir, resolvedPaths[1]);
-        Assert.Equal(Path.Combine(expectedManagedDir, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), resolvedPaths[2]);
+        Assert.Equal(expectedDashboardDir, resolvedPaths[1]);
+        Assert.Equal(Path.Combine(expectedDashboardDir, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard"), resolvedPaths[2]);
         Assert.False(Directory.Exists(Path.Combine(aspireHome, BundleDiscovery.BundleDirectoryName)));
     }
 
@@ -611,7 +611,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         var bundleRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleDiscovery.BundleDirectoryName);
         Assert.Equal(EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.DcpDirectoryName)), resolvedPaths[0]);
-        Assert.Equal(EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.ManagedDirectoryName)), resolvedPaths[1]);
+        Assert.Equal(EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.DashboardDirectoryName)), resolvedPaths[1]);
     }
 
     [Fact]
@@ -664,8 +664,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(bundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -700,8 +700,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
-        Assert.Equal(bundle.ManagedDir, resolvedPaths[1]);
-        Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
+        Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
+        Assert.Equal(bundle.DashboardPath, resolvedPaths[2]);
     }
 
     [Fact]
@@ -977,33 +977,37 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         """);
     }
 
-    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundle(string basePath)
+    private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundle(string basePath)
     {
         return CreateFakeCliBundleAtLayoutRoot(Path.Combine(basePath, "layout"));
     }
 
-    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleAtLayoutRoot(string layoutRoot)
+    private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundleAtLayoutRoot(string layoutRoot)
     {
         return CreateFakeCliBundleRoot(layoutRoot, Path.Combine(layoutRoot, "bundle"));
     }
 
-    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleAtVersionedLayoutRoot(string layoutRoot, string versionId)
+    private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundleAtVersionedLayoutRoot(string layoutRoot, string versionId)
     {
         return CreateFakeCliBundleRoot(layoutRoot, Path.Combine(layoutRoot, "versions", versionId));
     }
 
-    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleRoot(string layoutRoot, string bundleRoot)
+    private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundleRoot(string layoutRoot, string bundleRoot)
     {
         var dcpDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "dcp"));
         var managedDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "managed"));
+        var dashboardDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, BundleDiscovery.DashboardDirectoryName));
         Directory.CreateDirectory(dcpDir);
         Directory.CreateDirectory(managedDir);
+        Directory.CreateDirectory(dashboardDir);
 
         File.WriteAllText(Path.Combine(dcpDir, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
         var managedPath = Path.Combine(managedDir, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed");
         File.WriteAllText(managedPath, "");
+        var dashboardPath = Path.Combine(dashboardDir, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        File.WriteAllText(dashboardPath, "");
 
-        return (layoutRoot, dcpDir, managedDir, managedPath);
+        return (layoutRoot, dcpDir, dashboardDir, dashboardPath);
     }
 
     private static string CreateFakeAspireCli(string directory)
@@ -1018,14 +1022,17 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var cliPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         var dcpExecutable = OperatingSystem.IsWindows() ? "dcp.exe" : "dcp";
         var managedExecutable = OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed";
+        var dashboardExecutable = OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard";
         var contents = OperatingSystem.IsWindows()
             ? $$"""
                 @echo off
                 if not "%~1"=="setup" exit /b 2
                 mkdir "%~dp0..\bundle\dcp"
                 mkdir "%~dp0..\bundle\managed"
+                mkdir "%~dp0..\bundle\dashboard"
                 type nul > "%~dp0..\bundle\dcp\{{dcpExecutable}}"
                 type nul > "%~dp0..\bundle\managed\{{managedExecutable}}"
+                type nul > "%~dp0..\bundle\dashboard\{{dashboardExecutable}}"
                 """
             : $$"""
                 #!/bin/sh
@@ -1033,9 +1040,10 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
                     exit 2
                 fi
                 install_path="$(dirname "$0")/.."
-                mkdir -p "$install_path/bundle/dcp" "$install_path/bundle/managed"
+                mkdir -p "$install_path/bundle/dcp" "$install_path/bundle/managed" "$install_path/bundle/dashboard"
                 : > "$install_path/bundle/dcp/{{dcpExecutable}}"
                 : > "$install_path/bundle/managed/{{managedExecutable}}"
+                : > "$install_path/bundle/dashboard/{{dashboardExecutable}}"
                 """;
 
         File.WriteAllText(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));

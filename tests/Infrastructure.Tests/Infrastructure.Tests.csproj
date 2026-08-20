@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+    <ProjectReference Include="..\..\tools\CreateLayout\CreateLayout.csproj" />
     <ProjectReference Include="..\..\tools\TypeScriptApiCompat\TypeScriptApiCompat.csproj" />
     <ProjectReference Include="..\..\tools\SelectTests\SelectTests.csproj" />
     <ProjectReference Include="..\..\tools\Aspire.TestTools\Aspire.TestTools.csproj" />

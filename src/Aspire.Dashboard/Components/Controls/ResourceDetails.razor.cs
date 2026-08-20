@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Extensions;
@@ -14,7 +15,6 @@ using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -75,43 +75,36 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private readonly HashSet<string> _unmaskedItemNames = new();
     private const string StateDescriptionPropertyKey = "resource-state-description";
 
-    internal IQueryable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
+        internal IEnumerable<EnvironmentVariableViewModel> FilteredEnvironmentVariables =>
         Resource.Environment
             .Where(vm => (_showAll || vm.FromSpec) && ((IPropertyGridItem)vm).MatchesFilter(_filter))
-            .OrderBy(vm => vm.Name, StringComparers.EnvironmentVariableName)
-            .AsQueryable();
+            .OrderBy(vm => vm.Name, StringComparers.EnvironmentVariableName);
 
-    internal IQueryable<DisplayedUrl> FilteredUrls =>
+        internal IEnumerable<DisplayedUrl> FilteredUrls =>
         GetUrls()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<ResourceDetailRelationshipViewModel> FilteredRelationships =>
+        internal IEnumerable<ResourceDetailRelationshipViewModel> FilteredRelationships =>
         GetRelationships()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<ResourceDetailRelationshipViewModel> FilteredBackRelationships =>
+        internal IEnumerable<ResourceDetailRelationshipViewModel> FilteredBackRelationships =>
         GetBackRelationships()
-            .Where(vm => vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => vm.MatchesFilter(_filter));
 
-    internal IQueryable<VolumeViewModel> FilteredVolumes =>
+        internal IEnumerable<VolumeViewModel> FilteredVolumes =>
         Resource.Volumes
             .Where(vm => vm.MatchesFilter(_filter))
-            .OrderBy(vm => vm.Source, StringComparer.OrdinalIgnoreCase)
-            .AsQueryable();
+            .OrderBy(vm => vm.Source, StringComparer.OrdinalIgnoreCase);
 
-    internal IQueryable<HealthReportViewModel> FilteredHealthReports =>
+        internal IEnumerable<HealthReportViewModel> FilteredHealthReports =>
         Resource.HealthReports
             .Where(vm => vm.MatchesFilter(_filter))
-            .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase)
-            .AsQueryable();
+            .OrderBy(vm => vm.Name, StringComparer.OrdinalIgnoreCase);
 
-    internal IQueryable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
+        internal IEnumerable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
         GetResourceProperties(ordered: true)
-            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter))
-            .AsQueryable();
+            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter));
 
     private bool _isVolumesExpanded;
     private bool _isEnvironmentVariablesExpanded;
@@ -132,7 +125,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         set { _isMaskAllChecked = value; }
     }
 
-    private readonly GridSort<DisplayedUrl> _urlValueSort = GridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
+    private readonly EnumerableGridSort<DisplayedUrl> _urlValueSort = EnumerableGridSort<DisplayedUrl>.ByAscending(vm => vm.Url ?? vm.Text);
 
     protected override void OnParametersSet()
     {

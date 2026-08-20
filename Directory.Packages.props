@@ -7,7 +7,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <!-- Set this to false when switching Microsoft.FluentUI.AspNetCore.Components to a release package. -->
-    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26251.2</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26253.2</MicrosoftFluentUIAspNetCoreComponentsVersion>
     <MicrosoftFluentUIAspNetCoreComponentsIsPreview>true</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
     <Npgsql8Version>8.0.9</Npgsql8Version>
@@ -105,7 +105,8 @@
     <PackageVersion Include="NuGet.Resolver" Version="7.6.0" />
     <!-- external dependencies -->
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
-    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Dapper" Version="2.1.85" />
+    <PackageVersion Include="Dapper.AOT" Version="1.0.85" />
     <!-- axe-core accessibility engine wrapper for Playwright. The MIT-licensed .NET wrapper's
          major.minor tracks the embedded axe-core version, so 4.11.x runs axe-core 4.11.x.
          Test-only dependency; pinned to a version present on the dotnet-public feed mirror. -->
@@ -313,5 +314,15 @@
     <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion)" />
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesPreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientPreviewVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostNet11Version)" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryNet11Version)" />
+    <PackageVersion Update="Microsoft.Extensions.Configuration.Binder" Version="$(MicrosoftExtensionsConfigurationBinderNet11Version)" />
+    <PackageVersion Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpNet11Version)" />
+    <PackageVersion Update="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingNet11Version)" />
   </ItemGroup>
 </Project>

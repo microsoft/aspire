@@ -33,7 +33,7 @@ internal static class BundleDiscovery
 
     /// <summary>
     /// Environment variable for overriding the Dashboard path.
-    /// Still used by DcpOptions/DashboardEventHandlers — value now points to aspire-managed exe.
+    /// Used by DcpOptions and DashboardEventHandlers to locate the native Dashboard executable.
     /// </summary>
     public const string DashboardPathEnvVar = "ASPIRE_DASHBOARD_PATH";
 
@@ -89,8 +89,13 @@ internal static class BundleDiscovery
     public const string ManagedDirectoryName = "managed";
 
     /// <summary>
+    /// Directory name for the Dashboard executable and static assets in the bundle layout.
+    /// </summary>
+    public const string DashboardDirectoryName = "dashboard";
+
+    /// <summary>
     /// Directory name for the single top-level reparse point that links to the
-    /// active versioned bundle directory. Components (<c>managed/</c> and <c>dcp/</c>)
+    /// active versioned bundle directory. Components (<c>managed/</c>, <c>dashboard/</c>, and <c>dcp/</c>)
     /// are resolved as subdirectories of this link target.
     /// </summary>
     public const string BundleDirectoryName = "bundle";
@@ -103,6 +108,11 @@ internal static class BundleDiscovery
     /// Executable name for the unified managed binary.
     /// </summary>
     public const string ManagedExecutableName = "aspire-managed";
+
+    /// <summary>
+    /// Executable name for the Native AOT Dashboard.
+    /// </summary>
+    public const string DashboardExecutableName = "Aspire.Dashboard";
 
     // ═══════════════════════════════════════════════════════════════════════
     // DISCOVERY METHODS

@@ -2,29 +2,34 @@
 
   <PropertyGroup>
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <TargetFramework>net11.0</TargetFramework>
+    <PublishAot>true</PublishAot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
     <!-- Enable System.GC.DynamicAdaptationMode to get a GC that dynamically adapts to the application's memory use. -->
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
     <!--
+      BL0016: JS interop calls that require error handling already have it; not every call needs a local try/catch block.
       CS1591: Missing XML comment for publicly visible type or member 'Type_or_Member'
       CS8002: Referenced assembly does not have a strong name
+      NU3018, NU3027: Fluent UI daily package signature warnings documented in https://github.com/microsoft/fluentui-blazor/blob/dev-v5/docs/using-latest-daily.md
     -->
-    <NoWarn>$(NoWarn);CS1591;CS8002</NoWarn>
-
-    <!-- This Application is a framework-dependent application that targets .NET 8.0. This means that the
-    application is not able to run if the place where it is deployed does not have the .NET 8.0 runtime installed.
-    Given we want to be able to support people running on environments where they only have a newer SDK/runtime installed,
-    we allow roll-forward to the next major in order to support these customers.-->
-    <RollForward>Major</RollForward>
+    <NoWarn>$(NoWarn);BL0016;CS1591;CS8002;NU3018;NU3027</NoWarn>
+    <!-- Keep detailed diagnostics for Dashboard and dependencies not explicitly grouped below. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Only the opted-in dependency assemblies produce these summary diagnostics. -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
+    <!--
+      IL2101 is not an analysis warning and cannot be grouped by assembly or suppressed by a member
+      attribute. Blazor's Endpoints assembly embeds a hot-reload substitution with the Forms assembly
+      name. Keep this exception until that framework XML is corrected; it also hides other IL2101 reports.
+    -->
+    <NoWarn>$(NoWarn);IL2101</NoWarn>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
-
-    <!--
-      Enable raw string literals support in Razor. Can remove when target switches to .NET 10+.
-      See https://devblogs.microsoft.com/dotnet/enhancing-razor-productivity-with-new-features/
-    -->
-    <Features>use-roslyn-tokenizer</Features>
 
     <!-- Bundle optimization: disable web.config generation -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
@@ -34,6 +39,40 @@
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
+
+  <Target Name="ConfigureDependencyTrimmingWarnings" AfterTargets="_PrepareTrimConfiguration">
+    <!--
+      Group known dependency warnings so IL2104/IL3053 can be suppressed without hiding
+      diagnostics from Dashboard code. Re-audit these assemblies when updating dependencies.
+      Pattern: https://github.com/NuGet/NuGet.Client/pull/7659
+      .NET 11 carries trim metadata on ResolvedFileToPublish for both ILLink and Native AOT.
+    -->
+    <ItemGroup>
+      <!-- Blazor discovery, binding, persistence, and serialization are not yet trim/AOT-safe.
+           Remove as the framework addresses these paths: https://aka.ms/aspnet/nativeaot. -->
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Microsoft.AspNetCore.Components' Or
+                                        '%(Filename)' == 'Microsoft.AspNetCore.Components.Web' Or
+                                        '%(Filename)' == 'Microsoft.AspNetCore.Components.Forms' Or
+                                        '%(Filename)' == 'Microsoft.AspNetCore.Components.Endpoints' Or
+                                        '%(Filename)' == 'Microsoft.AspNetCore.Components.Server'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ResolvedFileToPublish>
+      <!-- JSInterop callable-method discovery and serialization need upstream annotations. -->
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Microsoft.JSInterop'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ResolvedFileToPublish>
+      <!-- Fluent UI component reflection, property metadata, and input parsing need upstream annotations. -->
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Microsoft.FluentUI.AspNetCore.Components'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ResolvedFileToPublish>
+      <!-- Dapper.AOT supports DynamicParameters, but its adapter retains Dapper's reflection paths.
+           Dashboard uses explicit parameter values, not object templates or SQL Server TVPs.
+           Remove as Dapper isolates these paths: https://aot.dapperlib.dev/gettingstarted.html. -->
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Dapper'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <!-- Build service and client types. Integration tests use the client types to call OTLP services. -->
@@ -53,6 +92,9 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" />
+    <!-- Keep the Dapper AOT analyzer local to the Dashboard; referencing test projects are not AOT-compiled. -->
+    <!-- PrivateAssets="all" defaults Publish to false, but generated interceptors need the runtime assembly. -->
+    <PackageReference Include="Dapper.AOT" PrivateAssets="all" Publish="true" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
@@ -74,10 +116,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
-  </ItemGroup>
+    <TrimmerRootAssembly Include="$(AssemblyName)" />
 
-  <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Benchmarks" />
@@ -288,6 +328,12 @@
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Utils\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Utils\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Utils\HeldFileLease.cs" />
+    <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
+    <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Utils\ParentProcessWatchdog.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
@@ -337,7 +383,5 @@
     <Content Remove="wwwroot\fonts\cascadia-mono-nf\README.md" />
     <None Include="wwwroot\fonts\cascadia-mono-nf\README.md" />
   </ItemGroup>
-
-  <Import Project="BlazorAssets.targets" />
 
 </Project>

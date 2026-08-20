@@ -17,17 +17,26 @@ public sealed class IconResolverTests
         return new IconResolver(logger ?? NullLogger<IconResolver>.Instance);
     }
 
-    [Fact]
-    public void ResolveIconName_ValidIcon_ReturnsIcon()
+    [Theory]
+    [InlineData("Database", IconSize.Size16, IconVariant.Regular)]
+    [InlineData("database", IconSize.Size20, IconVariant.Regular)]
+    [InlineData("DATABASE", IconSize.Size24, IconVariant.Regular)]
+    [InlineData("Database", IconSize.Size16, IconVariant.Filled)]
+    [InlineData("database", IconSize.Size20, IconVariant.Filled)]
+    [InlineData("DATABASE", IconSize.Size24, IconVariant.Filled)]
+    public void ResolveIconName_ValidIcon_ReturnsIcon(string name, IconSize size, IconVariant variant)
     {
         // Arrange
         var iconResolver = CreateIconResolver();
 
         // Act
-        var icon = iconResolver.ResolveIconName("Database", IconSize.Size20, IconVariant.Filled);
+        var icon = iconResolver.ResolveIconName(name, size, variant);
 
         // Assert
         Assert.NotNull(icon);
+        Assert.Equal("Database", icon.Name);
+        Assert.Equal(size, icon.Size);
+        Assert.Equal(variant, icon.Variant);
     }
 
     [Fact]

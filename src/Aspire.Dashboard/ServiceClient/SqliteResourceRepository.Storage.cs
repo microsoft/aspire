@@ -345,7 +345,7 @@ public sealed partial class SqliteResourceRepository
 
     private static IEnumerable<StoredResource> LoadResourceRecords(SqliteConnection connection)
     {
-        using var reader = connection.QueryMultiple("""
+        var resourceRecords = connection.Query<ResourceRecord>("""
             SELECT
                 resource_name AS ResourceName,
                 replica_index AS ReplicaIndex,
@@ -367,41 +367,57 @@ public sealed partial class SqliteResourceRepository
                 console_logs_loaded AS ConsoleLogsLoaded
             FROM dashboard_resources
             ORDER BY rowid;
+            """).AsList();
 
+        var environments = connection.Query<EnvironmentRecord>("""
             SELECT resource_name AS ResourceName, name AS Name, value AS Value, is_from_spec AS IsFromSpec
             FROM dashboard_resource_environment
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var urls = connection.Query<UrlRecord>("""
             SELECT resource_name AS ResourceName, endpoint_name AS EndpointName, full_url AS FullUrl,
                 is_internal AS IsInternal, is_inactive AS IsInactive, display_sort_order AS DisplaySortOrder, display_name AS DisplayName
             FROM dashboard_resource_urls
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var volumes = connection.Query<VolumeRecord>("""
             SELECT resource_name AS ResourceName, source AS Source, target AS Target, mount_type AS MountType, is_read_only AS IsReadOnly
             FROM dashboard_resource_volumes
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var healthReports = connection.Query<HealthReportRecord>("""
             SELECT resource_name AS ResourceName, status AS Status, key AS Key, description AS Description,
                 exception AS Exception, last_run_at_seconds AS LastRunAtSeconds, last_run_at_nanos AS LastRunAtNanos
             FROM dashboard_resource_health_reports
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var relationships = connection.Query<RelationshipRecord>("""
             SELECT resource_name AS ResourceName, related_resource_name AS RelatedResourceName, relationship_type AS RelationshipType
             FROM dashboard_resource_relationships
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var properties = connection.Query<PropertyRecord>("""
             SELECT resource_name AS ResourceName, name AS Name, display_name AS DisplayName, value AS JsonValue,
                 is_sensitive AS IsSensitive, is_highlighted AS IsHighlighted, sort_order AS SortOrder
             FROM dashboard_resource_properties
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var commands = connection.Query<CommandRecord>("""
             SELECT resource_name AS ResourceName, ordinal AS Ordinal, name AS Name, display_name AS DisplayName,
                 confirmation_message AS ConfirmationMessage, parameter_value AS ParameterJsonValue,
                 is_highlighted AS IsHighlighted, icon_name AS IconName, icon_variant AS IconVariant,
                 display_description AS DisplayDescription, state AS State
             FROM dashboard_resource_commands
             ORDER BY resource_name, ordinal;
+            """).ToLookup(record => record.ResourceName, StringComparers.ResourceName);
 
+        var inputs = connection.Query<InputRecord>("""
             SELECT resource_name AS ResourceName, command_ordinal AS CommandOrdinal, ordinal AS Ordinal,
                 label AS Label, placeholder AS Placeholder, input_type AS InputType, required AS Required,
                 value AS Value, description AS Description, enable_description_markdown AS EnableDescriptionMarkdown,
@@ -410,30 +426,21 @@ public sealed partial class SqliteResourceRepository
                 max_file_size AS MaxFileSize, allow_multiple_files AS AllowMultipleFiles, file_filter AS FileFilter
             FROM dashboard_resource_command_inputs
             ORDER BY resource_name, command_ordinal, ordinal;
+            """).ToLookup(record => (record.ResourceName, record.CommandOrdinal));
 
+        var options = connection.Query<OptionRecord>("""
             SELECT resource_name AS ResourceName, command_ordinal AS CommandOrdinal, input_ordinal AS InputOrdinal,
                 option_key AS OptionKey, option_value AS OptionValue
             FROM dashboard_resource_command_input_options
             ORDER BY resource_name, command_ordinal, input_ordinal, option_key;
+            """).ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
 
+        var validationErrors = connection.Query<ValidationErrorRecord>("""
             SELECT resource_name AS ResourceName, command_ordinal AS CommandOrdinal, input_ordinal AS InputOrdinal,
                 validation_error AS ValidationError
             FROM dashboard_resource_command_input_validation_errors
             ORDER BY resource_name, command_ordinal, input_ordinal, ordinal;
-
-            """);
-
-        var resourceRecords = reader.Read<ResourceRecord>().AsList();
-        var environments = reader.Read<EnvironmentRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var urls = reader.Read<UrlRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var volumes = reader.Read<VolumeRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var healthReports = reader.Read<HealthReportRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var relationships = reader.Read<RelationshipRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var properties = reader.Read<PropertyRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var commands = reader.Read<CommandRecord>().ToLookup(record => record.ResourceName, StringComparers.ResourceName);
-        var inputs = reader.Read<InputRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal));
-        var options = reader.Read<OptionRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
-        var validationErrors = reader.Read<ValidationErrorRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
+            """).ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
 
         foreach (var record in resourceRecords)
         {
@@ -636,7 +643,7 @@ public sealed partial class SqliteResourceRepository
 
     private sealed record StoredResource(Resource Resource, int ReplicaIndex, bool ConsoleLogsLoaded);
 
-    private sealed class ResourceRecord
+    internal sealed class ResourceRecord
     {
         public required string ResourceName { get; init; }
         public required int ReplicaIndex { get; init; }
@@ -658,7 +665,7 @@ public sealed partial class SqliteResourceRepository
         public required bool ConsoleLogsLoaded { get; init; }
     }
 
-    private sealed class EnvironmentRecord
+    internal sealed class EnvironmentRecord
     {
         public required string ResourceName { get; init; }
         public required string Name { get; init; }
@@ -666,7 +673,7 @@ public sealed partial class SqliteResourceRepository
         public required bool IsFromSpec { get; init; }
     }
 
-    private sealed class UrlRecord
+    internal sealed class UrlRecord
     {
         public required string ResourceName { get; init; }
         public string? EndpointName { get; init; }
@@ -677,7 +684,7 @@ public sealed partial class SqliteResourceRepository
         public required string DisplayName { get; init; }
     }
 
-    private sealed class VolumeRecord
+    internal sealed class VolumeRecord
     {
         public required string ResourceName { get; init; }
         public required string Source { get; init; }
@@ -686,7 +693,7 @@ public sealed partial class SqliteResourceRepository
         public required bool IsReadOnly { get; init; }
     }
 
-    private sealed class HealthReportRecord
+    internal sealed class HealthReportRecord
     {
         public required string ResourceName { get; init; }
         public int? Status { get; init; }
@@ -697,7 +704,7 @@ public sealed partial class SqliteResourceRepository
         public int? LastRunAtNanos { get; init; }
     }
 
-    private sealed class PropertyRecord
+    internal sealed class PropertyRecord
     {
         public required string ResourceName { get; init; }
         public required string Name { get; init; }
@@ -708,7 +715,7 @@ public sealed partial class SqliteResourceRepository
         public int? SortOrder { get; init; }
     }
 
-    private sealed class CommandRecord
+    internal sealed class CommandRecord
     {
         public required string ResourceName { get; init; }
         public required int Ordinal { get; init; }
@@ -723,7 +730,7 @@ public sealed partial class SqliteResourceRepository
         public required int State { get; init; }
     }
 
-    private sealed class InputRecord
+    internal sealed class InputRecord
     {
         public required string ResourceName { get; init; }
         public required int CommandOrdinal { get; init; }
@@ -746,7 +753,7 @@ public sealed partial class SqliteResourceRepository
         public required string FileFilter { get; init; }
     }
 
-    private sealed class OptionRecord
+    internal sealed class OptionRecord
     {
         public required string ResourceName { get; init; }
         public required int CommandOrdinal { get; init; }
@@ -755,14 +762,14 @@ public sealed partial class SqliteResourceRepository
         public required string OptionValue { get; init; }
     }
 
-    private sealed class RelationshipRecord
+    internal sealed class RelationshipRecord
     {
         public required string ResourceName { get; init; }
         public required string RelatedResourceName { get; init; }
         public required string RelationshipType { get; init; }
     }
 
-    private sealed class ValidationErrorRecord
+    internal sealed class ValidationErrorRecord
     {
         public required string ResourceName { get; init; }
         public required int CommandOrdinal { get; init; }

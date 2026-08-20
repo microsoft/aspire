@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
@@ -11,8 +12,10 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -358,6 +361,10 @@ public partial class ResourcesTests : DashboardTestContext
 
         var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
         var initializeGraphInvocationHandler = resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        initializeGraphInvocationHandler.SetVoidResult();
+        var updateGraphInvocationHandler = resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        updateGraphInvocationHandler.SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
@@ -375,6 +382,18 @@ public partial class ResourcesTests : DashboardTestContext
         var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
         Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
         Assert.Equal(true, focusInvocation.Arguments[1]);
+
+        var icons = Assert.IsType<GraphIconsDto>(initializeGraphInvocationHandler.Invocations.Single().Arguments[1]);
+        var serializedIcons = JsonSerializer.SerializeToElement(icons, DashboardJsonSerializerContext.Default.Options);
+        Assert.Equal(icons.Menu.Path, serializedIcons.GetProperty("menu").GetProperty("path").GetString());
+        Assert.Equal(icons.Menu.LabelFormat, serializedIcons.GetProperty("menu").GetProperty("labelFormat").GetString());
+        Assert.Equivalent(icons, serializedIcons.Deserialize(icons.GetType(), DashboardJsonSerializerContext.Default.Options), strict: true);
+
+        var resources = Assert.IsType<List<ResourceDto>>(updateGraphInvocationHandler.Invocations.Single().Arguments[0]);
+        var resource = Assert.Single(resources);
+        var serializedResources = JsonSerializer.SerializeToElement(resources, DashboardJsonSerializerContext.Default.Options);
+        Assert.Equal(resource.Name, serializedResources[0].GetProperty("name").GetString());
+        Assert.Equivalent(resources, serializedResources.Deserialize(resources.GetType(), DashboardJsonSerializerContext.Default.Options), strict: true);
     }
 
     [Fact]

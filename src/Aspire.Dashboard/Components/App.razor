@@ -6,17 +6,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="aspire-version" content="@VersionHelpers.DashboardDisplayVersion" />
-    <meta name="dotnet-runtime-version" content="@System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription" />
+    <meta name="dotnet-runtime-version" content="@VersionHelpers.RuntimeFrameworkDescription" />
+    <meta name="dotnet-runtime-mode" content="@VersionHelpers.RuntimeMode" />
     <base href="/" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
-    <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
-    <link rel="stylesheet" href="css/design.css" />
-    <link rel="stylesheet" href="css/controls.css" />
-    <link rel="stylesheet" href="css/layout.css" />
-    <link rel="stylesheet" href="css/highlight.css" />
-    <link rel="stylesheet" href="css/markdown.css" />
-    <link rel="stylesheet" href="Aspire.Dashboard.styles.css" />
-    <script src="js/app-theme-bootstrap.js"></script>
+    <link rel="icon" type="image/x-icon" href="@Assets["favicon.ico"]" />
+    <link rel="stylesheet" href="@Assets["_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css"]" />
+    <link rel="stylesheet" href="@Assets["css/design.css"]" />
+    <link rel="stylesheet" href="@Assets["css/controls.css"]" />
+    <link rel="stylesheet" href="@Assets["css/layout.css"]" />
+    <link rel="stylesheet" href="@Assets["css/highlight.css"]" />
+    <link rel="stylesheet" href="@Assets["css/markdown.css"]" />
+    <link rel="stylesheet" href="@Assets["Aspire.Dashboard.styles.css"]" />
+    <script src="@Assets["js/app-theme-bootstrap.js"]"></script>
 
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
@@ -24,12 +25,12 @@
 <body data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
-    <script src="js/imask-7.6.1.min.js"></script>
-    <BlazorScript />
-    <script src="js/app.js"></script>
-    <script src="js/app-reconnect.js"></script>
+    <script src="@Assets["js/imask-7.6.1.min.js"]"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["js/app.js"]"></script>
+    <script src="@Assets["js/app-reconnect.js"]"></script>
 
-    <script src="js/app-theme.js" type="module"></script>
-    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
+    <script src="@Assets["js/app-theme.js"]" type="module"></script>
+    <script src="@Assets["_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js"]" type="module"></script>
 </body>
 </html>

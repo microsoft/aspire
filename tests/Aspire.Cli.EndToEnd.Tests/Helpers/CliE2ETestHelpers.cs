@@ -140,8 +140,9 @@ internal static class CliE2ETestHelpers
     /// <returns>A <see cref="TerminalRun"/> that ensures diagnostics capture and clean exit on disposal.</returns>
     internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, ITestOutputHelper output, CancellationToken cancellationToken)
     {
-        var pendingRun = terminal.RunAsync(cancellationToken);
-        return new TerminalRun(pendingRun, automator, counter, workspace, output);
+        var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pendingRun = terminal.RunAsync(runCancellation.Token);
+        return new TerminalRun(pendingRun, runCancellation, automator, counter, workspace, output);
     }
 
     /// <summary>

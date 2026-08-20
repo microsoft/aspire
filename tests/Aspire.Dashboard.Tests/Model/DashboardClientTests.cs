@@ -3,6 +3,9 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
@@ -28,6 +31,100 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);
         builder.SetMinimumLevel(LogLevel.Trace);
     });
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("test-password")]
+    public async Task FileCertificate_LoadsPkcs12WithPrivateKey(string? password)
+    {
+        using var key = ECDsa.Create();
+        var request = new CertificateRequest("CN=Dashboard client test", key, HashAlgorithmName.SHA256);
+        var now = DateTimeOffset.UtcNow;
+        using var certificate = request.CreateSelfSigned(now.AddDays(-1), now.AddDays(1));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        X509Certificate2? loadedCertificate = null;
+        try
+        {
+            var path = Path.Combine(workspace.Path, "client.pfx");
+            File.WriteAllBytes(path, certificate.Export(X509ContentType.Pkcs12, password));
+
+            await using var client = CreateResourceServiceClient(
+                clientCertificate: new ResourceServiceClientCertificateOptions
+                {
+                    Source = DashboardClientCertificateSource.File,
+                    FilePath = path,
+                    Password = password
+                },
+                configureHttpHandler: handler =>
+                {
+                    Assert.NotNull(handler.SslOptions.ClientCertificates);
+                    loadedCertificate = Assert.IsType<X509Certificate2>(Assert.Single(handler.SslOptions.ClientCertificates.Cast<X509Certificate>()));
+                });
+
+            Assert.NotNull(loadedCertificate);
+            Assert.Equal(certificate.RawData, loadedCertificate.RawData);
+            Assert.True(loadedCertificate.HasPrivateKey);
+        }
+        finally
+        {
+            loadedCertificate?.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData("der")]
+    [InlineData("pem")]
+    [InlineData("pkcs7")]
+    [InlineData("invalid")]
+    public void FileCertificate_RejectsNonPkcs12(string format)
+    {
+        using var certificate = TestCertificateLoader.GetTestCertificate();
+        var data = format switch
+        {
+            "der" => certificate.RawData,
+            "pem" => Encoding.UTF8.GetBytes(certificate.ExportCertificatePem()),
+            "pkcs7" => new X509Certificate2Collection(certificate).Export(X509ContentType.Pkcs7)!,
+            "invalid" => new byte[] { 1, 2, 3 },
+            _ => throw new InvalidOperationException()
+        };
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var path = Path.Combine(workspace.Path, "client.pfx");
+        File.WriteAllBytes(path, data);
+
+        Assert.ThrowsAny<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = path
+            }));
+    }
+
+    [Fact]
+    public void FileCertificate_IncorrectPassword()
+    {
+        Assert.ThrowsAny<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = TestCertificateLoader.TestCertificatePath,
+                Password = "incorrect-password"
+            }));
+    }
+
+    [Fact]
+    public void FileCertificate_MissingFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var path = Path.Combine(workspace.Path, "missing.pfx");
+        var exception = Assert.Throws<CryptographicException>(() => CreateResourceServiceClient(
+            clientCertificate: new ResourceServiceClientCertificateOptions
+            {
+                Source = DashboardClientCertificateSource.File,
+                FilePath = path
+            }));
+        Assert.Equal(path, Assert.IsType<FileNotFoundException>(exception.InnerException).FileName);
+    }
 
     [Fact]
     public async Task SubscribeResources_OnCancel_ChannelRemoved()
@@ -434,8 +531,9 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             }
         };
 
-        // Trigger the connection. ConnectWithRetryAsync succeeds, then WatchResources starts failing.
-        await instance.WhenConnected.DefaultTimeout();
+        // Trigger the connection without awaiting it. The first watch failure can reset
+        // WhenConnected before the getter returns, leaving it waiting for a reconnect that never succeeds.
+        _ = instance.WhenConnected;
 
         // Wait for at least 3 Disconnected events to prove each retry fires a new event.
         // Without the Connecting transition between retries, only 1 Disconnected event would fire.
@@ -792,15 +890,19 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
     private DashboardClient CreateResourceServiceClient(
         DashboardActivitySource? activitySource = null,
-        IResourceRepositoryWriter? resourceRepositoryWriter = null)
+        IResourceRepositoryWriter? resourceRepositoryWriter = null,
+        ResourceServiceClientCertificateOptions? clientCertificate = null,
+        Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
-        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
+        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter, clientCertificate, configureHttpHandler);
     }
 
     private static DashboardClient CreateResourceServiceClient(
         ILoggerFactory loggerFactory,
         DashboardActivitySource? activitySource,
-        IResourceRepositoryWriter? resourceRepositoryWriter)
+        IResourceRepositoryWriter? resourceRepositoryWriter,
+        ResourceServiceClientCertificateOptions? clientCertificate = null,
+        Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         var options = new DashboardOptions
         {
@@ -810,6 +912,12 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
                 Url = "http://localhost:12345"
             }
         };
+        if (clientCertificate is not null)
+        {
+            options.ResourceServiceClient.AuthMode = ResourceClientAuthMode.Certificate;
+            options.ResourceServiceClient.ClientCertificate = clientCertificate;
+        }
+
         options.ResourceServiceClient.TryParseOptions(out _);
 
         return new DashboardClient(
@@ -819,7 +927,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             Options.Create(options),
             new MockKnownPropertyLookup(),
             new TestStringLocalizer<DashboardResources>(),
-            resourceRepositoryWriter: resourceRepositoryWriter ?? new RecordingResourceRepositoryWriter());
+            resourceRepositoryWriter: resourceRepositoryWriter ?? new RecordingResourceRepositoryWriter(),
+            configureHttpHandler: configureHttpHandler);
     }
 
     public void Dispose()

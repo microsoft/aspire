@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard;
-using Aspire.Managed.NuGet.Commands;
-using Aspire.TerminalHost;
-using Aspire.Shared;
 using System.CommandLine;
+using System.Diagnostics;
+using System.Globalization;
+using Aspire.Hosting;
+using Aspire.Managed.NuGet.Commands;
+using Aspire.Shared;
+using Aspire.TerminalHost;
 
 BundleVersionLease? acquiredBundleLease;
 try
@@ -31,24 +33,36 @@ return args switch
 
 static async Task<int> RunDashboard(string[] args)
 {
-    var options = new WebApplicationOptions
+    var startInfo = CreateStartInfo(AppContext.BaseDirectory, args);
+    if (!File.Exists(startInfo.FileName))
     {
-        Args = args,
-        ContentRootPath = AppContext.BaseDirectory
-    };
+        Console.Error.WriteLine($"Dashboard executable was not found at '{startInfo.FileName}'. Reinstall or rebuild the Aspire bundle.");
+        return 1;
+    }
 
-    var app = new DashboardWebApplication(options: options);
-
-    // Tear the dashboard down if the launching CLI dies so a hard-killed `aspire dashboard run` (or the
-    // profiling collector, which also launches aspire-managed dashboard) cannot leave an orphaned
-    // dashboard process behind. No-op when ASPIRE_CLI_PID is not set — either the dashboard is launched
-    // directly (so the embedded/in-process dashboard is unaffected), or on Windows where the CLI relies
-    // on the kernel kill-on-close job instead (see LayoutProcessRunner).
+    using var process = new Process { StartInfo = startInfo };
+    // Legacy callers can launch this compatibility forwarder with a CLI parent identity.
+    // Watch that parent as well as having the native Dashboard watch this forwarding process.
+    // Without a parent identity, this is a no-op (including Windows callers using kill-on-close jobs).
     using var shutdownCts = new CancellationTokenSource();
     var parentWatchdog = ParentProcessWatchdog.Start(shutdownCts);
     try
     {
-        return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
+        process.Start();
+        await process.WaitForExitAsync(shutdownCts.Token).ConfigureAwait(false);
+        return process.ExitCode;
+    }
+    catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
+    {
+        // Cancelling WaitForExitAsync does not stop the child. Keep the watchdog's force-exit
+        // backstop armed until cleanup completes in case terminating the process gets stuck.
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+        }
+
+        await process.WaitForExitAsync().ConfigureAwait(false);
+        return 0;
     }
     finally
     {
@@ -56,6 +70,31 @@ static async Task<int> RunDashboard(string[] args)
         {
             await parentWatchdog.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    static ProcessStartInfo CreateStartInfo(string managedDirectory, string[] args)
+    {
+        // Older AppHosts launch "aspire-managed dashboard". Keep that contract without loading
+        // the Dashboard into the managed helper or requiring the AppHost to understand native executables.
+        var dashboardDirectory = Path.GetFullPath(Path.Combine(managedDirectory, "..", BundleDiscovery.DashboardDirectoryName));
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = Path.Combine(dashboardDirectory, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+            WorkingDirectory = dashboardDirectory,
+            UseShellExecute = false
+        };
+
+        foreach (var argument in args)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        // DCP owns this forwarding process. The native Dashboard must stop if DCP terminates it.
+        startInfo.Environment[KnownConfigNames.CliProcessId] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliProcessStartedStable] = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds().ToString(CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliProcessStarted] = ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
+
+        return startInfo;
     }
 }
 
