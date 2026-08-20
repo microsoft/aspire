@@ -41,6 +41,13 @@ async function main() {
     } catch (error) {
       const message = `${scenario.id}: ${error.message}`;
       console.warn(message);
+      if (error.terminalOutput) {
+        console.warn([
+          `--- ${scenario.id}: latest terminal output (up to 48 lines) ---`,
+          error.terminalOutput,
+          `--- ${scenario.id}: end terminal output ---`
+        ].join('\n'));
+      }
       failures.push(message);
     }
   }

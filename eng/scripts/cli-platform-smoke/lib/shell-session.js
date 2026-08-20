@@ -215,6 +215,19 @@ class ShellCommandRun {
     await delay(10);
   }
 
+  getLatestOutput(maxLines = this.session.rows) {
+    const output = this.session.cleanOutput
+      .slice(this.startIndex)
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trimEnd();
+    if (!output) {
+      return '';
+    }
+
+    return output.split('\n').slice(-maxLines).join('\n');
+  }
+
   flushArtifacts() {
     if (!this.logPath) {
       return;
