@@ -104,45 +104,45 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveRepoLocalManagedPath_ReturnsNullWithoutRepoRoot()
+    public void ResolveRepoLocalDashboardPath_ReturnsNullWithoutRepoRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var managedBaseDirectory = Directory.CreateDirectory(Path.Combine(
+        var dashboardBaseDirectory = Directory.CreateDirectory(Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "artifacts",
             "bin",
-            "Aspire.Managed",
+            "Aspire.Dashboard",
             "Debug",
-            "net10.0"));
-        var expectedManagedPath = Path.Combine(
-            managedBaseDirectory.FullName,
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(expectedManagedPath, string.Empty);
+            "net11.0"));
+        var expectedDashboardPath = Path.Combine(
+            dashboardBaseDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(expectedDashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveRepoLocalManagedPath(repoRoot: null);
+        var resolvedPath = ProfileCaptureService.ResolveRepoLocalDashboardPath(repoRoot: null);
 
         Assert.Null(resolvedPath);
     }
 
     [Fact]
-    public void ResolveRepoLocalManagedPath_UsesOptInRepoRoot()
+    public void ResolveRepoLocalDashboardPath_UsesOptInRepoRoot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var managedBaseDirectory = Directory.CreateDirectory(Path.Combine(
+        var dashboardBaseDirectory = Directory.CreateDirectory(Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "artifacts",
             "bin",
-            "Aspire.Managed",
+            "Aspire.Dashboard",
             "Debug",
-            "net10.0"));
-        var expectedManagedPath = Path.Combine(
-            managedBaseDirectory.FullName,
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(expectedManagedPath, string.Empty);
+            "net11.0"));
+        var expectedDashboardPath = Path.Combine(
+            dashboardBaseDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(expectedDashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveRepoLocalManagedPath(workspace.WorkspaceRoot.FullName);
+        var resolvedPath = ProfileCaptureService.ResolveRepoLocalDashboardPath(workspace.WorkspaceRoot.FullName);
 
-        Assert.Equal(expectedManagedPath, resolvedPath);
+        Assert.Equal(expectedDashboardPath, resolvedPath);
     }
 
     [Fact]

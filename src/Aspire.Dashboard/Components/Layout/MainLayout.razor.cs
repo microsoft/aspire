@@ -250,7 +250,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-theme.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
             await ThemeManager.EnsureInitializedAsync();
             await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
             _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
