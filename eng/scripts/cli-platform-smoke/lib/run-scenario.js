@@ -6,33 +6,56 @@ const { buildAspireCommand } = require('./aspire-command');
 const { ShellSession } = require('./shell-session');
 
 const defaultTimeoutMs = 600_000;
-const cleanupGracePeriodMs = 130_000;
+const cleanupTimeoutMs = 130_000;
+const callbackSettlementTimeoutMs = 5_000;
 
 async function runScenario(scenario, context) {
-  const state = {
-    artifactCounts: new Map(),
-    cancelled: false,
-    sessions: new Set()
-  };
-
-  try {
-    await executeScenario(scenario, context, state);
-  } catch (error) {
-    state.cancelled = true;
-    await disposeSessions(state);
-    throw error;
-  }
-}
-
-async function executeScenario(scenario, context, state, runAfterCancellation = false) {
   validateScenario(scenario);
 
   const timeoutMs = scenario.timeoutMs || defaultTimeoutMs;
-  const artifactName = getArtifactName(scenario.description, state.artifactCounts);
-  const cwd = scenario.cwd ? scenario.cwd(context) : context.projectRoot;
+  const artifactCounts = new Map();
+  const controller = createShellController(context, scenario.description, timeoutMs, artifactCounts);
+  const execution = runCallback(scenario.callback, controller);
+  let failure = null;
+
+  try {
+    await withTimeout(execution, timeoutMs);
+  } catch (error) {
+    failure = error;
+    await controller.dispose();
+    await waitForSettlement(execution, callbackSettlementTimeoutMs);
+  } finally {
+    await controller.dispose();
+  }
+
+  if (scenario.cleanup) {
+    const cleanupController = createShellController(
+      context,
+      `${scenario.description} cleanup`,
+      cleanupTimeoutMs,
+      artifactCounts);
+
+    try {
+      await withTimeout(runCallback(scenario.cleanup, cleanupController), cleanupTimeoutMs);
+    } catch (error) {
+      if (!failure) {
+        failure = error;
+      }
+    } finally {
+      await cleanupController.dispose();
+    }
+  }
+
+  if (failure) {
+    throw new Error(`${scenario.description}: ${failure.message}`, { cause: failure });
+  }
+}
+
+function createShellController(context, description, timeoutMs, artifactCounts) {
   let activeRun = null;
-  let commandNumber = 0;
+  let disposed = false;
   let session = null;
+  let sessionCwd = null;
 
   async function completeActiveRun() {
     if (!activeRun) {
@@ -50,63 +73,108 @@ async function executeScenario(scenario, context, state, runAfterCancellation = 
     }
   }
 
-  async function runAspireCommand(args) {
-    if (state.cancelled && !runAfterCancellation) {
-      throw new Error('The parent scenario has already ended.');
-    }
-
+  async function runAspireCommand(args, options = {}) {
+    ensureNotDisposed();
     await completeActiveRun();
-    if (!session) {
-      session = await ShellSession.start(cwd);
-      state.sessions.add(session);
+
+    const cwd = options.cwd || context.projectRoot;
+    if (!session || sessionCwd !== cwd) {
+      await session?.dispose();
+      session = null;
+      sessionCwd = null;
+      ensureNotDisposed();
+
+      const startedSession = await ShellSession.start(cwd);
+      if (disposed) {
+        await startedSession.dispose();
+        throw new Error('The scenario shell was disposed while starting.');
+      }
+
+      session = startedSession;
+      sessionCwd = cwd;
     }
 
-    commandNumber++;
+    ensureNotDisposed();
+    const requestedArtifactName = options.artifactName || description;
+    const artifactName = getArtifactName(requestedArtifactName, artifactCounts);
+    const logPath = path.join(context.diagnosticsDir, `${artifactName}.log`);
+    const startedRun = await session.startCommand(
+      buildAspireCommand(context.aspireCommand, args),
+      logPath);
+    if (disposed) {
+      startedRun.flushArtifacts();
+      await session.dispose();
+      throw new Error('The scenario shell was disposed while starting an Aspire command.');
+    }
 
-    const commandArtifactName = commandNumber === 1
-      ? artifactName
-      : `${artifactName}-${commandNumber}`;
-    const logPath = path.join(context.diagnosticsDir, `${commandArtifactName}.log`);
-    activeRun = await session.startCommand(buildAspireCommand(context.aspireCommand, args), logPath);
+    activeRun = startedRun;
+  }
+
+  function waitFor(text, waitDescription, waitTimeoutMs = timeoutMs) {
+    return getActiveRun().waitForText(text, waitTimeoutMs, waitDescription);
+  }
+
+  function waitForAny(texts, waitDescription, waitTimeoutMs = timeoutMs) {
+    return getActiveRun().waitForAnyText(texts, waitTimeoutMs, waitDescription);
+  }
+
+  function type(text) {
+    return getActiveRun().type(text);
+  }
+
+  function enter() {
+    return getActiveRun().enter();
+  }
+
+  function ctrlC() {
+    return getActiveRun().ctrlC();
+  }
+
+  function getCommandExitNeedle() {
+    return getActiveRun().exitNeedle;
+  }
+
+  function getActiveRun() {
+    if (!activeRun) {
+      throw new Error('Start an Aspire command before interacting with the shell.');
+    }
+
     return activeRun;
   }
 
-  async function runNestedScenario(nestedScenario) {
-    const nestedRunAfterCancellation = nestedScenario.runAfterCancellation === true;
-    if (state.cancelled && !nestedRunAfterCancellation) {
-      throw new Error('The parent scenario has already ended.');
+  function ensureNotDisposed() {
+    if (disposed) {
+      throw new Error('The scenario shell has already been disposed.');
     }
-
-    await completeActiveRun();
-    await executeScenario(nestedScenario, context, state, nestedRunAfterCancellation);
   }
 
-  const execution = (async () => {
-    await scenario.callback({
-      ...context,
-      runAspireCommand,
-      runScenario: runNestedScenario,
-      timeoutMs
-    });
-    await completeActiveRun();
-  })();
-
-  try {
-    await withTimeout(execution, timeoutMs);
-  } catch (error) {
-    if (error instanceof ScenarioTimeoutError) {
-      state.cancelled = true;
-      await disposeSessions(state);
-      await waitForSettlement(execution, cleanupGracePeriodMs);
-      await disposeSessions(state);
+  async function dispose() {
+    if (disposed) {
+      return;
     }
 
+    disposed = true;
     activeRun?.flushArtifacts();
-    throw new Error(`${scenario.description}: ${error.message}`, { cause: error });
-  } finally {
     await session?.dispose();
-    state.sessions.delete(session);
   }
+
+  return {
+    ...context,
+    ctrlC,
+    enter,
+    getCommandExitNeedle,
+    runAspireCommand,
+    type,
+    waitFor,
+    waitForAny,
+    complete: completeActiveRun,
+    dispose
+  };
+}
+
+async function runCallback(callback, controller) {
+  await callback(controller);
+  await controller.complete();
 }
 
 function validateScenario(scenario) {
@@ -118,24 +186,18 @@ function validateScenario(scenario) {
     throw new Error(`Scenario '${scenario.description}' must provide a callback.`);
   }
 
+  if (scenario.cleanup !== undefined && typeof scenario.cleanup !== 'function') {
+    throw new Error(`Scenario '${scenario.description}' must provide cleanup as a function.`);
+  }
+
   if (scenario.timeoutMs !== undefined &&
       (!Number.isFinite(scenario.timeoutMs) || scenario.timeoutMs <= 0)) {
     throw new Error(`Scenario '${scenario.description}' must provide a positive timeout.`);
   }
-
-  if (scenario.cwd !== undefined && typeof scenario.cwd !== 'function') {
-    throw new Error(`Scenario '${scenario.description}' must provide cwd as a function.`);
-  }
-
-  if (scenario.runAfterCancellation !== undefined &&
-      typeof scenario.runAfterCancellation !== 'boolean') {
-    throw new Error(
-      `Scenario '${scenario.description}' must provide runAfterCancellation as a boolean.`);
-  }
 }
 
-function getArtifactName(description, artifactCounts) {
-  const baseName = description
+function getArtifactName(name, artifactCounts) {
+  const baseName = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'scenario';
@@ -152,7 +214,7 @@ async function withTimeout(promise, timeoutMs) {
       promise,
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new ScenarioTimeoutError(timeoutMs)),
+          () => reject(new Error(`Timed out after ${Math.round(timeoutMs / 1000)} second(s).`)),
           timeoutMs);
       })
     ]);
@@ -173,16 +235,6 @@ async function waitForSettlement(promise, timeoutMs) {
     ]);
   } finally {
     clearTimeout(timer);
-  }
-}
-
-async function disposeSessions(state) {
-  await Promise.allSettled([...state.sessions].map(session => session.dispose()));
-}
-
-class ScenarioTimeoutError extends Error {
-  constructor(timeoutMs) {
-    super(`Timed out after ${Math.round(timeoutMs / 1000)} second(s).`);
   }
 }
 
