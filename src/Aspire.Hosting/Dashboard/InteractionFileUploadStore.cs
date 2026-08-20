@@ -102,8 +102,11 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         bool removeEntry;
         lock (entry)
         {
-            entry.UploadComplete = true;
-            removeEntry = entry.InteractionState == FileInteractionState.Canceled;
+            removeEntry = entry.State == FileEntryState.DiscardWhenComplete;
+            if (entry.State == FileEntryState.Uploading)
+            {
+                entry.State = FileEntryState.Uploaded;
+            }
         }
 
         _logger.LogDebug(
@@ -119,30 +122,30 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     }
 
     /// <summary>
-    /// Gets the file path for a given file ID, interaction ID, and input name.
+    /// Gets the completed uploads for an interaction input.
     /// </summary>
-    public string? GetFilePath(string fileId, int interactionId, string inputName)
+    public IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName)
     {
-        if (!TryGetEntry(interactionId, fileId, out var entry))
+        if (!_interactions.TryGetValue(interactionId, out var interaction))
         {
-            return null;
+            return [];
         }
 
-        lock (entry)
+        var files = new List<InteractionFileUpload>();
+        foreach (var (fileId, entry) in interaction.Files)
         {
-            return entry.UploadComplete &&
-                string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
-                    ? entry.TempFile.Path
-                    : null;
+            lock (entry)
+            {
+                if (entry.State is FileEntryState.Uploaded or FileEntryState.Resolved &&
+                    string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
+                {
+                    entry.State = FileEntryState.Resolved;
+                    files.Add(new InteractionFileUpload(fileId, entry.OriginalFileName, entry.TempFile.Path));
+                }
+            }
         }
-    }
 
-    /// <summary>
-    /// Gets the original file name for a given file ID.
-    /// </summary>
-    public string? GetFileName(int interactionId, string fileId)
-    {
-        return TryGetEntry(interactionId, fileId, out var entry) ? entry.OriginalFileName : null;
+        return files;
     }
 
     /// <summary>
@@ -187,15 +190,25 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             interactionId,
             interaction.Files.Count);
 
-        // The interaction completes before the prompt task returns, so its uploads must remain available for the
-        // caller to process. The returned InteractionFileCollection owns their cleanup: .NET callers dispose the
-        // collection from GetFiles(), and ATS callers invoke ReleaseFiles() on the original input builder. Store
-        // disposal at AppHost shutdown is only a fallback for callers that do not release their files earlier.
-        foreach (var entry in interaction.Files.Values)
+        // Resolved entries belong to the accepted result and remain available for caller disposal. An entry that
+        // became Uploaded after the resolved snapshot was taken was not accepted and is removed. Uploads still being
+        // written are marked for deletion after their writer closes the file handle.
+        foreach (var (fileId, entry) in interaction.Files)
         {
+            bool removeEntry;
             lock (entry)
             {
-                entry.InteractionState = FileInteractionState.Complete;
+                removeEntry = entry.State == FileEntryState.Uploaded;
+                entry.State = entry.State switch
+                {
+                    FileEntryState.Uploading => FileEntryState.DiscardWhenComplete,
+                    _ => entry.State
+                };
+            }
+
+            if (removeEntry)
+            {
+                RemoveEntry(interactionId, fileId);
             }
         }
 
@@ -227,8 +240,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             bool removeEntry;
             lock (entry)
             {
-                entry.InteractionState = FileInteractionState.Canceled;
-                removeEntry = entry.UploadComplete;
+                removeEntry = entry.State is FileEntryState.Uploaded or FileEntryState.Resolved;
+                entry.State = FileEntryState.DiscardWhenComplete;
             }
 
             if (removeEntry)
@@ -241,54 +254,68 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     }
 
     /// <summary>
-    /// Resolves a JSON-encoded file reference array into InputFileDto entries.
-    /// Returns null if the value is empty, malformed, or contains no resolvable files.
+    /// Resolves completed uploads for an interaction input into InputFileDto entries.
     /// </summary>
-    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IInteractionFileUploadStore store, string? jsonValue, int interactionId, string inputName, ILogger logger)
+    public static IReadOnlyList<InputFileDto>? ResolveFiles(IInteractionFileUploadStore store, int interactionId, string inputName)
     {
-        if (string.IsNullOrEmpty(jsonValue))
-        {
-            return null;
-        }
+        var files = store.GetFiles(interactionId, inputName)
+            .Select(file => new InputFileDto(
+                file.Id,
+                file.Name,
+                file.FilePath,
+                () => store.RemoveEntry(interactionId, file.Id)))
+            .ToArray();
 
-        FileReference?[]? fileRefs;
+        return files.Length > 0 ? files : null;
+    }
+
+    /// <summary>
+    /// Validates that client-submitted file IDs exactly match the resolved files and returns them in client order.
+    /// </summary>
+    public static IReadOnlyList<InputFileDto>? ValidateFileReferences(string? jsonValue, string inputName, IReadOnlyList<InputFileDto>? files)
+    {
+        // Clients submit file selections as: [{"Id":"<upload-id>","Name":"<display-name>"}].
+        // Only Id participates in validation; Name is untrusted and resolved metadata remains authoritative.
+        FileReference?[] fileReferences;
         try
         {
-            fileRefs = JsonSerializer.Deserialize<FileReference?[]>(jsonValue);
+            fileReferences = string.IsNullOrEmpty(jsonValue)
+                ? []
+                : JsonSerializer.Deserialize<FileReference?[]>(jsonValue) ?? throw CreateFileMismatchException(inputName);
         }
         catch (JsonException ex)
         {
-            logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", inputName);
-            return null;
+            throw CreateFileMismatchException(inputName, ex);
         }
 
-        if (fileRefs is not { Length: > 0 })
+        var filesById = (files ?? []).ToDictionary(file => file.Id, StringComparer.Ordinal);
+        if (fileReferences.Length != filesById.Count)
         {
-            return null;
+            throw CreateFileMismatchException(inputName);
         }
 
-        var files = new List<InputFileDto>(fileRefs.Length);
-        for (var idx = 0; idx < fileRefs.Length; idx++)
+        var orderedFiles = new InputFileDto[fileReferences.Length];
+        for (var i = 0; i < fileReferences.Length; i++)
         {
-            var fileRef = fileRefs[idx];
-            if (fileRef is null || string.IsNullOrEmpty(fileRef.Id))
+            if (fileReferences[i] is not { Id.Length: > 0 } fileReference)
             {
-                logger.LogWarning("Received malformed file reference in interaction input '{InputName}'. Skipping.", inputName);
-                continue;
+                throw CreateFileMismatchException(inputName);
             }
 
-            var filePath = store.GetFilePath(fileRef.Id, interactionId, inputName);
-            if (filePath is null)
+            if (!filesById.Remove(fileReference.Id, out var file))
             {
-                // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
-                logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
-                continue;
+                throw CreateFileMismatchException(inputName);
             }
-            var fileName = store.GetFileName(interactionId, fileRef.Id) ?? "";
-            files.Add(new InputFileDto(fileRef.Id, fileName, filePath, () => store.RemoveEntry(interactionId, fileRef.Id)));
+
+            orderedFiles[i] = file;
         }
 
-        return files.Count > 0 ? files : null;
+        return orderedFiles.Length > 0 ? orderedFiles : null;
+    }
+
+    private static InvalidOperationException CreateFileMismatchException(string inputName, Exception? innerException = null)
+    {
+        return new InvalidOperationException($"Submitted files for input '{inputName}' do not match the completed uploads.", innerException);
     }
 
     public void Dispose()
@@ -317,12 +344,9 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         _interactions.Clear();
     }
 
-    // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
-    // The shape matches what the Dashboard sends: [{"Id":"...","Name":"..."}]
     private sealed class FileReference
     {
         public string? Id { get; set; }
-        public string? Name { get; set; }
     }
 
     private bool TryGetEntry(int interactionId, string fileId, [NotNullWhen(true)] out FileEntry? entry)
@@ -348,8 +372,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         public TempFile TempFile { get; } = tempFile;
         public string InputName { get; } = inputName;
         public string OriginalFileName { get; } = originalFileName;
-        public bool UploadComplete { get; set; }
-        public FileInteractionState InteractionState { get; set; }
+        public FileEntryState State { get; set; }
     }
 
     private sealed class FileInteraction(IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs)
@@ -367,5 +390,13 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         InProgress,
         Complete,
         Canceled
+    }
+
+    private enum FileEntryState
+    {
+        Uploading,
+        Uploaded,
+        Resolved,
+        DiscardWhenComplete
     }
 }

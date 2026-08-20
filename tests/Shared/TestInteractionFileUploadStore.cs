@@ -38,20 +38,43 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
 
     public void CompleteUpload(int interactionId, string fileId)
     {
+        if (_files.TryGetValue(fileId, out var entry) && entry.InteractionId == interactionId)
+        {
+            bool removeEntry;
+            lock (entry)
+            {
+                removeEntry = entry.State == FileEntryState.DiscardWhenComplete;
+                if (entry.State == FileEntryState.Uploading)
+                {
+                    entry.State = FileEntryState.Uploaded;
+                }
+            }
+
+            if (removeEntry)
+            {
+                _files.TryRemove(fileId, out _);
+            }
+        }
     }
 
-    public string? GetFilePath(string fileId, int interactionId, string inputName)
+    public IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName)
     {
-        return _files.TryGetValue(fileId, out var entry) &&
-            entry.InteractionId == interactionId &&
-            string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName)
-                ? entry.FilePath
-                : null;
-    }
+        var files = new List<InteractionFileUpload>();
+        foreach (var (fileId, entry) in _files)
+        {
+            lock (entry)
+            {
+                if (entry.State is FileEntryState.Uploaded or FileEntryState.Resolved &&
+                    entry.InteractionId == interactionId &&
+                    string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
+                {
+                    entry.State = FileEntryState.Resolved;
+                    files.Add(new InteractionFileUpload(fileId, entry.OriginalFileName, entry.FilePath));
+                }
+            }
+        }
 
-    public string? GetFileName(int interactionId, string fileId)
-    {
-        return _files.TryGetValue(fileId, out var entry) && entry.InteractionId == interactionId ? entry.OriginalFileName : null;
+        return files;
     }
 
     public void RemoveEntry(int interactionId, string fileId)
@@ -66,6 +89,28 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
     {
         CompleteInteractionCallback?.Invoke(interactionId);
         CompletedInteractions.Enqueue(interactionId);
+
+        foreach (var (fileId, entry) in _files)
+        {
+            bool removeEntry;
+            lock (entry)
+            {
+                removeEntry = entry.InteractionId == interactionId && entry.State == FileEntryState.Uploaded;
+                if (entry.InteractionId == interactionId)
+                {
+                    entry.State = entry.State switch
+                    {
+                        FileEntryState.Uploading => FileEntryState.DiscardWhenComplete,
+                        _ => entry.State
+                    };
+                }
+            }
+
+            if (removeEntry)
+            {
+                _files.TryRemove(fileId, out _);
+            }
+        }
     }
 
     public void CancelInteraction(int interactionId)
@@ -75,12 +120,47 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
 
         foreach (var (fileId, entry) in _files)
         {
-            if (entry.InteractionId == interactionId)
+            bool removeEntry;
+            lock (entry)
+            {
+                removeEntry = entry.InteractionId == interactionId &&
+                    entry.State is FileEntryState.Uploaded or FileEntryState.Resolved;
+                if (entry.InteractionId == interactionId)
+                {
+                    entry.State = FileEntryState.DiscardWhenComplete;
+                }
+            }
+
+            if (removeEntry)
             {
                 _files.TryRemove(fileId, out _);
             }
         }
     }
 
-    private sealed record FileEntry(string FilePath, string OriginalFileName, int InteractionId, string InputName);
+    private sealed class FileEntry(string filePath, string originalFileName, int interactionId, string inputName)
+    {
+        public string FilePath { get; } = filePath;
+        public string OriginalFileName { get; } = originalFileName;
+        public int InteractionId { get; } = interactionId;
+        public string InputName { get; } = inputName;
+        public FileEntryState State { get; set; }
+    }
+
+    private enum FileEntryState
+    {
+        Uploading,
+        Uploaded,
+        Resolved,
+        DiscardWhenComplete
+    }
+}
+
+internal static class InteractionFileUploadStoreTestExtensions
+{
+    public static string? GetFilePath(this IInteractionFileUploadStore store, string fileId, int interactionId, string inputName)
+    {
+        return store.GetFiles(interactionId, inputName).SingleOrDefault(file => file.Id == fileId)?.FilePath;
+    }
+
 }

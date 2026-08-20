@@ -212,12 +212,16 @@ internal sealed class DashboardServiceData : IDisposable
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
+                        var submittedInputs = request.InputsDialog.InputItems
+                            .Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType)))
+                            .ToList();
+                        var inputDtos = CreateInputDtos(_fileUploadStore, interaction.InteractionId, inputsInfo, submittedInputs);
 
                         ProcessInputs(
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => MapInputDto(interaction.InteractionId, inputsInfo, i)).ToList(),
+                            inputDtos,
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -230,32 +234,51 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    private InputDto MapInputDto(int interactionId, Interaction.InputsInteractionInfo inputsInfo, Aspire.DashboardService.Proto.V1.InteractionInput i)
-    {
-        if (!inputsInfo.Inputs.TryGetByName(i.Name, out var modelInput))
-        {
-            return new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType));
-        }
-
-        var inputType = modelInput.InputType;
-
-        // For file inputs, Value contains a JSON array of objects with file IDs and names.
-        // Resolve each ID to the temp file path and build InputFileDto entries.
-        if (inputType == InputType.File)
-        {
-            var files = InteractionFileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
-            if (files is not null)
-            {
-                return new InputDto(i.Name, i.Value, inputType, files);
-            }
-        }
-
-        return new InputDto(i.Name, i.Value, inputType);
-    }
-
     public record InputFileDto(string Id, string Name, string FilePath, Action? Delete = null);
 
     public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
+
+    internal static List<InputDto> CreateInputDtos(
+        IInteractionFileUploadStore fileUploadStore,
+        int interactionId,
+        Interaction.InputsInteractionInfo inputsInfo,
+        IReadOnlyList<InputDto> submittedInputs)
+    {
+        var submittedInputsByName = new Dictionary<string, InputDto>(StringComparers.InteractionInputName);
+        foreach (var submittedInput in submittedInputs)
+        {
+            submittedInputsByName[submittedInput.Name] = submittedInput;
+        }
+
+        var inputDtos = new List<InputDto>(inputsInfo.Inputs.Count);
+        foreach (var input in inputsInfo.Inputs)
+        {
+            if (submittedInputsByName.TryGetValue(input.Name, out var submittedInput))
+            {
+                var files = input.InputType == InputType.File
+                    ? ResolveAndValidateFiles(fileUploadStore, submittedInput.Value, interactionId, input.Name)
+                    : null;
+                inputDtos.Add(new InputDto(input.Name, submittedInput.Value, input.InputType, files));
+            }
+            else if (input.InputType == InputType.File)
+            {
+                var files = ResolveAndValidateFiles(fileUploadStore, jsonValue: null, interactionId, input.Name);
+                inputDtos.Add(new InputDto(input.Name, input.Value ?? string.Empty, input.InputType, files));
+            }
+        }
+
+        return inputDtos;
+    }
+
+    internal static IReadOnlyList<InputFileDto>? ResolveAndValidateFiles(
+        IInteractionFileUploadStore fileUploadStore,
+        string? jsonValue,
+        int interactionId,
+        string inputName)
+    {
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, interactionId, inputName);
+        return InteractionFileUploadStore.ValidateFileReferences(jsonValue, inputName, files);
+    }
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -277,7 +300,7 @@ internal sealed class DashboardServiceData : IDisposable
                 incomingValue = (bool.TryParse(incomingValue, out var b) && b) ? "true" : "false";
             }
 
-            if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty))
+            if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty) || requestInput.InputType == InputType.File)
             {
                 modelInput.Value = incomingValue;
 

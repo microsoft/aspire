@@ -68,7 +68,7 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
         var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, interactionId, inputName));
         Assert.Equal(data, await File.ReadAllBytesAsync(filePath));
         Assert.NotEqual(expectedFileName, Path.GetFileName(filePath));
-        Assert.Equal(expectedFileName, fileUploadStore.GetFileName(interactionId, response.FileId));
+        Assert.Equal(expectedFileName, Assert.Single(fileUploadStore.GetFiles(interactionId, inputName)).Name);
     }
 
     [Fact]

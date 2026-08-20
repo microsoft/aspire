@@ -24,14 +24,9 @@ internal interface IInteractionFileUploadStore
     void CompleteUpload(int interactionId, string fileId);
 
     /// <summary>
-    /// Gets the file path for a given file ID, interaction ID, and input name.
+    /// Gets the completed uploads for an interaction input.
     /// </summary>
-    string? GetFilePath(string fileId, int interactionId, string inputName);
-
-    /// <summary>
-    /// Gets the original file name for a given interaction and file ID.
-    /// </summary>
-    string? GetFileName(int interactionId, string fileId);
+    IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName);
 
     /// <summary>
     /// Removes a file entry from an interaction and cleans up its uploaded content.
@@ -48,3 +43,5 @@ internal interface IInteractionFileUploadStore
     /// </summary>
     void CancelInteraction(int interactionId);
 }
+
+internal sealed record InteractionFileUpload(string Id, string Name, string FilePath);

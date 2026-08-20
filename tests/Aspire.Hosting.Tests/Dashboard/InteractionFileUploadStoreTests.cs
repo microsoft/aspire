@@ -26,7 +26,8 @@ public class InteractionFileUploadStoreTests
         Assert.NotNull(fileId);
         Assert.NotEmpty(fileId);
         Assert.NotEqual("test.txt", Path.GetFileName(filePath));
-        Assert.Equal("test.txt", fileUploadStore.GetFileName(InteractionId, fileId));
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+        Assert.Equal("test.txt", Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
         Assert.True(File.Exists(filePath));
     }
 
@@ -73,8 +74,9 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        Assert.Equal("cert.pem", fileUploadStore.GetFileName(InteractionId, fileId));
+        Assert.Equal("cert.pem", Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
     }
 
     [Fact]
@@ -100,6 +102,8 @@ public class InteractionFileUploadStoreTests
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
         fileUploadStore.CompleteInteraction(InteractionId);
 
         Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("other.bin", InteractionId, InputName));
@@ -121,6 +125,8 @@ public class InteractionFileUploadStoreTests
         var (fileId2, filePath2) = fileUploadStore.CreateEntry("file2.bin", InteractionId, InputName);
         fileUploadStore.CompleteUpload(InteractionId, fileId1);
         fileUploadStore.CompleteUpload(InteractionId, fileId2);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId1, fileId2), InputName, files);
         fileUploadStore.CompleteInteraction(InteractionId);
 
         fileUploadStore.RemoveEntry(InteractionId, fileId1);
@@ -146,7 +152,7 @@ public class InteractionFileUploadStoreTests
         var otherInteractionId = InteractionId + 1;
         StartInteraction(fileUploadStore, otherInteractionId);
 
-        Assert.Null(fileUploadStore.GetFileName(otherInteractionId, fileId));
+        Assert.Empty(fileUploadStore.GetFiles(otherInteractionId, InputName));
         fileUploadStore.CompleteUpload(otherInteractionId, fileId);
         fileUploadStore.RemoveEntry(otherInteractionId, fileId);
         fileUploadStore.CancelInteraction(InteractionId);
@@ -161,7 +167,7 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void CompleteInteraction_UploadInProgress_KeepsFile()
+    public void CompleteInteraction_UntransferredUploadInProgress_RemovesFileAfterUploadCompletes()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
@@ -171,6 +177,11 @@ public class InteractionFileUploadStoreTests
 
         Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
+
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
+
+        Assert.Null(fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
+        Assert.False(File.Exists(filePath));
     }
 
     [Fact]
@@ -221,17 +232,39 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void CompleteInteraction_KeepsFile()
+    public void CompleteInteraction_TransferredUploadKeepsFile()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
         fileUploadStore.CompleteInteraction(InteractionId);
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
         Assert.True(File.Exists(filePath));
+    }
+
+    [Fact]
+    public void CompleteInteraction_UploadCompletedAfterResolution_RemovesLateFile()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var (acceptedFileId, acceptedFilePath) = CreateEntry(fileUploadStore, "accepted.bin");
+        var (lateFileId, lateFilePath) = fileUploadStore.CreateEntry("late.bin", InteractionId, InputName);
+        fileUploadStore.CompleteUpload(InteractionId, acceptedFileId);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        _ = InteractionFileUploadStore.ValidateFileReferences(FileReferences(acceptedFileId), InputName, files);
+
+        fileUploadStore.CompleteUpload(InteractionId, lateFileId);
+        fileUploadStore.CompleteInteraction(InteractionId);
+
+        Assert.Equal(acceptedFilePath, fileUploadStore.GetFilePath(acceptedFileId, InteractionId, InputName));
+        Assert.True(File.Exists(acceptedFilePath));
+        Assert.Null(fileUploadStore.GetFilePath(lateFileId, InteractionId, InputName));
+        Assert.False(File.Exists(lateFilePath));
     }
 
     [Fact]
@@ -262,10 +295,11 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, maliciousFileName);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         Assert.NotEqual(maliciousFileName, filePath);
         Assert.NotEqual(expectedLeafName, Path.GetFileName(filePath));
-        Assert.Equal(expectedLeafName, fileUploadStore.GetFileName(InteractionId, fileId));
+        Assert.Equal(expectedLeafName, Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
     }
 
     [Theory]
@@ -279,10 +313,11 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, originalFileName);
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
         Assert.True(File.Exists(filePath));
         Assert.NotEqual(originalFileName, Path.GetFileName(filePath));
-        Assert.Equal(originalFileName, fileUploadStore.GetFileName(InteractionId, fileId));
+        Assert.Equal(originalFileName, Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
     }
 
     [Theory]
@@ -346,116 +381,130 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFileReferences_ValidReference_ResolvesCorrectly()
+    public void ValidateFileReferences_ReturnsFilesInClientOrder()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
-        var (fileId, filePath) = CreateEntry(fileUploadStore, "cert.pem", "CertInput");
-        File.WriteAllText(filePath, "certificate-content");
-        fileUploadStore.CompleteUpload(InteractionId, fileId);
+        var (firstFileId, firstFilePath) = CreateEntry(fileUploadStore, "first.pem", "CertInput");
+        var (secondFileId, secondFilePath) = fileUploadStore.CreateEntry("second.pem", InteractionId, "CertInput");
+        fileUploadStore.CompleteUpload(InteractionId, secondFileId);
+        fileUploadStore.CompleteUpload(InteractionId, firstFileId);
 
-        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "CertInput", NullLogger.Instance);
+        var resolvedFiles = InteractionFileUploadStore.ResolveFiles(
+            fileUploadStore,
+            InteractionId,
+            "CertInput");
+        resolvedFiles = InteractionFileUploadStore.ValidateFileReferences(
+            FileReferences(secondFileId, firstFileId),
+            "CertInput",
+            resolvedFiles);
 
         Assert.NotNull(resolvedFiles);
-        var file = Assert.Single(resolvedFiles);
-        Assert.Equal(fileId, file.Id);
-        Assert.Equal("cert.pem", file.Name);
-        Assert.Equal(filePath, file.FilePath);
+        Assert.Collection(
+            resolvedFiles,
+            file =>
+            {
+                Assert.Equal(secondFileId, file.Id);
+                Assert.Equal("second.pem", file.Name);
+                Assert.Equal(secondFilePath, file.FilePath);
+            },
+            file =>
+            {
+                Assert.Equal(firstFileId, file.Id);
+                Assert.Equal("first.pem", file.Name);
+                Assert.Equal(firstFilePath, file.FilePath);
+            });
     }
 
     [Fact]
-    public void ResolveFileReferences_ClientProvidedName_UsesStoredFileName()
+    public void ResolveFiles_UsesStoredFileName()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "../../../cert.pem", "CertInput");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"../../target\"}}]";
-
-        var resolvedFiles = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "CertInput", NullLogger.Instance);
+        var resolvedFiles = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, "CertInput");
+        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), "CertInput", resolvedFiles);
 
         var file = Assert.Single(resolvedFiles!);
         Assert.Equal("cert.pem", file.Name);
     }
 
     [Fact]
-    public void ResolveFileReferences_DifferentInputName_ReturnsNull()
+    public void ValidateFileReferences_MismatchedSubmission_Throws()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var (firstFileId, _) = CreateEntry(fileUploadStore, "first.txt");
+        var (secondFileId, _) = fileUploadStore.CreateEntry("second.txt", InteractionId, InputName);
+        fileUploadStore.CompleteUpload(InteractionId, firstFileId);
+        fileUploadStore.CompleteUpload(InteractionId, secondFileId);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        var mismatchedValues = new[]
+        {
+            "[]",
+            FileReferences(firstFileId),
+            FileReferences(firstFileId, "unknown"),
+            FileReferences(firstFileId, firstFileId),
+            "not-json",
+            "[null]"
+        };
+
+        foreach (var value in mismatchedValues)
+        {
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+                InteractionFileUploadStore.ValidateFileReferences(value, InputName, files));
+
+            Assert.Equal($"Submitted files for input '{InputName}' do not match the completed uploads.", exception.Message);
+        }
+    }
+
+    [Fact]
+    public void ValidateFileReferences_DifferentInputName_Throws()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
-        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "OtherFile", NullLogger.Instance);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, "OtherFile");
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), "OtherFile", files));
 
-        Assert.Null(result);
+        Assert.Equal("Submitted files for input 'OtherFile' do not match the completed uploads.", exception.Message);
     }
 
     [Fact]
-    public void ResolveFileReferences_DifferentInteractionId_ReturnsNull()
+    public void ValidateFileReferences_DifferentInteractionId_Throws()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
-        var json = $"[{{\"Id\":\"{fileId}\",\"Name\":\"cert.pem\"}}]";
+        fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId + 1, InputName, NullLogger.Instance);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId + 1, InputName);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files));
 
-        Assert.Null(result);
+        Assert.Equal($"Submitted files for input '{InputName}' do not match the completed uploads.", exception.Message);
     }
 
     [Fact]
-    public void ResolveFileReferences_UnknownId_ReturnsNull()
+    public void ValidateFileReferences_UploadInProgress_Throws()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
-        var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
+        var (fileId, _) = CreateEntry(fileUploadStore, "file.txt");
 
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files));
 
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void ResolveFileReferences_MalformedJson_ReturnsNull()
-    {
-        using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
-        var json = "not-valid-json";
-
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
-
-        Assert.Null(result);
-    }
-
-    [Theory]
-    [InlineData("[null]")]
-    [InlineData("[{\"Id\":null}]")]
-    [InlineData("[{\"Id\":\"\"}]")]
-    public void ResolveFileReferences_MalformedReference_ReturnsNull(string json)
-    {
-        using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
-
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, json, InteractionId, "TestInput", NullLogger.Instance);
-
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void ResolveFileReferences_EmptyValue_ReturnsNull()
-    {
-        using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
-
-        var result = InteractionFileUploadStore.ResolveFileReferences(fileUploadStore, "", InteractionId, "TestInput", NullLogger.Instance);
-
-        Assert.Null(result);
+        Assert.Equal($"Submitted files for input '{InputName}' do not match the completed uploads.", exception.Message);
     }
 
     [Fact]
@@ -507,10 +556,15 @@ public class InteractionFileUploadStoreTests
         fileUploadStore.StartInteraction(interactionId, [(inputName, maxFileCount)]);
     }
 
+    private static string FileReferences(params string[] fileIds) =>
+        $"[{string.Join(',', fileIds.Select(fileId => $"{{\"Id\":\"{fileId}\"}}"))}]";
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference<InteractionFile> CompleteInteractionWithFile(InteractionFileUploadStore fileUploadStore, string fileId, string filePath)
     {
         var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
+        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
         fileUploadStore.CompleteInteraction(InteractionId);
         return new WeakReference<InteractionFile>(interactionFile);
     }
