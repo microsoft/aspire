@@ -1,0 +1,95 @@
+{
+  "run_id": 32403422458,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32403422458",
+  "analyzed_at": "2026-08-20T19:25:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19238,
+    "title": "Improve process fallback failure diagnostics",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/better-err-when-process-fallback-fails",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19238"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 96540324902,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32403422458/job/96540324902",
+      "classification": "flaky-test",
+      "reason": "SqlServerContainerFixture failed to bind port 1433 due to Docker networking 'address already in use'. Matches known recurring issue #19014. PR only modifies DcpExecutor.cs/ExecutableCreator.cs and their unit tests, unrelated to Azure SQL/Docker test infra.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 96544159979,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32403422458/job/96544159979",
+      "classification": "flaky-test",
+      "reason": "Job failed generically (exit code 1) with no detailed logs available. PR does not touch the VS Code extension. Consistent with other known-flaky VS Code E2E shard failures unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint testcontainers-ryuk-360b270c-2e24-47f0-9181-6d70953aed6c: failed to bind host port for 0.0.0.0::172.17.0.2:8080/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494\nat Docker.DotNet.DockerClient.MakeRequestAsync[T](...) in DockerClient.cs:line 246\nat Docker.DotNet.ContainerOperations.StartContainerAsync(...) in ContainerOperations.cs:line 201\nat DotNet.Testcontainers.Clients.TestcontainersClient.StartAsync(...) in TestcontainersClient.cs:line 129",
+      "classification": "flaky",
+      "reason": "Docker port binding conflict in shared CI runner, unrelated to PR changes; matches known recurring cause (issue #19014)."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationHandlesPrincipalNamesRequiringEscaping",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity ... address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494\nat DotNet.Testcontainers.Containers.ResourceReaper.GetAndStartNewAsync(...) in ResourceReaper.cs:line 231",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict as other tests in this fixture; unrelated to PR changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationIsANoOpWhenTheScriptRunsAgain",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : address already in use",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict; shared fixture failure unrelated to PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : address already in use",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict; shared fixture failure unrelated to PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationLeavesPrincipalsItDidNotCreateIntact",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : address already in use",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict; shared fixture failure unrelated to PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationRollsBackWhenTheUserCannotBeRecreated",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : address already in use",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict; shared fixture failure unrelated to PR."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : address already in use",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494",
+      "classification": "flaky",
+      "reason": "Same Docker port binding conflict; shared fixture failure unrelated to PR."
+    }
+  ],
+  "causes": ["sqlserver-container-fixture-port-in-use", "vscode-e2e-windows-edge-cases-flaky"]
+}
