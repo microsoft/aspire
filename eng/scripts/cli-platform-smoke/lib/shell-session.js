@@ -17,6 +17,9 @@ class ShellSession {
       env: {
         ...process.env,
         ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
+        // The Aspire CLI intentionally disables prompts when it detects CI. Playground mode
+        // forces interactive behavior so this PTY-driven smoke test exercises the real prompts.
+        ASPIRE_PLAYGROUND: 'true',
         DOTNET_CLI_TELEMETRY_OPTOUT: 'true',
         DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true',
         DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false',
@@ -152,18 +155,32 @@ class ShellCommandRun {
       description);
   }
 
+  waitForTextOrExit(text, timeoutMs, description) {
+    return this.session.waitForSlice(
+      this.startIndex,
+      slice => {
+        if (slice.includes(text)) {
+          return text;
+        }
+
+        // The PTY first echoes the wrapper; in bash that includes
+        // `__ASPIRE_SMOKE_DONE_...__:%s`. Only the later marker with an integer
+        // exit code represents command completion.
+        return this.findExitMatch(slice) ? 'command-exited' : null;
+      },
+      timeoutMs,
+      description);
+  }
+
   async waitForExit(timeoutMs) {
     const marker = await this.session.waitForSlice(
       this.startIndex,
-      slice => {
-        const match = new RegExp(`${escapeRegExp(this.sentinel)}:(-?\\d+)`).exec(slice);
-        return match ? match[0] : null;
-      },
+      slice => this.findExitMatch(slice)?.[0] || null,
       timeoutMs,
       'waiting for command completion');
 
     const slice = this.session.cleanOutput.slice(this.startIndex);
-    const match = new RegExp(`${escapeRegExp(this.sentinel)}:(-?\\d+)`).exec(slice);
+    const match = this.findExitMatch(slice);
     const exitCode = match ? Number.parseInt(match[1], 10) : Number.NaN;
 
     this.flushArtifacts();
@@ -177,6 +194,10 @@ class ShellCommandRun {
     }
 
     return exitCode;
+  }
+
+  findExitMatch(slice) {
+    return new RegExp(`${escapeRegExp(this.sentinel)}:(-?\\d+)`).exec(slice);
   }
 
   async type(text) {

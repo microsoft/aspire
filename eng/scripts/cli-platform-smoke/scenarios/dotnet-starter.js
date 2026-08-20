@@ -14,6 +14,7 @@ const template = {
   projectName: 'AspireCliCsStarterSmoke',
   selectionText: 'Starter App (ASP.NET Core/Blazor)',
   expectedResources: ['apiservice'],
+  hasRedisCachePrompt: true,
   hasTestProjectPrompt: true
 };
 
