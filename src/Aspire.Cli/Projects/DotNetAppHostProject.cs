@@ -14,6 +14,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -24,6 +25,7 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -1489,7 +1491,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false, aspireHostingVersion: null);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
@@ -1518,7 +1520,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
             : null;
         var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo?.AspireHostingVersion);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -2585,7 +2587,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,
         BundleLayoutLease? layoutLease,
-        bool injectDcpAndDashboard)
+        bool injectDcpAndDashboard,
+        string? aspireHostingVersion)
     {
         var layout = layoutLease?.Layout;
         if (layout is null)
@@ -2616,11 +2619,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
-                layout.GetManagedPath() is { } layoutManagedPath &&
-                IsUsableDashboardPath(layoutManagedPath))
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
+                SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
+                var supportsNativeDashboard = DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
+                if (DashboardLaunchHelper.GetDashboardPath(layout, supportsNativeDashboard) is { } dashboardPath)
+                {
+                    env[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
+                }
             }
         }
 

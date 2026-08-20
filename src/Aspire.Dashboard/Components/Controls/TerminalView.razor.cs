@@ -181,7 +181,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         try
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/Components/Controls/TerminalView.razor.js");
+                "import", $"/{Assets["Components/Controls/TerminalView.razor.js"]}");
 
             _selfRef ??= DotNetObjectReference.Create(this);
 

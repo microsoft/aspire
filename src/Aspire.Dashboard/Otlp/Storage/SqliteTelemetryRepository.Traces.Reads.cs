@@ -632,13 +632,15 @@ public sealed partial class SqliteTelemetryRepository
                 FROM telemetry_span_attributes
                 WHERE attribute_key = @AttributeName COLLATE NOCASE
                 GROUP BY attribute_value;
-                """, new { AttributeName = attributeName })
+                """, attributeName)
         };
         return values.ToDictionary(record => record.FieldValue!, record => record.ValueCount, StringComparers.OtlpAttribute);
 
-        IEnumerable<FieldValueRecord> Query(string sql, object? parameters = null)
+        IEnumerable<FieldValueRecord> Query(string sql, string? attributeName = null)
         {
-            return connection.Query<FieldValueRecord>(sql, parameters);
+            return attributeName is null
+                ? connection.Query<FieldValueRecord>(sql)
+                : connection.Query<FieldValueRecord>(sql, new { AttributeName = attributeName });
         }
 
         IEnumerable<FieldValueRecord> QueryFieldValues(string expression, string table)
@@ -839,19 +841,19 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record TraceQuery(string FromAndWhere, DynamicParameters Parameters);
 
-    private sealed class TraceAggregateRecord
+    internal sealed class TraceAggregateRecord
     {
         public required int TotalItemCount { get; init; }
         public required long MaxDurationTicks { get; init; }
     }
 
-    private sealed class TraceSummaryRecord
+    internal sealed class TraceSummaryRecord
     {
         public required string TraceId { get; init; }
         public required long LastUpdatedTimestampTicks { get; init; }
     }
 
-    private sealed class TracePageSummaryRecord
+    internal sealed class TracePageSummaryRecord
     {
         public required int TotalItemCount { get; init; }
         public required long MaxDurationTicks { get; init; }
@@ -872,29 +874,29 @@ public sealed partial class SqliteTelemetryRepository
         public int? ErroredSpans { get; init; }
     }
 
-    private sealed class SpanIdentityRecord
+    internal sealed class SpanIdentityRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
     }
 
-    private sealed class TraceOwnedAttributeRecord : AttributeRecord
+    internal sealed class TraceOwnedAttributeRecord : AttributeRecord
     {
         public required string TraceId { get; init; }
         public required string OwnerId { get; init; }
     }
 
-    private sealed class TextOwnedAttributeRecord : AttributeRecord
+    internal sealed class TextOwnedAttributeRecord : AttributeRecord
     {
         public required string OwnerId { get; init; }
     }
 
-    private sealed class LongOwnedAttributeRecord : AttributeRecord
+    internal sealed class LongOwnedAttributeRecord : AttributeRecord
     {
         public required long OwnerId { get; init; }
     }
 
-    private sealed class SpanEventRecord
+    internal sealed class SpanEventRecord
     {
         public required string TraceId { get; init; }
         public required string EventId { get; init; }
@@ -903,7 +905,7 @@ public sealed partial class SqliteTelemetryRepository
         public required long EventTimeTicks { get; init; }
     }
 
-    private sealed class SpanLinkRecord
+    internal sealed class SpanLinkRecord
     {
         public required long LinkId { get; init; }
         public required string SourceTraceId { get; init; }
@@ -913,7 +915,7 @@ public sealed partial class SqliteTelemetryRepository
         public required string TraceState { get; init; }
     }
 
-    private sealed class SpanRecord
+    internal sealed class SpanRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }

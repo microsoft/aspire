@@ -271,7 +271,7 @@ public partial class ManageDataDialog : IAsyncDisposable
         };
     }
 
-    private IQueryable<ManageDataGridItem> GetGridItems()
+    private List<ManageDataGridItem> GetGridItems()
     {
         var items = new List<ManageDataGridItem>();
 
@@ -300,7 +300,7 @@ public partial class ManageDataDialog : IAsyncDisposable
             }
         }
 
-        return items.AsQueryable();
+        return items;
     }
 
     private void OnRowClicked(FluentDataGridRow<ManageDataGridItem> row)
@@ -543,7 +543,6 @@ public partial class ManageDataDialog : IAsyncDisposable
 
         _isRemoving = true;
         _errorMessage = null;
-        StateHasChanged();
 
         try
         {
@@ -620,7 +619,6 @@ public partial class ManageDataDialog : IAsyncDisposable
         finally
         {
             _isImporting = false;
-            StateHasChanged();
         }
     }
 
@@ -633,7 +631,6 @@ public partial class ManageDataDialog : IAsyncDisposable
 
         _isExporting = true;
         _errorMessage = null;
-        StateHasChanged();
 
         try
         {
@@ -651,7 +648,6 @@ public partial class ManageDataDialog : IAsyncDisposable
         finally
         {
             _isExporting = false;
-            StateHasChanged();
         }
     }
 

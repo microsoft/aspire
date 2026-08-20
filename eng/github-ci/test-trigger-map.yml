@@ -75,6 +75,7 @@ ignore:
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1
   - eng/scripts/verify-cli-tool-nupkg.ps1
+  - eng/scripts/test-native-dashboard.ps1
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
@@ -343,8 +344,8 @@ path_rules:
     reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests]
-    reason: AppHostSdkTargetsTests asserts the per-RID dashboard package reference used when the CLI bundle is disabled
+    targets: [test:Aspire.Hosting.Sdk.Tests, CLI_BUNDLE]
+    reason: AppHostSdkTargetsTests asserts the per-RID dashboard package reference used when the CLI bundle is disabled; dashboardpack publishes and packages the Native AOT Dashboard consumed by the CLI bundle and its archive consumers
   - paths:
       - eng/dcppack/**
     targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests]

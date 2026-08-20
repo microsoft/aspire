@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Xunit;
@@ -13,6 +14,29 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class LogViewerTests : DashboardTestContext
 {
+    [Fact]
+    public void LogViewer_ItemComparer_PreservesIdentityOfRepeatedEntries()
+    {
+        SetupLogViewerServices();
+
+        var timestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var entry = LogEntry.Create(timestamp, logMessage: "Repeated message", isErrorMessage: false);
+        var repeatedEntry = LogEntry.Create(timestamp, logMessage: "Repeated message", isErrorMessage: false);
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(entry);
+        logEntries.InsertSorted(repeatedEntry);
+
+        var cut = RenderComponent<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
+        var comparer = cut.FindComponent<Virtualize<LogEntry>>().Instance.ItemComparer;
+
+        Assert.NotNull(comparer);
+        Assert.True(comparer.Equals(entry, logEntries.GetEntries()[0]));
+        Assert.False(comparer.Equals(entry, repeatedEntry));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["Repeated message", "Repeated message"],
+            cut.FindAll(".log-content").Select(element => element.TextContent.Trim())));
+    }
+
     [Fact]
     public void ResourcePrefixStyle_UsesGeneratedAccentAndThemeAwareTextColor()
     {

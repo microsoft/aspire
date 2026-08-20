@@ -2305,17 +2305,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         string[]? restoreInvocation = null;
         string? temporaryNuGetConfigContent = null;
-        var executionFactory = new TestProcessExecutionFactory
+        var executionFactory = CreatePackageRestoreExecutionFactory();
+        executionFactory.AssertionCallback = (args, _, _, _) =>
         {
-            AssertionCallback = (args, _, _, _) =>
+            if (args.Length > 1 &&
+                args[0] == "nuget" &&
+                args[1] == "restore")
             {
-                if (args.Length > 1 &&
-                    args[0] == "nuget" &&
-                    args[1] == "restore")
-                {
-                    restoreInvocation = args.ToArray();
-                    temporaryNuGetConfigContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
-                }
+                restoreInvocation = args.ToArray();
+                temporaryNuGetConfigContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
             }
         };
 
@@ -2834,7 +2832,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         IPackagingService packagingService)
     {
         var layout = CreateBundleLayout(workspace);
-        var executionFactory = new TestProcessExecutionFactory();
+        var executionFactory = CreatePackageRestoreExecutionFactory();
         var nugetService = new BundleNuGetService(
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
@@ -2851,10 +2849,29 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return (server, executionFactory);
     }
 
+    private static TestProcessExecutionFactory CreatePackageRestoreExecutionFactory()
+    {
+        var executionFactory = new TestProcessExecutionFactory();
+        executionFactory.FileNameAssertionCallback = (_, args, _, _, _) =>
+        {
+            if (args is ["nuget", "manifest", ..])
+            {
+                File.WriteAllText(GetArgumentValue(args, "--output"), JsonSerializer.Serialize(new
+                {
+                    managedAssemblies = Array.Empty<object>(),
+                    nativeLibraries = Array.Empty<object>()
+                }));
+            }
+        };
+
+        return executionFactory;
+    }
+
     private static LayoutConfiguration CreateBundleLayout(TemporaryWorkspace workspace)
     {
         var layoutRoot = workspace.CreateDirectory("layout");
         var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        layoutRoot.CreateSubdirectory(BundleDiscovery.DashboardDirectoryName);
         File.WriteAllText(
             Path.Combine(
                 managedDirectory.FullName,
@@ -2968,6 +2985,158 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         Assert.True(optionIndex >= 0 && optionIndex < arguments.Count - 1, $"Option '{optionName}' was not found.");
         return arguments[optionIndex + 1];
+    }
+
+    [Theory]
+    [InlineData("13.6.0", "13.5.0", false)]
+    [InlineData("13.6.0", "13.2.0", false)]
+    [InlineData("13.5.0", "13.6.0", true)]
+    [InlineData("13.5.0", "13.6.0-dev", true)]
+    [InlineData("13.5.0", "14.0.0", true)]
+    public async Task CreateStartInfo_WithNativeDashboard_UsesResolvedHostingVersion(string sdkVersion, string hostingVersion, bool useNativeDashboard)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var dashboardPath = Assert.IsType<string>(layout.GetDashboardPath());
+        File.WriteAllText(dashboardPath, string.Empty);
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.dll"] = "hosting",
+            ["MyIntegration.dll"] = "integration"
+        };
+        var packageMetadata = new Dictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.dll"] = ("Aspire.Hosting", hostingVersion, "lib/net10.0/Aspire.Hosting.dll", "runtime")
+        };
+        using var server = CreateProjectReferenceServer(workspace, closureFiles, ["MyIntegration"], packageMetadata, layout);
+        var result = await server.PrepareAsync(sdkVersion, CreateProjectReferenceIntegrations());
+        Assert.True(result.Success, result.Output?.ToString());
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(useNativeDashboard ? dashboardPath : layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("terminalhost", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+    }
+
+    [Fact]
+    public async Task CreateStartInfo_WithNativeDashboard_InvalidHostingAssembly_UsesManagedDispatcher()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        File.WriteAllText(Assert.IsType<string>(layout.GetDashboardPath()), string.Empty);
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.dll"] = "invalid assembly",
+            ["MyIntegration.dll"] = "integration"
+        };
+        using var server = CreateProjectReferenceServer(workspace, closureFiles, ["MyIntegration"], null, layout);
+
+        var result = await server.PrepareAsync("13.6.0", CreateProjectReferenceIntegrations());
+        Assert.True(result.Success, result.Output?.ToString());
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+    }
+
+    [Theory]
+    [InlineData("13.5.0", false)]
+    [InlineData("13.6.0-dev", true)]
+    [InlineData("", false)]
+    [InlineData("invalid", false)]
+    public async Task CreateStartInfo_WithNativeDashboard_UsesSdkVersionWhenHostingVersionUnavailable(string sdkVersion, bool useNativeDashboard)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var dashboardPath = Assert.IsType<string>(layout.GetDashboardPath());
+        File.WriteAllText(dashboardPath, string.Empty);
+        using var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+
+        var result = await server.PrepareAsync(sdkVersion, []);
+        Assert.True(result.Success, result.Output?.ToString());
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(useNativeDashboard ? dashboardPath : layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+    }
+
+    [Theory]
+    [InlineData("dashboard")]
+    [InlineData("bundle/dashboard")]
+    [InlineData("custom dashboard")]
+    public void CreateStartInfo_WithNativeDashboard_PrefersNativeExecutable(string dashboardComponentPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        layout.Components.Dashboard = dashboardComponentPath;
+        var dashboardDirectory = Assert.IsType<string>(layout.GetComponentPath(LayoutComponent.Dashboard));
+        Directory.CreateDirectory(dashboardDirectory);
+        var dashboardPath = Path.Combine(
+            dashboardDirectory,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(dashboardPath, startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("terminalhost", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateStartInfo_WithoutNativeDashboard_UsesManagedDispatcher(bool dashboardComponentConfigured)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        if (!dashboardComponentConfigured)
+        {
+            layout.Components.Dashboard = null;
+        }
+
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_WithNativeDashboard_PreservesCompatibilityOverride()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        File.WriteAllText(Assert.IsType<string>(layout.GetDashboardPath()), string.Empty);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.DashboardPathEnvVar] = Assert.IsType<string>(layout.GetManagedPath())
+        };
+
+        var startInfo = server.CreateStartInfo(123, environmentVariables);
+
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_WithTerminalHostOverrides_PreservesOverrides()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.TerminalHostPathEnvVar] = "custom-terminal-host",
+            [BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "custom-args"
+        };
+
+        var startInfo = server.CreateStartInfo(123, environmentVariables);
+
+        Assert.Equal("custom-terminal-host", startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("custom-args", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
     }
 
     [Fact]

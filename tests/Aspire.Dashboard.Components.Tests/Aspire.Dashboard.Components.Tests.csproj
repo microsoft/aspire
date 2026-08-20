@@ -1,12 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD_COMPONENT_TESTS</DefineConstants>
     <!--
       CS8002: Referenced assembly does not have a strong name
     -->
     <NoWarn>$(NoWarn);CS8002</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);ASPDEPR004;ASPDEPR008;SYSLIB0057</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,14 +17,6 @@
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="bUnit" />
-  </ItemGroup>
-
-  <!-- The following package references need to be lifted because MEAI depends on older versions -->
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" VersionOverride="$(MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
-    <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Primitives" VersionOverride="$(MicrosoftExtensionsPrimitivesPreviewVersion)" />
   </ItemGroup>
 
   <ItemGroup>

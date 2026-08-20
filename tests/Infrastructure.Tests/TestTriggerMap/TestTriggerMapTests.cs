@@ -394,7 +394,25 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/dashboardpack/Sdk.targets",
-            ["test:Aspire.Hosting.Sdk.Tests"]
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/dashboardpack/Common.projitems",
+            [
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
         },
         {
             "eng/dcppack/Aspire.Hosting.Orchestration.targets",
@@ -518,6 +536,7 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
+    [InlineData("eng/scripts/test-native-dashboard.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
