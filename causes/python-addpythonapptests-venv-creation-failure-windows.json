@@ -1,0 +1,17 @@
+{
+  "id": "python-addpythonapptests-venv-creation-failure-windows",
+  "type": "flaky-test",
+  "title": "Flaky: AddPythonAppTests.PythonResourceSupportsWithReference fails to create Python virtual environment on Windows runner",
+  "test_name": "Aspire.Hosting.Python.Tests.AddPythonAppTests.PythonResourceSupportsWithReference",
+  "error_pattern": "System.InvalidOperationException : Failed to create virtual environment.\n   at Aspire.Hosting.Python.Tests.AddPythonAppTests.PreparePythonProject(...) in tests\\Aspire.Hosting.Python.Tests\\AddPythonAppTests.cs:line 327\n   at Aspire.Hosting.Python.Tests.AddPythonAppTests.CreateTempPythonProject(...) line 275",
+  "occurrences": [
+    {
+      "run_id": 32375588350,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32375588350",
+      "job": "Tests / Hosting.Python / Hosting.Python (windows-latest)",
+      "pr_number": 19335,
+      "observed_at": "2026-08-20T15:06:20Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19542"
+}

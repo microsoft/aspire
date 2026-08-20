@@ -1,0 +1,55 @@
+{
+  "run_id": 32375588350,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32375588350",
+  "analyzed_at": "2026-08-20T15:06:20Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19335,
+    "title": "Update Sigstore and Tuf to 1.0.0",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-redesigned-fiesta",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19335"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Python / Hosting.Python (windows-latest)",
+      "id": 96448944641,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32375588350/job/96448944641",
+      "classification": "flaky-test",
+      "reason": "Test fails to create a Python virtual environment on Windows, an environment/tooling issue unrelated to the PR's changes (Directory.Packages.props, eng/Signing.props).",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 96448962384,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32375588350/job/96448962384",
+      "classification": "flaky-test",
+      "reason": "Matches known flaky test DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange, a race condition unrelated to the PR's changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Python.Tests.AddPythonAppTests.PythonResourceSupportsWithReference",
+      "job": "Tests / Hosting.Python / Hosting.Python (windows-latest)",
+      "error": "System.InvalidOperationException : Failed to create virtual environment.",
+      "stack_trace": "at Aspire.Hosting.Python.Tests.AddPythonAppTests.PreparePythonProject(ITestOutputHelper outputHelper, String projectDirectory, String scriptContent, String requirementsContent) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Python.Tests\\AddPythonAppTests.cs:line 327\n   at Aspire.Hosting.Python.Tests.AddPythonAppTests.CreateTempPythonProject(...) line 275\n   at Aspire.Hosting.Python.Tests.AddPythonAppTests.PythonResourceSupportsWithReference() line 126",
+      "classification": "flaky",
+      "reason": "Failure to create a Python venv is an environment/tooling issue on the Windows runner; the PR only touches Directory.Packages.props and eng/Signing.props, unrelated to Python hosting tests."
+    },
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "Assert.Single() Failure: The collection contained 2 matching items\nExpected:      (predicate expression)\nCollection:    [ResourceViewModelChange { ChangeType = Upsert, ... }, ...]\nMatch indices: 0, 3",
+      "stack_trace": "at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 567",
+      "classification": "flaky",
+      "reason": "Known recurring race condition duplicating resource change events; matches prior cause dashboard-subscriberesources-replicastartedatchanged-flaky. Unrelated to PR's package version bump changes."
+    }
+  ],
+  "causes": ["dashboard-subscriberesources-replicastartedatchanged-flaky", "python-addpythonapptests-venv-creation-failure-windows"]
+}
