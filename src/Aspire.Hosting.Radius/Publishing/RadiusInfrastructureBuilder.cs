@@ -144,7 +144,11 @@ internal sealed class RadiusInfrastructureBuilder
         [RadiusResourceTypes.RedisCaches] = "ghcr.io/radius-project/kube-recipes/rediscaches:" + UnreleasedRecipeSha,
         // See https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep.
         [RadiusResourceTypes.PostgreSqlDatabases] = "ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest",
-        [RadiusResourceTypes.MongoDatabases] = "ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest",
+        // Deliberately absent: Radius.Data/mongoDatabases. It has no published kube-recipes
+        // artifact yet, so there is no default recipe to register for it — the same situation as
+        // Radius.Data/sqlServerDatabases below. The LegacyMongoDatabases row further down is what
+        // ResourceTypeMapper actually emits, and pointing the UDT at that local-dev recipe here
+        // would register a recipe that cannot serve it the moment the legacy fallback is dropped.
         [RadiusResourceTypes.RabbitMQ] = "ghcr.io/radius-project/kube-recipes/rabbitmq:" + UnreleasedRecipeSha,
         // Radius.Security/secrets is recipe-backed like any other type. Registered on demand when
         // a resource's credential is carried by a secret resource — see the call site in BuildAsync.
@@ -162,6 +166,14 @@ internal sealed class RadiusInfrastructureBuilder
         [RadiusResourceTypes.LegacyDaprStateStores] = "ghcr.io/radius-project/recipes/local-dev/daprstatestores:latest",
         [RadiusResourceTypes.LegacyDaprPubSubBrokers] = "ghcr.io/radius-project/recipes/local-dev/daprpubsubbrokers:latest",
     };
+
+    /// <summary>
+    /// The default recipe table, exposed so <c>BackingResourceContractTests</c> can hold it to the
+    /// same contract the connection-schema table has: total over every emitted backing type, and
+    /// with each recipe prefix matching its type's namespace. A missing or mismatched row is
+    /// otherwise invisible until <c>rad deploy</c> reports <c>RecipeDownloadFailed</c>.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> DefaultRecipeTemplates => s_defaultRecipeTemplates;
 
     internal RadiusInfrastructureBuilder(
         RadiusEnvironmentResource environment,

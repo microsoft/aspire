@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 
 /// <summary>
 /// Represents a Radius resource type instance (e.g., <c>Radius.Data/redisCaches</c>,
-/// <c>Radius.Messaging/rabbitMQQueues</c>) in the Bicep AST.
+/// <c>Radius.Messaging/rabbitMQ</c>) in the Bicep AST.
 /// The concrete resource type and API version are passed via the constructor
 /// since they vary per Aspire resource mapping.
 /// </summary>
