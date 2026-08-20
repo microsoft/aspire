@@ -176,7 +176,7 @@ Telemetry limits have different scopes depending on the telemetry type:
 |--------|-------------|
 | `Dashboard:TelemetryLimits:MaxLogCount`<br/>Default: `10,000` | The maximum number of log entries. The limit is shared across resources. |
 | `Dashboard:TelemetryLimits:MaxTraceCount`<br/>Default: `10,000` | The maximum number of traces. The limit is shared across resources. |
-| `Dashboard:TelemetryLimits:MaxMetricsCount`<br/>Default: `50,000` | The maximum number of metric data points. The limit is per resource. |
+| `Dashboard:TelemetryLimits:MaxMetricsCount`<br/>Default: `50,000` | The maximum number of metric data points. The limit is per dimension. |
 | `Dashboard:TelemetryLimits:MaxAttributeCount`<br/>Default: `128` | The maximum number of attributes on telemetry. |
 | `Dashboard:TelemetryLimits:MaxAttributeLength`<br/>Default: `null` | The maximum length of attributes. |
 | `Dashboard:TelemetryLimits:MaxSpanEventCount`<br/>Default: `null` | The maximum number of events on span attributes. |
