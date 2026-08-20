@@ -58,6 +58,7 @@ async function runScenario(scenario, context) {
 
 function createShellController(context, description, timeoutMs, artifactCounts) {
   let activeRun = null;
+  let activeRunDeadlineMs = null;
   let disposed = false;
   let latestRun = null;
   let session = null;
@@ -70,12 +71,16 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
 
     const run = activeRun;
     try {
-      await run.waitForExit(timeoutMs);
+      const completionTimeoutMs = activeRunDeadlineMs === null
+        ? timeoutMs
+        : Math.max(1, activeRunDeadlineMs - performance.now());
+      await run.waitForExit(completionTimeoutMs);
     } catch (error) {
       run.flushArtifacts();
       throw error;
     } finally {
       activeRun = null;
+      activeRunDeadlineMs = null;
     }
   }
 
@@ -114,6 +119,7 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     }
 
     activeRun = startedRun;
+    activeRunDeadlineMs = performance.now() + (options.timeoutMs ?? timeoutMs);
     latestRun = startedRun;
   }
 
